@@ -1,1 +1,1 @@
-"""SQLite persistence layer."""
+"""SQLite metrics storage."""
