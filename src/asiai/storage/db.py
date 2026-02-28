@@ -90,6 +90,7 @@ def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
     cutoff = int(time.time()) - (days * 86400)
     conn = sqlite3.connect(db_path)
     try:
+        conn.execute("DELETE FROM benchmarks WHERE ts < ?", (cutoff,))
         conn.execute("DELETE FROM models WHERE ts < ?", (cutoff,))
         cursor = conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
         conn.commit()
@@ -118,6 +119,63 @@ def query_history(db_path: str, hours: int = 24) -> list[dict]:
             entry["models"] = [dict(m) for m in models]
             result.append(entry)
         return result
+    finally:
+        conn.close()
+
+
+def store_benchmark(db_path: str, results: list[dict]) -> None:
+    """Persist benchmark results to SQLite."""
+    conn = sqlite3.connect(db_path)
+    try:
+        for r in results:
+            conn.execute(
+                """INSERT INTO benchmarks
+                   (ts, engine, model, prompt_type,
+                    tokens_generated, tok_per_sec, ttft_ms, total_duration_ms,
+                    vram_bytes, mem_used, thermal_level, thermal_speed_limit)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    r["ts"], r["engine"], r["model"], r["prompt_type"],
+                    r.get("tokens_generated", 0),
+                    r.get("tok_per_sec", 0.0),
+                    r.get("ttft_ms", 0.0),
+                    r.get("total_duration_ms", 0.0),
+                    r.get("vram_bytes", 0),
+                    r.get("mem_used", 0),
+                    r.get("thermal_level", ""),
+                    r.get("thermal_speed_limit", -1),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def query_benchmarks(db_path: str, hours: int = 0, model: str = "") -> list[dict]:
+    """Query past benchmark results.
+
+    Args:
+        hours: If > 0, limit to last N hours. If 0, return all.
+        model: If non-empty, filter by model name.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        query = "SELECT * FROM benchmarks WHERE 1=1"
+        params: list = []
+
+        if hours > 0:
+            since = int(time.time()) - (hours * 3600)
+            query += " AND ts >= ?"
+            params.append(since)
+
+        if model:
+            query += " AND model = ?"
+            params.append(model)
+
+        query += " ORDER BY ts DESC"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
     finally:
         conn.close()
 

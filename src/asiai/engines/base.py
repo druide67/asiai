@@ -18,6 +18,21 @@ class ModelInfo:
 
 
 @dataclass
+class GenerateResult:
+    """Result of a text generation request with timing metrics."""
+
+    text: str = ""
+    tokens_generated: int = 0
+    tok_per_sec: float = 0.0
+    ttft_ms: float = 0.0
+    total_duration_ms: float = 0.0
+    prompt_eval_duration_ms: float = 0.0
+    model: str = ""
+    engine: str = ""
+    error: str = ""
+
+
+@dataclass
 class EngineStatus:
     """Status of an inference engine."""
 
@@ -55,6 +70,10 @@ class InferenceEngine(ABC):
     @abstractmethod
     def list_available(self) -> list[ModelInfo]:
         """List all available (downloaded) models."""
+
+    @abstractmethod
+    def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
+        """Send a generation request and return timing metrics."""
 
     def status(self) -> EngineStatus:
         """Collect full engine status."""

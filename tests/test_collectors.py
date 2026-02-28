@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
 import subprocess
+from unittest.mock import MagicMock, patch
 
 from asiai.collectors.system import (
-    CpuLoad,
-    MemoryInfo,
-    ThermalInfo,
     collect_cpu_cores,
     collect_cpu_load,
     collect_memory,

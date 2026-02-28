@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import sys
 
-
 # --- ANSI color helpers ---
 
 def _supports_color() -> bool:

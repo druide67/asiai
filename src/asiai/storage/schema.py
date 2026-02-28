@@ -32,6 +32,24 @@ CREATE TABLE IF NOT EXISTS models (
 );
 
 CREATE INDEX IF NOT EXISTS idx_models_ts ON models(ts);
+
+CREATE TABLE IF NOT EXISTS benchmarks (
+    ts INTEGER NOT NULL,
+    engine TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_type TEXT NOT NULL,
+    tokens_generated INTEGER,
+    tok_per_sec REAL,
+    ttft_ms REAL,
+    total_duration_ms REAL,
+    vram_bytes INTEGER,
+    mem_used INTEGER,
+    thermal_level TEXT,
+    thermal_speed_limit INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_benchmarks_ts ON benchmarks(ts);
+CREATE INDEX IF NOT EXISTS idx_benchmarks_model ON benchmarks(model);
 """
 
 # Migrations from earlier schema versions.
