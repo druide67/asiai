@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 
 from asiai.benchmark.prompts import BenchPrompt, get_prompts
-from asiai.collectors.system import collect_memory, collect_thermal
+from asiai.collectors.system import collect_engine_processes, collect_memory, collect_thermal
 from asiai.engines.base import InferenceEngine
 
 logger = logging.getLogger("asiai.benchmark.runner")
@@ -117,6 +117,10 @@ def _run_single(
 
     gen = engine.generate(model, prompt.prompt, prompt.max_tokens)
 
+    # Capture process-level resource usage right after generation
+    procs = collect_engine_processes()
+    engine_proc = next((p for p in procs if p.name == engine.name), None)
+
     if gen.error:
         run.errors.append(f"{engine.name}/{prompt.name}: {gen.error}")
         return
@@ -134,6 +138,9 @@ def _run_single(
         "mem_used": mem.used,
         "thermal_level": thermal.level,
         "thermal_speed_limit": thermal.speed_limit,
+        "proc_cpu_pct": engine_proc.cpu_pct if engine_proc else 0.0,
+        "proc_mem_pct": engine_proc.mem_pct if engine_proc else 0.0,
+        "proc_rss_bytes": engine_proc.rss_bytes if engine_proc else 0,
     })
 
 

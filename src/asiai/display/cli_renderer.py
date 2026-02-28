@@ -223,13 +223,18 @@ def render_bench(report: dict) -> None:
     print()
 
     # Table header
-    print(f"  {'Engine':<12} {'tok/s':>8} {'TTFT':>8} {'VRAM':>10} {'Thermal':>10}")
-    print(f"  {'─' * 12} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}")
+    print(f"  {'Engine':<12} {'tok/s':>8} {'TTFT':>8} {'VRAM':>10} "
+          f"{'CPU%':>6} {'RSS':>10} {'Thermal':>10}")
+    print(f"  {'─' * 12} {'─' * 8} {'─' * 8} {'─' * 10} "
+          f"{'─' * 6} {'─' * 10} {'─' * 10}")
 
     for engine_name, data in sorted(engines.items()):
         tok_s = f"{data['avg_tok_s']:.1f}" if data["avg_tok_s"] > 0 else "N/A"
         ttft = f"{data['avg_ttft_ms'] / 1000:.2f}s" if data["avg_ttft_ms"] > 0 else "N/A"
         vram = format_bytes(data["vram_bytes"]) if data["vram_bytes"] > 0 else "N/A"
+        cpu = f"{data.get('avg_proc_cpu', 0):.0f}%" if data.get("avg_proc_cpu", 0) > 0 else "N/A"
+        rss_val = data.get("proc_rss_bytes", 0)
+        rss = format_bytes(rss_val) if rss_val > 0 else "N/A"
         thermal = format_thermal(data["thermal_level"]) if data["thermal_level"] else "N/A"
 
         name_str = engine_name
@@ -238,7 +243,8 @@ def render_bench(report: dict) -> None:
             name_str = green(engine_name)
             tok_s_str = green(tok_s)
 
-        print(f"  {name_str:<12} {tok_s_str:>8} {ttft:>8} {vram:>10} {thermal:>10}")
+        print(f"  {name_str:<12} {tok_s_str:>8} {ttft:>8} {vram:>10} "
+              f"{cpu:>6} {rss:>10} {thermal:>10}")
 
     print()
 
