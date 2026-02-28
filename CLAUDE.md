@@ -94,7 +94,10 @@ pip install -e . && asiai --version && asiai detect
 Spin-off du projet OpenClaw (swarm multi-agents IA sur Mac Mini M4 Pro 64 Go). Le code du health agent v1.1 (650 lignes, production) et des scripts de benchmark sont la base de l'extraction.
 
 ### Docs strategie
-Les documents de strategie (etude de marche, SWOT, plan marketing, reseaux sociaux) sont dans le vault OpenClaw, PAS dans ce repo : `openclaw-macos-hardened/docs/obsidian-vault/07 - Projets Annexes/inference-pilot/`
+Les documents de strategie (etude de marche, SWOT, plan marketing, reseaux sociaux) sont dans le vault OpenClaw, PAS dans ce repo. Ils sont accessibles via le working directory supplementaire configure dans `.claude/settings.json` :
+- Chemin : `/Users/jmn/projets/openclaw-macos-hardened/docs/obsidian-vault/07 - Projets Annexes/inference-pilot/`
+- Fichiers : 00-Vision, 01-Etude-Marche, 02-Fonctionnalites, 03-Architecture, 04-Securite, 05-SWOT, 06-Plan-Communication, 07-Plan-Marketing, 08-Questions-Ouvertes, 09-Reseaux-Sociaux
+- **Ne jamais copier ces fichiers dans ce repo** — ils contiennent la strategie privee
 
 ### Identite
 - GitHub : `druide67`
