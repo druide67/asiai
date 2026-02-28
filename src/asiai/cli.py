@@ -1,5 +1,7 @@
 """CLI entry point for asiai."""
 
+from __future__ import annotations
+
 import argparse
 import sys
 
