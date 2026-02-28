@@ -230,6 +230,52 @@ def collect_machine_info() -> str:
     return " — ".join(parts) if parts else "unknown"
 
 
+@dataclass
+class ProcessInfo:
+    """Resource usage of an inference engine process."""
+
+    name: str = ""
+    cpu_pct: float = 0.0
+    mem_pct: float = 0.0
+    rss_bytes: int = 0
+
+
+# Process name patterns for inference engines
+_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio"]
+
+
+def collect_engine_processes() -> list[ProcessInfo]:
+    """Collect CPU% and MEM% for inference engine processes via ps."""
+    try:
+        out = subprocess.run(
+            ["ps", "aux"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout
+    except Exception as e:
+        logger.warning("engine_processes: %s", e)
+        return []
+
+    # Aggregate by engine name (sum child processes)
+    totals: dict[str, ProcessInfo] = {}
+    for line in out.splitlines()[1:]:  # Skip header
+        cols = line.split(None, 10)
+        if len(cols) < 11:
+            continue
+        cmd = cols[10]
+        for pattern in _ENGINE_PATTERNS:
+            if pattern.lower() in cmd.lower():
+                pat = pattern.lower()
+                key = "lmstudio" if "lm studio" in pat or "lmstudio" in pat else pat
+                if key not in totals:
+                    totals[key] = ProcessInfo(name=key)
+                totals[key].cpu_pct += float(cols[2])
+                totals[key].mem_pct += float(cols[3])
+                totals[key].rss_bytes += int(cols[5]) * 1024  # RSS in KB
+                break
+
+    return list(totals.values())
+
+
 def collect_uptime() -> int:
     """System uptime in seconds via sysctl kern.boottime."""
     try:
