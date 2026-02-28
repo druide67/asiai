@@ -200,7 +200,9 @@ def render_compare(data: dict) -> None:
 
 
 def render_bench(report: dict) -> None:
-    """Render benchmark comparison table."""
+    """Render benchmark comparison table with machine context."""
+    from asiai.collectors.system import collect_machine_info, collect_memory
+
     model = report.get("model", "unknown")
     engines = report.get("engines", {})
     winner = report.get("winner")
@@ -209,6 +211,13 @@ def render_bench(report: dict) -> None:
         print(dim("No benchmark results to display."))
         return
 
+    print()
+    # Machine context header
+    machine = collect_machine_info()
+    mem = collect_memory()
+    ram_str = format_bytes(mem.total) if mem.total > 0 else "N/A"
+    mem_pct = f"{mem.used / mem.total * 100:.0f}%" if mem.total > 0 else "N/A"
+    print(dim(f"  {machine}  RAM: {ram_str} ({mem_pct} used)  Pressure: {mem.pressure}"))
     print()
     print(bold(f"Benchmark: {model}"))
     print()

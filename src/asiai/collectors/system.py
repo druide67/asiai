@@ -208,6 +208,28 @@ def collect_thermal() -> ThermalInfo:
     return result
 
 
+def collect_machine_info() -> str:
+    """Return machine model and chip (e.g. 'MacBookPro18,3 — Apple M1 Pro')."""
+    parts = []
+    try:
+        model = subprocess.run(
+            ["sysctl", "-n", "hw.model"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        parts.append(model)
+    except Exception:
+        pass
+    try:
+        chip = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        parts.append(chip)
+    except Exception:
+        pass
+    return " — ".join(parts) if parts else "unknown"
+
+
 def collect_uptime() -> int:
     """System uptime in seconds via sysctl kern.boottime."""
     try:
