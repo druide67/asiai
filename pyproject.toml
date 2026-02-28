@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "asiai"
+version = "0.1.0-dev"
+description = "Multi-engine LLM benchmark & monitoring CLI for Apple Silicon"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "Jean-Marc Nahlovsky", email = "druide67@free.fr" },
+]
+keywords = [
+    "llm",
+    "benchmark",
+    "monitoring",
+    "apple-silicon",
+    "ollama",
+    "lm-studio",
+    "mlx",
+    "inference",
+    "cli",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Monitoring",
+]
+
+[project.urls]
+Homepage = "https://github.com/druide67/asiai"
+Repository = "https://github.com/druide67/asiai"
+Issues = "https://github.com/druide67/asiai/issues"
+
+[project.scripts]
+asiai = "asiai.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/asiai"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
