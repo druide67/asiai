@@ -2,10 +2,10 @@
 
 ## Projet
 
-**asiai** — CLI open-source pour gerer, benchmarker et monitorer l'inference LLM locale sur Apple Silicon.
+**asiai** — CLI open-source pour gérer, benchmarker et monitorer l'inférence LLM locale sur Apple Silicon.
 
-- **Repo** : `druide67/asiai` (prive, passage public a v0.1)
-- **Langage** : Python 3.11+, zero dependance externe (stdlib) pour le core
+- **Repo** : `druide67/asiai` (privé, passage public à v0.1)
+- **Langage** : Python 3.11+, zéro dépendance externe (stdlib) pour le core
 - **Cible** : macOS Apple Silicon uniquement (M1/M2/M3/M4). Pas de Linux, pas de Windows.
 - **License** : Apache 2.0
 
@@ -14,10 +14,10 @@
 ```
 asiai/
 ├── src/asiai/
-│   ├── cli.py              # Point d'entree CLI (argparse)
+│   ├── cli.py              # Point d'entrée CLI (argparse)
 │   ├── engines/            # Adapters moteurs (Ollama, LM Studio, MLX, OpenAI-compat)
-│   ├── collectors/         # Collecteurs metriques (system, inference, macOS natif)
-│   ├── benchmark/          # Runner + prompts standardises + reporter
+│   ├── collectors/         # Collecteurs métriques (system, inference, macOS natif)
+│   ├── benchmark/          # Runner + prompts standardisés + reporter
 │   ├── storage/            # SQLite (schema, migrations, dataclasses)
 │   ├── advisor/            # Recommandations hardware-aware
 │   └── display/            # Renderers (CLI, TUI Textual, Web FastAPI+htmx)
@@ -26,7 +26,7 @@ asiai/
 └── pyproject.toml          # hatchling build
 ```
 
-**Pattern cle** : Shared Data Layer — le code metier (SQLite, API moteurs) est partage entre CLI, TUI et Web. Seul le renderer differe.
+**Pattern clé** : Shared Data Layer — le code métier (SQLite, API moteurs) est partagé entre CLI, TUI et Web. Seul le renderer diffère.
 
 ## Stack technique
 
@@ -53,63 +53,63 @@ pytest
 ruff check src/ tests/
 ruff format src/ tests/
 
-# Verifier le package
+# Vérifier le package
 pip install -e . && asiai --version && asiai detect
 ```
 
-## Regles de code
+## Règles de code
 
 ### Style
 - **Langue** : tout en anglais (code, commentaires, commits, README, docs)
 - **Formatage** : ruff, line-length 100
-- **Types** : type hints partout, pas de `Any` sauf justifie
+- **Types** : type hints partout, pas de `Any` sauf justifié
 - **Docstrings** : Google style, en anglais
 - **Imports** : isort via ruff (I)
 
 ### Architecture
-- **Zero dependance core** : le coeur (engines, collectors, storage) ne depend que de la stdlib Python. Les dependances optionnelles (rich, textual, fastapi) sont des extras.
-- **Engine adapters** : chaque moteur implemente `InferenceEngine` (ABC). Ajouter un moteur = ajouter un fichier dans `engines/`.
-- **macOS natif** : utiliser sysctl, vm_stat, pmset, IOReport pour les metriques. Pas de psutil.
-- **SQLite** : schema versionne avec migrations. Retention automatique 90 jours.
+- **Zéro dépendance core** : le cœur (engines, collectors, storage) ne dépend que de la stdlib Python. Les dépendances optionnelles (rich, textual, fastapi) sont des extras.
+- **Engine adapters** : chaque moteur implémente `InferenceEngine` (ABC). Ajouter un moteur = ajouter un fichier dans `engines/`.
+- **macOS natif** : utiliser sysctl, vm_stat, pmset, IOReport pour les métriques. Pas de psutil.
+- **SQLite** : schéma versionné avec migrations. Rétention automatique 90 jours.
 
 ### Tests
 - **pytest** obligatoire pour tout nouveau code
 - **Mocks** : mocker les appels HTTP (pas de vrai serveur Ollama/LM Studio en CI)
-- **Pas de tests qui necessitent du hardware Apple Silicon** en CI (marquer avec `@pytest.mark.apple_silicon`)
+- **Pas de tests qui nécessitent du hardware Apple Silicon** en CI (marquer avec `@pytest.mark.apple_silicon`)
 
 ### Commits
 - **Format** : Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`)
 - **Langue** : anglais
 - **Pas de co-author automatique**
 
-### Securite
-- **Jamais de telemetrie** : aucun appel reseau sauf vers les moteurs locaux
-- **Pas de secrets** : l'outil ne gere pas de tokens/cles
+### Sécurité
+- **Jamais de télémétrie** : aucun appel réseau sauf vers les moteurs locaux
+- **Pas de secrets** : l'outil ne gère pas de tokens/clés
 - **subprocess** : toujours avec liste d'args (pas de shell=True)
-- **SQLite** : parametres lies (pas de f-string dans les requetes)
+- **SQLite** : paramètres liés (pas de f-string dans les requêtes)
 
 ## Contexte projet
 
 ### Origine
 Spin-off du projet OpenClaw (swarm multi-agents IA sur Mac Mini M4 Pro 64 Go). Le code du health agent v1.1 (650 lignes, production) et des scripts de benchmark sont la base de l'extraction.
 
-### Docs strategie
-Les documents de strategie (etude de marche, SWOT, plan marketing, reseaux sociaux) sont dans le vault OpenClaw, PAS dans ce repo. Ils sont accessibles via le working directory supplementaire configure dans `.claude/settings.json` :
+### Docs stratégie
+Les documents de stratégie (étude de marché, SWOT, plan marketing, réseaux sociaux) sont dans le vault OpenClaw, PAS dans ce repo. Ils sont accessibles via le working directory supplémentaire configuré dans `.claude/settings.json` :
 - Chemin : `/Users/jmn/projets/openclaw-macos-hardened/docs/obsidian-vault/07 - Projets Annexes/inference-pilot/`
 - Fichiers : 00-Vision, 01-Etude-Marche, 02-Fonctionnalites, 03-Architecture, 04-Securite, 05-SWOT, 06-Plan-Communication, 07-Plan-Marketing, 08-Questions-Ouvertes, 09-Reseaux-Sociaux
-- **Ne jamais copier ces fichiers dans ce repo** — ils contiennent la strategie privee
+- **Ne jamais copier ces fichiers dans ce repo** — ils contiennent la stratégie privée
 
-### Identite
+### Identité
 - GitHub : `druide67`
-- X : `@druide67`
+- X : `@jmn67`
 - LinkedIn : Jean-Marc Nahlovsky
-- Le nom "asiai" (ASI + AI) n'est pas encore verrouille. Si le nom change, renommer le package, le repo, et les references.
+- Le nom "asiai" (ASI + AI) n'est pas encore verrouillé. Si le nom change, renommer le package, le repo, et les références.
 
 ## Roadmap
 
 | Version | Scope | Statut |
 |---------|-------|--------|
 | v0.1 | detect + bench + monitor (CLI, stdlib only) | En cours |
-| v0.2 | recommend + analyze + TUI (Textual) | Planifie |
-| v0.3 | Dashboard web (FastAPI + htmx + ApexCharts) | Planifie |
-| v1.0 | Multi-serveur, plugins, Homebrew Core | Planifie |
+| v0.2 | recommend + analyze + TUI (Textual) | Planifié |
+| v0.3 | Dashboard web (FastAPI + htmx + ApexCharts) | Planifié |
+| v1.0 | Multi-serveur, plugins, Homebrew Core | Planifié |

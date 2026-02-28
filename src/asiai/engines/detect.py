@@ -31,6 +31,28 @@ def http_get_json(url: str, timeout: int = 5) -> tuple[dict | None, dict[str, st
         return None, {}
 
 
+def http_post_json(
+    url: str,
+    data: dict,
+    timeout: int = 300,
+) -> tuple[dict | None, dict[str, str]]:
+    """HTTP POST with JSON body, returning parsed JSON and lowercase headers.
+
+    Returns (None, {}) on any failure.
+    """
+    try:
+        body = json.dumps(data).encode()
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode()
+            parsed = json.loads(raw)
+            headers = {k.lower(): v for k, v in resp.headers.items()}
+            return parsed, headers
+    except (URLError, OSError, ValueError, json.JSONDecodeError):
+        return None, {}
+
+
 def detect_engine_type(base_url: str) -> tuple[str, str]:
     """Detect which engine is running at the given URL.
 

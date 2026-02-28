@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from asiai.engines.base import EngineStatus, InferenceEngine, ModelInfo
-from asiai.engines.detect import http_get_json
+from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
+from asiai.engines.detect import http_get_json, http_post_json
 
 logger = logging.getLogger("asiai.engines.ollama")
 
@@ -56,3 +56,39 @@ class OllamaEngine(InferenceEngine):
                 size_total=m.get("size", 0),
             ))
         return models
+
+    def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
+        """Generate text using Ollama /api/generate endpoint."""
+        data, _ = http_post_json(
+            f"{self.base_url}/api/generate",
+            {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"num_predict": max_tokens},
+            },
+            timeout=300,
+        )
+        if data is None:
+            return GenerateResult(engine=self.name, model=model, error="request failed")
+
+        if "error" in data:
+            return GenerateResult(engine=self.name, model=model, error=data["error"])
+
+        eval_count = data.get("eval_count", 0)
+        eval_duration_ns = data.get("eval_duration", 0)
+        prompt_eval_ns = data.get("prompt_eval_duration", 0)
+        total_ns = data.get("total_duration", 0)
+
+        tok_s = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else 0.0
+
+        return GenerateResult(
+            text=data.get("response", ""),
+            tokens_generated=eval_count,
+            tok_per_sec=round(tok_s, 2),
+            ttft_ms=round(prompt_eval_ns / 1e6, 1),
+            total_duration_ms=round(total_ns / 1e6, 1),
+            prompt_eval_duration_ms=round(prompt_eval_ns / 1e6, 1),
+            model=model,
+            engine=self.name,
+        )

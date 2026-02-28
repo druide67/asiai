@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
-from asiai.engines.base import InferenceEngine, ModelInfo
-from asiai.engines.detect import detect_engine_type, http_get_json
+from asiai.engines.detect import detect_engine_type, http_get_json, http_post_json
 from asiai.engines.lmstudio import LMStudioEngine
 from asiai.engines.ollama import OllamaEngine
 
@@ -120,6 +118,105 @@ class TestOllamaEngine:
             models = engine.list_available()
 
         assert len(models) == 2
+
+
+class TestHttpPostJson:
+    def test_success(self):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"response": "hello"}'
+        mock_resp.headers = MagicMock()
+        mock_resp.headers.items.return_value = [("Content-Type", "application/json")]
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("asiai.engines.detect.urlopen", return_value=mock_resp):
+            data, headers = http_post_json("http://localhost/api", {"prompt": "hi"})
+
+        assert data == {"response": "hello"}
+
+    def test_error(self):
+        with patch("asiai.engines.detect.urlopen", side_effect=OSError("refused")):
+            data, headers = http_post_json("http://localhost/api", {"prompt": "hi"})
+
+        assert data is None
+        assert headers == {}
+
+
+class TestOllamaGenerate:
+    def test_generate_success(self):
+        gen_response = {
+            "response": "class BST:\n    pass",
+            "eval_count": 150,
+            "eval_duration": 3_000_000_000,
+            "prompt_eval_duration": 800_000_000,
+            "total_duration": 4_000_000_000,
+        }
+
+        def mock_post(url, data, timeout=300):
+            if "/api/generate" in url:
+                return gen_response, {}
+            return None, {}
+
+        with patch("asiai.engines.ollama.http_post_json", side_effect=mock_post):
+            engine = OllamaEngine("http://localhost:11434")
+            result = engine.generate("test-model", "Write a BST", 512)
+
+        assert result.tokens_generated == 150
+        assert result.tok_per_sec == 50.0
+        assert result.ttft_ms == 800.0
+        assert result.error == ""
+
+    def test_generate_error(self):
+        def mock_post(url, data, timeout=300):
+            return {"error": "model not found"}, {}
+
+        with patch("asiai.engines.ollama.http_post_json", side_effect=mock_post):
+            engine = OllamaEngine("http://localhost:11434")
+            result = engine.generate("bad-model", "hello", 512)
+
+        assert result.error == "model not found"
+
+    def test_generate_connection_failed(self):
+        with patch("asiai.engines.ollama.http_post_json", return_value=(None, {})):
+            engine = OllamaEngine("http://localhost:11434")
+            result = engine.generate("model", "hello", 512)
+
+        assert result.error == "request failed"
+
+
+class TestLMStudioGenerate:
+    def test_generate_success(self):
+        gen_response = {
+            "choices": [{"text": "def hello(): pass"}],
+            "usage": {"completion_tokens": 80},
+        }
+
+        def mock_post(url, data, timeout=300):
+            if "/v1/completions" in url:
+                return gen_response, {}
+            return None, {}
+
+        with patch("asiai.engines.lmstudio.http_post_json", side_effect=mock_post), \
+             patch("asiai.engines.lmstudio.time") as mock_time:
+            mock_time.monotonic.side_effect = [0.0, 2.0]  # 2 seconds elapsed
+            engine = LMStudioEngine("http://localhost:1234")
+            result = engine.generate("test-model", "Write code", 512)
+
+        assert result.tokens_generated == 80
+        assert result.tok_per_sec == 40.0
+        assert result.ttft_ms == 0.0  # N/A for LM Studio
+        assert result.error == ""
+
+    def test_generate_error(self):
+        gen_response = {"error": {"message": "model not loaded"}}
+
+        with patch("asiai.engines.lmstudio.http_post_json", return_value=(gen_response, {})), \
+             patch("asiai.engines.lmstudio.time") as mock_time:
+            mock_time.monotonic.side_effect = [0.0, 0.1]
+            engine = LMStudioEngine("http://localhost:1234")
+            result = engine.generate("bad-model", "hello", 512)
+
+        assert "model not loaded" in result.error
 
 
 class TestLMStudioEngine:

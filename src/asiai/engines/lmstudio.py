@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import time
 
-from asiai.engines.base import InferenceEngine, ModelInfo
-from asiai.engines.detect import http_get_json
+from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
+from asiai.engines.detect import http_get_json, http_post_json
 
 logger = logging.getLogger("asiai.engines.lmstudio")
 
@@ -51,3 +52,46 @@ class LMStudioEngine(InferenceEngine):
     def list_available(self) -> list[ModelInfo]:
         # LM Studio API does not expose available (downloaded) models
         return []
+
+    def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
+        """Generate text using LM Studio /v1/completions endpoint."""
+        t0 = time.monotonic()
+        data, _ = http_post_json(
+            f"{self.base_url}/v1/completions",
+            {
+                "model": model,
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "stream": False,
+                "temperature": 0.0,
+            },
+            timeout=300,
+        )
+        elapsed_s = time.monotonic() - t0
+
+        if data is None:
+            return GenerateResult(engine=self.name, model=model, error="request failed")
+
+        if "error" in data:
+            msg = data["error"]
+            if isinstance(msg, dict):
+                msg = msg.get("message", str(msg))
+            return GenerateResult(engine=self.name, model=model, error=str(msg))
+
+        choices = data.get("choices", [])
+        text = choices[0].get("text", "") if choices else ""
+        usage = data.get("usage", {})
+        completion_tokens = usage.get("completion_tokens", 0)
+
+        tok_s = (completion_tokens / elapsed_s) if elapsed_s > 0 else 0.0
+
+        return GenerateResult(
+            text=text,
+            tokens_generated=completion_tokens,
+            tok_per_sec=round(tok_s, 2),
+            ttft_ms=0.0,  # Not available in non-streaming mode
+            total_duration_ms=round(elapsed_s * 1000, 1),
+            prompt_eval_duration_ms=0.0,
+            model=model,
+            engine=self.name,
+        )

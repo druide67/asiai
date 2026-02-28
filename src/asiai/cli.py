@@ -101,7 +101,13 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         render_history,
         render_snapshot,
     )
-    from asiai.storage.db import DEFAULT_DB_PATH, init_db, query_compare, query_history, store_snapshot
+    from asiai.storage.db import (
+        DEFAULT_DB_PATH,
+        init_db,
+        query_compare,
+        query_history,
+        store_snapshot,
+    )
 
     urls = _parse_urls(args.url)
     engines = _discover_engines(urls)
@@ -152,6 +158,82 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         return 0
 
 
+def cmd_bench(args: argparse.Namespace) -> int:
+    """Handle 'bench' command."""
+    from asiai.benchmark.reporter import aggregate_results
+    from asiai.benchmark.runner import find_common_model, run_benchmark
+    from asiai.display.cli_renderer import render_bench, render_bench_history
+    from asiai.storage.db import (
+        DEFAULT_DB_PATH,
+        init_db,
+        query_benchmarks,
+        store_benchmark,
+    )
+
+    db_path = args.db or DEFAULT_DB_PATH
+    init_db(db_path)
+
+    # History mode
+    if args.history:
+        period = args.history.rstrip("dh")
+        if args.history.endswith("d"):
+            hours = int(period) * 24 if period.isdigit() else 168
+        else:
+            hours = int(period) if period.isdigit() else 24
+        rows = query_benchmarks(db_path, hours=hours, model=args.model or "")
+        render_bench_history(rows)
+        return 0
+
+    # Benchmark mode
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+
+    if not engines:
+        print("No inference engines detected.", file=sys.stderr)
+        return 1
+
+    # Filter engines if --engines specified
+    if args.engines:
+        wanted = {e.strip().lower() for e in args.engines.split(",")}
+        engines = [e for e in engines if e.name in wanted]
+        if not engines:
+            print(f"None of the specified engines found: {args.engines}", file=sys.stderr)
+            return 1
+
+    # Determine model
+    model = find_common_model(engines, args.model or "")
+    if not model:
+        print("No model to benchmark. Load a model or use --model.", file=sys.stderr)
+        return 1
+
+    # Parse prompt types
+    prompt_names = None
+    if args.prompts:
+        prompt_names = [p.strip() for p in args.prompts.split(",")]
+
+    # Show what we are about to do
+    engine_names = ", ".join(e.name for e in engines)
+    print(f"Benchmarking {model} on {engine_names}...")
+    print()
+
+    # Run benchmark
+    bench_run = run_benchmark(engines, model, prompt_names)
+
+    # Store results
+    if bench_run.results:
+        store_benchmark(db_path, bench_run.results)
+
+    # Display errors
+    for err in bench_run.errors:
+        print(f"  Warning: {err}", file=sys.stderr)
+
+    # Aggregate and render
+    report = aggregate_results(bench_run.results)
+    render_bench(report)
+
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="asiai",
@@ -196,10 +278,23 @@ def main(argv: list[str] | None = None) -> int:
         help="Compare two timestamps",
     )
 
-    # bench (placeholder)
+    # bench
     bench_parser = subparsers.add_parser("bench", help="Benchmark models across engines")
     bench_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
-    bench_parser.add_argument("--model", help="Model to benchmark")
+    bench_parser.add_argument("--model", "-m", help="Model to benchmark (default: auto-detect)")
+    bench_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
+    bench_parser.add_argument(
+        "--engines", "-e", metavar="LIST",
+        help="Engines to benchmark, comma-separated (e.g. ollama,lmstudio)",
+    )
+    bench_parser.add_argument(
+        "--prompts", "-p", metavar="LIST",
+        help="Prompt types, comma-separated (code,tool_call,reasoning,long_gen)",
+    )
+    bench_parser.add_argument(
+        "--history", "-H", metavar="PERIOD",
+        help="Show past benchmarks (e.g. 7d, 24h)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -211,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         "detect": cmd_detect,
         "models": cmd_models,
         "monitor": cmd_monitor,
+        "bench": cmd_bench,
     }
 
     handler = commands.get(args.command)

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 import time
 from datetime import datetime
 
 from asiai.display.formatters import (
     bold,
-    cyan,
     dim,
     format_bytes,
     format_pressure,
@@ -198,6 +196,79 @@ def render_compare(data: dict) -> None:
             print(f"    {red('-')} {name}")
     else:
         print(dim("  No model changes."))
+    print()
+
+
+def render_bench(report: dict) -> None:
+    """Render benchmark comparison table."""
+    model = report.get("model", "unknown")
+    engines = report.get("engines", {})
+    winner = report.get("winner")
+
+    if not engines:
+        print(dim("No benchmark results to display."))
+        return
+
+    print()
+    print(bold(f"Benchmark: {model}"))
+    print()
+
+    # Table header
+    print(f"  {'Engine':<12} {'tok/s':>8} {'TTFT':>8} {'VRAM':>10} {'Thermal':>10}")
+    print(f"  {'─' * 12} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}")
+
+    for engine_name, data in sorted(engines.items()):
+        tok_s = f"{data['avg_tok_s']:.1f}" if data["avg_tok_s"] > 0 else "N/A"
+        ttft = f"{data['avg_ttft_ms'] / 1000:.2f}s" if data["avg_ttft_ms"] > 0 else "N/A"
+        vram = format_bytes(data["vram_bytes"]) if data["vram_bytes"] > 0 else "N/A"
+        thermal = format_thermal(data["thermal_level"]) if data["thermal_level"] else "N/A"
+
+        name_str = engine_name
+        tok_s_str = tok_s
+        if winner and winner["name"] == engine_name:
+            name_str = green(engine_name)
+            tok_s_str = green(tok_s)
+
+        print(f"  {name_str:<12} {tok_s_str:>8} {ttft:>8} {vram:>10} {thermal:>10}")
+
+    print()
+
+    if winner:
+        parts = [winner["tok_s_delta"], winner["vram_delta"]]
+        parts = [p for p in parts if p]
+        detail = f" ({', '.join(parts)})" if parts else ""
+        print(f"  {bold('Winner:')} {green(winner['name'])}{detail}")
+    elif len(engines) == 1:
+        print(dim("  Single engine — no comparison available."))
+    print()
+
+
+def render_bench_history(rows: list[dict]) -> None:
+    """Render past benchmark results."""
+    if not rows:
+        print(dim("No benchmark history found."))
+        return
+
+    print(bold(f"Benchmark History — {len(rows)} entries"))
+    print()
+    print(f"  {'Timestamp':<20} {'Engine':<12} {'Model':<30} "
+          f"{'Prompt':>10} {'tok/s':>8} {'TTFT':>8}")
+    print(f"  {'─' * 20} {'─' * 12} {'─' * 30} "
+          f"{'─' * 10} {'─' * 8} {'─' * 8}")
+
+    for row in rows:
+        ts_str = _ts_to_str(row["ts"])
+        engine = row.get("engine", "")
+        model = row.get("model", "")
+        if len(model) > 30:
+            model = model[:27] + "..."
+        prompt = row.get("prompt_type", "")
+        tok_s = f"{row.get('tok_per_sec', 0):.1f}"
+        ttft = row.get("ttft_ms", 0)
+        ttft_str = f"{ttft / 1000:.2f}s" if ttft > 0 else "N/A"
+
+        print(f"  {ts_str:<20} {engine:<12} {model:<30} "
+              f"{prompt:>10} {tok_s:>8} {ttft_str:>8}")
     print()
 
 
