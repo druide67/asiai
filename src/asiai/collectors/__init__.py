@@ -1,1 +1,1 @@
-"""System and inference metric collectors."""
+"""System and inference metrics collectors."""

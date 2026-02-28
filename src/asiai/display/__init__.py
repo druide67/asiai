@@ -1,1 +1,1 @@
-"""Display renderers (CLI, TUI, Web)."""
+"""CLI display and formatting."""

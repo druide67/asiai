@@ -1,0 +1,65 @@
+"""Base classes for inference engine adapters."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+
+@dataclass
+class ModelInfo:
+    """Information about a loaded or available model."""
+
+    name: str
+    size_vram: int = 0
+    size_total: int = 0
+    format: str = ""
+    quantization: str = ""
+
+
+@dataclass
+class EngineStatus:
+    """Status of an inference engine."""
+
+    running: list[ModelInfo] = field(default_factory=list)
+    available: list[ModelInfo] = field(default_factory=list)
+    reachable: bool = False
+
+
+class InferenceEngine(ABC):
+    """Abstract base class for inference engine adapters.
+
+    Each engine (Ollama, LM Studio, mlx-lm, etc.) implements this interface.
+    """
+
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url.rstrip("/")
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Engine name (e.g. 'ollama', 'lmstudio')."""
+
+    @abstractmethod
+    def version(self) -> str:
+        """Return the engine version string, or empty string if unreachable."""
+
+    @abstractmethod
+    def is_reachable(self) -> bool:
+        """Check if the engine is responding."""
+
+    @abstractmethod
+    def list_running(self) -> list[ModelInfo]:
+        """List currently loaded/running models."""
+
+    @abstractmethod
+    def list_available(self) -> list[ModelInfo]:
+        """List all available (downloaded) models."""
+
+    def status(self) -> EngineStatus:
+        """Collect full engine status."""
+        return EngineStatus(
+            running=self.list_running(),
+            available=self.list_available(),
+            reachable=self.is_reachable(),
+        )
