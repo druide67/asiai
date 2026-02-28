@@ -10,6 +10,7 @@ from asiai.benchmark.prompts import PROMPTS, get_prompts
 from asiai.benchmark.reporter import aggregate_results
 from asiai.benchmark.runner import (
     _model_matches,
+    _resolve_model_name,
     find_common_model,
     run_benchmark,
 )
@@ -64,6 +65,24 @@ class TestModelMatches:
 
     def test_no_match(self):
         assert not _model_matches("llama3:8b", "qwen3.5:35b")
+
+
+class TestResolveModelName:
+    def test_exact_match(self):
+        engine = _mock_engine(models=[ModelInfo(name="gemma2:9b")])
+        assert _resolve_model_name(engine, "gemma2:9b") == "gemma2:9b"
+
+    def test_cross_engine_name(self):
+        engine = _mock_engine(models=[ModelInfo(name="gemma-2-9b")])
+        assert _resolve_model_name(engine, "gemma2:9b") == "gemma-2-9b"
+
+    def test_no_match_returns_target(self):
+        engine = _mock_engine(models=[ModelInfo(name="llama3:8b")])
+        assert _resolve_model_name(engine, "qwen3:32b") == "qwen3:32b"
+
+    def test_empty_models(self):
+        engine = _mock_engine(models=[])
+        assert _resolve_model_name(engine, "gemma2:9b") == "gemma2:9b"
 
 
 # --- Runner ---

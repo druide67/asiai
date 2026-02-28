@@ -83,6 +83,9 @@ def run_benchmark(
             run.errors.append(f"{engine.name}: not reachable")
             continue
 
+        # Resolve engine-specific model name
+        engine_model = _resolve_model_name(engine, model)
+
         # Get VRAM for this model
         vram_bytes = 0
         try:
@@ -94,8 +97,8 @@ def run_benchmark(
             pass
 
         for prompt in prompts:
-            logger.info("Benchmarking %s on %s [%s]", model, engine.name, prompt.name)
-            _run_single(engine, model, prompt, ts, vram_bytes, run)
+            logger.info("Benchmarking %s on %s [%s]", engine_model, engine.name, prompt.name)
+            _run_single(engine, engine_model, prompt, ts, vram_bytes, run)
 
     return run
 
@@ -134,6 +137,20 @@ def _run_single(
     })
 
 
+def _resolve_model_name(engine: InferenceEngine, target: str) -> str:
+    """Find the actual model name loaded in this engine that matches the target.
+
+    Returns the engine-specific name, or the target as-is if no match found.
+    """
+    try:
+        for m in engine.list_running():
+            if _model_matches(m.name, target):
+                return m.name
+    except Exception:
+        pass
+    return target
+
+
 def _model_matches(running_name: str, target: str) -> bool:
     """Check if a running model name matches the target.
 
@@ -151,6 +168,11 @@ def _model_matches(running_name: str, target: str) -> bool:
     if base_running == base_target:
         return True
     # Substring match for cross-engine name variants
-    if target in running_name or running_name in target:
+    if base_target in running_name or base_running in target:
+        return True
+    # Normalize separators (gemma-2-9b vs gemma2:9b)
+    norm_running = base_running.replace("-", "").replace(".", "")
+    norm_target = base_target.replace("-", "").replace(".", "")
+    if norm_running == norm_target or norm_target in norm_running or norm_running in norm_target:
         return True
     return False
