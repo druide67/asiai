@@ -109,7 +109,7 @@ Les documents de stratégie (étude de marché, SWOT, plan marketing, réseaux s
 
 | Version | Scope | Statut |
 |---------|-------|--------|
-| v0.1 | detect + bench + monitor (CLI, stdlib only) | En cours |
-| v0.2 | recommend + analyze + TUI (Textual) | Planifié |
+| **v0.1** | detect + bench + monitor + models (CLI, stdlib) | **Done** |
+| **v0.2** | mlx-lm + doctor + daemon launchd + TUI (Textual) | **En cours** |
 | v0.3 | Dashboard web (FastAPI + htmx + ApexCharts) | Planifié |
 | v1.0 | Multi-serveur, plugins, Homebrew Core | Planifié |

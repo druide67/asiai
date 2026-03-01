@@ -14,11 +14,13 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     """Detect inference engines and return instantiated adapters."""
     from asiai.engines.detect import detect_engines
     from asiai.engines.lmstudio import LMStudioEngine
+    from asiai.engines.mlxlm import MlxLmEngine
     from asiai.engines.ollama import OllamaEngine
 
     engine_map = {
         "ollama": OllamaEngine,
         "lmstudio": LMStudioEngine,
+        "mlxlm": MlxLmEngine,
     }
 
     found = detect_engines(urls)
@@ -139,23 +141,110 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         render_compare(data)
         return 0
 
+    quiet = getattr(args, "quiet", False)
+
     # Default: snapshot (with optional --watch)
     if args.watch:
         try:
             while True:
-                subprocess.run(["clear"], check=False)
+                if not quiet:
+                    subprocess.run(["clear"], check=False)
                 snap = collect_snapshot(engines)
                 store_snapshot(db_path, snap)
-                render_snapshot(snap)
+                if not quiet:
+                    render_snapshot(snap)
                 time.sleep(args.watch)
         except KeyboardInterrupt:
-            print()
+            if not quiet:
+                print()
             return 0
     else:
         snap = collect_snapshot(engines)
         store_snapshot(db_path, snap)
-        render_snapshot(snap)
+        if not quiet:
+            render_snapshot(snap)
         return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Handle 'doctor' command."""
+    from asiai.display.cli_renderer import render_doctor
+    from asiai.doctor import run_checks
+
+    db_path = args.db or None
+    checks = run_checks(db_path) if db_path else run_checks()
+    render_doctor(checks)
+
+    # Return non-zero if any check failed
+    if any(c.status == "fail" for c in checks):
+        return 1
+    return 0
+
+
+def cmd_tui(args: argparse.Namespace) -> int:
+    """Handle 'tui' command."""
+    try:
+        from asiai.display.tui import run_tui
+    except ImportError:
+        print("Textual is required for the TUI.", file=sys.stderr)
+        print("Install with: pip install asiai[tui]", file=sys.stderr)
+        return 1
+
+    from asiai.storage.db import DEFAULT_DB_PATH, init_db
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    db_path = args.db or DEFAULT_DB_PATH
+    init_db(db_path)
+    run_tui(engines=engines, db_path=db_path)
+    return 0
+
+
+def cmd_daemon(args: argparse.Namespace) -> int:
+    """Handle 'daemon' command."""
+    from asiai.daemon import daemon_logs, daemon_start, daemon_status, daemon_stop
+    from asiai.display.formatters import bold, dim, green, red
+
+    action = args.action
+    if not action:
+        print("Usage: asiai daemon {start|stop|status|logs}", file=sys.stderr)
+        return 1
+
+    if action == "start":
+        interval = args.interval if hasattr(args, "interval") else 60
+        result = daemon_start(interval)
+        if result["status"] == "started":
+            print(green("Daemon started"))
+            print(f"  Plist:    {result['plist']}")
+            print(f"  Interval: {result['interval']}s")
+        else:
+            print(red(f"Error: {result['message']}"), file=sys.stderr)
+            return 1
+
+    elif action == "stop":
+        result = daemon_stop()
+        if result["status"] == "stopped":
+            print(green("Daemon stopped"))
+        else:
+            print(red(f"Error: {result['message']}"), file=sys.stderr)
+            return 1
+
+    elif action == "status":
+        status = daemon_status()
+        if status["running"]:
+            pid_str = f" (PID {status['pid']})" if status["pid"] else ""
+            print(f"{green('●')} {bold('Running')}{pid_str}")
+        else:
+            print(f"{dim('○')} {dim('Not running')}")
+            if not status["plist_exists"]:
+                print(dim("  No plist installed. Run: asiai daemon start"))
+
+    elif action == "logs":
+        lines = args.lines if hasattr(args, "lines") else 50
+        output = daemon_logs(lines)
+        print(output)
+
+    return 0
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -277,6 +366,35 @@ def main(argv: list[str] | None = None) -> int:
         "--compare", "-c", nargs=2, metavar="TS",
         help="Compare two timestamps",
     )
+    monitor_parser.add_argument(
+        "--quiet", "-q", action="store_true",
+        help="Collect and store without output (for daemon use)",
+    )
+
+    # doctor
+    doctor_parser = subparsers.add_parser("doctor", help="Diagnose installation and environment")
+    doctor_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
+
+    # daemon
+    daemon_parser = subparsers.add_parser("daemon", help="Manage monitoring daemon")
+    daemon_sub = daemon_parser.add_subparsers(dest="action")
+    daemon_start_p = daemon_sub.add_parser("start", help="Start the monitoring daemon")
+    daemon_start_p.add_argument(
+        "--interval", "-i", type=int, default=60, metavar="SEC",
+        help="Collection interval in seconds (default: 60)",
+    )
+    daemon_sub.add_parser("stop", help="Stop the monitoring daemon")
+    daemon_sub.add_parser("status", help="Check daemon status")
+    daemon_logs_p = daemon_sub.add_parser("logs", help="Show daemon logs")
+    daemon_logs_p.add_argument(
+        "--lines", "-n", type=int, default=50, metavar="N",
+        help="Number of log lines to show (default: 50)",
+    )
+
+    # tui
+    tui_parser = subparsers.add_parser("tui", help="Interactive TUI dashboard (requires textual)")
+    tui_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
+    tui_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
 
     # bench
     bench_parser = subparsers.add_parser("bench", help="Benchmark models across engines")
@@ -307,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
         "models": cmd_models,
         "monitor": cmd_monitor,
         "bench": cmd_bench,
+        "doctor": cmd_doctor,
+        "daemon": cmd_daemon,
+        "tui": cmd_tui,
     }
 
     handler = commands.get(args.command)

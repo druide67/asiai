@@ -32,11 +32,54 @@ def _time_ago(seconds: int) -> str:
     return f"{seconds // 86400}d ago"
 
 
+def render_doctor(checks: list) -> None:
+    """Render doctor diagnostic results as a checklist."""
+    # Group by category
+    categories: dict[str, list] = {}
+    for check in checks:
+        cat = check.category
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(check)
+
+    status_icons = {"ok": green("✓"), "warn": yellow("⚠"), "fail": red("✗")}
+    category_order = ["system", "engine", "database"]
+
+    print(bold("Doctor"))
+    print()
+
+    for cat in category_order:
+        cat_checks = categories.get(cat, [])
+        if not cat_checks:
+            continue
+        print(f"  {bold(cat.capitalize())}")
+        for check in cat_checks:
+            icon = status_icons.get(check.status, "?")
+            print(f"    {icon} {check.name:<20} {check.message}")
+            if check.fix and check.status != "ok":
+                print(f"      {dim(f'Fix: {check.fix}')}")
+        print()
+
+    # Summary
+    ok_count = sum(1 for c in checks if c.status == "ok")
+    warn_count = sum(1 for c in checks if c.status == "warn")
+    fail_count = sum(1 for c in checks if c.status == "fail")
+    parts = []
+    if ok_count:
+        parts.append(green(f"{ok_count} ok"))
+    if warn_count:
+        parts.append(yellow(f"{warn_count} warning(s)"))
+    if fail_count:
+        parts.append(red(f"{fail_count} failed"))
+    print(f"  {', '.join(parts)}")
+    print()
+
+
 def render_detect(engines: list[dict]) -> None:
     """Render engine detection results."""
     if not engines:
         print(dim("No inference engines detected."))
-        print(dim("Checked default ports: localhost:11434 (Ollama), localhost:1234 (LM Studio)"))
+        print(dim("Checked: localhost:11434 (Ollama), :1234 (LM Studio), :8080 (mlx-lm)"))
         return
 
     print(bold("Detected engines:"))

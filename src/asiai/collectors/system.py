@@ -241,7 +241,7 @@ class ProcessInfo:
 
 
 # Process name patterns for inference engines
-_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio"]
+_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio", "mlx_lm"]
 
 
 def collect_engine_processes() -> list[ProcessInfo]:
@@ -265,7 +265,12 @@ def collect_engine_processes() -> list[ProcessInfo]:
         for pattern in _ENGINE_PATTERNS:
             if pattern.lower() in cmd.lower():
                 pat = pattern.lower()
-                key = "lmstudio" if "lm studio" in pat or "lmstudio" in pat else pat
+                if "lm studio" in pat or "lmstudio" in pat:
+                    key = "lmstudio"
+                elif "mlx_lm" in pat:
+                    key = "mlxlm"
+                else:
+                    key = pat
                 if key not in totals:
                     totals[key] = ProcessInfo(name=key)
                 totals[key].cpu_pct += float(cols[2])
