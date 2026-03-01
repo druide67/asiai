@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+_LMSTUDIO_APP_PLIST = "/Applications/LM Studio.app/Contents/Info.plist"
 
 logger = logging.getLogger("asiai.engines.detect")
 
@@ -54,6 +57,21 @@ def http_post_json(
         return None, {}
 
 
+def _lmstudio_version_from_app() -> str:
+    """Read LM Studio version from the macOS app bundle plist."""
+    try:
+        out = subprocess.run(
+            ["/usr/libexec/PlistBuddy", "-c",
+             "Print :CFBundleShortVersionString", _LMSTUDIO_APP_PLIST],
+            capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip().split("+")[0]
+    except Exception:
+        pass
+    return ""
+
+
 def detect_engine_type(base_url: str) -> tuple[str, str]:
     """Detect which engine is running at the given URL.
 
@@ -75,8 +93,12 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
         if version:
             return "lmstudio", version
         ver_data, _ = http_get_json(f"{base_url}/lms/version")
-        if ver_data and "version" in ver_data:
-            return "lmstudio", ver_data["version"]
+        if ver_data and isinstance(ver_data, dict):
+            if "version" in ver_data:
+                return "lmstudio", ver_data["version"]
+            # /lms/version responding (even with error) means LM Studio
+            if "error" in ver_data:
+                return "lmstudio", _lmstudio_version_from_app()
         # No LM Studio markers → mlx-lm (or other OpenAI-compatible server)
         return "mlxlm", ""
 

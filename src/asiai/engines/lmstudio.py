@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import time
 
 from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
 from asiai.engines.detect import http_get_json, http_post_json
+
+_APP_PLIST = "/Applications/LM Studio.app/Contents/Info.plist"
 
 logger = logging.getLogger("asiai.engines.lmstudio")
 
@@ -29,8 +32,19 @@ class LMStudioEngine(InferenceEngine):
             return version
         # Fallback: /lms/version endpoint
         data, _ = http_get_json(f"{self.base_url}/lms/version")
-        if data and "version" in data:
+        if data and isinstance(data, dict) and "version" in data:
             return data["version"]
+        # Fallback: read version from app bundle plist
+        try:
+            out = subprocess.run(
+                ["/usr/libexec/PlistBuddy", "-c",
+                 "Print :CFBundleShortVersionString", _APP_PLIST],
+                capture_output=True, text=True, timeout=5,
+            )
+            if out.returncode == 0 and out.stdout.strip():
+                return out.stdout.strip().split("+")[0]
+        except Exception:
+            pass
         return ""
 
     def is_reachable(self) -> bool:
