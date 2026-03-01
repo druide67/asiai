@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 
 from asiai.collectors.system import collect_machine_info, collect_memory, collect_thermal
-from asiai.engines.detect import http_get_json
+from asiai.engines.detect import _lmstudio_version_from_app, http_get_json
 from asiai.storage.db import DEFAULT_DB_PATH
 
 logger = logging.getLogger("asiai.doctor")
@@ -157,7 +157,10 @@ def _check_lmstudio() -> CheckResult:
     version = headers.get("x-lm-studio-version", "")
     if not version:
         ver_data, _ = http_get_json("http://localhost:1234/lms/version")
-        version = ver_data.get("version", "") if ver_data else ""
+        if ver_data and isinstance(ver_data, dict) and "version" in ver_data:
+            version = ver_data["version"]
+    if not version:
+        version = _lmstudio_version_from_app()
 
     models = data.get("data", [])
     if models:
