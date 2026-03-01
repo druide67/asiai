@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from asiai.engines.detect import detect_engine_type, http_get_json, http_post_json
 from asiai.engines.lmstudio import LMStudioEngine
+from asiai.engines.mlxlm import MlxLmEngine
 from asiai.engines.ollama import OllamaEngine
 
 
@@ -238,3 +239,136 @@ class TestLMStudioEngine:
         assert len(models) == 2
         assert models[0].name == "qwen-2.5-32b-instruct"
         assert models[0].format == "MLX"
+
+
+class TestMlxLmEngine:
+    def test_is_reachable(self):
+        with patch(
+            "asiai.engines.mlxlm.http_get_json",
+            return_value=({"data": []}, {}),
+        ):
+            engine = MlxLmEngine("http://localhost:8080")
+            assert engine.is_reachable()
+
+    def test_is_not_reachable(self):
+        with patch(
+            "asiai.engines.mlxlm.http_get_json",
+            return_value=(None, {}),
+        ):
+            engine = MlxLmEngine("http://localhost:8080")
+            assert not engine.is_reachable()
+
+    def test_list_running(self):
+        def mock_get(url, timeout=5):
+            if "/v1/models" in url:
+                return {
+                    "data": [
+                        {"id": "mlx-community/gemma-2-9b-4bit"},
+                    ]
+                }, {}
+            return None, {}
+
+        with patch("asiai.engines.mlxlm.http_get_json", side_effect=mock_get):
+            engine = MlxLmEngine("http://localhost:8080")
+            models = engine.list_running()
+
+        assert len(models) == 1
+        assert models[0].name == "mlx-community/gemma-2-9b-4bit"
+        assert models[0].format == "MLX"
+
+    def test_list_available(self):
+        engine = MlxLmEngine("http://localhost:8080")
+        assert engine.list_available() == []
+
+    def test_version_via_brew(self):
+        with patch("asiai.engines.mlxlm.subprocess") as mock_sub:
+            mock_result = MagicMock()
+            mock_result.stdout = "mlx-lm 0.30.7\n"
+            mock_sub.run.return_value = mock_result
+            engine = MlxLmEngine("http://localhost:8080")
+            assert engine.version() == "0.30.7"
+
+    def test_version_not_installed(self):
+        with patch("asiai.engines.mlxlm.subprocess") as mock_sub:
+            mock_result = MagicMock()
+            mock_result.stdout = ""
+            mock_sub.run.return_value = mock_result
+            engine = MlxLmEngine("http://localhost:8080")
+            assert engine.version() == ""
+
+
+class TestMlxLmGenerate:
+    def test_generate_success(self):
+        gen_response = {
+            "choices": [{"message": {"role": "assistant", "content": "def hello(): pass"}}],
+            "usage": {"completion_tokens": 80},
+        }
+
+        def mock_post(url, data, timeout=300):
+            if "/v1/chat/completions" in url:
+                return gen_response, {}
+            return None, {}
+
+        with patch("asiai.engines.mlxlm.http_post_json", side_effect=mock_post), \
+             patch("asiai.engines.mlxlm.time") as mock_time:
+            mock_time.monotonic.side_effect = [0.0, 2.0]
+            engine = MlxLmEngine("http://localhost:8080")
+            result = engine.generate("test-model", "Write code", 512)
+
+        assert result.tokens_generated == 80
+        assert result.tok_per_sec == 40.0
+        assert result.text == "def hello(): pass"
+        assert result.error == ""
+
+    def test_generate_error(self):
+        gen_response = {"error": {"message": "model not loaded"}}
+
+        with patch("asiai.engines.mlxlm.http_post_json", return_value=(gen_response, {})), \
+             patch("asiai.engines.mlxlm.time") as mock_time:
+            mock_time.monotonic.side_effect = [0.0, 0.1]
+            engine = MlxLmEngine("http://localhost:8080")
+            result = engine.generate("bad-model", "hello", 512)
+
+        assert "model not loaded" in result.error
+
+    def test_generate_connection_failed(self):
+        with patch("asiai.engines.mlxlm.http_post_json", return_value=(None, {})), \
+             patch("asiai.engines.mlxlm.time") as mock_time:
+            mock_time.monotonic.side_effect = [0.0, 0.1]
+            engine = MlxLmEngine("http://localhost:8080")
+            result = engine.generate("model", "hello", 512)
+
+        assert result.error == "request failed"
+
+
+class TestDetectMlxLm:
+    def test_detect_mlxlm_no_lmstudio_headers(self):
+        """mlx-lm responds to /v1/models but has no LM Studio markers."""
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "gemma-2-9b"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8080")
+
+        assert engine == "mlxlm"
+
+    def test_detect_lmstudio_with_header(self):
+        """LM Studio with header should NOT be detected as mlx-lm."""
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": []}, {"x-lm-studio-version": "0.4.6"}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:1234")
+
+        assert engine == "lmstudio"
+        assert version == "0.4.6"

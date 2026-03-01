@@ -13,6 +13,7 @@ logger = logging.getLogger("asiai.engines.detect")
 DEFAULT_URLS = [
     "http://localhost:11434",  # Ollama default
     "http://localhost:1234",   # LM Studio default
+    "http://localhost:8080",   # mlx-lm default
 ]
 
 
@@ -66,15 +67,18 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
     if data and "version" in data:
         return "ollama", data["version"]
 
-    # Try LM Studio: GET /v1/models (header or body contains version)
+    # Try OpenAI-compatible: GET /v1/models (LM Studio or mlx-lm)
     data, headers = http_get_json(f"{base_url}/v1/models")
     if data is not None:
+        # Check for LM Studio signatures first
         version = headers.get("x-lm-studio-version", "")
-        if not version:
-            ver_data, _ = http_get_json(f"{base_url}/lms/version")
-            if ver_data and "version" in ver_data:
-                version = ver_data["version"]
-        return "lmstudio", version or "unknown"
+        if version:
+            return "lmstudio", version
+        ver_data, _ = http_get_json(f"{base_url}/lms/version")
+        if ver_data and "version" in ver_data:
+            return "lmstudio", ver_data["version"]
+        # No LM Studio markers → mlx-lm (or other OpenAI-compatible server)
+        return "mlxlm", ""
 
     return "unknown", ""
 
