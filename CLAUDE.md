@@ -4,7 +4,7 @@
 
 **asiai** — CLI open-source pour gérer, benchmarker et monitorer l'inférence LLM locale sur Apple Silicon.
 
-- **Repo** : `druide67/asiai` (privé, passage public à v0.1)
+- **Repo** : `druide67/asiai`
 - **Langage** : Python 3.11+, zéro dépendance externe (stdlib) pour le core
 - **Cible** : macOS Apple Silicon uniquement (M1/M2/M3/M4). Pas de Linux, pas de Windows.
 - **License** : Apache 2.0
@@ -15,13 +15,26 @@
 asiai/
 ├── src/asiai/
 │   ├── cli.py              # Point d'entrée CLI (argparse)
-│   ├── engines/            # Adapters moteurs (Ollama, LM Studio, MLX, OpenAI-compat)
+│   ├── doctor.py           # Diagnostic installation et environnement
+│   ├── daemon.py           # Gestion daemon launchd (monitoring continu)
+│   ├── engines/            # Adapters moteurs (Ollama, LM Studio, mlx-lm)
+│   │   ├── base.py         # ABC InferenceEngine + dataclasses
+│   │   ├── detect.py       # Auto-détection moteurs (ports 11434, 1234, 8080)
+│   │   ├── ollama.py       # Adapter Ollama (API native)
+│   │   ├── lmstudio.py     # Adapter LM Studio (OpenAI-compatible)
+│   │   └── mlxlm.py        # Adapter mlx-lm (OpenAI-compatible, Apple MLX natif)
 │   ├── collectors/         # Collecteurs métriques (system, inference, macOS natif)
 │   ├── benchmark/          # Runner + prompts standardisés + reporter
 │   ├── storage/            # SQLite (schema, migrations, dataclasses)
 │   ├── advisor/            # Recommandations hardware-aware
 │   └── display/            # Renderers (CLI, TUI Textual, Web FastAPI+htmx)
-├── tests/                  # pytest
+│       ├── cli_renderer.py # Rendu CLI (detect, bench, doctor, monitor)
+│       ├── formatters.py   # Helpers formatage (ANSI, bytes, uptime)
+│       ├── tui.py          # Dashboard Textual (optionnel)
+│       └── tui.tcss        # Styles Textual
+├── tests/                  # pytest (128 unit + 7 integration)
+│   ├── conftest.py         # Flag --integration
+│   └── test_integration.py # Tests end-to-end (vrais moteurs, skip par défaut)
 ├── docs/                   # MkDocs-Material
 └── pyproject.toml          # hatchling build
 ```
@@ -30,15 +43,18 @@ asiai/
 
 ## Stack technique
 
-| Composant | Techno | Phase |
-|-----------|--------|-------|
-| Core CLI | stdlib Python (argparse, urllib, sqlite3, subprocess) | v0.1 |
-| Formatage | rich (optionnel) | v0.1 |
-| TUI | Textual | v0.2 |
-| API web | FastAPI + uvicorn | v0.3 |
-| Frontend web | htmx + Jinja2 + ApexCharts | v0.3 |
-| Docs site | MkDocs-Material | v0.1 |
-| Distribution | PyPI (pipx) + Homebrew Tap (druide67/tap) | v0.1 |
+| Composant | Techno | Phase | Statut |
+|-----------|--------|-------|--------|
+| Core CLI | stdlib Python (argparse, urllib, sqlite3, subprocess) | v0.1 | Done |
+| Engines | Ollama + LM Studio + mlx-lm adapters | v0.1-v0.2 | Done |
+| Benchmark | Runner + prompts standardisés + reporter | v0.1 | Done |
+| Doctor | Diagnostic installation et environnement | v0.2 | Done |
+| Daemon | launchd monitoring continu (plistlib) | v0.2 | Done |
+| TUI | Textual (optionnel) | v0.2 | Done |
+| API web | FastAPI + uvicorn | v0.3 | Planifié |
+| Frontend web | htmx + Jinja2 + ApexCharts | v0.3 | Planifié |
+| Docs site | MkDocs-Material | v0.1 | Planifié |
+| Distribution | PyPI (pipx) + Homebrew Tap (druide67/tap) | v0.1 | Done |
 
 ## Commandes de dev
 
@@ -46,8 +62,14 @@ asiai/
 # Installation dev
 pip install -e ".[dev]"
 
-# Tests
+# Installation avec TUI
+pip install -e ".[dev,tui]"
+
+# Tests unitaires
 pytest
+
+# Tests d'intégration (vrais moteurs requis)
+pytest --integration -v
 
 # Lint
 ruff check src/ tests/
@@ -56,6 +78,18 @@ ruff format src/ tests/
 # Vérifier le package
 pip install -e . && asiai --version && asiai detect
 ```
+
+## Commandes CLI
+
+| Commande | Description | Phase |
+|----------|-----------|-------|
+| `asiai detect` | Auto-détection moteurs (Ollama, LM Studio, mlx-lm) | v0.1 |
+| `asiai models` | Liste des modèles chargés par moteur | v0.1 |
+| `asiai monitor` | Snapshot système + inférence, stocké en SQLite | v0.1 |
+| `asiai bench` | Benchmark cross-engine avec prompts standardisés | v0.1 |
+| `asiai doctor` | Diagnostic installation, moteurs, système, DB | v0.2 |
+| `asiai daemon start\|stop\|status\|logs` | Monitoring continu via launchd | v0.2 |
+| `asiai tui` | Dashboard interactif Textual (optionnel) | v0.2 |
 
 ## Règles de code
 
@@ -68,14 +102,15 @@ pip install -e . && asiai --version && asiai detect
 
 ### Architecture
 - **Zéro dépendance core** : le cœur (engines, collectors, storage) ne dépend que de la stdlib Python. Les dépendances optionnelles (rich, textual, fastapi) sont des extras.
-- **Engine adapters** : chaque moteur implémente `InferenceEngine` (ABC). Ajouter un moteur = ajouter un fichier dans `engines/`.
+- **Engine adapters** : chaque moteur implémente `InferenceEngine` (ABC). Ajouter un moteur = ajouter un fichier dans `engines/`. Moteurs actuels : Ollama, LM Studio, mlx-lm.
 - **macOS natif** : utiliser sysctl, vm_stat, pmset, IOReport pour les métriques. Pas de psutil.
 - **SQLite** : schéma versionné avec migrations. Rétention automatique 90 jours.
 
 ### Tests
 - **pytest** obligatoire pour tout nouveau code
-- **Mocks** : mocker les appels HTTP (pas de vrai serveur Ollama/LM Studio en CI)
+- **Mocks** : mocker les appels HTTP (pas de vrai serveur Ollama/LM Studio/mlx-lm en CI)
 - **Pas de tests qui nécessitent du hardware Apple Silicon** en CI (marquer avec `@pytest.mark.apple_silicon`)
+- **Tests d'intégration** : `pytest --integration -v` (vrais moteurs requis, skippés par défaut)
 
 ### Commits
 - **Format** : Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`)
@@ -103,13 +138,33 @@ Les documents de stratégie (étude de marché, SWOT, plan marketing, réseaux s
 - GitHub : `druide67`
 - X : `@jmn67`
 - LinkedIn : Jean-Marc Nahlovsky
-- Le nom "asiai" (ASI + AI) n'est pas encore verrouillé. Si le nom change, renommer le package, le repo, et les références.
+- Nom "asiai" validé (ASI + AI)
 
 ## Roadmap
 
 | Version | Scope | Statut |
 |---------|-------|--------|
 | **v0.1** | detect + bench + monitor + models (CLI, stdlib) | **Done** |
-| **v0.2** | mlx-lm + doctor + daemon launchd + TUI (Textual) | **En cours** |
-| v0.3 | Dashboard web (FastAPI + htmx + ApexCharts) | Planifié |
+| **v0.2** | mlx-lm + doctor + daemon launchd + TUI (Textual) | **Done** |
+| **v0.3** | vllm-mlx + llama.cpp + tok/s per watt + variance + dashboard web | **Planifié** |
 | v1.0 | Multi-serveur, plugins, Homebrew Core | Planifié |
+
+### v0.3 — Scope détaillé
+
+**P0 — Must have** :
+- vllm-mlx adapter (5ème moteur, 400+ tok/s, continuous batching)
+- tok/s per watt (puissance GPU via IOReport/powermetrics — killer feature)
+- Stabilité benchmark (multi-runs, mean ± stddev)
+
+**P1 — Should have** :
+- llama.cpp server adapter (4ème moteur, `brew install llama.cpp`)
+- Temps de chargement modèle (cold load vs warm — déterminant pour les swaps multi-agents)
+- Détection moteurs par processus (`lsof -i :PORT` pour distinguer les serveurs OpenAI-compatible)
+- Détection de régression (comparaison auto après update moteur/OS)
+
+**P2 — Could have** :
+- Dashboard web (FastAPI + htmx + ApexCharts)
+- Export Prometheus
+- Débit concurrent (batching vllm-mlx)
+
+**Détection moteurs OpenAI-compatible** : cascade `/lms/version` → `/health`+`/props` → `/version` → fallback mlx-lm. Signal complémentaire : `lsof -i :PORT`. Ports à scanner : 11434, 1234, 8080, 8000, 8081.
