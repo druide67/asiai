@@ -27,9 +27,7 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         for migration in MIGRATIONS:
             existing = {
                 row[1]
-                for row in conn.execute(
-                    f"PRAGMA table_info({migration['table']})"
-                ).fetchall()
+                for row in conn.execute(f"PRAGMA table_info({migration['table']})").fetchall()
             }
             for col, sql in zip(migration["columns"], migration["sql"]):
                 if col not in existing:
@@ -57,9 +55,14 @@ def store_snapshot(db_path: str, snap: dict) -> None:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 snap["ts"],
-                snap["cpu_load_1"], snap["cpu_load_5"], snap["cpu_load_15"],
-                snap["mem_total"], snap["mem_used"], snap["mem_pressure"],
-                snap["thermal_level"], snap["thermal_speed_limit"],
+                snap["cpu_load_1"],
+                snap["cpu_load_5"],
+                snap["cpu_load_15"],
+                snap["mem_total"],
+                snap["mem_used"],
+                snap["mem_pressure"],
+                snap["thermal_level"],
+                snap["thermal_speed_limit"],
                 snap["uptime"],
                 snap.get("inference_engine"),
                 snap.get("engine_version"),
@@ -105,9 +108,7 @@ def query_history(db_path: str, hours: int = 24) -> list[dict]:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            "SELECT * FROM metrics WHERE ts >= ? ORDER BY ts", (since,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM metrics WHERE ts >= ? ORDER BY ts", (since,)).fetchall()
         result = []
         for row in rows:
             entry = dict(row)
@@ -132,10 +133,14 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                 """INSERT INTO benchmarks
                    (ts, engine, model, prompt_type,
                     tokens_generated, tok_per_sec, ttft_ms, total_duration_ms,
-                    vram_bytes, mem_used, thermal_level, thermal_speed_limit)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    vram_bytes, mem_used, thermal_level, thermal_speed_limit,
+                    run_index, power_watts, tok_per_sec_per_watt, load_time_ms)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    r["ts"], r["engine"], r["model"], r["prompt_type"],
+                    r["ts"],
+                    r["engine"],
+                    r["model"],
+                    r["prompt_type"],
                     r.get("tokens_generated", 0),
                     r.get("tok_per_sec", 0.0),
                     r.get("ttft_ms", 0.0),
@@ -144,6 +149,10 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("mem_used", 0),
                     r.get("thermal_level", ""),
                     r.get("thermal_speed_limit", -1),
+                    r.get("run_index", 0),
+                    r.get("power_watts", 0.0),
+                    r.get("tok_per_sec_per_watt", 0.0),
+                    r.get("load_time_ms", 0.0),
                 ),
             )
         conn.commit()
@@ -185,6 +194,7 @@ def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
+
         def nearest(ts: int) -> dict | None:
             row = conn.execute(
                 "SELECT * FROM metrics ORDER BY ABS(ts - ?) LIMIT 1", (ts,)

@@ -36,13 +36,15 @@ class OllamaEngine(InferenceEngine):
             return []
         models = []
         for m in data.get("models", []):
-            models.append(ModelInfo(
-                name=m.get("name", "unknown"),
-                size_vram=m.get("size_vram", 0),
-                size_total=m.get("size", 0),
-                format=m.get("details", {}).get("format", ""),
-                quantization=m.get("details", {}).get("quantization_level", ""),
-            ))
+            models.append(
+                ModelInfo(
+                    name=m.get("name", "unknown"),
+                    size_vram=m.get("size_vram", 0),
+                    size_total=m.get("size", 0),
+                    format=m.get("details", {}).get("format", ""),
+                    quantization=m.get("details", {}).get("quantization_level", ""),
+                )
+            )
         return models
 
     def list_available(self) -> list[ModelInfo]:
@@ -51,11 +53,32 @@ class OllamaEngine(InferenceEngine):
             return []
         models = []
         for m in data.get("models", []):
-            models.append(ModelInfo(
-                name=m.get("name", "unknown"),
-                size_total=m.get("size", 0),
-            ))
+            models.append(
+                ModelInfo(
+                    name=m.get("name", "unknown"),
+                    size_total=m.get("size", 0),
+                )
+            )
         return models
+
+    def measure_load_time(self, model: str) -> float:
+        """Measure model load time via a minimal /api/generate call.
+
+        Returns load_duration in milliseconds from Ollama's response.
+        """
+        data, _ = http_post_json(
+            f"{self.base_url}/api/generate",
+            {
+                "model": model,
+                "prompt": "",
+                "stream": False,
+                "options": {"num_predict": 1},
+            },
+            timeout=120,
+        )
+        if data and "load_duration" in data:
+            return round(data["load_duration"] / 1e6, 1)  # ns -> ms
+        return 0.0
 
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
         """Generate text using Ollama /api/generate endpoint."""

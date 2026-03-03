@@ -38,7 +38,9 @@ def _check_apple_silicon() -> CheckResult:
         chip = collect_machine_info()
         return CheckResult("system", "Apple Silicon", "ok", chip)
     return CheckResult(
-        "system", "Apple Silicon", "fail",
+        "system",
+        "Apple Silicon",
+        "fail",
         f"Architecture: {arch} (expected arm64)",
         fix="asiai requires macOS on Apple Silicon (M1/M2/M3/M4).",
     )
@@ -51,11 +53,15 @@ def _check_ram() -> CheckResult:
     if total_gb >= 16:
         pct = mem.used / mem.total * 100 if mem.total > 0 else 0
         return CheckResult(
-            "system", "RAM", "ok",
+            "system",
+            "RAM",
+            "ok",
             f"{total_gb:.0f} GB total, {pct:.0f}% used",
         )
     return CheckResult(
-        "system", "RAM", "warn",
+        "system",
+        "RAM",
+        "warn",
         f"{total_gb:.1f} GB total (16 GB recommended for LLM inference)",
     )
 
@@ -67,11 +73,17 @@ def _check_memory_pressure() -> CheckResult:
         return CheckResult("system", "Memory pressure", "ok", "normal")
     if mem.pressure == "warn":
         return CheckResult(
-            "system", "Memory pressure", "warn", "warning",
+            "system",
+            "Memory pressure",
+            "warn",
+            "warning",
             fix="Close unused applications to reduce memory pressure.",
         )
     return CheckResult(
-        "system", "Memory pressure", "fail", mem.pressure,
+        "system",
+        "Memory pressure",
+        "fail",
+        mem.pressure,
         fix="System is under heavy memory pressure. Free up RAM.",
     )
 
@@ -81,16 +93,22 @@ def _check_thermal() -> CheckResult:
     thermal = collect_thermal()
     if thermal.level in ("nominal", "unknown"):
         return CheckResult(
-            "system", "Thermal", "ok",
+            "system",
+            "Thermal",
+            "ok",
             f"{thermal.level} ({thermal.speed_limit}%)",
         )
     if thermal.level == "fair":
         return CheckResult(
-            "system", "Thermal", "warn",
+            "system",
+            "Thermal",
+            "warn",
             f"{thermal.level} ({thermal.speed_limit}%)",
         )
     return CheckResult(
-        "system", "Thermal", "fail",
+        "system",
+        "Thermal",
+        "fail",
         f"{thermal.level} ({thermal.speed_limit}%)",
         fix="CPU is thermal throttling. Allow the machine to cool down.",
     )
@@ -102,15 +120,21 @@ def _check_ollama() -> CheckResult:
     try:
         result = subprocess.run(
             ["which", "ollama"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         installed = result.returncode == 0
-    except Exception:
+    except Exception as e:
+        logger.debug("Ollama 'which' check failed: %s", e)
         installed = False
 
     if not installed:
         return CheckResult(
-            "engine", "Ollama", "fail", "not installed",
+            "engine",
+            "Ollama",
+            "fail",
+            "not installed",
             fix="brew install ollama",
         )
 
@@ -118,7 +142,10 @@ def _check_ollama() -> CheckResult:
     data, _ = http_get_json("http://localhost:11434/api/version")
     if data is None:
         return CheckResult(
-            "engine", "Ollama", "warn", "installed but not running",
+            "engine",
+            "Ollama",
+            "warn",
+            "installed but not running",
             fix="ollama serve",
         )
 
@@ -141,7 +168,10 @@ def _check_lmstudio() -> CheckResult:
 
     if not installed:
         return CheckResult(
-            "engine", "LM Studio", "fail", "not installed",
+            "engine",
+            "LM Studio",
+            "fail",
+            "not installed",
             fix="brew install --cask lm-studio",
         )
 
@@ -149,7 +179,9 @@ def _check_lmstudio() -> CheckResult:
     data, headers = http_get_json("http://localhost:1234/v1/models")
     if data is None:
         return CheckResult(
-            "engine", "LM Studio", "warn",
+            "engine",
+            "LM Studio",
+            "warn",
             "installed but server not running",
             fix="Open LM Studio → start local server, or: ~/.lmstudio/bin/lms server start",
         )
@@ -166,11 +198,15 @@ def _check_lmstudio() -> CheckResult:
     if models:
         names = ", ".join(m.get("id", "?") for m in models)
         return CheckResult(
-            "engine", "LM Studio", "ok",
+            "engine",
+            "LM Studio",
+            "ok",
             f"v{version} — {len(models)} model(s): {names}",
         )
     return CheckResult(
-        "engine", "LM Studio", "ok",
+        "engine",
+        "LM Studio",
+        "ok",
         f"v{version} — no models loaded",
     )
 
@@ -181,15 +217,21 @@ def _check_mlxlm() -> CheckResult:
     try:
         result = subprocess.run(
             ["brew", "list", "--versions", "mlx-lm"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         brew_out = result.stdout.strip()
-    except Exception:
+    except Exception as e:
+        logger.debug("mlx-lm brew check failed: %s", e)
         brew_out = ""
 
     if not brew_out:
         return CheckResult(
-            "engine", "mlx-lm", "fail", "not installed",
+            "engine",
+            "mlx-lm",
+            "fail",
+            "not installed",
             fix="brew install mlx-lm",
         )
 
@@ -201,7 +243,9 @@ def _check_mlxlm() -> CheckResult:
     data, _ = http_get_json("http://localhost:8080/v1/models")
     if data is None:
         return CheckResult(
-            "engine", "mlx-lm", "warn",
+            "engine",
+            "mlx-lm",
+            "warn",
             f"v{version} installed but server not running",
             fix="mlx_lm.server --host 0.0.0.0 --port 8080",
         )
@@ -210,12 +254,134 @@ def _check_mlxlm() -> CheckResult:
     if models:
         names = ", ".join(m.get("id", "?") for m in models)
         return CheckResult(
-            "engine", "mlx-lm", "ok",
+            "engine",
+            "mlx-lm",
+            "ok",
             f"v{version} — {len(models)} model(s): {names}",
         )
     return CheckResult(
-        "engine", "mlx-lm", "ok",
+        "engine",
+        "mlx-lm",
+        "ok",
         f"v{version} — no models loaded",
+    )
+
+
+def _check_llamacpp() -> CheckResult:
+    """Check llama.cpp installation and reachability."""
+    # Check if installed via brew
+    try:
+        result = subprocess.run(
+            ["brew", "list", "--versions", "llama.cpp"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        brew_out = result.stdout.strip()
+    except Exception as e:
+        logger.debug("llama.cpp brew check failed: %s", e)
+        brew_out = ""
+
+    if not brew_out:
+        return CheckResult(
+            "engine",
+            "llama.cpp",
+            "fail",
+            "not installed",
+            fix="brew install llama.cpp",
+        )
+
+    parts = brew_out.split()
+    version = parts[-1] if len(parts) >= 2 else "unknown"
+
+    # Check if server is running via /health
+    data, _ = http_get_json("http://localhost:8080/health")
+    if data is None or data.get("status") != "ok":
+        return CheckResult(
+            "engine",
+            "llama.cpp",
+            "warn",
+            f"v{version} installed but server not running",
+            fix="llama-server -m model.gguf --port 8080",
+        )
+
+    # Get model info via /v1/models
+    models_data, _ = http_get_json("http://localhost:8080/v1/models")
+    models = models_data.get("data", []) if models_data else []
+    if models:
+        names = ", ".join(m.get("id", "?") for m in models)
+        return CheckResult(
+            "engine",
+            "llama.cpp",
+            "ok",
+            f"v{version} — {len(models)} model(s): {names}",
+        )
+    return CheckResult(
+        "engine",
+        "llama.cpp",
+        "ok",
+        f"v{version} — server running",
+    )
+
+
+def _check_vllm_mlx() -> CheckResult:
+    """Check vllm-mlx installation and reachability."""
+    # Check if installed via pip
+    try:
+        result = subprocess.run(
+            ["pip", "show", "vllm-mlx"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        pip_out = result.stdout.strip()
+    except Exception as e:
+        logger.debug("vllm-mlx pip check failed: %s", e)
+        pip_out = ""
+
+    version = ""
+    if pip_out:
+        for line in pip_out.splitlines():
+            if line.startswith("Version:"):
+                version = line.split(":", 1)[1].strip()
+                break
+
+    if not version:
+        return CheckResult(
+            "engine",
+            "vllm-mlx",
+            "fail",
+            "not installed",
+            fix="pip install vllm-mlx",
+        )
+
+    # Check if server is running
+    data, _ = http_get_json("http://localhost:8000/version")
+    if data is None:
+        return CheckResult(
+            "engine",
+            "vllm-mlx",
+            "warn",
+            f"v{version} installed but server not running",
+            fix="vllm serve <model> --port 8000",
+        )
+
+    server_version = data.get("version", version)
+    models_data, _ = http_get_json("http://localhost:8000/v1/models")
+    models = models_data.get("data", []) if models_data else []
+    if models:
+        names = ", ".join(m.get("id", "?") for m in models)
+        return CheckResult(
+            "engine",
+            "vllm-mlx",
+            "ok",
+            f"v{server_version} — {len(models)} model(s): {names}",
+        )
+    return CheckResult(
+        "engine",
+        "vllm-mlx",
+        "ok",
+        f"v{server_version} — server running",
     )
 
 
@@ -223,7 +389,9 @@ def _check_db(db_path: str = DEFAULT_DB_PATH) -> CheckResult:
     """Check database existence, integrity, and freshness."""
     if not os.path.exists(db_path):
         return CheckResult(
-            "database", "SQLite", "warn",
+            "database",
+            "SQLite",
+            "warn",
             "database does not exist yet",
             fix="Run 'asiai monitor' to create it.",
         )
@@ -235,7 +403,9 @@ def _check_db(db_path: str = DEFAULT_DB_PATH) -> CheckResult:
             result = conn.execute("PRAGMA integrity_check").fetchone()
             if result[0] != "ok":
                 return CheckResult(
-                    "database", "SQLite", "fail",
+                    "database",
+                    "SQLite",
+                    "fail",
                     f"integrity check failed: {result[0]}",
                 )
 
@@ -243,15 +413,15 @@ def _check_db(db_path: str = DEFAULT_DB_PATH) -> CheckResult:
             size = os.path.getsize(db_path)
 
             # Freshness: last metrics entry
-            row = conn.execute(
-                "SELECT MAX(ts) FROM metrics"
-            ).fetchone()
+            row = conn.execute("SELECT MAX(ts) FROM metrics").fetchone()
             last_ts = row[0] if row and row[0] else 0
         finally:
             conn.close()
     except Exception as e:
         return CheckResult(
-            "database", "SQLite", "fail",
+            "database",
+            "SQLite",
+            "fail",
             f"cannot open database: {e}",
         )
 
@@ -297,6 +467,8 @@ def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
     checks.append(_check_ollama())
     checks.append(_check_lmstudio())
     checks.append(_check_mlxlm())
+    checks.append(_check_llamacpp())
+    checks.append(_check_vllm_mlx())
 
     # Database checks
     checks.append(_check_db(db_path))

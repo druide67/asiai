@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 
 def aggregate_results(results: list[dict]) -> dict:
     """Aggregate per-prompt results into per-engine summaries.
@@ -12,6 +14,9 @@ def aggregate_results(results: list[dict]) -> dict:
             "engines": {
                 "engine_name": {
                     "avg_tok_s": float,
+                    "std_dev_tok_s": float,
+                    "runs_count": int,
+                    "stability": str,          # "stable", "variable", "unstable"
                     "avg_ttft_ms": float,
                     "vram_bytes": int,
                     "thermal_level": str,
@@ -38,28 +43,54 @@ def aggregate_results(results: list[dict]) -> dict:
             }
         engines[name]["prompt_results"].append(r)
 
-    # Compute averages
+    # Compute averages and variance
     for data in engines.values():
         pr = data["prompt_results"]
         tok_values = [p["tok_per_sec"] for p in pr if p["tok_per_sec"] > 0]
         ttft_values = [p["ttft_ms"] for p in pr if p["ttft_ms"] > 0]
         cpu_values = [p["proc_cpu_pct"] for p in pr if p.get("proc_cpu_pct", 0) > 0]
         rss_values = [p["proc_rss_bytes"] for p in pr if p.get("proc_rss_bytes", 0) > 0]
-        data["avg_tok_s"] = (
-            round(sum(tok_values) / len(tok_values), 1) if tok_values else 0.0
-        )
-        data["avg_ttft_ms"] = (
-            round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
-        )
-        data["avg_proc_cpu"] = (
-            round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
-        )
+        data["avg_tok_s"] = round(sum(tok_values) / len(tok_values), 1) if tok_values else 0.0
+        data["avg_ttft_ms"] = round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
+        data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
         data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
+
+        # Variance: stddev of tok/s across runs
+        data["std_dev_tok_s"] = _stddev(tok_values)
+        data["runs_count"] = _count_runs(pr)
+        data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
 
     # Determine winner by avg tok/s
     winner = _determine_winner(engines)
 
     return {"model": model, "engines": engines, "winner": winner}
+
+
+def _stddev(values: list[float]) -> float:
+    """Compute population standard deviation."""
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    return round(math.sqrt(variance), 2)
+
+
+def _count_runs(results: list[dict]) -> int:
+    """Count distinct run indices."""
+    indices = {r.get("run_index", 0) for r in results}
+    return len(indices)
+
+
+def _classify_stability(avg: float, stddev: float) -> str:
+    """Classify tok/s stability based on coefficient of variation."""
+    if avg <= 0 or stddev <= 0:
+        return "stable"
+    cv = (stddev / avg) * 100
+    if cv < 5:
+        return "stable"
+    if cv < 10:
+        return "variable"
+    return "unstable"
 
 
 def _determine_winner(engines: dict[str, dict]) -> dict | None:
@@ -74,14 +105,16 @@ def _determine_winner(engines: dict[str, dict]) -> dict | None:
     if best["avg_tok_s"] <= 0 or second["avg_tok_s"] <= 0:
         return None
 
-    tok_pct = ((best["avg_tok_s"] - second["avg_tok_s"]) / second["avg_tok_s"]) * 100
-    tok_s_delta = f"+{tok_pct:.0f}% tok/s"
+    tok_ratio = best["avg_tok_s"] / second["avg_tok_s"]
+    if tok_ratio >= 1.5:
+        tok_s_delta = f"{tok_ratio:.1f}x faster"
+    else:
+        tok_pct = (tok_ratio - 1) * 100
+        tok_s_delta = f"+{tok_pct:.0f}% tok/s"
 
     vram_delta = ""
     if best["vram_bytes"] > 0 and second["vram_bytes"] > 0:
-        vram_pct = (
-            (best["vram_bytes"] - second["vram_bytes"]) / second["vram_bytes"]
-        ) * 100
+        vram_pct = ((best["vram_bytes"] - second["vram_bytes"]) / second["vram_bytes"]) * 100
         sign = "+" if vram_pct >= 0 else ""
         vram_delta = f"{sign}{vram_pct:.0f}% VRAM"
 

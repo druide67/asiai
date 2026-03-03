@@ -7,6 +7,7 @@ import sys
 
 # --- ANSI color helpers ---
 
+
 def _supports_color() -> bool:
     """Check if the terminal supports ANSI colors."""
     if os.environ.get("NO_COLOR"):
@@ -54,6 +55,7 @@ def cyan(text: str) -> str:
 
 
 # --- Value formatters ---
+
 
 def format_bytes(n: int) -> str:
     """Format byte count as human-readable string (e.g. '12.3 GB')."""

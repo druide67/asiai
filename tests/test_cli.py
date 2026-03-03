@@ -71,6 +71,7 @@ def _make_mock_engine(name, models=None):
     from unittest.mock import MagicMock
 
     from asiai.engines.base import InferenceEngine
+
     engine = MagicMock(spec=InferenceEngine)
     engine.name = name
     engine.base_url = "http://localhost:11434"

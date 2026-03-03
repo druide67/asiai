@@ -13,14 +13,18 @@ from asiai import __version__
 def _discover_engines(urls: list[str] | None = None) -> list:
     """Detect inference engines and return instantiated adapters."""
     from asiai.engines.detect import detect_engines
+    from asiai.engines.llamacpp import LlamaCppEngine
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
     from asiai.engines.ollama import OllamaEngine
+    from asiai.engines.vllm_mlx import VllmMlxEngine
 
     engine_map = {
         "ollama": OllamaEngine,
         "lmstudio": LMStudioEngine,
         "mlxlm": MlxLmEngine,
+        "llamacpp": LlamaCppEngine,
+        "vllm_mlx": VllmMlxEngine,
     }
 
     found = detect_engines(urls)
@@ -49,20 +53,22 @@ def cmd_detect(args: argparse.Namespace) -> int:
     results = []
     for engine in engines:
         models = engine.list_running()
-        results.append({
-            "name": engine.name,
-            "version": engine.version(),
-            "url": engine.base_url,
-            "models": [
-                {
-                    "name": m.name,
-                    "size_vram": m.size_vram,
-                    "format": m.format,
-                    "quantization": m.quantization,
-                }
-                for m in models
-            ],
-        })
+        results.append(
+            {
+                "name": engine.name,
+                "version": engine.version(),
+                "url": engine.base_url,
+                "models": [
+                    {
+                        "name": m.name,
+                        "size_vram": m.size_vram,
+                        "format": m.format,
+                        "quantization": m.quantization,
+                    }
+                    for m in models
+                ],
+            }
+        )
 
     render_detect(results)
     return 0
@@ -135,13 +141,18 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     if args.compare:
         parts = args.compare
         if len(parts) != 2:
-            print("Error: --compare requires exactly 2 timestamps", file=sys.stderr)
+            from asiai.display.formatters import red
+
+            print(red("Error: --compare requires exactly 2 timestamps"), file=sys.stderr)
             return 1
         data = query_compare(db_path, int(parts[0]), int(parts[1]))
         render_compare(data)
         return 0
 
     quiet = getattr(args, "quiet", False)
+
+    if args.watch is not None and args.watch < 1:
+        args.watch = 1
 
     # Default: snapshot (with optional --watch)
     if args.watch:
@@ -186,8 +197,10 @@ def cmd_tui(args: argparse.Namespace) -> int:
     try:
         from asiai.display.tui import run_tui
     except ImportError:
-        print("Textual is required for the TUI.", file=sys.stderr)
-        print("Install with: pip install asiai[tui]", file=sys.stderr)
+        from asiai.display.formatters import dim, red
+
+        print(red("Textual is required for the TUI."), file=sys.stderr)
+        print(dim("Install with: pip install asiai[tui]"), file=sys.stderr)
         return 1
 
     from asiai.storage.db import DEFAULT_DB_PATH, init_db
@@ -207,7 +220,7 @@ def cmd_daemon(args: argparse.Namespace) -> int:
 
     action = args.action
     if not action:
-        print("Usage: asiai daemon {start|stop|status|logs}", file=sys.stderr)
+        print(dim("Usage: asiai daemon {start|stop|status|logs}"), file=sys.stderr)
         return 1
 
     if action == "start":
@@ -249,9 +262,11 @@ def cmd_daemon(args: argparse.Namespace) -> int:
 
 def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
+    from asiai.benchmark.regression import detect_regressions
     from asiai.benchmark.reporter import aggregate_results
     from asiai.benchmark.runner import find_common_model, run_benchmark
-    from asiai.display.cli_renderer import render_bench, render_bench_history
+    from asiai.display.cli_renderer import render_bench, render_bench_history, render_regressions
+    from asiai.display.formatters import red, yellow
     from asiai.storage.db import (
         DEFAULT_DB_PATH,
         init_db,
@@ -278,7 +293,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     engines = _discover_engines(urls)
 
     if not engines:
-        print("No inference engines detected.", file=sys.stderr)
+        print(red("✗ No inference engines detected."), file=sys.stderr)
         return 1
 
     # Filter engines if --engines specified
@@ -286,13 +301,13 @@ def cmd_bench(args: argparse.Namespace) -> int:
         wanted = {e.strip().lower() for e in args.engines.split(",")}
         engines = [e for e in engines if e.name in wanted]
         if not engines:
-            print(f"None of the specified engines found: {args.engines}", file=sys.stderr)
+            print(red(f"✗ None of the specified engines found: {args.engines}"), file=sys.stderr)
             return 1
 
     # Determine model
     model = find_common_model(engines, args.model or "")
     if not model:
-        print("No model to benchmark. Load a model or use --model.", file=sys.stderr)
+        print(yellow("⚠ No model to benchmark. Load a model or use --model."), file=sys.stderr)
         return 1
 
     # Parse prompt types
@@ -306,7 +321,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
     print()
 
     # Run benchmark
-    bench_run = run_benchmark(engines, model, prompt_names)
+    runs = max(1, min(getattr(args, "runs", 1), 100))
+    power = getattr(args, "power", False)
+    bench_run = run_benchmark(engines, model, prompt_names, runs=runs, power=power)
 
     # Store results
     if bench_run.results:
@@ -314,11 +331,17 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     # Display errors
     for err in bench_run.errors:
-        print(f"  Warning: {err}", file=sys.stderr)
+        print(f"  {yellow('⚠')} {err}", file=sys.stderr)
 
     # Aggregate and render
     report = aggregate_results(bench_run.results)
     render_bench(report)
+
+    # Check for regressions against historical data
+    if bench_run.results:
+        regressions = detect_regressions(bench_run.results, db_path)
+        if regressions:
+            render_regressions(regressions)
 
     return 0
 
@@ -330,7 +353,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"asiai {__version__}")
     parser.add_argument(
-        "--url", metavar="URL",
+        "--url",
+        metavar="URL",
         help="Inference server URL(s), comma-separated (default: auto-detect)",
     )
 
@@ -346,28 +370,44 @@ def main(argv: list[str] | None = None) -> int:
 
     # monitor
     monitor_parser = subparsers.add_parser(
-        "monitor", help="Monitor system and inference metrics",
+        "monitor",
+        help="Monitor system and inference metrics",
     )
     monitor_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
     monitor_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
     monitor_parser.add_argument(
-        "--watch", "-w", type=int, metavar="SEC",
+        "--watch",
+        "-w",
+        type=int,
+        metavar="SEC",
         help="Refresh every SEC seconds",
     )
     monitor_parser.add_argument(
-        "--history", "-H", metavar="PERIOD",
+        "--history",
+        "-H",
+        metavar="PERIOD",
         help="Show history (e.g. 24h, 1h)",
     )
     monitor_parser.add_argument(
-        "--analyze", "-a", type=int, nargs="?", const=24, metavar="HOURS",
+        "--analyze",
+        "-a",
+        type=int,
+        nargs="?",
+        const=24,
+        metavar="HOURS",
         help="Comprehensive analysis (default: 24h)",
     )
     monitor_parser.add_argument(
-        "--compare", "-c", nargs=2, metavar="TS",
+        "--compare",
+        "-c",
+        nargs=2,
+        metavar="TS",
         help="Compare two timestamps",
     )
     monitor_parser.add_argument(
-        "--quiet", "-q", action="store_true",
+        "--quiet",
+        "-q",
+        action="store_true",
         help="Collect and store without output (for daemon use)",
     )
 
@@ -380,14 +420,22 @@ def main(argv: list[str] | None = None) -> int:
     daemon_sub = daemon_parser.add_subparsers(dest="action")
     daemon_start_p = daemon_sub.add_parser("start", help="Start the monitoring daemon")
     daemon_start_p.add_argument(
-        "--interval", "-i", type=int, default=60, metavar="SEC",
+        "--interval",
+        "-i",
+        type=int,
+        default=60,
+        metavar="SEC",
         help="Collection interval in seconds (default: 60)",
     )
     daemon_sub.add_parser("stop", help="Stop the monitoring daemon")
     daemon_sub.add_parser("status", help="Check daemon status")
     daemon_logs_p = daemon_sub.add_parser("logs", help="Show daemon logs")
     daemon_logs_p.add_argument(
-        "--lines", "-n", type=int, default=50, metavar="N",
+        "--lines",
+        "-n",
+        type=int,
+        default=50,
+        metavar="N",
         help="Number of log lines to show (default: 50)",
     )
 
@@ -402,15 +450,35 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument("--model", "-m", help="Model to benchmark (default: auto-detect)")
     bench_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
     bench_parser.add_argument(
-        "--engines", "-e", metavar="LIST",
+        "--engines",
+        "-e",
+        metavar="LIST",
         help="Engines to benchmark, comma-separated (e.g. ollama,lmstudio)",
     )
     bench_parser.add_argument(
-        "--prompts", "-p", metavar="LIST",
+        "--prompts",
+        "-p",
+        metavar="LIST",
         help="Prompt types, comma-separated (code,tool_call,reasoning,long_gen)",
     )
     bench_parser.add_argument(
-        "--history", "-H", metavar="PERIOD",
+        "--runs",
+        "-r",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of runs per prompt for variance measurement (default: 1)",
+    )
+    bench_parser.add_argument(
+        "--power",
+        "-P",
+        action="store_true",
+        help="Measure GPU power consumption (requires sudo)",
+    )
+    bench_parser.add_argument(
+        "--history",
+        "-H",
+        metavar="PERIOD",
         help="Show past benchmarks (e.g. 7d, 24h)",
     )
 

@@ -23,8 +23,10 @@ class TestFindAsiaiCommand:
         assert cmd == ["/usr/local/bin/asiai"]
 
     def test_fallback_python_m(self):
-        with patch("asiai.daemon.shutil.which", return_value=None), \
-             patch("asiai.daemon.sys") as mock_sys:
+        with (
+            patch("asiai.daemon.shutil.which", return_value=None),
+            patch("asiai.daemon.sys") as mock_sys,
+        ):
             mock_sys.executable = "/usr/bin/python3"
             cmd = _find_asiai_command()
         assert cmd == ["/usr/bin/python3", "-m", "asiai"]
@@ -62,12 +64,14 @@ class TestDaemonStart:
                 return mock_status_result
             return MagicMock(returncode=0)
 
-        with patch("asiai.daemon.subprocess.run", side_effect=mock_run), \
-             patch("asiai.daemon.os.makedirs"), \
-             patch("asiai.daemon.shutil.which", return_value="/usr/local/bin/asiai"), \
-             patch("builtins.open", mock_open()), \
-             patch("asiai.daemon.plistlib.dump"), \
-             patch("asiai.daemon.os.path.exists", return_value=False):
+        with (
+            patch("asiai.daemon.subprocess.run", side_effect=mock_run),
+            patch("asiai.daemon.os.makedirs"),
+            patch("asiai.daemon.shutil.which", return_value="/usr/local/bin/asiai"),
+            patch("builtins.open", mock_open()),
+            patch("asiai.daemon.plistlib.dump"),
+            patch("asiai.daemon.os.path.exists", return_value=False),
+        ):
             result = daemon_start(60)
 
         assert result["status"] == "started"
@@ -88,12 +92,14 @@ class TestDaemonStart:
                 return mock_status_result
             return MagicMock(returncode=0)
 
-        with patch("asiai.daemon.subprocess.run", side_effect=mock_run), \
-             patch("asiai.daemon.os.makedirs"), \
-             patch("asiai.daemon.shutil.which", return_value="/usr/local/bin/asiai"), \
-             patch("builtins.open", mock_open()), \
-             patch("asiai.daemon.plistlib.dump"), \
-             patch("asiai.daemon.os.path.exists", return_value=False):
+        with (
+            patch("asiai.daemon.subprocess.run", side_effect=mock_run),
+            patch("asiai.daemon.os.makedirs"),
+            patch("asiai.daemon.shutil.which", return_value="/usr/local/bin/asiai"),
+            patch("builtins.open", mock_open()),
+            patch("asiai.daemon.plistlib.dump"),
+            patch("asiai.daemon.os.path.exists", return_value=False),
+        ):
             result = daemon_start()
 
         assert result["status"] == "error"
@@ -102,9 +108,11 @@ class TestDaemonStart:
 
 class TestDaemonStop:
     def test_stop_with_plist(self):
-        with patch("asiai.daemon.os.path.exists", return_value=True), \
-             patch("asiai.daemon.subprocess.run") as mock_run, \
-             patch("asiai.daemon.os.remove") as mock_remove:
+        with (
+            patch("asiai.daemon.os.path.exists", return_value=True),
+            patch("asiai.daemon.subprocess.run") as mock_run,
+            patch("asiai.daemon.os.remove") as mock_remove,
+        ):
             mock_run.return_value = MagicMock(returncode=0)
             result = daemon_stop()
 
@@ -123,8 +131,10 @@ class TestDaemonStatus:
         mock_result.returncode = 0
         mock_result.stdout = '{\n\t"PID" = 12345;\n}'
 
-        with patch("asiai.daemon.subprocess.run", return_value=mock_result), \
-             patch("asiai.daemon.os.path.exists", return_value=True):
+        with (
+            patch("asiai.daemon.subprocess.run", return_value=mock_result),
+            patch("asiai.daemon.os.path.exists", return_value=True),
+        ):
             status = daemon_status()
 
         assert status["running"] is True
@@ -135,8 +145,10 @@ class TestDaemonStatus:
         mock_result = MagicMock()
         mock_result.returncode = 113  # Not found
 
-        with patch("asiai.daemon.subprocess.run", return_value=mock_result), \
-             patch("asiai.daemon.os.path.exists", return_value=False):
+        with (
+            patch("asiai.daemon.subprocess.run", return_value=mock_result),
+            patch("asiai.daemon.os.path.exists", return_value=False),
+        ):
             status = daemon_status()
 
         assert status["running"] is False
@@ -149,8 +161,10 @@ class TestDaemonLogs:
         mock_result = MagicMock()
         mock_result.stdout = "line1\nline2\nline3\n"
 
-        with patch("asiai.daemon.os.path.exists", return_value=True), \
-             patch("asiai.daemon.subprocess.run", return_value=mock_result):
+        with (
+            patch("asiai.daemon.os.path.exists", return_value=True),
+            patch("asiai.daemon.subprocess.run", return_value=mock_result),
+        ):
             output = daemon_logs(3)
 
         assert "line1" in output

@@ -82,7 +82,11 @@ if HAS_TEXTUAL:
 
         def on_mount(self) -> None:
             self.add_columns(
-                "Engine", "Model", "Prompt", "tok/s", "TTFT",
+                "Engine",
+                "Model",
+                "Prompt",
+                "tok/s",
+                "TTFT",
             )
 
         def update_data(self, rows: list[dict]) -> None:
@@ -187,8 +191,6 @@ if HAS_TEXTUAL:
 def run_tui(engines: list | None = None, db_path: str = "") -> None:
     """Launch the TUI app. Raises ImportError if textual is not installed."""
     if not HAS_TEXTUAL:
-        raise ImportError(
-            "Textual is required for the TUI. Install with: pip install asiai[tui]"
-        )
+        raise ImportError("Textual is required for the TUI. Install with: pip install asiai[tui]")
     app = AsiaiApp(engines=engines, db_path=db_path)
     app.run()

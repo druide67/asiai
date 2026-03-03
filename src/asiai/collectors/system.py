@@ -45,14 +45,17 @@ def collect_cpu_load() -> CpuLoad:
     try:
         out = subprocess.run(
             ["sysctl", "-n", "vm.loadavg"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
-        # Format: "{ 0.45 0.62 0.58 }"
+        # Format: "{ 0.45 0.62 0.58 }" (comma decimal on FR locale)
         parts = out.strip("{ }").split()
         return CpuLoad(
-            load_1=float(parts[0]),
-            load_5=float(parts[1]),
-            load_15=float(parts[2]),
+            load_1=float(parts[0].replace(",", ".")),
+            load_5=float(parts[1].replace(",", ".")),
+            load_15=float(parts[2].replace(",", ".")),
         )
     except Exception as e:
         logger.warning("cpu_load: %s", e)
@@ -64,7 +67,10 @@ def collect_cpu_cores() -> int:
     try:
         out = subprocess.run(
             ["sysctl", "-n", "hw.logicalcpu"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
         return int(out)
     except Exception:
@@ -77,14 +83,23 @@ def collect_memory() -> MemoryInfo:
 
     # Total RAM
     try:
-        total_bytes = int(subprocess.run(
-            ["sysctl", "-n", "hw.memsize"],
-            capture_output=True, text=True, timeout=5, check=True,
-        ).stdout.strip())
+        total_bytes = int(
+            subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+            ).stdout.strip()
+        )
         result.total = total_bytes
 
         vm_out = subprocess.run(
-            ["vm_stat"], capture_output=True, text=True, timeout=5, check=True,
+            ["vm_stat"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout
 
         page_size = 16384  # Apple Silicon default
@@ -106,10 +121,15 @@ def collect_memory() -> MemoryInfo:
 
     # Memory pressure via sysctl
     try:
-        level = int(subprocess.run(
-            ["sysctl", "-n", "kern.memorystatus_vm_pressure_level"],
-            capture_output=True, text=True, timeout=5, check=True,
-        ).stdout.strip())
+        level = int(
+            subprocess.run(
+                ["sysctl", "-n", "kern.memorystatus_vm_pressure_level"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+            ).stdout.strip()
+        )
         # 1=normal, 2=warn, 4=critical
         if level <= 1:
             result.pressure = "normal"
@@ -122,7 +142,9 @@ def collect_memory() -> MemoryInfo:
         try:
             mp_out = subprocess.run(
                 ["memory_pressure"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             ).stdout.lower()
             if "normal" in mp_out:
                 result.pressure = "normal"
@@ -144,7 +166,10 @@ def collect_thermal() -> ThermalInfo:
     try:
         out = subprocess.run(
             ["sysctl", "-n", "machdep.xcpm.cpu_thermal_level"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
         level = int(out)
         if level == 0:
@@ -167,7 +192,9 @@ def collect_thermal() -> ThermalInfo:
         try:
             out = subprocess.run(
                 ["pmset", "-g", "therm"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             ).stdout
             if "no thermal warning" in out.lower():
                 result.level = "nominal"
@@ -214,7 +241,10 @@ def collect_machine_info() -> str:
     try:
         model = subprocess.run(
             ["sysctl", "-n", "hw.model"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
         parts.append(model)
     except Exception:
@@ -222,7 +252,10 @@ def collect_machine_info() -> str:
     try:
         chip = subprocess.run(
             ["sysctl", "-n", "machdep.cpu.brand_string"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
         parts.append(chip)
     except Exception:
@@ -241,7 +274,7 @@ class ProcessInfo:
 
 
 # Process name patterns for inference engines
-_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio", "mlx_lm"]
+_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio", "mlx_lm", "llama-server", "vllm"]
 
 
 def collect_engine_processes() -> list[ProcessInfo]:
@@ -249,7 +282,10 @@ def collect_engine_processes() -> list[ProcessInfo]:
     try:
         out = subprocess.run(
             ["ps", "aux"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout
     except Exception as e:
         logger.warning("engine_processes: %s", e)
@@ -269,12 +305,16 @@ def collect_engine_processes() -> list[ProcessInfo]:
                     key = "lmstudio"
                 elif "mlx_lm" in pat:
                     key = "mlxlm"
+                elif "llama-server" in pat:
+                    key = "llamacpp"
+                elif pat == "vllm":
+                    key = "vllm_mlx"
                 else:
                     key = pat
                 if key not in totals:
                     totals[key] = ProcessInfo(name=key)
-                totals[key].cpu_pct += float(cols[2])
-                totals[key].mem_pct += float(cols[3])
+                totals[key].cpu_pct += float(cols[2].replace(",", "."))
+                totals[key].mem_pct += float(cols[3].replace(",", "."))
                 totals[key].rss_bytes += int(cols[5]) * 1024  # RSS in KB
                 break
 
@@ -286,7 +326,10 @@ def collect_uptime() -> int:
     try:
         out = subprocess.run(
             ["sysctl", "-n", "kern.boottime"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout
         # Format: "{ sec = 1234567890, usec = 0 }"
         m = re.search(r"sec\s*=\s*(\d+)", out)
