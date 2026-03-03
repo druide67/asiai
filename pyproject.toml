@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "asiai"
-version = "0.3.0-dev"
+version = "0.3.0"
 description = "Multi-engine LLM benchmark & monitoring CLI for Apple Silicon"
 readme = "README.md"
 license = "Apache-2.0"
