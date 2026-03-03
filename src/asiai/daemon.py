@@ -77,7 +77,9 @@ def daemon_start(interval: int = 60) -> dict:
         # Load via launchctl
         result = subprocess.run(
             ["launchctl", "load", PLIST_PATH],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode != 0:
             return {"status": "error", "message": result.stderr.strip()}
@@ -97,7 +99,9 @@ def daemon_stop() -> dict:
         if os.path.exists(PLIST_PATH):
             subprocess.run(
                 ["launchctl", "unload", PLIST_PATH],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             os.remove(PLIST_PATH)
         return {"status": "stopped"}
@@ -116,7 +120,9 @@ def daemon_status() -> dict:
     try:
         result = subprocess.run(
             ["launchctl", "list", LABEL],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             # Parse PID from output
@@ -142,7 +148,9 @@ def daemon_logs(lines: int = 50) -> str:
     try:
         result = subprocess.run(
             ["tail", "-n", str(lines), LOG_PATH],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.stdout
     except Exception as e:

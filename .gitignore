@@ -32,6 +32,15 @@ htmlcov/
 # SQLite databases (runtime data)
 *.db
 
+# Wheels
+*.whl
+
+# Type checking
+.mypy_cache/
+
+# Docs
+site/
+
 # Environment
 .env
 .env.local

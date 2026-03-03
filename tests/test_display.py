@@ -55,6 +55,7 @@ class TestFormatPressure:
         # Without color (force NO_COLOR)
         with patch.dict(os.environ, {"NO_COLOR": "1"}):
             from asiai.display import formatters
+
             old = formatters._COLOR
             formatters._COLOR = False
             try:
@@ -70,6 +71,7 @@ class TestFormatThermal:
     def test_levels(self):
         with patch.dict(os.environ, {"NO_COLOR": "1"}):
             from asiai.display import formatters
+
             old = formatters._COLOR
             formatters._COLOR = False
             try:

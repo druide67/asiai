@@ -80,4 +80,29 @@ MIGRATIONS = [
             "ALTER TABLE models ADD COLUMN engine TEXT",
         ],
     },
+    # v0.3: multi-run benchmark variance
+    {
+        "table": "benchmarks",
+        "columns": ["run_index"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN run_index INTEGER DEFAULT 0",
+        ],
+    },
+    # v0.3: power metrics (tok/s per watt)
+    {
+        "table": "benchmarks",
+        "columns": ["power_watts", "tok_per_sec_per_watt"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN power_watts REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN tok_per_sec_per_watt REAL DEFAULT 0",
+        ],
+    },
+    # v0.3: model load time
+    {
+        "table": "benchmarks",
+        "columns": ["load_time_ms"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN load_time_ms REAL DEFAULT 0",
+        ],
+    },
 ]

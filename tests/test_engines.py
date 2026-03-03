@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from asiai.engines.detect import detect_engine_type, http_get_json, http_post_json
+from asiai.engines.detect import (
+    detect_engine_type,
+    detect_port_process,
+    http_get_json,
+    http_post_json,
+)
+from asiai.engines.llamacpp import LlamaCppEngine
 from asiai.engines.lmstudio import LMStudioEngine
 from asiai.engines.mlxlm import MlxLmEngine
 from asiai.engines.ollama import OllamaEngine
+from asiai.engines.vllm_mlx import VllmMlxEngine
 
 
 class TestHttpGetJson:
@@ -75,6 +82,7 @@ class TestOllamaEngine:
                 if path in url:
                     return resp, {}
             return None, {}
+
         return mock
 
     def test_is_reachable(self):
@@ -119,6 +127,27 @@ class TestOllamaEngine:
             models = engine.list_available()
 
         assert len(models) == 2
+
+
+class TestOllamaMeasureLoadTime:
+    def test_load_time_from_api(self):
+        def mock_post(url, data, timeout=300):
+            if "/api/generate" in url:
+                return {"load_duration": 2_000_000_000}, {}  # 2s in ns
+            return None, {}
+
+        with patch("asiai.engines.ollama.http_post_json", side_effect=mock_post):
+            engine = OllamaEngine("http://localhost:11434")
+            result = engine.measure_load_time("test-model")
+
+        assert result == 2000.0  # 2000 ms
+
+    def test_load_time_no_data(self):
+        with patch("asiai.engines.ollama.http_post_json", return_value=(None, {})):
+            engine = OllamaEngine("http://localhost:11434")
+            result = engine.measure_load_time("test-model")
+
+        assert result == 0.0
 
 
 class TestHttpPostJson:
@@ -197,8 +226,10 @@ class TestLMStudioGenerate:
                 return gen_response, {}
             return None, {}
 
-        with patch("asiai.engines.lmstudio.http_post_json", side_effect=mock_post), \
-             patch("asiai.engines.lmstudio.time") as mock_time:
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", side_effect=mock_post),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
             mock_time.monotonic.side_effect = [0.0, 2.0]  # 2 seconds elapsed
             engine = LMStudioEngine("http://localhost:1234")
             result = engine.generate("test-model", "Write code", 512)
@@ -211,8 +242,10 @@ class TestLMStudioGenerate:
     def test_generate_error(self):
         gen_response = {"error": {"message": "model not loaded"}}
 
-        with patch("asiai.engines.lmstudio.http_post_json", return_value=(gen_response, {})), \
-             patch("asiai.engines.lmstudio.time") as mock_time:
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
             mock_time.monotonic.side_effect = [0.0, 0.1]
             engine = LMStudioEngine("http://localhost:1234")
             result = engine.generate("bad-model", "hello", 512)
@@ -232,7 +265,7 @@ class TestLMStudioEngine:
                 }, {}
             return None, {}
 
-        with patch("asiai.engines.lmstudio.http_get_json", side_effect=mock_get):
+        with patch("asiai.engines.openai_compat.http_get_json", side_effect=mock_get):
             engine = LMStudioEngine("http://localhost:1234")
             models = engine.list_running()
 
@@ -244,7 +277,7 @@ class TestLMStudioEngine:
 class TestMlxLmEngine:
     def test_is_reachable(self):
         with patch(
-            "asiai.engines.mlxlm.http_get_json",
+            "asiai.engines.openai_compat.http_get_json",
             return_value=({"data": []}, {}),
         ):
             engine = MlxLmEngine("http://localhost:8080")
@@ -252,7 +285,7 @@ class TestMlxLmEngine:
 
     def test_is_not_reachable(self):
         with patch(
-            "asiai.engines.mlxlm.http_get_json",
+            "asiai.engines.openai_compat.http_get_json",
             return_value=(None, {}),
         ):
             engine = MlxLmEngine("http://localhost:8080")
@@ -268,7 +301,7 @@ class TestMlxLmEngine:
                 }, {}
             return None, {}
 
-        with patch("asiai.engines.mlxlm.http_get_json", side_effect=mock_get):
+        with patch("asiai.engines.openai_compat.http_get_json", side_effect=mock_get):
             engine = MlxLmEngine("http://localhost:8080")
             models = engine.list_running()
 
@@ -309,8 +342,10 @@ class TestMlxLmGenerate:
                 return gen_response, {}
             return None, {}
 
-        with patch("asiai.engines.mlxlm.http_post_json", side_effect=mock_post), \
-             patch("asiai.engines.mlxlm.time") as mock_time:
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", side_effect=mock_post),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
             mock_time.monotonic.side_effect = [0.0, 2.0]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("test-model", "Write code", 512)
@@ -323,8 +358,10 @@ class TestMlxLmGenerate:
     def test_generate_error(self):
         gen_response = {"error": {"message": "model not loaded"}}
 
-        with patch("asiai.engines.mlxlm.http_post_json", return_value=(gen_response, {})), \
-             patch("asiai.engines.mlxlm.time") as mock_time:
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
             mock_time.monotonic.side_effect = [0.0, 0.1]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("bad-model", "hello", 512)
@@ -332,8 +369,10 @@ class TestMlxLmGenerate:
         assert "model not loaded" in result.error
 
     def test_generate_connection_failed(self):
-        with patch("asiai.engines.mlxlm.http_post_json", return_value=(None, {})), \
-             patch("asiai.engines.mlxlm.time") as mock_time:
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", return_value=(None, {})),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
             mock_time.monotonic.side_effect = [0.0, 0.1]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("model", "hello", 512)
@@ -344,6 +383,7 @@ class TestMlxLmGenerate:
 class TestDetectMlxLm:
     def test_detect_mlxlm_no_lmstudio_headers(self):
         """mlx-lm responds to /v1/models but has no LM Studio markers."""
+
         def mock_get(url, timeout=5):
             if "/api/version" in url:
                 return None, {}
@@ -360,6 +400,7 @@ class TestDetectMlxLm:
 
     def test_detect_lmstudio_with_header(self):
         """LM Studio with header should NOT be detected as mlx-lm."""
+
         def mock_get(url, timeout=5):
             if "/api/version" in url:
                 return None, {}
@@ -372,3 +413,326 @@ class TestDetectMlxLm:
 
         assert engine == "lmstudio"
         assert version == "0.4.6"
+
+
+class TestDetectPortProcess:
+    def test_detect_mlxlm(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "p1234\ncmlx_lm.server\n"
+        with patch("asiai.engines.detect.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            assert detect_port_process(8080) == "mlxlm"
+
+    def test_detect_llamacpp(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "p5678\ncllama-server\n"
+        with patch("asiai.engines.detect.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            assert detect_port_process(8080) == "llamacpp"
+
+    def test_detect_vllm(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "p9999\ncvllm\n"
+        with patch("asiai.engines.detect.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            assert detect_port_process(8000) == "vllm_mlx"
+
+    def test_detect_unknown_process(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "p1111\ncpython3\n"
+        with patch("asiai.engines.detect.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            assert detect_port_process(8080) == ""
+
+    def test_detect_no_listener(self):
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        with patch("asiai.engines.detect.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            assert detect_port_process(8080) == ""
+
+    def test_detect_lsof_error(self):
+        with patch("asiai.engines.detect.subprocess") as mock_sub:
+            mock_sub.run.side_effect = Exception("command failed")
+            assert detect_port_process(8080) == ""
+
+
+class TestLlamaCppEngine:
+    def test_name(self):
+        engine = LlamaCppEngine("http://localhost:8080")
+        assert engine.name == "llamacpp"
+
+    def test_is_reachable_ok(self):
+        with patch(
+            "asiai.engines.llamacpp.http_get_json",
+            return_value=({"status": "ok"}, {}),
+        ):
+            engine = LlamaCppEngine("http://localhost:8080")
+            assert engine.is_reachable()
+
+    def test_is_reachable_down(self):
+        with patch(
+            "asiai.engines.llamacpp.http_get_json",
+            return_value=(None, {}),
+        ):
+            engine = LlamaCppEngine("http://localhost:8080")
+            assert not engine.is_reachable()
+
+    def test_version_via_props(self):
+        def mock_get(url, timeout=5):
+            if "/props" in url:
+                return {"build_info": {"version": "b4567"}}, {}
+            return None, {}
+
+        with patch("asiai.engines.llamacpp.http_get_json", side_effect=mock_get):
+            engine = LlamaCppEngine("http://localhost:8080")
+            assert engine.version() == "b4567"
+
+    def test_version_via_brew(self):
+        with (
+            patch("asiai.engines.llamacpp.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.llamacpp.subprocess") as mock_sub,
+        ):
+            mock_result = MagicMock()
+            mock_result.stdout = "llama.cpp 0.0.4567\n"
+            mock_sub.run.return_value = mock_result
+            engine = LlamaCppEngine("http://localhost:8080")
+            assert engine.version() == "0.0.4567"
+
+    def test_generate_uses_chat_mode(self):
+        gen_response = {
+            "choices": [{"message": {"role": "assistant", "content": "hello"}}],
+            "usage": {"completion_tokens": 10},
+        }
+
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 1.0]
+            engine = LlamaCppEngine("http://localhost:8080")
+            result = engine.generate("model", "hi", 256)
+
+        assert result.text == "hello"
+        assert result.engine == "llamacpp"
+
+    def test_list_running(self):
+        data = {"data": [{"id": "my-gguf-model"}]}
+        with patch("asiai.engines.openai_compat.http_get_json", return_value=(data, {})):
+            engine = LlamaCppEngine("http://localhost:8080")
+            models = engine.list_running()
+        assert len(models) == 1
+        assert models[0].format == "GGUF"
+
+
+class TestVllmMlxEngine:
+    def test_name(self):
+        engine = VllmMlxEngine("http://localhost:8000")
+        assert engine.name == "vllm_mlx"
+
+    def test_version(self):
+        with patch(
+            "asiai.engines.vllm_mlx.http_get_json",
+            return_value=({"version": "0.1.2"}, {}),
+        ):
+            engine = VllmMlxEngine("http://localhost:8000")
+            assert engine.version() == "0.1.2"
+
+    def test_version_unreachable(self):
+        with patch(
+            "asiai.engines.vllm_mlx.http_get_json",
+            return_value=(None, {}),
+        ):
+            engine = VllmMlxEngine("http://localhost:8000")
+            assert engine.version() == ""
+
+    def test_generate_uses_chat_mode(self):
+        gen_response = {
+            "choices": [{"message": {"role": "assistant", "content": "fast"}}],
+            "usage": {"completion_tokens": 200},
+        }
+
+        with (
+            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.5]
+            engine = VllmMlxEngine("http://localhost:8000")
+            result = engine.generate("model", "hi", 256)
+
+        assert result.text == "fast"
+        assert result.tok_per_sec == 400.0
+        assert result.engine == "vllm_mlx"
+
+    def test_list_running(self):
+        data = {"data": [{"id": "mlx-model"}]}
+        with patch("asiai.engines.openai_compat.http_get_json", return_value=(data, {})):
+            engine = VllmMlxEngine("http://localhost:8000")
+            models = engine.list_running()
+        assert len(models) == 1
+        assert models[0].format == "MLX"
+
+
+class TestDetectCascade:
+    """Full cascade detection tests for all 5 engines."""
+
+    def test_detect_llamacpp(self):
+        """llama.cpp: /v1/models OK, no LM Studio, /health OK."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return {"status": "ok"}, {}
+            if "/props" in url:
+                return {"build_info": {"version": "b9999"}}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8080")
+
+        assert engine == "llamacpp"
+        assert version == "b9999"
+
+    def test_detect_llamacpp_build_info_string(self):
+        """llama.cpp: build_info as string 'b8180-d979f2b17' -> version '8180'."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return {"status": "ok"}, {}
+            if "/props" in url:
+                return {"build_info": "b8180-d979f2b17"}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8080")
+
+        assert engine == "llamacpp"
+        assert version == "8180"
+
+    def test_detect_vllm_mlx(self):
+        """vllm-mlx: /v1/models OK, no LM Studio, no /health, /version OK."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/version" in url:
+                return {"version": "0.2.0"}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8000")
+
+        assert engine == "vllm_mlx"
+        assert version == "0.2.0"
+
+    def test_detect_vllm_mlx_via_owned_by(self):
+        """vllm-mlx: /v1/models with owned_by:'vllm-mlx', no /version endpoint."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model", "owned_by": "vllm-mlx"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return {"status": "healthy"}, {}
+            if "/version" in url:
+                return None, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8000")
+
+        assert engine == "vllm_mlx"
+        assert version == ""
+
+    def test_detect_mlxlm_fallback(self):
+        """mlx-lm: /v1/models OK, no other markers -> fallback."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/version" in url:
+                return None, {}
+            return None, {}
+
+        with (
+            patch("asiai.engines.detect.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.detect.detect_port_process", return_value=""),
+        ):
+            engine, version = detect_engine_type("http://localhost:8080")
+
+        assert engine == "mlxlm"
+
+    def test_detect_via_lsof_fallback(self):
+        """Process detection via lsof when no API markers match."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": []}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/version" in url:
+                return None, {}
+            return None, {}
+
+        with (
+            patch("asiai.engines.detect.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.detect.detect_port_process", return_value="llamacpp"),
+        ):
+            engine, version = detect_engine_type("http://localhost:8080")
+
+        assert engine == "llamacpp"
+
+    def test_llamacpp_health_not_ok(self):
+        """llama.cpp /health exists but status != ok -> not llamacpp."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": []}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return {"status": "loading"}, {}
+            if "/version" in url:
+                return None, {}
+            return None, {}
+
+        with (
+            patch("asiai.engines.detect.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.detect.detect_port_process", return_value=""),
+        ):
+            engine, _ = detect_engine_type("http://localhost:8080")
+
+        # Should fall through to mlxlm fallback
+        assert engine == "mlxlm"

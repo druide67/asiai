@@ -75,6 +75,13 @@ class InferenceEngine(ABC):
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
         """Send a generation request and return timing metrics."""
 
+    def measure_load_time(self, model: str) -> float:
+        """Measure model load time in milliseconds.
+
+        Returns 0.0 by default. Override in engines that support load timing.
+        """
+        return 0.0
+
     def status(self) -> EngineStatus:
         """Collect full engine status."""
         return EngineStatus(

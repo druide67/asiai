@@ -8,20 +8,24 @@ from asiai.doctor import (
     CheckResult,
     _check_apple_silicon,
     _check_db,
+    _check_llamacpp,
     _check_lmstudio,
     _check_memory_pressure,
     _check_mlxlm,
     _check_ollama,
     _check_ram,
     _check_thermal,
+    _check_vllm_mlx,
     run_checks,
 )
 
 
 class TestCheckAppleSilicon:
     def test_arm64(self):
-        with patch("asiai.doctor.platform") as mock_platform, \
-             patch("asiai.doctor.collect_machine_info", return_value="Mac14,2 — Apple M2"):
+        with (
+            patch("asiai.doctor.platform") as mock_platform,
+            patch("asiai.doctor.collect_machine_info", return_value="Mac14,2 — Apple M2"),
+        ):
             mock_platform.machine.return_value = "arm64"
             result = _check_apple_silicon()
         assert result.status == "ok"
@@ -122,8 +126,10 @@ class TestCheckOllama:
                 return mock_which
             return MagicMock(returncode=0)
 
-        with patch("asiai.doctor.subprocess") as mock_sub, \
-             patch("asiai.doctor.http_get_json", return_value=(None, {})):
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             mock_sub.run.side_effect = mock_subprocess_run
             result = _check_ollama()
         assert result.status == "warn"
@@ -140,8 +146,10 @@ class TestCheckOllama:
                 return {"models": [{"name": "gemma2:9b"}]}, {}
             return None, {}
 
-        with patch("asiai.doctor.subprocess") as mock_sub, \
-             patch("asiai.doctor.http_get_json", side_effect=mock_get):
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
             mock_sub.run.return_value = mock_which
             result = _check_ollama()
         assert result.status == "ok"
@@ -156,8 +164,10 @@ class TestCheckLMStudio:
         assert "not installed" in result.message
 
     def test_installed_not_running(self):
-        with patch("asiai.doctor.os.path.exists", return_value=True), \
-             patch("asiai.doctor.http_get_json", return_value=(None, {})):
+        with (
+            patch("asiai.doctor.os.path.exists", return_value=True),
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             result = _check_lmstudio()
         assert result.status == "warn"
         assert "not running" in result.message
@@ -168,8 +178,10 @@ class TestCheckLMStudio:
                 return {"data": [{"id": "gemma-2-9b"}]}, {"x-lm-studio-version": "0.4.6"}
             return None, {}
 
-        with patch("asiai.doctor.os.path.exists", return_value=True), \
-             patch("asiai.doctor.http_get_json", side_effect=mock_get):
+        with (
+            patch("asiai.doctor.os.path.exists", return_value=True),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
             result = _check_lmstudio()
         assert result.status == "ok"
         assert "gemma-2-9b" in result.message
@@ -188,8 +200,10 @@ class TestCheckMlxLm:
     def test_installed_not_running(self):
         mock_result = MagicMock()
         mock_result.stdout = "mlx-lm 0.30.7"
-        with patch("asiai.doctor.subprocess") as mock_sub, \
-             patch("asiai.doctor.http_get_json", return_value=(None, {})):
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             mock_sub.run.return_value = mock_result
             result = _check_mlxlm()
         assert result.status == "warn"
@@ -204,12 +218,100 @@ class TestCheckMlxLm:
                 return {"data": [{"id": "mlx-community/gemma-2-9b-4bit"}]}, {}
             return None, {}
 
-        with patch("asiai.doctor.subprocess") as mock_sub, \
-             patch("asiai.doctor.http_get_json", side_effect=mock_get):
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
             mock_sub.run.return_value = mock_result
             result = _check_mlxlm()
         assert result.status == "ok"
         assert "gemma-2-9b" in result.message
+
+
+class TestCheckLlamaCpp:
+    def test_not_installed(self):
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        with patch("asiai.doctor.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            result = _check_llamacpp()
+        assert result.status == "fail"
+        assert "not installed" in result.message
+
+    def test_installed_not_running(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "llama.cpp 0.0.4567"
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
+            mock_sub.run.return_value = mock_result
+            result = _check_llamacpp()
+        assert result.status == "warn"
+        assert "not running" in result.message
+
+    def test_running(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "llama.cpp 0.0.4567"
+
+        def mock_get(url, timeout=5):
+            if "/health" in url:
+                return {"status": "ok"}, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "my-model.gguf"}]}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            mock_sub.run.return_value = mock_result
+            result = _check_llamacpp()
+        assert result.status == "ok"
+        assert "my-model" in result.message
+
+
+class TestCheckVllmMlx:
+    def test_not_installed(self):
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        with patch("asiai.doctor.subprocess") as mock_sub:
+            mock_sub.run.return_value = mock_result
+            result = _check_vllm_mlx()
+        assert result.status == "fail"
+        assert "not installed" in result.message
+
+    def test_installed_not_running(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "Name: vllm-mlx\nVersion: 0.1.2\n"
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
+            mock_sub.run.return_value = mock_result
+            result = _check_vllm_mlx()
+        assert result.status == "warn"
+        assert "not running" in result.message
+
+    def test_running_with_models(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "Name: vllm-mlx\nVersion: 0.1.2\n"
+
+        def mock_get(url, timeout=5):
+            if "/version" in url and "/v1" not in url:
+                return {"version": "0.1.2"}, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "mlx-model"}]}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            mock_sub.run.return_value = mock_result
+            result = _check_vllm_mlx()
+        assert result.status == "ok"
+        assert "mlx-model" in result.message
 
 
 class TestCheckDb:
@@ -224,9 +326,7 @@ class TestCheckDb:
 
         db_path = str(tmp_path / "test.db")
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            "CREATE TABLE metrics (ts INTEGER PRIMARY KEY, cpu_load_1 REAL)"
-        )
+        conn.execute("CREATE TABLE metrics (ts INTEGER PRIMARY KEY, cpu_load_1 REAL)")
         conn.execute(
             "INSERT INTO metrics (ts, cpu_load_1) VALUES (?, ?)",
             (int(time.time()) - 60, 1.5),
@@ -242,9 +342,7 @@ class TestCheckDb:
 
         db_path = str(tmp_path / "empty.db")
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            "CREATE TABLE metrics (ts INTEGER PRIMARY KEY, cpu_load_1 REAL)"
-        )
+        conn.execute("CREATE TABLE metrics (ts INTEGER PRIMARY KEY, cpu_load_1 REAL)")
         conn.commit()
         conn.close()
 
@@ -255,15 +353,19 @@ class TestCheckDb:
 
 class TestRunChecks:
     def test_returns_all_categories(self):
-        with patch("asiai.doctor._check_apple_silicon") as m1, \
-             patch("asiai.doctor._check_ram") as m2, \
-             patch("asiai.doctor._check_memory_pressure") as m3, \
-             patch("asiai.doctor._check_thermal") as m4, \
-             patch("asiai.doctor._check_ollama") as m5, \
-             patch("asiai.doctor._check_lmstudio") as m6, \
-             patch("asiai.doctor._check_mlxlm") as m7, \
-             patch("asiai.doctor._check_db") as m8:
-            for m in [m1, m2, m3, m4, m5, m6, m7, m8]:
+        with (
+            patch("asiai.doctor._check_apple_silicon") as m1,
+            patch("asiai.doctor._check_ram") as m2,
+            patch("asiai.doctor._check_memory_pressure") as m3,
+            patch("asiai.doctor._check_thermal") as m4,
+            patch("asiai.doctor._check_ollama") as m5,
+            patch("asiai.doctor._check_lmstudio") as m6,
+            patch("asiai.doctor._check_mlxlm") as m7,
+            patch("asiai.doctor._check_llamacpp") as m8a,
+            patch("asiai.doctor._check_vllm_mlx") as m8b,
+            patch("asiai.doctor._check_db") as m9,
+        ):
+            for m in [m1, m2, m3, m4, m5, m6, m7, m8a, m8b, m9]:
                 m.return_value = CheckResult("test", "test", "ok", "ok")
             checks = run_checks()
-        assert len(checks) == 8
+        assert len(checks) == 10

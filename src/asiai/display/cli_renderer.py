@@ -99,10 +99,12 @@ def render_snapshot(snap: dict) -> None:
     """Render a system + inference snapshot."""
     print(bold("System"))
     print(f"  Uptime:    {format_uptime(snap.get('uptime', -1))}")
-    print(f"  CPU Load:  {snap.get('cpu_load_1', -1):.2f} / "
-          f"{snap.get('cpu_load_5', -1):.2f} / "
-          f"{snap.get('cpu_load_15', -1):.2f}  "
-          f"{dim('(1m / 5m / 15m)')}")
+    print(
+        f"  CPU Load:  {snap.get('cpu_load_1', -1):.2f} / "
+        f"{snap.get('cpu_load_5', -1):.2f} / "
+        f"{snap.get('cpu_load_15', -1):.2f}  "
+        f"{dim('(1m / 5m / 15m)')}"
+    )
 
     mem_total = snap.get("mem_total", 0)
     mem_used = snap.get("mem_used", 0)
@@ -116,40 +118,55 @@ def render_snapshot(snap: dict) -> None:
     else:
         pct_str = "N/A"
 
-    print(f"  Memory:    {format_bytes(mem_used)} / {format_bytes(mem_total)}  "
-          f"{pct_str}")
+    print(f"  Memory:    {format_bytes(mem_used)} / {format_bytes(mem_total)}  {pct_str}")
     print(f"  Pressure:  {format_pressure(snap.get('mem_pressure', 'unknown'))}")
     speed = snap.get("thermal_speed_limit", -1)
-    print(f"  Thermal:   {format_thermal(snap.get('thermal_level', 'unknown'))}  "
-          f"{dim(f'({speed}%)')}")
+    print(
+        f"  Thermal:   {format_thermal(snap.get('thermal_level', 'unknown'))}  {dim(f'({speed}%)')}"
+    )
     print()
+
+    # Engines
+    engine_str = snap.get("inference_engine", "none")
+    version_str = snap.get("engine_version", "")
+
+    print(bold("Inference"))
+    if engine_str == "none":
+        print(dim("  No engine detected."))
+    else:
+        # Parse comma-separated engine names and versions
+        versions = {}
+        for v in version_str.split(","):
+            v = v.strip()
+            if "/" in v:
+                ename, ever = v.split("/", 1)
+                versions[ename] = ever
+        for ename in engine_str.split(","):
+            ename = ename.strip()
+            ver = versions.get(ename, "")
+            ver_display = dim(f"v{ver}") if ver else ""
+            print(f"  {green('●')} {ename} {ver_display}")
 
     # Models
     models = snap.get("models", [])
-    engine = snap.get("inference_engine", "none")
-    version = snap.get("engine_version", "")
-
-    if engine != "none":
-        print(bold("Inference") + f"  {dim(f'{engine} {version}')}")
-    else:
-        print(bold("Inference") + f"  {dim('no engine detected')}")
-
     if models:
         total_vram = sum(m.get("size_vram", 0) for m in models)
-        print(f"  Models loaded: {len(models)}  "
-              f"VRAM total: {bold(format_bytes(total_vram))}")
+        print()
+        print(f"  Models loaded: {len(models)}  VRAM total: {bold(format_bytes(total_vram))}")
         print()
         # Table header
-        print(f"  {'Model':<40} {'VRAM':>10} {'Format':>8} {'Quant':>6}")
-        print(f"  {'─' * 40} {'─' * 10} {'─' * 8} {'─' * 6}")
+        print(f"  {'Model':<40} {'Engine':<12} {'VRAM':>10} {'Format':>8} {'Quant':>6}")
+        print(f"  {'─' * 40} {'─' * 12} {'─' * 10} {'─' * 8} {'─' * 6}")
         for m in models:
             name = m.get("name", "unknown")
             if len(name) > 40:
                 name = name[:37] + "..."
+            eng = m.get("engine", "")
             vram = format_bytes(m.get("size_vram", 0))
             fmt = m.get("format", "") or ""
             quant = m.get("quantization", "") or ""
-            print(f"  {name:<40} {vram:>10} {fmt:>8} {quant:>6}")
+            eng_pad = dim(f"{eng:<12}")
+            print(f"  {name:<40} {eng_pad} {vram:>10} {fmt:>8} {quant:>6}")
     else:
         print(dim("  No models loaded."))
     print()
@@ -163,10 +180,11 @@ def render_history(data: list[dict], hours: int) -> None:
 
     print(bold(f"History ({hours}h) — {len(data)} entries"))
     print()
-    print(f"  {'Timestamp':<20} {'CPU 1m':>7} {'CPU 5m':>7} "
-          f"{'Mem Used':>10} {'Pressure':>10} {'Thermal':>10} {'Models':>7}")
-    print(f"  {'─' * 20} {'─' * 7} {'─' * 7} "
-          f"{'─' * 10} {'─' * 10} {'─' * 10} {'─' * 7}")
+    print(
+        f"  {'Timestamp':<20} {'CPU 1m':>7} {'CPU 5m':>7} "
+        f"{'Mem Used':>10} {'Pressure':>10} {'Thermal':>10} {'Models':>7}"
+    )
+    print(f"  {'─' * 20} {'─' * 7} {'─' * 7} {'─' * 10} {'─' * 10} {'─' * 10} {'─' * 7}")
 
     for entry in data:
         ts_str = _ts_to_str(entry["ts"])
@@ -176,8 +194,10 @@ def render_history(data: list[dict], hours: int) -> None:
         pressure = format_pressure(entry.get("mem_pressure", "unknown"))
         thermal = format_thermal(entry.get("thermal_level", "unknown"))
         n_models = len(entry.get("models", []))
-        print(f"  {ts_str:<20} {cpu1:>7} {cpu5:>7} "
-              f"{mem:>10} {pressure:>10} {thermal:>10} {n_models:>7}")
+        print(
+            f"  {ts_str:<20} {cpu1:>7} {cpu5:>7} "
+            f"{mem:>10} {pressure:>10} {thermal:>10} {n_models:>7}"
+        )
     print()
 
 
@@ -215,14 +235,19 @@ def render_compare(data: dict) -> None:
         delta_mem_str = red(delta_mem_str)
     elif delta_mem < 0:
         delta_mem_str = green(f"-{format_bytes(abs(delta_mem))}")
-    print(f"  Memory:        {format_bytes(mem_before)} → {format_bytes(mem_after)}  "
-          f"{delta_mem_str}")
+    print(
+        f"  Memory:        {format_bytes(mem_before)} → {format_bytes(mem_after)}  {delta_mem_str}"
+    )
 
     # Pressure & Thermal
-    print(f"  Pressure:      {format_pressure(before.get('mem_pressure', '?'))} → "
-          f"{format_pressure(after.get('mem_pressure', '?'))}")
-    print(f"  Thermal:       {format_thermal(before.get('thermal_level', '?'))} → "
-          f"{format_thermal(after.get('thermal_level', '?'))}")
+    print(
+        f"  Pressure:      {format_pressure(before.get('mem_pressure', '?'))} → "
+        f"{format_pressure(after.get('mem_pressure', '?'))}"
+    )
+    print(
+        f"  Thermal:       {format_thermal(before.get('thermal_level', '?'))} → "
+        f"{format_thermal(after.get('thermal_level', '?'))}"
+    )
     print()
 
     # Model changes
@@ -266,28 +291,62 @@ def render_bench(report: dict) -> None:
     print()
 
     # Table header
-    print(f"  {'Engine':<12} {'tok/s':>8} {'TTFT':>8} {'VRAM':>10} "
-          f"{'CPU%':>6} {'RSS':>10} {'Thermal':>10}")
-    print(f"  {'─' * 12} {'─' * 8} {'─' * 8} {'─' * 10} "
-          f"{'─' * 6} {'─' * 10} {'─' * 10}")
+    print(
+        f"  {'Engine':<12} {'tok/s':>24} {'TTFT':>8} "
+        f"{'Memory':>14} {'CPU%':>6} {'Thermal':>10}"
+    )
+    print(f"  {'─' * 12} {'─' * 24} {'─' * 8} {'─' * 14} {'─' * 6} {'─' * 10}")
 
     for engine_name, data in sorted(engines.items()):
-        tok_s = f"{data['avg_tok_s']:.1f}" if data["avg_tok_s"] > 0 else "N/A"
+        avg_tok = data["avg_tok_s"]
+        stddev = data.get("std_dev_tok_s", 0.0)
+        runs_count = data.get("runs_count", 1)
+        stability = data.get("stability", "")
+
+        if avg_tok > 0:
+            if runs_count > 1 and stddev > 0:
+                tok_s = f"{avg_tok:.1f} \u00b1 {stddev:.1f}"
+                if stability:
+                    tok_s += f" ({stability})"
+            else:
+                tok_s = f"{avg_tok:.1f}"
+        else:
+            tok_s = "N/A"
+
         ttft = f"{data['avg_ttft_ms'] / 1000:.2f}s" if data["avg_ttft_ms"] > 0 else "N/A"
-        vram = format_bytes(data["vram_bytes"]) if data["vram_bytes"] > 0 else "N/A"
         cpu = f"{data.get('avg_proc_cpu', 0):.0f}%" if data.get("avg_proc_cpu", 0) > 0 else "N/A"
-        rss_val = data.get("proc_rss_bytes", 0)
-        rss = format_bytes(rss_val) if rss_val > 0 else "N/A"
-        thermal = format_thermal(data["thermal_level"]) if data["thermal_level"] else "N/A"
 
-        name_str = engine_name
-        tok_s_str = tok_s
+        # Memory: prefer VRAM (Ollama), fallback to RSS with tag
+        vram_bytes = data.get("vram_bytes", 0)
+        rss_bytes = data.get("proc_rss_bytes", 0)
+        if vram_bytes > 0:
+            memory = format_bytes(vram_bytes)
+        elif rss_bytes > 0:
+            memory = f"{format_bytes(rss_bytes)} (rss)"
+        else:
+            memory = "N/A"
+
+        # Pad before coloring to preserve alignment (ANSI codes are invisible)
+        name_pad = f"{engine_name:<12}"
+        tok_s_pad = f"{tok_s:>24}"
+        ttft_pad = f"{ttft:>8}"
+        mem_pad = f"{memory:>14}"
+        cpu_pad = f"{cpu:>6}"
+
+        thermal_raw = data["thermal_level"] if data["thermal_level"] else "N/A"
+        thermal_pad = f"{thermal_raw:>10}"
+        if thermal_raw == "nominal":
+            thermal_pad = green(thermal_pad)
+        elif thermal_raw == "fair":
+            thermal_pad = yellow(thermal_pad)
+        elif thermal_raw in ("serious", "critical"):
+            thermal_pad = red(thermal_pad)
+
         if winner and winner["name"] == engine_name:
-            name_str = green(engine_name)
-            tok_s_str = green(tok_s)
+            name_pad = green(name_pad)
+            tok_s_pad = green(tok_s_pad)
 
-        print(f"  {name_str:<12} {tok_s_str:>8} {ttft:>8} {vram:>10} "
-              f"{cpu:>6} {rss:>10} {thermal:>10}")
+        print(f"  {name_pad} {tok_s_pad} {ttft_pad} {mem_pad} {cpu_pad} {thermal_pad}")
 
     print()
 
@@ -298,6 +357,67 @@ def render_bench(report: dict) -> None:
         print(f"  {bold('Winner:')} {green(winner['name'])}{detail}")
     elif len(engines) == 1:
         print(dim("  Single engine — no comparison available."))
+
+    # Load time (if available)
+    has_load_time = any(
+        any(p.get("load_time_ms", 0) > 0 for p in d["prompt_results"]) for d in engines.values()
+    )
+    if has_load_time:
+        print()
+        print(bold("  Model Load Time"))
+        for engine_name, data in sorted(engines.items()):
+            pr = data["prompt_results"]
+            load_vals = [p["load_time_ms"] for p in pr if p.get("load_time_ms", 0) > 0]
+            if load_vals:
+                load_ms = load_vals[0]  # Same for all prompts in one engine
+                if load_ms >= 1000:
+                    print(f"    {engine_name:<12} {load_ms / 1000:.1f}s")
+                else:
+                    print(f"    {engine_name:<12} {load_ms:.0f}ms")
+
+    # Power efficiency table (if power data available)
+    has_power = any(
+        any(p.get("power_watts", 0) > 0 for p in d["prompt_results"]) for d in engines.values()
+    )
+    if has_power:
+        print()
+        print(bold("  Power Efficiency"))
+        for engine_name, data in sorted(engines.items()):
+            pr = data["prompt_results"]
+            power_vals = [p["power_watts"] for p in pr if p.get("power_watts", 0) > 0]
+            eff_vals = [
+                p["tok_per_sec_per_watt"] for p in pr if p.get("tok_per_sec_per_watt", 0) > 0
+            ]
+            if power_vals:
+                avg_w = sum(power_vals) / len(power_vals)
+                avg_eff = sum(eff_vals) / len(eff_vals) if eff_vals else 0.0
+                tok_s = data["avg_tok_s"]
+                print(
+                    f"    {engine_name:<12} {tok_s:.1f} tok/s @ {avg_w:.1f}W"
+                    f" = {avg_eff:.2f} tok/s/W (tok/J)"
+                )
+    print()
+
+
+def render_regressions(regressions: list) -> None:
+    """Render regression warnings after a benchmark run."""
+    if not regressions:
+        return
+
+    print(bold("  Regression Warnings"))
+    severity_icons = {"major": red("!!!"), "significant": yellow("!!"), "minor": yellow("!")}
+    for r in regressions:
+        icon = severity_icons.get(r.severity, "?")
+        if r.metric == "tok_per_sec":
+            print(
+                f"    {icon} {r.engine}: tok/s dropped {abs(r.pct_change):.0f}%"
+                f" ({r.baseline:.1f} -> {r.current:.1f}) -- {r.severity}"
+            )
+        elif r.metric == "ttft_ms":
+            print(
+                f"    {icon} {r.engine}: TTFT increased {r.pct_change:.0f}%"
+                f" ({r.baseline:.0f}ms -> {r.current:.0f}ms) -- {r.severity}"
+            )
     print()
 
 
@@ -309,10 +429,10 @@ def render_bench_history(rows: list[dict]) -> None:
 
     print(bold(f"Benchmark History — {len(rows)} entries"))
     print()
-    print(f"  {'Timestamp':<20} {'Engine':<12} {'Model':<30} "
-          f"{'Prompt':>10} {'tok/s':>8} {'TTFT':>8}")
-    print(f"  {'─' * 20} {'─' * 12} {'─' * 30} "
-          f"{'─' * 10} {'─' * 8} {'─' * 8}")
+    print(
+        f"  {'Timestamp':<20} {'Engine':<12} {'Model':<30} {'Prompt':>10} {'tok/s':>8} {'TTFT':>8}"
+    )
+    print(f"  {'─' * 20} {'─' * 12} {'─' * 30} {'─' * 10} {'─' * 8} {'─' * 8}")
 
     for row in rows:
         ts_str = _ts_to_str(row["ts"])
@@ -325,8 +445,7 @@ def render_bench_history(rows: list[dict]) -> None:
         ttft = row.get("ttft_ms", 0)
         ttft_str = f"{ttft / 1000:.2f}s" if ttft > 0 else "N/A"
 
-        print(f"  {ts_str:<20} {engine:<12} {model:<30} "
-              f"{prompt:>10} {tok_s:>8} {ttft_str:>8}")
+        print(f"  {ts_str:<20} {engine:<12} {model:<30} {prompt:>10} {tok_s:>8} {ttft_str:>8}")
     print()
 
 
@@ -359,11 +478,12 @@ def render_analyze(data: list[dict], hours: int) -> None:
         total_entries = len(data)
         for name, info in sorted(all_models.items(), key=lambda x: -x[1]["count"]):
             pct = info["count"] / total_entries * 100
-            bar = green(f"{pct:.0f}%") if pct > 90 else (
-                yellow(f"{pct:.0f}%") if pct > 50 else dim(f"{pct:.0f}%")
+            bar = (
+                green(f"{pct:.0f}%")
+                if pct > 90
+                else (yellow(f"{pct:.0f}%") if pct > 50 else dim(f"{pct:.0f}%"))
             )
-            print(f"    {name:<40} {bar:>8}  "
-                  f"{format_bytes(info['max_vram']):>10}")
+            print(f"    {name:<40} {bar:>8}  {format_bytes(info['max_vram']):>10}")
     else:
         print(dim("    No models found."))
     print()
@@ -377,12 +497,14 @@ def render_analyze(data: list[dict], hours: int) -> None:
         if prev_names is not None and current_names != prev_names:
             added = current_names - prev_names
             removed = prev_names - current_names
-            swaps.append({
-                "ts": entry["ts"],
-                "added": added,
-                "removed": removed,
-                "count": len(current_names),
-            })
+            swaps.append(
+                {
+                    "ts": entry["ts"],
+                    "added": added,
+                    "removed": removed,
+                    "count": len(current_names),
+                }
+            )
         prev_names = current_names
 
     if swaps:
@@ -408,18 +530,22 @@ def render_analyze(data: list[dict], hours: int) -> None:
 
     if vram_values:
         print(bold("  VRAM"))
-        print(f"    Min: {format_bytes(min(vram_values))}  "
-              f"Max: {format_bytes(max(vram_values))}  "
-              f"Avg: {format_bytes(int(sum(vram_values) / len(vram_values)))}")
+        print(
+            f"    Min: {format_bytes(min(vram_values))}  "
+            f"Max: {format_bytes(max(vram_values))}  "
+            f"Avg: {format_bytes(int(sum(vram_values) / len(vram_values)))}"
+        )
         print()
 
     # System stats
     print(bold("  System stats"))
     cpu1_values = [e.get("cpu_load_1", 0) for e in data if e.get("cpu_load_1", -1) >= 0]
     if cpu1_values:
-        print(f"    CPU 1m:  min {min(cpu1_values):.2f}  "
-              f"max {max(cpu1_values):.2f}  "
-              f"avg {sum(cpu1_values) / len(cpu1_values):.2f}")
+        print(
+            f"    CPU 1m:  min {min(cpu1_values):.2f}  "
+            f"max {max(cpu1_values):.2f}  "
+            f"avg {sum(cpu1_values) / len(cpu1_values):.2f}"
+        )
 
     # Pressure distribution
     pressure_counts: dict[str, int] = {}
@@ -470,9 +596,7 @@ def render_analyze(data: list[dict], hours: int) -> None:
                 stable_str = _time_ago(span)
             print(f"    Stable since: {green(stable_str)}")
 
-            sorted_models = sorted(
-                models, key=lambda m: m.get("size_vram", 0), reverse=True
-            )
+            sorted_models = sorted(models, key=lambda m: m.get("size_vram", 0), reverse=True)
             for m in sorted_models:
                 vram = format_bytes(m.get("size_vram", 0))
                 print(f"    {m['name']:<40} {vram:>10}")

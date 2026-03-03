@@ -42,14 +42,16 @@ def collect_snapshot(engines: list[InferenceEngine]) -> dict:
         try:
             running = engine.list_running()
             for m in running:
-                models.append({
-                    "engine": engine.name,
-                    "name": m.name,
-                    "size_vram": m.size_vram,
-                    "size_total": m.size_total,
-                    "format": m.format,
-                    "quantization": m.quantization,
-                })
+                models.append(
+                    {
+                        "engine": engine.name,
+                        "name": m.name,
+                        "size_vram": m.size_vram,
+                        "size_total": m.size_total,
+                        "format": m.format,
+                        "quantization": m.quantization,
+                    }
+                )
             engine_names.append(engine.name)
             version = engine.version()
             if version:
@@ -104,7 +106,8 @@ class CollectorThread(threading.Thread):
                     if deleted:
                         logger.info(
                             "Purged %d entries older than %d days",
-                            deleted, RETENTION_DAYS,
+                            deleted,
+                            RETENTION_DAYS,
                         )
             except Exception as e:
                 logger.error("Collector error: %s", e)
