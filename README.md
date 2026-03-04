@@ -1,14 +1,22 @@
-# asiai
+<p align="center">
+  <img src="assets/logo.svg" alt="asiai logo" width="140">
+</p>
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
-[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-black.svg)](https://support.apple.com/en-us/116943)
+<h1 align="center">asiai</h1>
 
-> Multi-engine LLM benchmark & monitoring CLI for Apple Silicon.
+<p align="center">
+  <strong>Apple Silicon AI</strong> — Multi-engine LLM benchmark & monitoring CLI
+</p>
 
-**asiai** compares inference engines side-by-side on your Mac. Load the same model on Ollama, LM Studio, or mlx-lm, run `asiai bench`, get the numbers. No guessing, no vibes — just tok/s, TTFT, VRAM, and CPU usage per engine.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python"></a>
+  <a href="https://support.apple.com/en-us/116943"><img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black.svg" alt="macOS"></a>
+</p>
 
-Born from the [OpenClaw](https://github.com/druide67/openclaw-macos-hardened) project, where we needed hard data to pick the fastest engine for multi-agent swarms on Mac Mini M4 Pro.
+**asiai** compares inference engines side-by-side on your Mac. Load the same model on Ollama and LM Studio, run `asiai bench`, get the numbers. No guessing, no vibes — just tok/s, TTFT, power efficiency, and stability per engine.
+
+Born from the OpenClaw project, where we needed hard data to pick the fastest engine for multi-agent swarms on Mac Mini M4 Pro.
 
 ## Quick start
 
@@ -25,58 +33,56 @@ cd asiai
 pip install -e .
 ```
 
-For the TUI dashboard:
-
-```bash
-pip install asiai[tui]
-```
-
 ## Commands
 
 ### `asiai detect`
 
-Auto-detect running inference engines (Ollama, LM Studio, mlx-lm).
+Auto-detect running inference engines across 5 ports.
 
 ```
 $ asiai detect
 
 Detected engines:
 
-  ● ollama 0.17.2
+  ● ollama 0.17.4
     URL: http://localhost:11434
 
-  ● lmstudio 0.4.6
+  ● lmstudio 0.4.5
     URL: http://localhost:1234
     Running: 1 model(s)
-      - gemma-2-9b  N/A
+      - qwen3.5-35b-a3b  MLX
 ```
 
 ### `asiai bench`
 
-Cross-engine benchmark with standardized prompts.
+Cross-engine benchmark with standardized prompts. Runs 3 iterations per prompt by default, reports median tok/s (SPEC standard) with stability classification.
 
 ```
-$ asiai bench --model gemma2:9b
+$ asiai bench -m qwen3.5 --runs 3 --power
 
-  MacBookPro18,2 — Apple M1 Max  RAM: 64.0 GB (55% used)  Pressure: normal
+  Mac Mini M4 Pro — Apple M4 Pro  RAM: 64.0 GB (42% used)  Pressure: normal
 
-Benchmark: gemma2:9b
+Benchmark: qwen3.5
 
-  Engine          tok/s     TTFT       VRAM   CPU%        RSS    Thermal
-  ──────────── ──────── ──────── ────────── ────── ────────── ──────────
-  lmstudio         24.4      N/A        N/A    12%    380 MB    nominal
-  ollama           45.7    0.12s     8.2 GB    85%    107 MB    nominal
+  Engine       tok/s (±stddev)    Tokens   Duration     TTFT       VRAM    Thermal
+  ────────── ───────────────── ───────── ────────── ──────── ────────── ──────────
+  lmstudio    72.6 ± 0.0 (stable)   435    6.20s    0.28s        —    nominal
+  ollama      30.4 ± 0.1 (stable)   448   15.28s    0.25s   26.0 GB   nominal
 
-  Winner: ollama (+87% tok/s)
+  Winner: lmstudio (2.4x faster)
+  Power: lmstudio 13.2W (5.52 tok/s/W) — ollama 16.0W (1.89 tok/s/W)
 ```
 
 Options:
 
 ```
---model, -m MODEL      Model to benchmark (default: auto-detect)
---engines, -e LIST     Filter engines (e.g. ollama,lmstudio,mlxlm)
---prompts, -p LIST     Prompt types: code, tool_call, reasoning, long_gen
---history, -H PERIOD   Show past benchmarks (e.g. 7d, 24h)
+-m, --model MODEL          Model to benchmark (default: auto-detect)
+-e, --engines LIST         Filter engines (e.g. ollama,lmstudio,mlxlm)
+-p, --prompts LIST         Prompt types: code, tool_call, reasoning, long_gen
+-r, --runs N               Runs per prompt (default: 3, for median + stddev)
+    --power                Measure GPU power via powermetrics (sudo required)
+    --context-size SIZE    Context fill prompt: 4k, 16k, 32k, 64k
+-H, --history PERIOD       Show past benchmarks (e.g. 7d, 24h)
 ```
 
 The runner resolves model names across engines automatically — `gemma2:9b` (Ollama) and `gemma-2-9b` (LM Studio) are matched as the same model.
@@ -89,10 +95,10 @@ List loaded models across all engines.
 $ asiai models
 
 ollama  http://localhost:11434
-  ● gemma2:9b                                    8.2 GB Q4_K_M
+  ● qwen3.5:35b-a3b                             26.0 GB Q4_K_M
 
 lmstudio  http://localhost:1234
-  ● gemma-2-9b                                      N/A
+  ● qwen3.5-35b-a3b                                 MLX
 ```
 
 ### `asiai monitor`
@@ -109,22 +115,22 @@ System
   Pressure:  normal
   Thermal:   nominal  (100%)
 
-Inference  ollama 0.17.2
-  Models loaded: 1  VRAM total: 8.2 GB
+Inference  ollama 0.17.4
+  Models loaded: 1  VRAM total: 26.0 GB
 
   Model                                        VRAM   Format  Quant
   ──────────────────────────────────────── ────────── ──────── ──────
-  gemma2:9b                                  8.2 GB     gguf Q4_K_M
+  qwen3.5:35b-a3b                            26.0 GB     gguf Q4_K_M
 ```
 
 Options:
 
 ```
---watch, -w SEC        Refresh every SEC seconds
---quiet, -q            Collect and store without output (for daemon use)
---history, -H PERIOD   Show history (e.g. 24h, 1h)
---analyze, -a HOURS    Comprehensive analysis with trends
---compare, -c TS TS    Compare two timestamps
+-w, --watch SEC            Refresh every SEC seconds
+-q, --quiet                Collect and store without output (for daemon use)
+-H, --history PERIOD       Show history (e.g. 24h, 1h)
+-a, --analyze HOURS        Comprehensive analysis with trends
+-c, --compare TS TS        Compare two timestamps
 ```
 
 ### `asiai doctor`
@@ -137,21 +143,22 @@ $ asiai doctor
 Doctor
 
   System
-    ✓ Apple Silicon       MacBookPro18,2 — Apple M1 Max
-    ✓ RAM                 64 GB total, 55% used
+    ✓ Apple Silicon       Mac Mini M4 Pro — Apple M4 Pro
+    ✓ RAM                 64 GB total, 42% used
     ✓ Memory pressure     normal
     ✓ Thermal             nominal (100%)
 
   Engine
-    ✓ Ollama              v0.17.2 — 1 model(s): gemma2:9b
-    ✓ LM Studio           v0.4.6 — 2 model(s): gemma-2-9b, qwen2.5-7b
+    ✓ Ollama              v0.17.4 — 1 model(s): qwen3.5:35b-a3b
+    ✓ LM Studio           v0.4.5 — 1 model(s): qwen3.5-35b-a3b
     ✗ mlx-lm              not installed
-      Fix: brew install mlx-lm
+    ✗ llama.cpp            not installed
+    ✗ vllm-mlx            not installed
 
   Database
-    ✓ SQLite              1.2 MB, last entry: 3m ago
+    ✓ SQLite              2.4 MB, last entry: 1m ago
 
-  6 ok, 0 warning(s), 1 failed
+  5 ok, 0 warning(s), 3 failed
 ```
 
 ### `asiai daemon`
@@ -163,7 +170,6 @@ asiai daemon start              # Install and start the daemon
 asiai daemon start --interval 30  # Custom interval (seconds)
 asiai daemon status             # Check if running
 asiai daemon logs               # View recent logs
-asiai daemon logs -n 100        # Last 100 lines
 asiai daemon stop               # Stop and uninstall
 ```
 
@@ -175,8 +181,6 @@ Interactive terminal dashboard with auto-refresh. Requires `pip install asiai[tu
 asiai tui
 ```
 
-Keybindings: `q` quit, `r` refresh, `b` toggle benchmarks.
-
 ## Supported engines
 
 | Engine | Port | Install | API |
@@ -184,20 +188,35 @@ Keybindings: `q` quit, `r` refresh, `b` toggle benchmarks.
 | [Ollama](https://ollama.com) | 11434 | `brew install ollama` | Native |
 | [LM Studio](https://lmstudio.ai) | 1234 | `brew install --cask lm-studio` | OpenAI-compatible |
 | [mlx-lm](https://github.com/ml-explore/mlx-examples) | 8080 | `brew install mlx-lm` | OpenAI-compatible |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | 8080 | `brew install llama.cpp` | OpenAI-compatible |
+| [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | `pip install vllm-mlx` | OpenAI-compatible |
 
 ## What it measures
 
-| Metric | Source | Ollama | LM Studio | mlx-lm |
-|--------|--------|--------|-----------|--------|
-| tok/s | API response / wall clock | Native (`eval_duration`) | Client-side timing | Client-side timing |
-| TTFT | Time to first token | Native (`prompt_eval_duration`) | N/A | N/A |
-| VRAM | Model memory footprint | `/api/ps` | N/A | N/A |
-| CPU% | Per-process usage | `ps aux` | `ps aux` | `ps aux` |
-| RSS | Resident memory | `ps aux` | `ps aux` | `ps aux` |
-| Thermal | CPU throttling state | `sysctl` / `pmset` | `sysctl` / `pmset` | `sysctl` / `pmset` |
-| RAM pressure | System memory pressure | `sysctl` | `sysctl` | `sysctl` |
+| Metric | Description |
+|--------|-------------|
+| **tok/s** | Generation speed (tokens/sec), excluding prompt processing (TTFT) |
+| **TTFT** | Time to first token — prompt processing latency |
+| **Power** | GPU power draw in watts (`sudo powermetrics`) |
+| **tok/s/W** | Energy efficiency — tokens per second per watt |
+| **Stability** | Run-to-run variance: stable (CV<5%), variable (<10%), unstable (>10%) |
+| **VRAM** | GPU memory footprint (Ollama only) |
+| **Thermal** | CPU throttling state and speed limit percentage |
 
-All metrics are stored in SQLite (`~/.local/share/asiai/metrics.db`) with 90-day retention.
+All metrics stored in SQLite (`~/.local/share/asiai/metrics.db`) with 90-day retention and automatic regression detection.
+
+## Benchmark methodology
+
+Following [MLPerf](https://mlcommons.org/benchmarks/inference-server/), [SPEC CPU 2017](https://www.spec.org/cpu2017/), and [NVIDIA GenAI-Perf](https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/stable/benchmarking/genai_perf.html) standards:
+
+- **Warmup**: 1 non-timed generation per engine before measured runs
+- **Runs**: 3 iterations per prompt (configurable), median as primary metric
+- **Sampling**: `temperature=0` (greedy decoding) for deterministic results
+- **Power**: Per-engine monitoring (not session-wide average)
+- **Variance**: Pooled intra-prompt stddev (isolates run-to-run noise)
+- **Metadata**: Engine version, model quantization, hardware chip, macOS version stored per result
+
+See [docs/benchmark-best-practices.md](docs/benchmark-best-practices.md) for the full conformance audit.
 
 ## Benchmark prompts
 
@@ -210,11 +229,13 @@ Four standardized prompts test different generation patterns:
 | `reasoning` | 384 | Multi-step math problem |
 | `long_gen` | 1024 | Sustained throughput (bash script) |
 
+Use `--context-size 4k|16k|32k|64k` to test with large context fill prompts instead.
+
 ## Requirements
 
 - macOS on Apple Silicon (M1 / M2 / M3 / M4)
 - Python 3.11+
-- At least one inference engine: [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), or [mlx-lm](https://github.com/ml-explore/mlx-examples)
+- At least one inference engine running locally
 
 ## Zero dependencies
 
@@ -222,16 +243,16 @@ The core uses only the Python standard library — `urllib`, `sqlite3`, `subproc
 
 Optional extras:
 - `asiai[tui]` — Textual terminal dashboard
-- `asiai[dev]` — pytest, ruff, pytest-asyncio
+- `asiai[dev]` — pytest, ruff
 
 ## Roadmap
 
 | Version | Scope | Status |
 |---------|-------|--------|
-| **v0.1** | detect + bench + monitor + models (CLI) | **Done** |
+| **v0.1** | detect + bench + monitor + models (CLI, stdlib) | **Done** |
 | **v0.2** | mlx-lm + doctor + daemon + TUI (Textual) | **Done** |
-| v0.3 | vllm-mlx + llama.cpp + tok/s per watt + dashboard web | Next |
-| v1.0 | Multi-server, plugins, Homebrew Core | Planned |
+| **v0.3** | 5 engines, power metrics, multi-run variance, regression detection | **Done** |
+| v1.0 | Multi-server, community export, Homebrew Core | Planned |
 
 ## License
 
