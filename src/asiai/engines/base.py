@@ -27,6 +27,7 @@ class GenerateResult:
     ttft_ms: float = 0.0
     total_duration_ms: float = 0.0
     prompt_eval_duration_ms: float = 0.0
+    generation_duration_ms: float = 0.0
     model: str = ""
     engine: str = ""
     error: str = ""

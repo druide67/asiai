@@ -7,7 +7,12 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 from asiai.benchmark.prompts import PROMPTS, get_prompts
-from asiai.benchmark.reporter import _classify_stability, _stddev, aggregate_results
+from asiai.benchmark.reporter import (
+    _classify_stability,
+    _pooled_stddev,
+    _stddev,
+    aggregate_results,
+)
 from asiai.benchmark.runner import (
     _check_model_availability,
     _model_matches,
@@ -66,6 +71,19 @@ class TestModelMatches:
 
     def test_no_match(self):
         assert not _model_matches("llama3:8b", "qwen3.5:35b")
+
+    def test_size_guard_rejects_different_sizes(self):
+        """gemma2:9b should NOT match gemma-2-2b-it-4bit (9B vs 2B)."""
+        assert not _model_matches("gemma2:9b", "mlx-community/gemma-2-2b-it-4bit")
+        assert not _model_matches("mlx-community/gemma-2-2b-it-4bit", "gemma2:9b")
+
+    def test_size_guard_allows_same_size(self):
+        """gemma2:9b should match gemma-2-9b-it (same size)."""
+        assert _model_matches("gemma-2-9b-it", "gemma2:9b")
+
+    def test_size_guard_no_size_in_target(self):
+        """qwen3.5 (no size) should still match qwen3.5:35b-a3b."""
+        assert _model_matches("qwen3.5:35b-a3b", "qwen3.5")
 
 
 class TestResolveModelName:
@@ -473,6 +491,57 @@ class TestReporter:
         assert report["winner"]["name"] == "a"
         assert "VRAM" in report["winner"]["vram_delta"]
 
+    def test_aggregate_tokens_and_duration(self):
+        """Tokens generated and total duration should be averaged."""
+        results = [
+            {
+                "engine": "ollama",
+                "model": "m",
+                "tok_per_sec": 45.0,
+                "ttft_ms": 100.0,
+                "vram_bytes": 0,
+                "thermal_level": "",
+                "prompt_type": "code",
+                "tokens_generated": 100,
+                "total_duration_ms": 2200.0,
+                "run_index": 0,
+            },
+            {
+                "engine": "ollama",
+                "model": "m",
+                "tok_per_sec": 47.0,
+                "ttft_ms": 110.0,
+                "vram_bytes": 0,
+                "thermal_level": "",
+                "prompt_type": "code",
+                "tokens_generated": 98,
+                "total_duration_ms": 2100.0,
+                "run_index": 1,
+            },
+        ]
+        report = aggregate_results(results)
+        data = report["engines"]["ollama"]
+        assert data["avg_tokens_generated"] == 99  # avg of 100, 98
+        assert data["avg_total_duration_ms"] == 2150.0  # avg of 2200, 2100
+
+    def test_aggregate_missing_tokens_defaults_zero(self):
+        """Results without tokens_generated should default to 0."""
+        results = [
+            {
+                "engine": "ollama",
+                "model": "m",
+                "tok_per_sec": 30.0,
+                "ttft_ms": 0.0,
+                "vram_bytes": 0,
+                "thermal_level": "",
+                "prompt_type": "code",
+            },
+        ]
+        report = aggregate_results(results)
+        data = report["engines"]["ollama"]
+        assert data["avg_tokens_generated"] == 0
+        assert data["avg_total_duration_ms"] == 0.0
+
 
 class TestRunBenchmarkPower:
     """Tests for power=True path in run_benchmark."""
@@ -488,10 +557,17 @@ class TestRunBenchmarkPower:
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
-        monitor = MagicMock()
-        monitor.start.return_value = True
-        monitor.stop.return_value = PowerSample(gpu_watts=20.0, cpu_watts=8.0, source="3 samples")
-        mock_power_cls.return_value = monitor
+        # First call: probe monitor (checks sudo access)
+        # Second call: per-engine monitor
+        probe_monitor = MagicMock()
+        probe_monitor.start.return_value = True
+        probe_monitor.stop.return_value = PowerSample(gpu_watts=0.0, source="probe")
+        engine_monitor = MagicMock()
+        engine_monitor.start.return_value = True
+        engine_monitor.stop.return_value = PowerSample(
+            gpu_watts=20.0, cpu_watts=8.0, source="3 samples"
+        )
+        mock_power_cls.side_effect = [probe_monitor, engine_monitor]
 
         engine = _mock_engine(
             generate_result=GenerateResult(
@@ -509,8 +585,8 @@ class TestRunBenchmarkPower:
         assert run.results[0]["power_watts"] == 20.0
         # tok/s/W = 50.0 / 20.0 = 2.5
         assert run.results[0]["tok_per_sec_per_watt"] == 2.5
-        monitor.start.assert_called_once()
-        monitor.stop.assert_called_once()
+        engine_monitor.start.assert_called_once()
+        engine_monitor.stop.assert_called_once()
 
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
@@ -522,7 +598,7 @@ class TestRunBenchmarkPower:
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
         monitor = MagicMock()
-        monitor.start.return_value = False  # No sudo
+        monitor.start.return_value = False  # No sudo (probe fails)
         mock_power_cls.return_value = monitor
 
         engine = _mock_engine()
@@ -547,10 +623,14 @@ class TestRunBenchmarkPower:
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
-        monitor = MagicMock()
-        monitor.start.return_value = True
-        monitor.stop.return_value = PowerSample(gpu_watts=0.0, source="no samples")
-        mock_power_cls.return_value = monitor
+        # Probe succeeds, per-engine monitor returns 0W
+        probe = MagicMock()
+        probe.start.return_value = True
+        probe.stop.return_value = PowerSample(gpu_watts=0.0, source="probe")
+        engine_mon = MagicMock()
+        engine_mon.start.return_value = True
+        engine_mon.stop.return_value = PowerSample(gpu_watts=0.0, source="no samples")
+        mock_power_cls.side_effect = [probe, engine_mon]
 
         engine = _mock_engine()
         run = run_benchmark([engine], "test-model", ["code"], power=True)
@@ -686,3 +766,169 @@ class TestBenchmarkStorage:
             assert rows[0]["model"] == "model-a"
         finally:
             os.unlink(path)
+
+
+# --- Pooled Stddev ---
+
+
+class TestPooledStddev:
+    def test_multi_prompt_excludes_inter_prompt_variance(self):
+        """Multi-prompt pooled stddev should NOT include inter-prompt variance."""
+        results = [
+            # code prompt: 45, 46, 47 (low intra-prompt variance)
+            {"prompt_type": "code", "tok_per_sec": 45.0, "run_index": 0},
+            {"prompt_type": "code", "tok_per_sec": 46.0, "run_index": 1},
+            {"prompt_type": "code", "tok_per_sec": 47.0, "run_index": 2},
+            # reasoning prompt: 25, 26, 27 (low intra-prompt variance, different mean)
+            {"prompt_type": "reasoning", "tok_per_sec": 25.0, "run_index": 0},
+            {"prompt_type": "reasoning", "tok_per_sec": 26.0, "run_index": 1},
+            {"prompt_type": "reasoning", "tok_per_sec": 27.0, "run_index": 2},
+        ]
+        pooled = _pooled_stddev(results)
+        # Intra-prompt stddev for each group is ~0.82
+        assert pooled < 1.0
+        # The old _stddev would give ~10.8 (mixing inter-prompt variance)
+        all_tok = [r["tok_per_sec"] for r in results]
+        old_stddev = _stddev(all_tok)
+        assert old_stddev > 5.0  # Much higher because of inter-prompt spread
+        assert pooled < old_stddev
+
+    def test_single_prompt_equals_stddev(self):
+        """Single prompt type: pooled stddev should equal regular stddev."""
+        results = [
+            {"prompt_type": "code", "tok_per_sec": 45.0, "run_index": 0},
+            {"prompt_type": "code", "tok_per_sec": 47.0, "run_index": 1},
+            {"prompt_type": "code", "tok_per_sec": 46.0, "run_index": 2},
+        ]
+        pooled = _pooled_stddev(results)
+        regular = _stddev([45.0, 47.0, 46.0])
+        assert pooled == regular
+
+    def test_single_run_returns_zero(self):
+        """Single run per prompt: no variance to compute."""
+        results = [
+            {"prompt_type": "code", "tok_per_sec": 45.0, "run_index": 0},
+            {"prompt_type": "reasoning", "tok_per_sec": 25.0, "run_index": 0},
+        ]
+        assert _pooled_stddev(results) == 0.0
+
+    def test_empty_returns_zero(self):
+        assert _pooled_stddev([]) == 0.0
+
+    def test_all_zero_tok_s(self):
+        results = [
+            {"prompt_type": "code", "tok_per_sec": 0.0, "run_index": 0},
+            {"prompt_type": "code", "tok_per_sec": 0.0, "run_index": 1},
+        ]
+        assert _pooled_stddev(results) == 0.0
+
+
+# --- Token fallback ---
+
+
+class TestTokenFallback:
+    def test_text_length_estimation(self):
+        """Token fallback should use len(text)//4, not chunk count."""
+        from asiai.engines.openai_compat import OpenAICompatEngine
+
+        class _TestEngine(OpenAICompatEngine):
+            @property
+            def name(self) -> str:
+                return "test"
+
+            def version(self) -> str:
+                return "1.0"
+
+        engine = _TestEngine("http://localhost:1234")
+
+        # Mock a streaming response with 2 chunks but long text
+        long_text = "a" * 400  # 400 chars -> ~100 tokens
+
+        # Build SSE response: 2 chunks, no usage field
+        chunk1_data = '{"choices":[{"delta":{"content":"' + long_text[:200] + '"}}]}'
+        chunk2_data = '{"choices":[{"delta":{"content":"' + long_text[200:] + '"}}]}'
+        done_line = "data: [DONE]"
+        sse = f"data: {chunk1_data}\ndata: {chunk2_data}\n{done_line}\n"
+
+        with patch("asiai.engines.openai_compat.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_resp.__iter__ = MagicMock(
+                return_value=iter(line.encode() + b"\n" for line in sse.splitlines())
+            )
+            mock_urlopen.return_value = mock_resp
+
+            result = engine.generate("test-model", "test prompt")
+
+        # Should be len(text)//4 = 100, NOT len(text_parts) = 2
+        assert result.tokens_generated == 100
+        assert result.generation_duration_ms >= 0.0
+
+
+# --- Per-engine power ---
+
+
+class TestPerEnginePower:
+    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.collect_thermal")
+    @patch("asiai.benchmark.runner.collect_memory")
+    @patch("asiai.collectors.power.PowerMonitor")
+    def test_per_engine_power_isolation(
+        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs
+    ):
+        """Each engine should get its own power measurement."""
+        from asiai.collectors.power import PowerSample
+
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+        mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
+
+        # Create monitors that return different wattage
+        monitors = [
+            MagicMock(),  # probe monitor
+            MagicMock(),  # engine 1 monitor
+            MagicMock(),  # engine 2 monitor
+        ]
+        monitors[0].start.return_value = True
+        monitors[0].stop.return_value = PowerSample(gpu_watts=0.0, source="probe")
+        monitors[1].start.return_value = True
+        monitors[1].stop.return_value = PowerSample(gpu_watts=15.0, source="engine1")
+        monitors[2].start.return_value = True
+        monitors[2].stop.return_value = PowerSample(gpu_watts=30.0, source="engine2")
+        mock_power_cls.side_effect = monitors
+
+        e1 = _mock_engine(
+            "ollama",
+            generate_result=GenerateResult(
+                tokens_generated=100,
+                tok_per_sec=50.0,
+                ttft_ms=100.0,
+                total_duration_ms=2000.0,
+                model="test-model",
+                engine="ollama",
+            ),
+        )
+        e2 = _mock_engine(
+            "lmstudio",
+            generate_result=GenerateResult(
+                tokens_generated=100,
+                tok_per_sec=70.0,
+                ttft_ms=50.0,
+                total_duration_ms=1500.0,
+                model="test-model",
+                engine="lmstudio",
+            ),
+        )
+        run = run_benchmark([e1, e2], "test-model", ["code"], power=True)
+
+        assert len(run.results) == 2
+        ollama_result = next(r for r in run.results if r["engine"] == "ollama")
+        lmstudio_result = next(r for r in run.results if r["engine"] == "lmstudio")
+
+        # Each engine gets its own power reading
+        assert ollama_result["power_watts"] == 15.0
+        assert lmstudio_result["power_watts"] == 30.0
+
+        # tok/s/W computed with per-engine power
+        assert ollama_result["tok_per_sec_per_watt"] == round(50.0 / 15.0, 2)
+        assert lmstudio_result["tok_per_sec_per_watt"] == round(70.0 / 30.0, 2)

@@ -75,3 +75,71 @@ def get_prompts(names: list[str] | None = None) -> list[BenchPrompt]:
     if names is None:
         names = DEFAULT_PROMPT_ORDER
     return [PROMPTS[n] for n in names if n in PROMPTS]
+
+
+# --- Context fill prompt generation ---
+
+# ~750 tokens of varied English prose (repeated to fill target size).
+_FILL_BLOCK = (
+    "The quick brown fox jumps over the lazy dog near the river bank. "
+    "Scientists recently discovered a new species of deep-sea fish that "
+    "can survive extreme pressure at depths exceeding 8,000 meters. The "
+    "research team published their findings in Nature, noting that the "
+    "fish exhibits bioluminescent properties unlike any previously "
+    "documented organism. Meanwhile, advances in quantum computing "
+    "continue to accelerate, with several major tech companies announcing "
+    "breakthroughs in error correction that could bring practical quantum "
+    "advantage closer to reality. In the world of open-source software, "
+    "community-driven projects have shown remarkable resilience and "
+    "innovation, often outpacing proprietary alternatives in both "
+    "performance and security. Local large language model inference on "
+    "Apple Silicon has become increasingly viable, with frameworks like "
+    "MLX enabling efficient utilization of the unified memory architecture. "
+    "Benchmark results show that models running natively on Metal can "
+    "achieve throughput comparable to dedicated GPU setups at a fraction "
+    "of the power consumption. The implications for edge AI deployment "
+    "are significant, as developers can now run capable models without "
+    "cloud dependencies or specialized hardware. Temperature monitoring "
+    "and memory pressure tracking become essential when pushing these "
+    "systems to their limits during sustained inference workloads. "
+)
+
+# Approximate tokens per character ratio (conservative for English text).
+_CHARS_PER_TOKEN = 4.0
+
+
+def parse_context_size(value: str) -> int:
+    """Parse a context size string like '64k', '128k', '4096' into token count."""
+    value = value.strip().lower()
+    if value.endswith("k"):
+        return int(value[:-1]) * 1024
+    return int(value)
+
+
+def generate_context_fill_prompt(target_tokens: int) -> BenchPrompt:
+    """Generate a prompt that fills approximately target_tokens of context.
+
+    The prompt wraps filler text in an instruction asking the model to
+    summarize it, so the model processes the full context before generating.
+    """
+    instruction = "Summarize the following text in 3 bullet points:\n\n"
+    instruction_chars = len(instruction)
+
+    target_chars = int(target_tokens * _CHARS_PER_TOKEN) - instruction_chars
+    if target_chars < 100:
+        target_chars = 100
+
+    # Repeat the fill block to reach the target size
+    block_len = len(_FILL_BLOCK)
+    repeats = (target_chars // block_len) + 1
+    filler = (_FILL_BLOCK * repeats)[:target_chars]
+
+    prompt_text = instruction + filler
+
+    return BenchPrompt(
+        name="context_fill",
+        label=f"Context Fill ({target_tokens // 1024}k)",
+        prompt=prompt_text,
+        max_tokens=256,
+        description=f"TTFT stress test with ~{target_tokens} input tokens",
+    )

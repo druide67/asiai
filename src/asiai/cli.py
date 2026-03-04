@@ -209,7 +209,14 @@ def cmd_tui(args: argparse.Namespace) -> int:
     engines = _discover_engines(urls)
     db_path = args.db or DEFAULT_DB_PATH
     init_db(db_path)
-    run_tui(engines=engines, db_path=db_path)
+    try:
+        run_tui(engines=engines, db_path=db_path)
+    except ImportError:
+        from asiai.display.formatters import dim, red
+
+        print(red("Textual is required for the TUI."), file=sys.stderr)
+        print(dim("Install with: pip install asiai[tui]"), file=sys.stderr)
+        return 1
     return 0
 
 
@@ -323,7 +330,14 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Run benchmark
     runs = max(1, min(getattr(args, "runs", 1), 100))
     power = getattr(args, "power", False)
-    bench_run = run_benchmark(engines, model, prompt_names, runs=runs, power=power)
+    context_size = 0
+    if getattr(args, "context_size", None):
+        from asiai.benchmark.prompts import parse_context_size
+
+        context_size = parse_context_size(args.context_size)
+    bench_run = run_benchmark(
+        engines, model, prompt_names, runs=runs, power=power, context_size=context_size,
+    )
 
     # Store results
     if bench_run.results:
@@ -335,6 +349,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     # Aggregate and render
     report = aggregate_results(bench_run.results)
+    report["model"] = model  # Use user-requested name, not engine-resolved
     render_bench(report)
 
     # Check for regressions against historical data
@@ -474,6 +489,12 @@ def main(argv: list[str] | None = None) -> int:
         "-P",
         action="store_true",
         help="Measure GPU power consumption (requires sudo)",
+    )
+    bench_parser.add_argument(
+        "--context-size",
+        "-C",
+        metavar="SIZE",
+        help="Fill context with N tokens to stress-test TTFT (e.g. 64k, 128k, 4096)",
     )
     bench_parser.add_argument(
         "--history",

@@ -134,8 +134,9 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                    (ts, engine, model, prompt_type,
                     tokens_generated, tok_per_sec, ttft_ms, total_duration_ms,
                     vram_bytes, mem_used, thermal_level, thermal_speed_limit,
-                    run_index, power_watts, tok_per_sec_per_watt, load_time_ms)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    run_index, power_watts, tok_per_sec_per_watt, load_time_ms,
+                    metrics_version)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
                     r["engine"],
@@ -153,6 +154,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("power_watts", 0.0),
                     r.get("tok_per_sec_per_watt", 0.0),
                     r.get("load_time_ms", 0.0),
+                    2,  # metrics_version: 2 = tok/s excludes TTFT
                 ),
             )
         conn.commit()
