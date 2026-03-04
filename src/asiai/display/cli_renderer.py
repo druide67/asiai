@@ -381,6 +381,28 @@ def render_bench(report: dict) -> None:
                 else:
                     print(f"    {engine_name:<12} {load_ms:.0f}ms")
 
+    # Statistical details (CI, percentiles, outliers)
+    has_stats = any(d.get("runs_count", 1) >= 2 for d in engines.values())
+    if has_stats:
+        print()
+        print(bold("  Statistics"))
+        for engine_name, data in sorted(engines.items()):
+            if data.get("runs_count", 1) < 2:
+                continue
+            ci_lo = data.get("ci95_lower", 0)
+            ci_hi = data.get("ci95_upper", 0)
+            p90 = data.get("p90_tok_s", 0)
+            p90_ttft = data.get("p90_ttft_ms", 0)
+            parts = [f"95% CI: [{ci_lo:.1f}, {ci_hi:.1f}] tok/s"]
+            if p90 > 0:
+                parts.append(f"P90: {p90:.1f} tok/s")
+            if p90_ttft > 0:
+                parts.append(f"P90 TTFT: {p90_ttft / 1000:.2f}s")
+            outliers = data.get("outliers", [])
+            if outliers:
+                parts.append(yellow(f"{len(outliers)} outlier(s)"))
+            print(f"    {engine_name:<12} {', '.join(parts)}")
+
     # Power tip (when no power data)
     has_power = any(
         any(p.get("power_watts", 0) > 0 for p in d["prompt_results"]) for d in engines.values()
