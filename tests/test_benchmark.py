@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 from asiai.benchmark.prompts import PROMPTS, generate_context_fill_prompt, get_prompts
 from asiai.benchmark.reporter import (
     _classify_stability,
+    _detect_outliers,
+    _percentile,
     _pooled_stddev,
     _stddev,
     aggregate_results,
@@ -150,7 +152,7 @@ def _mock_engine(name="ollama", models=None, generate_result=None):
     )
     engine.generate.return_value = generate_result or GenerateResult(
         text="generated text",
-        tokens_generated=100,
+        tokens_generated=500,
         tok_per_sec=45.2,
         ttft_ms=850.0,
         total_duration_ms=2200.0,
@@ -991,3 +993,158 @@ class TestPerEnginePower:
         # tok/s/W computed with per-engine power
         assert ollama_result["tok_per_sec_per_watt"] == round(50.0 / 15.0, 2)
         assert lmstudio_result["tok_per_sec_per_watt"] == round(70.0 / 30.0, 2)
+
+
+# --- Percentile ---
+
+
+class TestPercentile:
+    def test_p50(self):
+        assert _percentile([1, 2, 3, 4, 5], 50) == 3.0
+
+    def test_p90(self):
+        values = list(range(1, 101))  # 1..100
+        assert abs(_percentile(values, 90) - 90.1) < 0.01
+
+    def test_p99(self):
+        values = list(range(1, 101))
+        p99 = _percentile(values, 99)
+        assert p99 > 98.0
+
+    def test_single_value(self):
+        assert _percentile([42.0], 50) == 42.0
+
+    def test_empty(self):
+        assert _percentile([], 50) == 0.0
+
+    def test_two_values(self):
+        assert _percentile([10, 20], 50) == 15.0
+
+
+# --- Outlier Detection ---
+
+
+class TestDetectOutliers:
+    def test_no_outliers(self):
+        values = [45.0, 46.0, 44.0, 45.5, 46.5]
+        assert _detect_outliers(values) == []
+
+    def test_outlier_detected(self):
+        values = [45.0, 46.0, 44.0, 45.5, 10.0]  # 10.0 is an outlier
+        outliers = _detect_outliers(values)
+        assert len(outliers) == 1
+        assert outliers[0]["value"] == 10.0
+
+    def test_too_few_values(self):
+        assert _detect_outliers([1.0, 2.0, 3.0]) == []
+
+    def test_all_same(self):
+        assert _detect_outliers([5.0, 5.0, 5.0, 5.0]) == []
+
+
+# --- Aggregate with stats ---
+
+
+class TestAggregateStats:
+    def test_ci95_and_percentiles(self):
+        """Multi-run results should have CI 95% and percentiles."""
+        results = [
+            {
+                "engine": "ollama",
+                "model": "m",
+                "tok_per_sec": 44.0,
+                "ttft_ms": 100.0,
+                "vram_bytes": 0,
+                "thermal_level": "",
+                "prompt_type": "code",
+                "run_index": 0,
+            },
+            {
+                "engine": "ollama",
+                "model": "m",
+                "tok_per_sec": 46.0,
+                "ttft_ms": 120.0,
+                "vram_bytes": 0,
+                "thermal_level": "",
+                "prompt_type": "code",
+                "run_index": 1,
+            },
+            {
+                "engine": "ollama",
+                "model": "m",
+                "tok_per_sec": 48.0,
+                "ttft_ms": 110.0,
+                "vram_bytes": 0,
+                "thermal_level": "",
+                "prompt_type": "code",
+                "run_index": 2,
+            },
+        ]
+        report = aggregate_results(results)
+        data = report["engines"]["ollama"]
+
+        # CI 95%
+        assert data["ci95_lower"] <= data["avg_tok_s"]
+        assert data["ci95_upper"] >= data["avg_tok_s"]
+
+        # Percentiles
+        assert data["p50_tok_s"] == data["median_tok_s"]
+        assert data["p90_tok_s"] >= data["p50_tok_s"]
+
+        # TTFT percentiles
+        assert data["p50_ttft_ms"] > 0
+        assert data["p90_ttft_ms"] >= data["p50_ttft_ms"]
+
+        # Outliers
+        assert data["outliers"] == []
+
+
+# --- Token ratio check ---
+
+
+class TestTokenRatioCheck:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
+    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.collect_thermal")
+    @patch("asiai.benchmark.runner.collect_memory")
+    def test_low_token_ratio_warns(self, mock_mem, mock_thermal, _procs, _hw, _os):
+        """Generating < 90% of max_tokens should produce a warning."""
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+        mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
+
+        engine = _mock_engine(
+            generate_result=GenerateResult(
+                tokens_generated=50,  # code prompt has max_tokens=512, 50/512 = 9.7%
+                tok_per_sec=45.0,
+                ttft_ms=100.0,
+                total_duration_ms=1100.0,
+                model="test-model",
+                engine="ollama",
+            )
+        )
+        run = run_benchmark([engine], "test-model", ["code"])
+        assert any("stopped early" in e for e in run.errors)
+
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
+    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.collect_thermal")
+    @patch("asiai.benchmark.runner.collect_memory")
+    def test_full_token_ratio_no_warning(self, mock_mem, mock_thermal, _procs, _hw, _os):
+        """Generating >= 90% of max_tokens should not warn."""
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+        mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
+
+        engine = _mock_engine(
+            generate_result=GenerateResult(
+                tokens_generated=500,  # 500/512 = 97.6%
+                tok_per_sec=45.0,
+                ttft_ms=100.0,
+                total_duration_ms=11000.0,
+                model="test-model",
+                engine="ollama",
+            )
+        )
+        run = run_benchmark([engine], "test-model", ["code"])
+        assert not any("stopped early" in e for e in run.errors)
