@@ -115,10 +115,16 @@ def run_benchmark(
         else:
             test_monitor.stop()
 
+    engines_run = 0
     for engine in engines:
         if not engine.is_reachable():
             run.errors.append(f"{engine.name}: not reachable")
             continue
+
+        # Cooldown between engines to stabilize thermals
+        if engines_run > 0:
+            logger.info("Cooldown 3s between engines")
+            time.sleep(3)
 
         # Pre-check: verify the model exists on this engine
         check = _check_model_availability(engine, model)
@@ -216,6 +222,21 @@ def run_benchmark(
                     f"(speed limit {speed_limit}%) — results may be degraded"
                 )
                 break  # One warning per engine is enough
+
+        # Token ratio check: warn if generation stopped early
+        for result in run.results[results_before:]:
+            prompt_obj = next((p for p in prompts if p.name == result.get("prompt_type")), None)
+            if prompt_obj and result.get("tokens_generated", 0) > 0:
+                ratio = result["tokens_generated"] / prompt_obj.max_tokens
+                if ratio < 0.9:
+                    run.errors.append(
+                        f"{engine.name}/{result['prompt_type']}: generated only "
+                        f"{result['tokens_generated']}/{prompt_obj.max_tokens} tokens "
+                        f"({ratio:.0%}) — model may have stopped early"
+                    )
+                    break  # One warning per engine is enough
+
+        engines_run += 1
 
     return run
 
