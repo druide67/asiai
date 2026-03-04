@@ -47,18 +47,18 @@ class PowerMonitor:
 
     def start(self) -> bool:
         """Start powermetrics in background. Returns False if no sudo access."""
-        # Check non-interactive sudo
+        # Check non-interactive sudo access for powermetrics
         try:
             result = subprocess.run(
-                ["sudo", "-n", "true"],
+                ["sudo", "-n", "/usr/bin/powermetrics", "--samplers", "gpu_power", "-n", "1", "-i", "1"],
                 capture_output=True,
-                timeout=5,
+                timeout=10,
             )
             if result.returncode != 0:
-                logger.info("No passwordless sudo access, skipping power monitoring")
+                logger.info("No passwordless sudo access for powermetrics")
                 return False
         except Exception as e:
-            logger.debug("sudo check failed: %s", e)
+            logger.debug("sudo powermetrics check failed: %s", e)
             return False
 
         try:
