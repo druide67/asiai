@@ -268,7 +268,10 @@ def collect_hw_chip() -> str:
     try:
         return subprocess.run(
             ["sysctl", "-n", "machdep.cpu.brand_string"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
     except Exception:
         return ""
@@ -279,7 +282,10 @@ def collect_os_version() -> str:
     try:
         return subprocess.run(
             ["sw_vers", "-productVersion"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
     except Exception:
         return ""

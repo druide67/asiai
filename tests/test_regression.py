@@ -36,8 +36,11 @@ class TestComputeAverages:
     def test_single_result(self):
         results = [
             {
-                "engine": "ollama", "model": "m", "prompt_type": "code",
-                "tok_per_sec": 50.0, "ttft_ms": 800.0,
+                "engine": "ollama",
+                "model": "m",
+                "prompt_type": "code",
+                "tok_per_sec": 50.0,
+                "ttft_ms": 800.0,
             }
         ]
         avgs = _compute_averages(results)
@@ -47,12 +50,18 @@ class TestComputeAverages:
     def test_multiple_results(self):
         results = [
             {
-                "engine": "ollama", "model": "m", "prompt_type": "code",
-                "tok_per_sec": 40.0, "ttft_ms": 800.0,
+                "engine": "ollama",
+                "model": "m",
+                "prompt_type": "code",
+                "tok_per_sec": 40.0,
+                "ttft_ms": 800.0,
             },
             {
-                "engine": "ollama", "model": "m", "prompt_type": "code",
-                "tok_per_sec": 60.0, "ttft_ms": 1200.0,
+                "engine": "ollama",
+                "model": "m",
+                "prompt_type": "code",
+                "tok_per_sec": 60.0,
+                "ttft_ms": 1200.0,
             },
         ]
         avgs = _compute_averages(results)

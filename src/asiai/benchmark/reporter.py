@@ -60,9 +60,7 @@ def aggregate_results(results: list[dict]) -> dict:
 
         # Tokens generated and total duration (for display)
         tok_gen_values = [p["tokens_generated"] for p in pr if p.get("tokens_generated", 0) > 0]
-        duration_values = [
-            p["total_duration_ms"] for p in pr if p.get("total_duration_ms", 0) > 0
-        ]
+        duration_values = [p["total_duration_ms"] for p in pr if p.get("total_duration_ms", 0) > 0]
         data["avg_tokens_generated"] = (
             round(sum(tok_gen_values) / len(tok_gen_values)) if tok_gen_values else 0
         )
