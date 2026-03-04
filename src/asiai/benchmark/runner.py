@@ -366,12 +366,16 @@ def _model_matches(running_name: str, target: str) -> bool:
     if size_running and size_target and size_running != size_target:
         return False
 
-    # Substring match for cross-engine name variants
-    if base_target in running_name or base_running in target:
+    # Substring match for cross-engine name variants (case-insensitive)
+    lower_running = running_name.lower()
+    lower_target_full = target.lower()
+    lower_base_running = base_running.lower()
+    lower_base_target = base_target.lower()
+    if lower_base_target in lower_running or lower_base_running in lower_target_full:
         return True
     # Normalize separators (gemma-2-9b vs gemma2:9b)
-    norm_running = base_running.replace("-", "").replace(".", "")
-    norm_target = base_target.replace("-", "").replace(".", "")
+    norm_running = lower_base_running.replace("-", "").replace(".", "")
+    norm_target = lower_base_target.replace("-", "").replace(".", "")
     if norm_running == norm_target or norm_target in norm_running or norm_running in norm_target:
         return True
     return False
