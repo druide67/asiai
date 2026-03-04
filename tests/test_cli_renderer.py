@@ -452,6 +452,46 @@ class TestRenderBench:
 
     @patch("asiai.collectors.system.collect_memory")
     @patch("asiai.collectors.system.collect_machine_info")
+    def test_statistics_section(self, mock_machine, mock_mem, capsys):
+        from asiai.collectors.system import MemoryInfo
+
+        mock_machine.return_value = "Apple M1 Max"
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+
+        report = {
+            "model": "m",
+            "engines": {
+                "ollama": {
+                    "avg_tok_s": 45.0,
+                    "median_tok_s": 45.0,
+                    "std_dev_tok_s": 1.0,
+                    "runs_count": 3,
+                    "stability": "stable",
+                    "avg_tokens_generated": 100,
+                    "avg_total_duration_ms": 2200.0,
+                    "avg_ttft_ms": 100.0,
+                    "vram_bytes": 0,
+                    "thermal_level": "nominal",
+                    "prompt_results": [],
+                    "ci95_lower": 43.8,
+                    "ci95_upper": 46.2,
+                    "p50_tok_s": 45.0,
+                    "p90_tok_s": 46.5,
+                    "p90_ttft_ms": 120.0,
+                    "outliers": [],
+                },
+            },
+            "winner": None,
+        }
+        with _no_color():
+            render_bench(report)
+        out = capsys.readouterr().out
+        assert "Statistics" in out
+        assert "95% CI" in out
+        assert "P90" in out
+
+    @patch("asiai.collectors.system.collect_memory")
+    @patch("asiai.collectors.system.collect_machine_info")
     def test_load_time(self, mock_machine, mock_mem, capsys):
         from asiai.collectors.system import MemoryInfo
 
