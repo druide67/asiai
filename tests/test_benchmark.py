@@ -6,7 +6,7 @@ import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
-from asiai.benchmark.prompts import PROMPTS, get_prompts
+from asiai.benchmark.prompts import PROMPTS, generate_context_fill_prompt, get_prompts
 from asiai.benchmark.reporter import (
     _classify_stability,
     _pooled_stddev,
@@ -51,6 +51,38 @@ class TestPrompts:
             assert prompt.prompt
             assert prompt.max_tokens > 0
             assert prompt.description
+
+
+class TestContextFillPrompt:
+    def test_input_plus_output_within_target(self):
+        """Prompt input tokens + max_tokens should not exceed target_tokens."""
+        target = 65536
+        prompt = generate_context_fill_prompt(target)
+        # Estimate input tokens from prompt text length
+        input_tokens_estimate = len(prompt.prompt) / 4.0
+        assert input_tokens_estimate + prompt.max_tokens <= target
+
+    def test_custom_max_tokens(self):
+        """Custom max_tokens should be respected."""
+        prompt = generate_context_fill_prompt(4096, max_tokens=512)
+        assert prompt.max_tokens == 512
+        input_tokens_estimate = len(prompt.prompt) / 4.0
+        assert input_tokens_estimate + prompt.max_tokens <= 4096
+
+    def test_small_context(self):
+        """Small context sizes should still produce a valid prompt."""
+        prompt = generate_context_fill_prompt(512)
+        assert len(prompt.prompt) > 0
+        assert prompt.max_tokens == 256
+        assert prompt.name == "context_fill"
+
+    def test_label_shows_k_size(self):
+        prompt = generate_context_fill_prompt(65536)
+        assert "64k" in prompt.label
+
+    def test_default_max_tokens_256(self):
+        prompt = generate_context_fill_prompt(8192)
+        assert prompt.max_tokens == 256
 
 
 # --- Model matching ---

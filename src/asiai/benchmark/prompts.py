@@ -116,16 +116,19 @@ def parse_context_size(value: str) -> int:
     return int(value)
 
 
-def generate_context_fill_prompt(target_tokens: int) -> BenchPrompt:
+def generate_context_fill_prompt(target_tokens: int, max_tokens: int = 256) -> BenchPrompt:
     """Generate a prompt that fills approximately target_tokens of context.
 
     The prompt wraps filler text in an instruction asking the model to
     summarize it, so the model processes the full context before generating.
+
+    The input budget is reduced by max_tokens so that input + output fits
+    within the target context window.
     """
     instruction = "Summarize the following text in 3 bullet points:\n\n"
-    instruction_chars = len(instruction)
 
-    target_chars = int(target_tokens * _CHARS_PER_TOKEN) - instruction_chars
+    input_budget = max(100, target_tokens - max_tokens)
+    target_chars = int(input_budget * _CHARS_PER_TOKEN) - len(instruction)
     if target_chars < 100:
         target_chars = 100
 
@@ -140,6 +143,6 @@ def generate_context_fill_prompt(target_tokens: int) -> BenchPrompt:
         name="context_fill",
         label=f"Context Fill ({target_tokens // 1024}k)",
         prompt=prompt_text,
-        max_tokens=256,
+        max_tokens=max_tokens,
         description=f"TTFT stress test with ~{target_tokens} input tokens",
     )
