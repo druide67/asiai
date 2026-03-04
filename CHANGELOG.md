@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased](https://github.com/druide67/asiai/compare/v0.2.0...HEAD) — v0.3.0-dev
+## [Unreleased](https://github.com/druide67/asiai/compare/v0.4.0...HEAD)
+
+## [0.4.0](https://github.com/druide67/asiai/compare/v0.3.0...v0.4.0) — 2026-03-04
+
+### Added
+
+- GitHub Actions CI (Python 3.11–3.13, macOS, lint + tests)
+- GitHub issue and PR templates
+- pytest-cov configuration with coverage reporting
+- Tests for `cli_renderer.py` (all 9 render functions)
+- MkDocs documentation site with mkdocs-material theme
+
+### Fixed
+
+- `--context-size` overflow: input tokens + max_tokens no longer exceeds the target context window
+
+## [0.3.0](https://github.com/druide67/asiai/compare/v0.2.0...v0.3.0) — 2026-03-04
 
 ### Added
 
@@ -57,4 +73,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - SQLite persistence with schema migrations and 90-day retention
 - Zero external dependencies for core
 - Homebrew tap distribution (`druide67/tap`)
-
