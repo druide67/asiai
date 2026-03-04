@@ -73,6 +73,28 @@ def aggregate_results(results: list[dict]) -> dict:
         data["runs_count"] = _count_runs(pr)
         data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
 
+        # Statistical rigor: CI 95%, percentiles, outliers
+        if tok_values and len(tok_values) >= 2:
+            n = len(tok_values)
+            se = data["std_dev_tok_s"] / math.sqrt(n) if n > 0 else 0.0
+            data["ci95_lower"] = round(data["avg_tok_s"] - 2 * se, 1)
+            data["ci95_upper"] = round(data["avg_tok_s"] + 2 * se, 1)
+        else:
+            data["ci95_lower"] = data["avg_tok_s"]
+            data["ci95_upper"] = data["avg_tok_s"]
+
+        data["p50_tok_s"] = data["median_tok_s"]
+        data["p90_tok_s"] = round(_percentile(tok_values, 90), 1) if tok_values else 0.0
+        data["p99_tok_s"] = round(_percentile(tok_values, 99), 1) if tok_values else 0.0
+
+        # TTFT percentiles (tail latency matters)
+        data["p50_ttft_ms"] = data["median_ttft_ms"]
+        data["p90_ttft_ms"] = round(_percentile(ttft_values, 90), 1) if ttft_values else 0.0
+        data["p99_ttft_ms"] = round(_percentile(ttft_values, 99), 1) if ttft_values else 0.0
+
+        # IQR outlier detection
+        data["outliers"] = _detect_outliers(tok_values) if tok_values else []
+
     # Determine winner by median tok/s (falls back to avg if single run)
     winner = _determine_winner(engines)
 
@@ -115,6 +137,41 @@ def _pooled_stddev(results: list[dict]) -> float:
 
     pooled_var = sum(variances) / len(variances)
     return round(math.sqrt(pooled_var), 2)
+
+
+def _percentile(values: list[float], p: int) -> float:
+    """Compute the p-th percentile using linear interpolation."""
+    if not values:
+        return 0.0
+    sorted_v = sorted(values)
+    n = len(sorted_v)
+    if n == 1:
+        return sorted_v[0]
+    k = (p / 100) * (n - 1)
+    lo = int(k)
+    hi = min(lo + 1, n - 1)
+    frac = k - lo
+    return sorted_v[lo] + frac * (sorted_v[hi] - sorted_v[lo])
+
+
+def _detect_outliers(values: list[float]) -> list[dict]:
+    """Detect outliers using the IQR method.
+
+    Returns list of {"index": int, "value": float} for values outside
+    [Q1 - 1.5*IQR, Q3 + 1.5*IQR].
+    """
+    if len(values) < 4:
+        return []
+    q1 = _percentile(values, 25)
+    q3 = _percentile(values, 75)
+    iqr = q3 - q1
+    if iqr <= 0:
+        return []
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+    return [
+        {"index": i, "value": round(v, 1)} for i, v in enumerate(values) if v < lower or v > upper
+    ]
 
 
 def _count_runs(results: list[dict]) -> int:
