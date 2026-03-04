@@ -41,6 +41,9 @@ htmlcov/
 # Docs
 site/
 
+# Playwright MCP
+.playwright-mcp/
+
 # Environment
 .env
 .env.local
