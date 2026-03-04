@@ -51,8 +51,15 @@ class PowerMonitor:
         try:
             result = subprocess.run(
                 [
-                    "sudo", "-n", "/usr/bin/powermetrics",
-                    "--samplers", "gpu_power", "-n", "1", "-i", "1",
+                    "sudo",
+                    "-n",
+                    "/usr/bin/powermetrics",
+                    "--samplers",
+                    "gpu_power",
+                    "-n",
+                    "1",
+                    "-i",
+                    "1",
                 ],
                 capture_output=True,
                 timeout=10,

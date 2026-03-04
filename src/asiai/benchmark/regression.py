@@ -148,9 +148,7 @@ def _query_baselines(
                        WHERE ts >= ? AND ts < ?
                          AND COALESCE(metrics_version, 1) = 2
                        GROUP BY engine, model, prompt_type"""
-            rows = conn.execute(
-                query, (since, current_ts or int(time.time()))
-            ).fetchall()
+            rows = conn.execute(query, (since, current_ts or int(time.time()))).fetchall()
 
             baselines: dict[tuple[str, str, str], dict] = {}
             for row in rows:

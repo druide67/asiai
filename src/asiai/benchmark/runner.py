@@ -301,16 +301,22 @@ def _check_model_availability(engine: InferenceEngine, target: str) -> dict:
     for m in running:
         if _model_matches(m.name, target):
             return {
-                "found": True, "resolved_name": m.name, "vram_bytes": m.size_vram,
-                "model_format": m.format, "model_quantization": m.quantization,
+                "found": True,
+                "resolved_name": m.name,
+                "vram_bytes": m.size_vram,
+                "model_format": m.format,
+                "model_quantization": m.quantization,
             }
 
     # Check available (downloaded but not loaded)
     for m in available:
         if _model_matches(m.name, target):
             return {
-                "found": True, "resolved_name": m.name, "vram_bytes": 0,
-                "model_format": m.format, "model_quantization": m.quantization,
+                "found": True,
+                "resolved_name": m.name,
+                "vram_bytes": 0,
+                "model_format": m.format,
+                "model_quantization": m.quantization,
             }
 
     # Model not found — build a helpful error message

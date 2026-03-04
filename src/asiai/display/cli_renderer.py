@@ -295,10 +295,7 @@ def render_bench(report: dict) -> None:
         f"  {'Engine':<12} {'tok/s':>24} {'Tokens':>8} {'Duration':>8} "
         f"{'TTFT':>8} {'VRAM':>10} {'Thermal':>10}"
     )
-    print(
-        f"  {'─' * 12} {'─' * 24} {'─' * 8} {'─' * 8} "
-        f"{'─' * 8} {'─' * 10} {'─' * 10}"
-    )
+    print(f"  {'─' * 12} {'─' * 24} {'─' * 8} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}")
 
     for engine_name, data in sorted(engines.items()):
         avg_tok = data["avg_tok_s"]
@@ -319,9 +316,11 @@ def render_bench(report: dict) -> None:
         else:
             tok_s = "N/A"
 
-        tokens = str(data.get("avg_tokens_generated", 0)) if data.get(
-            "avg_tokens_generated", 0
-        ) > 0 else "N/A"
+        tokens = (
+            str(data.get("avg_tokens_generated", 0))
+            if data.get("avg_tokens_generated", 0) > 0
+            else "N/A"
+        )
         dur_ms = data.get("avg_total_duration_ms", 0.0)
         duration = f"{dur_ms / 1000:.2f}s" if dur_ms > 0 else "N/A"
         ttft = f"{data['avg_ttft_ms'] / 1000:.2f}s" if data["avg_ttft_ms"] > 0 else "N/A"
@@ -352,8 +351,7 @@ def render_bench(report: dict) -> None:
             tok_s_pad = green(tok_s_pad)
 
         print(
-            f"  {name_pad} {tok_s_pad} {tokens_pad} {dur_pad} "
-            f"{ttft_pad} {vram_pad} {thermal_pad}"
+            f"  {name_pad} {tok_s_pad} {tokens_pad} {dur_pad} {ttft_pad} {vram_pad} {thermal_pad}"
         )
 
     print()

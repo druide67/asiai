@@ -336,7 +336,12 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
         context_size = parse_context_size(args.context_size)
     bench_run = run_benchmark(
-        engines, model, prompt_names, runs=runs, power=power, context_size=context_size,
+        engines,
+        model,
+        prompt_names,
+        runs=runs,
+        power=power,
+        context_size=context_size,
     )
 
     # Store results

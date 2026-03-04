@@ -233,9 +233,7 @@ class TestMigrations:
 
             # Verify v0.3 columns exist
             conn = sqlite3.connect(path)
-            columns = {
-                row[1] for row in conn.execute("PRAGMA table_info(benchmarks)").fetchall()
-            }
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(benchmarks)").fetchall()}
             conn.close()
             assert "run_index" in columns
             assert "power_watts" in columns
