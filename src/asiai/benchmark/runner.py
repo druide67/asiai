@@ -7,7 +7,13 @@ import time
 from dataclasses import dataclass, field
 
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
-from asiai.collectors.system import collect_engine_processes, collect_memory, collect_thermal
+from asiai.collectors.system import (
+    collect_engine_processes,
+    collect_hw_chip,
+    collect_memory,
+    collect_os_version,
+    collect_thermal,
+)
 from asiai.engines.base import InferenceEngine
 
 logger = logging.getLogger("asiai.benchmark.runner")
@@ -95,6 +101,10 @@ def run_benchmark(
     ts = int(time.time())
     run = BenchmarkRun(ts=ts, model=model)
 
+    # Collect machine info once per run (stable during session)
+    hw_chip = collect_hw_chip()
+    os_version = collect_os_version()
+
     # Track whether power monitoring was requested but unavailable
     power_unavailable = False
     if power:
@@ -119,6 +129,14 @@ def run_benchmark(
         # Resolve engine-specific model name
         engine_model = check.get("resolved_name", model)
         vram_bytes = check.get("vram_bytes", 0)
+        model_format = check.get("model_format", "")
+        model_quantization = check.get("model_quantization", "")
+
+        # Capture engine version for reproducibility
+        try:
+            engine_ver = engine.version()
+        except Exception:
+            engine_ver = ""
 
         # Measure model load time (cold load on first access)
         load_time_ms = 0.0
@@ -136,6 +154,13 @@ def run_benchmark(
                         break
             except Exception as e:
                 logger.debug("VRAM re-read failed for %s: %s", engine.name, e)
+
+        # Warmup: one short non-timed generation to prime JIT/caches
+        logger.info("Warmup run for %s on %s", engine_model, engine.name)
+        try:
+            engine.generate(engine_model, "Hello", max_tokens=1)
+        except Exception as e:
+            logger.debug("warmup failed for %s: %s", engine.name, e)
 
         # Start per-engine power monitoring
         engine_power: PowerMonitor | None = None
@@ -165,6 +190,11 @@ def run_benchmark(
                     run,
                     run_index,
                     load_time_ms,
+                    engine_version=engine_ver,
+                    model_format=model_format,
+                    model_quantization=model_quantization,
+                    hw_chip=hw_chip,
+                    os_version=os_version,
                 )
 
         # Stop per-engine power monitoring and annotate this engine's results
@@ -176,6 +206,16 @@ def run_benchmark(
                 tok_s = result.get("tok_per_sec", 0.0)
                 if gpu_watts > 0 and tok_s > 0:
                     result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
+
+        # Check for thermal throttling during this engine's runs
+        for result in run.results[results_before:]:
+            speed_limit = result.get("thermal_speed_limit", 100)
+            if 0 < speed_limit < 100:
+                run.errors.append(
+                    f"{engine.name}: thermal throttling detected "
+                    f"(speed limit {speed_limit}%) — results may be degraded"
+                )
+                break  # One warning per engine is enough
 
     return run
 
@@ -189,6 +229,11 @@ def _run_single(
     run: BenchmarkRun,
     run_index: int = 0,
     load_time_ms: float = 0.0,
+    engine_version: str = "",
+    model_format: str = "",
+    model_quantization: str = "",
+    hw_chip: str = "",
+    os_version: str = "",
 ) -> None:
     """Run a single engine+prompt benchmark and append to run."""
     mem = collect_memory()
@@ -224,6 +269,11 @@ def _run_single(
             "proc_rss_bytes": engine_proc.rss_bytes if engine_proc else 0,
             "run_index": run_index,
             "load_time_ms": load_time_ms,
+            "engine_version": engine_version,
+            "model_format": model_format,
+            "model_quantization": model_quantization,
+            "hw_chip": hw_chip,
+            "os_version": os_version,
         }
     )
 
@@ -250,12 +300,18 @@ def _check_model_availability(engine: InferenceEngine, target: str) -> dict:
     # Check loaded models first
     for m in running:
         if _model_matches(m.name, target):
-            return {"found": True, "resolved_name": m.name, "vram_bytes": m.size_vram}
+            return {
+                "found": True, "resolved_name": m.name, "vram_bytes": m.size_vram,
+                "model_format": m.format, "model_quantization": m.quantization,
+            }
 
     # Check available (downloaded but not loaded)
     for m in available:
         if _model_matches(m.name, target):
-            return {"found": True, "resolved_name": m.name, "vram_bytes": 0}
+            return {
+                "found": True, "resolved_name": m.name, "vram_bytes": 0,
+                "model_format": m.format, "model_quantization": m.quantization,
+            }
 
     # Model not found — build a helpful error message
     loaded_names = sorted({m.name for m in running})

@@ -88,7 +88,7 @@ class OllamaEngine(InferenceEngine):
                 "model": model,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"num_predict": max_tokens},
+                "options": {"num_predict": max_tokens, "temperature": 0},
             },
             timeout=300,
         )

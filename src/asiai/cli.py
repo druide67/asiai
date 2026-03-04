@@ -480,9 +480,9 @@ def main(argv: list[str] | None = None) -> int:
         "--runs",
         "-r",
         type=int,
-        default=1,
+        default=3,
         metavar="N",
-        help="Number of runs per prompt for variance measurement (default: 1)",
+        help="Number of runs per prompt for variance measurement (default: 3)",
     )
     bench_parser.add_argument(
         "--power",

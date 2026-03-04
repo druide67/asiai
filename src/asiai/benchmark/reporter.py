@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 
 
 def aggregate_results(results: list[dict]) -> dict:
@@ -51,7 +52,9 @@ def aggregate_results(results: list[dict]) -> dict:
         cpu_values = [p["proc_cpu_pct"] for p in pr if p.get("proc_cpu_pct", 0) > 0]
         rss_values = [p["proc_rss_bytes"] for p in pr if p.get("proc_rss_bytes", 0) > 0]
         data["avg_tok_s"] = round(sum(tok_values) / len(tok_values), 1) if tok_values else 0.0
+        data["median_tok_s"] = round(statistics.median(tok_values), 1) if tok_values else 0.0
         data["avg_ttft_ms"] = round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
+        data["median_ttft_ms"] = round(statistics.median(ttft_values), 1) if ttft_values else 0.0
         data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
         data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
 
@@ -72,7 +75,7 @@ def aggregate_results(results: list[dict]) -> dict:
         data["runs_count"] = _count_runs(pr)
         data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
 
-    # Determine winner by avg tok/s
+    # Determine winner by median tok/s (falls back to avg if single run)
     winner = _determine_winner(engines)
 
     return {"model": model, "engines": engines, "winner": winner}
@@ -135,18 +138,24 @@ def _classify_stability(avg: float, stddev: float) -> str:
 
 
 def _determine_winner(engines: dict[str, dict]) -> dict | None:
-    """Pick winner by highest avg_tok_s and compute deltas."""
+    """Pick winner by median tok/s (more robust than mean) and compute deltas."""
     if len(engines) < 2:
         return None
 
-    ranked = sorted(engines.items(), key=lambda x: x[1]["avg_tok_s"], reverse=True)
+    def _primary_tok_s(data: dict) -> float:
+        """Use median when available (multi-run), fallback to avg."""
+        return data.get("median_tok_s", 0.0) or data.get("avg_tok_s", 0.0)
+
+    ranked = sorted(engines.items(), key=lambda x: _primary_tok_s(x[1]), reverse=True)
     best_name, best = ranked[0]
     second_name, second = ranked[1]
 
-    if best["avg_tok_s"] <= 0 or second["avg_tok_s"] <= 0:
+    best_tok = _primary_tok_s(best)
+    second_tok = _primary_tok_s(second)
+    if best_tok <= 0 or second_tok <= 0:
         return None
 
-    tok_ratio = best["avg_tok_s"] / second["avg_tok_s"]
+    tok_ratio = best_tok / second_tok
     if tok_ratio >= 1.5:
         tok_s_delta = f"{tok_ratio:.1f}x faster"
     else:

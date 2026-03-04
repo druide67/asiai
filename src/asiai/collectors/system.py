@@ -263,6 +263,28 @@ def collect_machine_info() -> str:
     return " — ".join(parts) if parts else "unknown"
 
 
+def collect_hw_chip() -> str:
+    """Return the Apple Silicon chip name (e.g. 'Apple M4 Pro')."""
+    try:
+        return subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+    except Exception:
+        return ""
+
+
+def collect_os_version() -> str:
+    """Return macOS version (e.g. '15.3')."""
+    try:
+        return subprocess.run(
+            ["sw_vers", "-productVersion"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+    except Exception:
+        return ""
+
+
 @dataclass
 class ProcessInfo:
     """Resource usage of an inference engine process."""
