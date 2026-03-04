@@ -34,19 +34,30 @@ class TestClassifySeverity:
 
 class TestComputeAverages:
     def test_single_result(self):
-        results = [{"engine": "ollama", "model": "m", "tok_per_sec": 50.0, "ttft_ms": 800.0}]
+        results = [
+            {
+                "engine": "ollama", "model": "m", "prompt_type": "code",
+                "tok_per_sec": 50.0, "ttft_ms": 800.0,
+            }
+        ]
         avgs = _compute_averages(results)
-        assert avgs[("ollama", "m")]["tok_per_sec"] == 50.0
-        assert avgs[("ollama", "m")]["ttft_ms"] == 800.0
+        assert avgs[("ollama", "m", "code")]["tok_per_sec"] == 50.0
+        assert avgs[("ollama", "m", "code")]["ttft_ms"] == 800.0
 
     def test_multiple_results(self):
         results = [
-            {"engine": "ollama", "model": "m", "tok_per_sec": 40.0, "ttft_ms": 800.0},
-            {"engine": "ollama", "model": "m", "tok_per_sec": 60.0, "ttft_ms": 1200.0},
+            {
+                "engine": "ollama", "model": "m", "prompt_type": "code",
+                "tok_per_sec": 40.0, "ttft_ms": 800.0,
+            },
+            {
+                "engine": "ollama", "model": "m", "prompt_type": "code",
+                "tok_per_sec": 60.0, "ttft_ms": 1200.0,
+            },
         ]
         avgs = _compute_averages(results)
-        assert avgs[("ollama", "m")]["tok_per_sec"] == 50.0
-        assert avgs[("ollama", "m")]["ttft_ms"] == 1000.0
+        assert avgs[("ollama", "m", "code")]["tok_per_sec"] == 50.0
+        assert avgs[("ollama", "m", "code")]["ttft_ms"] == 1000.0
 
 
 class TestDetectRegressions:
