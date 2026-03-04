@@ -112,6 +112,7 @@ class OllamaEngine(InferenceEngine):
             ttft_ms=round(prompt_eval_ns / 1e6, 1),
             total_duration_ms=round(total_ns / 1e6, 1),
             prompt_eval_duration_ms=round(prompt_eval_ns / 1e6, 1),
+            generation_duration_ms=round(eval_duration_ns / 1e6, 1),
             model=model,
             engine=self.name,
         )

@@ -5,11 +5,14 @@ Shared by LM Studio, mlx-lm, llama.cpp, and vllm-mlx.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
-from asiai.engines.detect import http_get_json, http_post_json
+from asiai.engines.detect import http_get_json
 
 logger = logging.getLogger("asiai.engines.openai_compat")
 
@@ -49,7 +52,7 @@ class OpenAICompatEngine(InferenceEngine):
         return []
 
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
-        """Generate text via OpenAI-compatible API."""
+        """Generate text via streaming OpenAI-compatible API (measures TTFT)."""
         t0 = time.monotonic()
 
         if self._generate_mode == "chat":
@@ -57,7 +60,7 @@ class OpenAICompatEngine(InferenceEngine):
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_tokens,
-                "stream": False,
+                "stream": True,
                 "temperature": 0.0,
             }
         else:
@@ -65,47 +68,72 @@ class OpenAICompatEngine(InferenceEngine):
                 "model": model,
                 "prompt": prompt,
                 "max_tokens": max_tokens,
-                "stream": False,
+                "stream": True,
                 "temperature": 0.0,
             }
 
-        data, _ = http_post_json(
-            f"{self.base_url}{self._generate_endpoint}",
-            payload,
-            timeout=300,
-        )
+        url = f"{self.base_url}{self._generate_endpoint}"
+        ttft_ms = 0.0
+        text_parts: list[str] = []
+        completion_tokens = 0
+
+        try:
+            body = json.dumps(payload).encode()
+            req = Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+
+            with urlopen(req, timeout=300) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8").strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+
+                    if self._generate_mode == "chat":
+                        content = choices[0].get("delta", {}).get("content", "")
+                    else:
+                        content = choices[0].get("text", "")
+
+                    if content:
+                        if not text_parts:
+                            ttft_ms = round((time.monotonic() - t0) * 1000, 1)
+                        text_parts.append(content)
+
+                    usage = chunk.get("usage")
+                    if usage and "completion_tokens" in usage:
+                        completion_tokens = usage["completion_tokens"]
+
+        except (TimeoutError, ConnectionRefusedError, URLError, OSError, ValueError) as e:
+            logger.debug("streaming generate %s failed: %s", url, e)
+            return GenerateResult(engine=self.name, model=model, error=str(e))
+
         elapsed_s = time.monotonic() - t0
+        text = "".join(text_parts)
+        if completion_tokens == 0:
+            completion_tokens = max(1, len(text) // 4)
 
-        if data is None:
-            return GenerateResult(engine=self.name, model=model, error="request failed")
-
-        if "error" in data:
-            msg = data["error"]
-            if isinstance(msg, dict):
-                msg = msg.get("message", str(msg))
-            return GenerateResult(engine=self.name, model=model, error=str(msg))
-
-        choices = data.get("choices", [])
-        text = ""
-        if choices:
-            if self._generate_mode == "chat":
-                message = choices[0].get("message", {})
-                text = message.get("content", "")
-            else:
-                text = choices[0].get("text", "")
-
-        usage = data.get("usage", {})
-        completion_tokens = usage.get("completion_tokens", 0)
-
-        tok_s = (completion_tokens / elapsed_s) if elapsed_s > 0 else 0.0
+        ttft_s = ttft_ms / 1000.0
+        generation_s = max(0.0, elapsed_s - ttft_s)
+        tok_s = (completion_tokens / generation_s) if generation_s >= 0.01 else 0.0
 
         return GenerateResult(
             text=text,
             tokens_generated=completion_tokens,
             tok_per_sec=round(tok_s, 2),
-            ttft_ms=0.0,
+            ttft_ms=ttft_ms,
             total_duration_ms=round(elapsed_s * 1000, 1),
-            prompt_eval_duration_ms=0.0,
+            prompt_eval_duration_ms=ttft_ms,
+            generation_duration_ms=round(generation_s * 1000, 1),
             model=model,
             engine=self.name,
         )

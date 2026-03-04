@@ -55,8 +55,20 @@ def aggregate_results(results: list[dict]) -> dict:
         data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
         data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
 
-        # Variance: stddev of tok/s across runs
-        data["std_dev_tok_s"] = _stddev(tok_values)
+        # Tokens generated and total duration (for display)
+        tok_gen_values = [p["tokens_generated"] for p in pr if p.get("tokens_generated", 0) > 0]
+        duration_values = [
+            p["total_duration_ms"] for p in pr if p.get("total_duration_ms", 0) > 0
+        ]
+        data["avg_tokens_generated"] = (
+            round(sum(tok_gen_values) / len(tok_gen_values)) if tok_gen_values else 0
+        )
+        data["avg_total_duration_ms"] = (
+            round(sum(duration_values) / len(duration_values), 1) if duration_values else 0.0
+        )
+
+        # Variance: pooled intra-prompt stddev (excludes inter-prompt variance)
+        data["std_dev_tok_s"] = _pooled_stddev(pr)
         data["runs_count"] = _count_runs(pr)
         data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
 
@@ -73,6 +85,35 @@ def _stddev(values: list[float]) -> float:
     mean = sum(values) / len(values)
     variance = sum((v - mean) ** 2 for v in values) / len(values)
     return round(math.sqrt(variance), 2)
+
+
+def _pooled_stddev(results: list[dict]) -> float:
+    """Compute pooled intra-prompt standard deviation.
+
+    Groups results by prompt_type, computes variance within each group,
+    then returns sqrt(mean(variances)). This captures run-to-run noise
+    without mixing in inter-prompt variance.
+    """
+    by_prompt: dict[str, list[float]] = {}
+    for r in results:
+        pt = r.get("prompt_type", "unknown")
+        tok_s = r.get("tok_per_sec", 0.0)
+        if tok_s > 0:
+            by_prompt.setdefault(pt, []).append(tok_s)
+
+    variances: list[float] = []
+    for values in by_prompt.values():
+        if len(values) < 2:
+            continue
+        mean = sum(values) / len(values)
+        var = sum((v - mean) ** 2 for v in values) / len(values)
+        variances.append(var)
+
+    if not variances:
+        return 0.0
+
+    pooled_var = sum(variances) / len(variances)
+    return round(math.sqrt(pooled_var), 2)
 
 
 def _count_runs(results: list[dict]) -> int:

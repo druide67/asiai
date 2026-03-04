@@ -141,6 +141,7 @@ def _query_baselines(
                           AVG(ttft_ms) as avg_ttft
                    FROM benchmarks
                    WHERE ts >= ? AND ts < ?
+                     AND COALESCE(metrics_version, 1) = 2
                    GROUP BY engine, model""",
                 (since, current_ts or int(time.time())),
             ).fetchall()

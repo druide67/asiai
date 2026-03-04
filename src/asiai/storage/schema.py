@@ -105,4 +105,12 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN load_time_ms REAL DEFAULT 0",
         ],
     },
+    # v0.3.1: metrics version for regression comparison
+    {
+        "table": "benchmarks",
+        "columns": ["metrics_version"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN metrics_version INTEGER DEFAULT 1",
+        ],
+    },
 ]

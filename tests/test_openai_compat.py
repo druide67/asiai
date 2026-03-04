@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from asiai.engines.openai_compat import OpenAICompatEngine
@@ -35,6 +36,28 @@ class _CompletionsEngine(OpenAICompatEngine):
 
     def version(self) -> str:
         return "2.0"
+
+
+def _sse_response(chunks: list[dict]):
+    """Build a mock HTTP response that yields SSE lines."""
+    lines: list[bytes] = []
+    for chunk in chunks:
+        lines.append(f"data: {json.dumps(chunk)}\n".encode())
+        lines.append(b"\n")
+    lines.append(b"data: [DONE]\n")
+    lines.append(b"\n")
+
+    class MockSSEResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+        def __iter__(self):
+            return iter(lines)
+
+    return MockSSEResponse()
 
 
 class TestOpenAICompatIsReachable:
@@ -84,78 +107,84 @@ class TestOpenAICompatListRunning:
 
 class TestOpenAICompatGenerateChat:
     def test_generate_chat_success(self):
-        gen_response = {
-            "choices": [{"message": {"role": "assistant", "content": "hello world"}}],
-            "usage": {"completion_tokens": 50},
-        }
-
-        def mock_post(url, data, timeout=300):
-            if "/v1/chat/completions" in url:
-                return gen_response, {}
-            return None, {}
+        chunks = [
+            {"choices": [{"delta": {"role": "assistant"}}]},
+            {"choices": [{"delta": {"content": "hello"}}]},
+            {"choices": [{"delta": {"content": " world"}}]},
+            {"choices": [{"delta": {}}], "usage": {"completion_tokens": 50}},
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", side_effect=mock_post),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 1.0]
+            mock_time.monotonic.side_effect = [0.0, 0.15, 1.0]
             engine = _ChatEngine("http://localhost:8080")
             result = engine.generate("model-a", "say hi", 256)
 
         assert result.text == "hello world"
         assert result.tokens_generated == 50
-        assert result.tok_per_sec == 50.0
+        assert result.tok_per_sec == 58.82  # 50 / (1.0 - 0.15) generation only
+        assert result.ttft_ms == 150.0
         assert result.engine == "test_chat"
         assert result.error == ""
 
-    def test_generate_chat_error(self):
-        gen_response = {"error": {"message": "model not found"}}
+    def test_generate_chat_ttft_measured(self):
+        """TTFT is measured at the first content chunk, not the role chunk."""
+        chunks = [
+            {"choices": [{"delta": {"role": "assistant"}}]},
+            {"choices": [{"delta": {"content": "hi"}}]},
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1]
+            # t0=0.0, first content monotonic=0.2, end=0.5
+            mock_time.monotonic.side_effect = [0.0, 0.2, 0.5]
             engine = _ChatEngine("http://localhost:8080")
-            result = engine.generate("bad", "hi", 256)
+            result = engine.generate("m", "hi", 64)
 
-        assert "model not found" in result.error
+        assert result.ttft_ms == 200.0
+        assert result.tokens_generated == 1  # fallback: len(text_parts)
 
     def test_generate_connection_failed(self):
+        from urllib.error import URLError
+
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(None, {})),
+            patch(
+                "asiai.engines.openai_compat.urlopen",
+                side_effect=URLError("connection refused"),
+            ),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1]
+            mock_time.monotonic.side_effect = [0.0]
             engine = _ChatEngine("http://localhost:8080")
             result = engine.generate("m", "hi", 256)
 
-        assert result.error == "request failed"
+        assert result.error != ""
 
 
 class TestOpenAICompatGenerateCompletions:
     def test_generate_completions_success(self):
-        gen_response = {
-            "choices": [{"text": "def foo(): pass"}],
-            "usage": {"completion_tokens": 80},
-        }
-
-        def mock_post(url, data, timeout=300):
-            if "/v1/completions" in url:
-                return gen_response, {}
-            return None, {}
+        chunks = [
+            {"choices": [{"text": "def "}]},
+            {"choices": [{"text": "foo():"}]},
+            {"choices": [{"text": " pass"}], "usage": {"completion_tokens": 80}},
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", side_effect=mock_post),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 2.0]
+            mock_time.monotonic.side_effect = [0.0, 0.1, 2.0]
             engine = _CompletionsEngine("http://localhost:8080")
             result = engine.generate("model-b", "Write code", 512)
 
         assert result.text == "def foo(): pass"
         assert result.tokens_generated == 80
-        assert result.tok_per_sec == 40.0
+        assert result.tok_per_sec == 42.11  # 80 / (2.0 - 0.1) generation only
+        assert result.ttft_ms == 100.0
         assert result.engine == "test_completions"
 
 

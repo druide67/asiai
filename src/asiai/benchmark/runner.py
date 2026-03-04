@@ -6,7 +6,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from asiai.benchmark.prompts import BenchPrompt, get_prompts
+from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
 from asiai.collectors.system import collect_engine_processes, collect_memory, collect_thermal
 from asiai.engines.base import InferenceEngine
 
@@ -71,6 +71,7 @@ def run_benchmark(
     prompt_names: list[str] | None = None,
     runs: int = 1,
     power: bool = False,
+    context_size: int = 0,
 ) -> BenchmarkRun:
     """Run benchmarks across engines for a given model.
 
@@ -80,23 +81,29 @@ def run_benchmark(
         prompt_names: Optional subset of prompt types to run.
         runs: Number of runs per prompt (for variance measurement).
         power: If True, measure GPU power via powermetrics (sudo required).
+        context_size: If > 0, use a single context-fill prompt of this many tokens.
 
     Execution is sequential to avoid memory/thermal interference
     on unified memory Apple Silicon.
     """
     from asiai.collectors.power import PowerMonitor
 
-    prompts = get_prompts(prompt_names)
+    if context_size > 0:
+        prompts = [generate_context_fill_prompt(context_size)]
+    else:
+        prompts = get_prompts(prompt_names)
     ts = int(time.time())
     run = BenchmarkRun(ts=ts, model=model)
 
-    # Start power monitoring if requested
-    power_monitor: PowerMonitor | None = None
+    # Track whether power monitoring was requested but unavailable
+    power_unavailable = False
     if power:
-        power_monitor = PowerMonitor()
-        if not power_monitor.start():
+        test_monitor = PowerMonitor()
+        if not test_monitor.start():
             run.errors.append("Power monitoring: sudo access required (run 'sudo -v' first)")
-            power_monitor = None
+            power_unavailable = True
+        else:
+            test_monitor.stop()
 
     for engine in engines:
         if not engine.is_reachable():
@@ -130,6 +137,15 @@ def run_benchmark(
             except Exception as e:
                 logger.debug("VRAM re-read failed for %s: %s", engine.name, e)
 
+        # Start per-engine power monitoring
+        engine_power: PowerMonitor | None = None
+        if power and not power_unavailable:
+            engine_power = PowerMonitor()
+            if not engine_power.start():
+                engine_power = None
+
+        results_before = len(run.results)
+
         for prompt in prompts:
             for run_index in range(runs):
                 logger.info(
@@ -151,15 +167,15 @@ def run_benchmark(
                     load_time_ms,
                 )
 
-    # Stop power monitoring and annotate results
-    if power_monitor:
-        power_sample = power_monitor.stop()
-        gpu_watts = power_sample.gpu_watts
-        for result in run.results:
-            result["power_watts"] = gpu_watts
-            tok_s = result.get("tok_per_sec", 0.0)
-            if gpu_watts > 0 and tok_s > 0:
-                result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
+        # Stop per-engine power monitoring and annotate this engine's results
+        if engine_power:
+            power_sample = engine_power.stop()
+            gpu_watts = power_sample.gpu_watts
+            for result in run.results[results_before:]:
+                result["power_watts"] = gpu_watts
+                tok_s = result.get("tok_per_sec", 0.0)
+                if gpu_watts > 0 and tok_s > 0:
+                    result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
 
     return run
 
@@ -198,6 +214,7 @@ def _run_single(
             "tok_per_sec": gen.tok_per_sec,
             "ttft_ms": gen.ttft_ms,
             "total_duration_ms": gen.total_duration_ms,
+            "generation_duration_ms": gen.generation_duration_ms,
             "vram_bytes": vram_bytes,
             "mem_used": mem.used,
             "thermal_level": thermal.level,
@@ -273,7 +290,8 @@ def _model_matches(running_name: str, target: str) -> bool:
     """Check if a running model name matches the target.
 
     Handles Ollama name:tag convention and partial matches for
-    cross-engine model name differences.
+    cross-engine model name differences. Rejects matches when both names
+    contain a parameter size (e.g. 2b vs 9b) and they differ.
     """
     if running_name == target:
         return True
@@ -285,6 +303,13 @@ def _model_matches(running_name: str, target: str) -> bool:
     base_target = target.split(":")[0]
     if base_running == base_target:
         return True
+
+    # Size guard: if both names have a param size and they differ, reject
+    size_running = _extract_param_size(running_name)
+    size_target = _extract_param_size(target)
+    if size_running and size_target and size_running != size_target:
+        return False
+
     # Substring match for cross-engine name variants
     if base_target in running_name or base_running in target:
         return True
@@ -294,3 +319,17 @@ def _model_matches(running_name: str, target: str) -> bool:
     if norm_running == norm_target or norm_target in norm_running or norm_running in norm_target:
         return True
     return False
+
+
+def _extract_param_size(name: str) -> str:
+    """Extract parameter size like '2b', '9b', '35b' from a model name.
+
+    Returns lowercase size string, or empty string if not found.
+    """
+    import re
+
+    # Match patterns like :9b, -9b, /9b at word boundaries
+    m = re.search(r"[\-:/](\d+[bB])\b", name)
+    if m:
+        return m.group(1).lower()
+    return ""

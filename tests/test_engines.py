@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 from asiai.engines.detect import (
@@ -214,39 +215,58 @@ class TestOllamaGenerate:
         assert result.error == "request failed"
 
 
+def _sse_response(chunks: list[dict]):
+    """Build a mock HTTP response that yields SSE lines."""
+    lines: list[bytes] = []
+    for chunk in chunks:
+        lines.append(f"data: {json.dumps(chunk)}\n".encode())
+        lines.append(b"\n")
+    lines.append(b"data: [DONE]\n")
+    lines.append(b"\n")
+
+    class MockSSEResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+        def __iter__(self):
+            return iter(lines)
+
+    return MockSSEResponse()
+
+
 class TestLMStudioGenerate:
     def test_generate_success(self):
-        gen_response = {
-            "choices": [{"text": "def hello(): pass"}],
-            "usage": {"completion_tokens": 80},
-        }
-
-        def mock_post(url, data, timeout=300):
-            if "/v1/completions" in url:
-                return gen_response, {}
-            return None, {}
+        chunks = [
+            {"choices": [{"text": "def hello(): pass"}], "usage": {"completion_tokens": 80}},
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", side_effect=mock_post),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 2.0]  # 2 seconds elapsed
+            mock_time.monotonic.side_effect = [0.0, 0.1, 2.0]
             engine = LMStudioEngine("http://localhost:1234")
             result = engine.generate("test-model", "Write code", 512)
 
         assert result.tokens_generated == 80
-        assert result.tok_per_sec == 40.0
-        assert result.ttft_ms == 0.0  # N/A for LM Studio
+        assert result.tok_per_sec == 42.11  # 80 / (2.0 - 0.1) generation only
+        assert result.ttft_ms == 100.0
         assert result.error == ""
 
     def test_generate_error(self):
-        gen_response = {"error": {"message": "model not loaded"}}
+        from urllib.error import URLError
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch(
+                "asiai.engines.openai_compat.urlopen",
+                side_effect=URLError("model not loaded"),
+            ),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1]
+            mock_time.monotonic.side_effect = [0.0]
             engine = LMStudioEngine("http://localhost:1234")
             result = engine.generate("bad-model", "hello", 512)
 
@@ -332,52 +352,58 @@ class TestMlxLmEngine:
 
 class TestMlxLmGenerate:
     def test_generate_success(self):
-        gen_response = {
-            "choices": [{"message": {"role": "assistant", "content": "def hello(): pass"}}],
-            "usage": {"completion_tokens": 80},
-        }
-
-        def mock_post(url, data, timeout=300):
-            if "/v1/chat/completions" in url:
-                return gen_response, {}
-            return None, {}
+        chunks = [
+            {"choices": [{"delta": {"role": "assistant"}}]},
+            {
+                "choices": [{"delta": {"content": "def hello(): pass"}}],
+                "usage": {"completion_tokens": 80},
+            },
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", side_effect=mock_post),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 2.0]
+            mock_time.monotonic.side_effect = [0.0, 0.1, 2.0]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("test-model", "Write code", 512)
 
         assert result.tokens_generated == 80
-        assert result.tok_per_sec == 40.0
+        assert result.tok_per_sec == 42.11  # 80 / (2.0 - 0.1) generation only
         assert result.text == "def hello(): pass"
         assert result.error == ""
 
     def test_generate_error(self):
-        gen_response = {"error": {"message": "model not loaded"}}
+        from urllib.error import URLError
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch(
+                "asiai.engines.openai_compat.urlopen",
+                side_effect=URLError("model not loaded"),
+            ),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1]
+            mock_time.monotonic.side_effect = [0.0]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("bad-model", "hello", 512)
 
         assert "model not loaded" in result.error
 
     def test_generate_connection_failed(self):
+        from urllib.error import URLError
+
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(None, {})),
+            patch(
+                "asiai.engines.openai_compat.urlopen",
+                side_effect=URLError("connection refused"),
+            ),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1]
+            mock_time.monotonic.side_effect = [0.0]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("model", "hello", 512)
 
-        assert result.error == "request failed"
+        assert result.error != ""
 
 
 class TestDetectMlxLm:
@@ -500,16 +526,15 @@ class TestLlamaCppEngine:
             assert engine.version() == "0.0.4567"
 
     def test_generate_uses_chat_mode(self):
-        gen_response = {
-            "choices": [{"message": {"role": "assistant", "content": "hello"}}],
-            "usage": {"completion_tokens": 10},
-        }
+        chunks = [
+            {"choices": [{"delta": {"content": "hello"}}], "usage": {"completion_tokens": 10}},
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 1.0]
+            mock_time.monotonic.side_effect = [0.0, 0.1, 1.0]
             engine = LlamaCppEngine("http://localhost:8080")
             result = engine.generate("model", "hi", 256)
 
@@ -547,21 +572,20 @@ class TestVllmMlxEngine:
             assert engine.version() == ""
 
     def test_generate_uses_chat_mode(self):
-        gen_response = {
-            "choices": [{"message": {"role": "assistant", "content": "fast"}}],
-            "usage": {"completion_tokens": 200},
-        }
+        chunks = [
+            {"choices": [{"delta": {"content": "fast"}}], "usage": {"completion_tokens": 200}},
+        ]
 
         with (
-            patch("asiai.engines.openai_compat.http_post_json", return_value=(gen_response, {})),
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.5]
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5]
             engine = VllmMlxEngine("http://localhost:8000")
             result = engine.generate("model", "hi", 256)
 
         assert result.text == "fast"
-        assert result.tok_per_sec == 400.0
+        assert result.tok_per_sec == 500.0  # 200 / (0.5 - 0.1) generation only
         assert result.engine == "vllm_mlx"
 
     def test_list_running(self):

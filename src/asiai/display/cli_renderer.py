@@ -90,7 +90,7 @@ def render_detect(engines: list[dict]) -> None:
         if e.get("models"):
             print(f"    Running: {len(e['models'])} model(s)")
             for m in e["models"]:
-                vram = format_bytes(m["size_vram"]) if m["size_vram"] else "N/A"
+                vram = format_bytes(m["size_vram"]) if m["size_vram"] else "—"
                 print(f"      - {m['name']}  {dim(vram)}")
         print()
 
@@ -292,10 +292,13 @@ def render_bench(report: dict) -> None:
 
     # Table header
     print(
-        f"  {'Engine':<12} {'tok/s':>24} {'TTFT':>8} "
-        f"{'Memory':>14} {'CPU%':>6} {'Thermal':>10}"
+        f"  {'Engine':<12} {'tok/s':>24} {'Tokens':>8} {'Duration':>8} "
+        f"{'TTFT':>8} {'VRAM':>10} {'Thermal':>10}"
     )
-    print(f"  {'─' * 12} {'─' * 24} {'─' * 8} {'─' * 14} {'─' * 6} {'─' * 10}")
+    print(
+        f"  {'─' * 12} {'─' * 24} {'─' * 8} {'─' * 8} "
+        f"{'─' * 8} {'─' * 10} {'─' * 10}"
+    )
 
     for engine_name, data in sorted(engines.items()):
         avg_tok = data["avg_tok_s"]
@@ -313,25 +316,24 @@ def render_bench(report: dict) -> None:
         else:
             tok_s = "N/A"
 
+        tokens = str(data.get("avg_tokens_generated", 0)) if data.get(
+            "avg_tokens_generated", 0
+        ) > 0 else "N/A"
+        dur_ms = data.get("avg_total_duration_ms", 0.0)
+        duration = f"{dur_ms / 1000:.2f}s" if dur_ms > 0 else "N/A"
         ttft = f"{data['avg_ttft_ms'] / 1000:.2f}s" if data["avg_ttft_ms"] > 0 else "N/A"
-        cpu = f"{data.get('avg_proc_cpu', 0):.0f}%" if data.get("avg_proc_cpu", 0) > 0 else "N/A"
 
-        # Memory: prefer VRAM (Ollama), fallback to RSS with tag
+        # VRAM only (no RSS fallback — misleading on unified memory)
         vram_bytes = data.get("vram_bytes", 0)
-        rss_bytes = data.get("proc_rss_bytes", 0)
-        if vram_bytes > 0:
-            memory = format_bytes(vram_bytes)
-        elif rss_bytes > 0:
-            memory = f"{format_bytes(rss_bytes)} (rss)"
-        else:
-            memory = "N/A"
+        vram = format_bytes(vram_bytes) if vram_bytes > 0 else "—"
 
         # Pad before coloring to preserve alignment (ANSI codes are invisible)
         name_pad = f"{engine_name:<12}"
         tok_s_pad = f"{tok_s:>24}"
+        tokens_pad = f"{tokens:>8}"
+        dur_pad = f"{duration:>8}"
         ttft_pad = f"{ttft:>8}"
-        mem_pad = f"{memory:>14}"
-        cpu_pad = f"{cpu:>6}"
+        vram_pad = f"{vram:>10}"
 
         thermal_raw = data["thermal_level"] if data["thermal_level"] else "N/A"
         thermal_pad = f"{thermal_raw:>10}"
@@ -346,7 +348,10 @@ def render_bench(report: dict) -> None:
             name_pad = green(name_pad)
             tok_s_pad = green(tok_s_pad)
 
-        print(f"  {name_pad} {tok_s_pad} {ttft_pad} {mem_pad} {cpu_pad} {thermal_pad}")
+        print(
+            f"  {name_pad} {tok_s_pad} {tokens_pad} {dur_pad} "
+            f"{ttft_pad} {vram_pad} {thermal_pad}"
+        )
 
     print()
 
@@ -375,10 +380,14 @@ def render_bench(report: dict) -> None:
                 else:
                     print(f"    {engine_name:<12} {load_ms:.0f}ms")
 
-    # Power efficiency table (if power data available)
+    # Power tip (when no power data)
     has_power = any(
         any(p.get("power_watts", 0) > 0 for p in d["prompt_results"]) for d in engines.values()
     )
+    if not has_power:
+        print(dim("  Tip: run with --power for tok/s per watt (requires sudo)"))
+
+    # Power efficiency table (if power data available)
     if has_power:
         print()
         print(bold("  Power Efficiency"))
