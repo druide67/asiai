@@ -1,6 +1,6 @@
 # Benchmark Metrics Specification
 
-> **Version**: 0.3.1
+> **Version**: 0.3.2
 > **Status**: Implemented
 > **Scope**: `asiai bench` — all engines
 
@@ -122,3 +122,15 @@ Where CV = `(std_dev_tok_s / avg_tok_s) * 100`.
 | M6 power_watts | — | — | — | per-engine monitor | passthrough |
 | M7 tok/s/W | — | — | — | computed | passthrough |
 | M8 std_dev | — | — | — | — | pooled intra-prompt |
+
+## Benchmark Protocol
+
+1. **Warmup**: 1 non-timed generation per engine (`"Hello"`, max_tokens=1) to prime caches.
+2. **Measured runs**: Default 3 runs per prompt per engine (configurable via `--runs`).
+3. **Sampling**: `temperature=0` (greedy) on all engines for deterministic output.
+4. **Reporting**: Median tok/s as primary metric (SPEC standard), mean +/- stddev as secondary.
+5. **Throttling**: Warning emitted if `thermal_speed_limit < 100%` during any run.
+6. **Metadata**: engine_version, model_format, model_quantization, hw_chip, os_version
+   stored per result for reproducibility.
+
+See [benchmark-best-practices.md](benchmark-best-practices.md) for full methodology audit.

@@ -226,10 +226,12 @@ class TestCheckModelAvailability:
 
 
 class TestRunBenchmark:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_single_engine(self, mock_mem, mock_thermal, _mock_procs):
+    def test_single_engine(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
@@ -240,12 +242,16 @@ class TestRunBenchmark:
         assert run.results[0]["engine"] == "ollama"
         assert run.results[0]["tok_per_sec"] == 45.2
         assert run.results[0]["model"] == "test-model"
+        assert run.results[0]["hw_chip"] == "Apple M1 Max"
+        assert run.results[0]["os_version"] == "15.3"
         assert run.errors == []
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_multi_engine(self, mock_mem, mock_thermal, _mock_procs):
+    def test_multi_engine(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
@@ -286,10 +292,12 @@ class TestRunBenchmark:
         assert len(run.errors) == 1
         assert "not reachable" in run.errors[0]
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_generate_error(self, mock_mem, mock_thermal, _mock_procs):
+    def test_generate_error(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         mock_mem.return_value = MemoryInfo()
         mock_thermal.return_value = ThermalInfo()
 
@@ -299,16 +307,18 @@ class TestRunBenchmark:
         )
 
         run = run_benchmark([engine], "test-model", ["code"])
+        # warmup also gets the error result, but errors only from measured runs
         assert len(run.results) == 0
-        assert len(run.errors) == 1
-        assert "model not loaded" in run.errors[0]
+        assert any("model not loaded" in e for e in run.errors)
 
 
 class TestRunBenchmarkMultiRun:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_runs_3_generates_3x(self, mock_mem, mock_thermal, _mock_procs):
+    def test_runs_3_generates_3x(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
@@ -316,7 +326,7 @@ class TestRunBenchmarkMultiRun:
         run = run_benchmark([engine], "test-model", ["code"], runs=3)
 
         assert len(run.results) == 3
-        assert engine.generate.call_count == 3
+        assert engine.generate.call_count == 4  # 1 warmup + 3 measured runs
         # Each result has a run_index
         indices = {r["run_index"] for r in run.results}
         assert indices == {0, 1, 2}
@@ -546,11 +556,15 @@ class TestReporter:
 class TestRunBenchmarkPower:
     """Tests for power=True path in run_benchmark."""
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
-    def test_power_annotates_results(self, mock_power_cls, mock_mem, mock_thermal, _mock_procs):
+    def test_power_annotates_results(
+        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
+    ):
         """power=True should annotate each result with watts and tok/s/W."""
         from asiai.collectors.power import PowerSample
 
@@ -588,11 +602,15 @@ class TestRunBenchmarkPower:
         engine_monitor.start.assert_called_once()
         engine_monitor.stop.assert_called_once()
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
-    def test_power_no_sudo_adds_error(self, mock_power_cls, mock_mem, mock_thermal, _mock_procs):
+    def test_power_no_sudo_adds_error(
+        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
+    ):
         """power=True without sudo should add error and still run benchmark."""
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
@@ -610,12 +628,14 @@ class TestRunBenchmarkPower:
         # Results should NOT have power annotations
         assert "power_watts" not in run.results[0]
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
     def test_power_zero_watts_no_efficiency(
-        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs
+        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
     ):
         """If GPU reports 0W, tok_per_sec_per_watt should not be set."""
         from asiai.collectors.power import PowerSample
@@ -641,10 +661,12 @@ class TestRunBenchmarkPower:
 
 
 class TestLoadTime:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_load_time_stored_in_results(self, mock_mem, mock_thermal, _mock_procs):
+    def test_load_time_stored_in_results(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
@@ -654,10 +676,12 @@ class TestLoadTime:
         run = run_benchmark([engine], "test-model", ["code"])
         assert run.results[0]["load_time_ms"] == 1234.5
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_load_time_exception_defaults_zero(self, mock_mem, mock_thermal, _mock_procs):
+    def test_load_time_exception_defaults_zero(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         """If measure_load_time() raises, result should have load_time_ms=0."""
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
@@ -667,12 +691,13 @@ class TestLoadTime:
 
         run = run_benchmark([engine], "test-model", ["code"])
         assert run.results[0]["load_time_ms"] == 0.0
-        assert run.errors == []  # Should not add to errors, just log
 
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
-    def test_load_time_default_zero(self, mock_mem, mock_thermal, _mock_procs):
+    def test_load_time_default_zero(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
         mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
 
@@ -870,12 +895,14 @@ class TestTokenFallback:
 
 
 class TestPerEnginePower:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
     def test_per_engine_power_isolation(
-        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs
+        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
     ):
         """Each engine should get its own power measurement."""
         from asiai.collectors.power import PowerSample

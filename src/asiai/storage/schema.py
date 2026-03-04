@@ -113,4 +113,24 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN metrics_version INTEGER DEFAULT 1",
         ],
     },
+    # v0.3.2: benchmark metadata for reproducibility
+    {
+        "table": "benchmarks",
+        "columns": [
+            "engine_version",
+            "model_format",
+            "model_quantization",
+            "generation_duration_ms",
+            "hw_chip",
+            "os_version",
+        ],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN engine_version TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN model_format TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN model_quantization TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN generation_duration_ms REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN hw_chip TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN os_version TEXT DEFAULT ''",
+        ],
+    },
 ]

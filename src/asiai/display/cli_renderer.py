@@ -302,13 +302,16 @@ def render_bench(report: dict) -> None:
 
     for engine_name, data in sorted(engines.items()):
         avg_tok = data["avg_tok_s"]
+        median_tok = data.get("median_tok_s", 0.0)
         stddev = data.get("std_dev_tok_s", 0.0)
         runs_count = data.get("runs_count", 1)
         stability = data.get("stability", "")
 
         if avg_tok > 0:
             if runs_count > 1 and stddev > 0:
-                tok_s = f"{avg_tok:.1f} \u00b1 {stddev:.1f}"
+                # Show median as primary (SPEC standard), ± stddev
+                primary = median_tok if median_tok > 0 else avg_tok
+                tok_s = f"{primary:.1f} \u00b1 {stddev:.1f}"
                 if stability:
                     tok_s += f" ({stability})"
             else:
