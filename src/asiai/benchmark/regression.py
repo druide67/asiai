@@ -49,16 +49,21 @@ def detect_regressions(
     if not current_results:
         return []
 
-    # Group current results by (engine, model) and compute averages
+    # Group current results by (engine, model, prompt_type) for fair comparison
     current_avgs = _compute_averages(current_results)
 
-    # Query historical baselines
-    baselines = _query_baselines(db_path, lookback_days, current_results[0].get("ts", 0))
+    # Collect prompt types used in this run
+    prompt_types = {r.get("prompt_type", "") for r in current_results}
+
+    # Query historical baselines for matching prompt types only
+    baselines = _query_baselines(
+        db_path, lookback_days, current_results[0].get("ts", 0), prompt_types
+    )
 
     regressions: list[Regression] = []
 
-    for (engine, model), cur in current_avgs.items():
-        base = baselines.get((engine, model))
+    for (engine, model, prompt_type), cur in current_avgs.items():
+        base = baselines.get((engine, model, prompt_type))
         if not base:
             continue
 
@@ -101,16 +106,16 @@ def detect_regressions(
     return regressions
 
 
-def _compute_averages(results: list[dict]) -> dict[tuple[str, str], dict]:
-    """Group results by (engine, model) and compute metric averages."""
-    groups: dict[tuple[str, str], list[dict]] = {}
+def _compute_averages(results: list[dict]) -> dict[tuple[str, str, str], dict]:
+    """Group results by (engine, model, prompt_type) and compute metric averages."""
+    groups: dict[tuple[str, str, str], list[dict]] = {}
     for r in results:
-        key = (r["engine"], r["model"])
+        key = (r["engine"], r["model"], r.get("prompt_type", ""))
         if key not in groups:
             groups[key] = []
         groups[key].append(r)
 
-    avgs: dict[tuple[str, str], dict] = {}
+    avgs: dict[tuple[str, str, str], dict] = {}
     for key, items in groups.items():
         tok_vals = [i["tok_per_sec"] for i in items if i.get("tok_per_sec", 0) > 0]
         ttft_vals = [i["ttft_ms"] for i in items if i.get("ttft_ms", 0) > 0]
@@ -125,8 +130,9 @@ def _query_baselines(
     db_path: str,
     lookback_days: int,
     current_ts: int,
-) -> dict[tuple[str, str], dict]:
-    """Query historical averages from the database."""
+    prompt_types: set[str] | None = None,
+) -> dict[tuple[str, str, str], dict]:
+    """Query historical averages from the database, grouped by prompt_type."""
     if current_ts:
         since = current_ts - (lookback_days * 86400)
     else:
@@ -135,20 +141,24 @@ def _query_baselines(
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         try:
+            query = """SELECT engine, model, prompt_type,
+                              AVG(tok_per_sec) as avg_tok,
+                              AVG(ttft_ms) as avg_ttft
+                       FROM benchmarks
+                       WHERE ts >= ? AND ts < ?
+                         AND COALESCE(metrics_version, 1) = 2
+                       GROUP BY engine, model, prompt_type"""
             rows = conn.execute(
-                """SELECT engine, model,
-                          AVG(tok_per_sec) as avg_tok,
-                          AVG(ttft_ms) as avg_ttft
-                   FROM benchmarks
-                   WHERE ts >= ? AND ts < ?
-                     AND COALESCE(metrics_version, 1) = 2
-                   GROUP BY engine, model""",
-                (since, current_ts or int(time.time())),
+                query, (since, current_ts or int(time.time()))
             ).fetchall()
 
-            baselines: dict[tuple[str, str], dict] = {}
+            baselines: dict[tuple[str, str, str], dict] = {}
             for row in rows:
-                baselines[(row["engine"], row["model"])] = {
+                pt = row["prompt_type"] or ""
+                # Only include baselines for prompt types used in current run
+                if prompt_types and pt not in prompt_types:
+                    continue
+                baselines[(row["engine"], row["model"], pt)] = {
                     "tok_per_sec": row["avg_tok"] or 0.0,
                     "ttft_ms": row["avg_ttft"] or 0.0,
                 }
