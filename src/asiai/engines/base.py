@@ -15,6 +15,7 @@ class ModelInfo:
     size_total: int = 0
     format: str = ""
     quantization: str = ""
+    context_length: int = 0
 
 
 @dataclass

@@ -36,6 +36,7 @@ class OllamaEngine(InferenceEngine):
             return []
         models = []
         for m in data.get("models", []):
+            ctx_len = self._get_context_length(m.get("name", ""))
             models.append(
                 ModelInfo(
                     name=m.get("name", "unknown"),
@@ -43,6 +44,7 @@ class OllamaEngine(InferenceEngine):
                     size_total=m.get("size", 0),
                     format=m.get("details", {}).get("format", ""),
                     quantization=m.get("details", {}).get("quantization_level", ""),
+                    context_length=ctx_len,
                 )
             )
         return models
@@ -79,6 +81,25 @@ class OllamaEngine(InferenceEngine):
         if data and "load_duration" in data:
             return round(data["load_duration"] / 1e6, 1)  # ns -> ms
         return 0.0
+
+    def _get_context_length(self, model_name: str) -> int:
+        """Fetch context window size from /api/show for a model."""
+        if not model_name:
+            return 0
+        data, _ = http_post_json(
+            f"{self.base_url}/api/show",
+            {"model": model_name},
+            timeout=10,
+        )
+        if data is None:
+            return 0
+        # model_info contains <arch>.context_length
+        model_info = data.get("model_info", {})
+        if isinstance(model_info, dict):
+            for key, value in model_info.items():
+                if key.endswith(".context_length") and isinstance(value, int):
+                    return value
+        return 0
 
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
         """Generate text using Ollama /api/generate endpoint."""

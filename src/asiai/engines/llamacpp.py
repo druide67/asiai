@@ -56,3 +56,18 @@ class LlamaCppEngine(OpenAICompatEngine):
         if data and isinstance(data, dict):
             return data.get("status") == "ok"
         return False
+
+    def list_running(self) -> list:
+        """List running models, enriched with context_length from /props."""
+        models = super().list_running()
+        # Enrich with context length from /props
+        ctx_len = 0
+        data, _ = http_get_json(f"{self.base_url}/props")
+        if data and isinstance(data, dict):
+            gen_settings = data.get("default_generation_settings", {})
+            if isinstance(gen_settings, dict):
+                ctx_len = gen_settings.get("n_ctx", 0)
+        if ctx_len > 0:
+            for m in models:
+                m.context_length = ctx_len
+        return models

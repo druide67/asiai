@@ -105,8 +105,12 @@ class TestOllamaEngine:
                 }
             ]
         }
+        show_response = {"model_info": {"llama.context_length": 32768}}
         mock = self._mock_get({"/api/ps": ps_response})
-        with patch("asiai.engines.ollama.http_get_json", side_effect=mock):
+        with (
+            patch("asiai.engines.ollama.http_get_json", side_effect=mock),
+            patch("asiai.engines.ollama.http_post_json", return_value=(show_response, {})),
+        ):
             engine = OllamaEngine("http://localhost:11434")
             models = engine.list_running()
 
@@ -114,6 +118,20 @@ class TestOllamaEngine:
         assert models[0].name == "qwen3-coder:30b"
         assert models[0].size_vram == 20_000_000_000
         assert models[0].quantization == "Q4_K_M"
+        assert models[0].context_length == 32768
+
+    def test_list_running_no_context_length(self):
+        ps_response = {"models": [{"name": "test:latest", "details": {}}]}
+        mock = self._mock_get({"/api/ps": ps_response})
+        with (
+            patch("asiai.engines.ollama.http_get_json", side_effect=mock),
+            patch("asiai.engines.ollama.http_post_json", return_value=(None, {})),
+        ):
+            engine = OllamaEngine("http://localhost:11434")
+            models = engine.list_running()
+
+        assert len(models) == 1
+        assert models[0].context_length == 0
 
     def test_list_available(self):
         tags_response = {
@@ -543,11 +561,41 @@ class TestLlamaCppEngine:
 
     def test_list_running(self):
         data = {"data": [{"id": "my-gguf-model"}]}
-        with patch("asiai.engines.openai_compat.http_get_json", return_value=(data, {})):
+        props = {"default_generation_settings": {"n_ctx": 8192}}
+
+        def mock_get(url, timeout=5):
+            if "/v1/models" in url:
+                return data, {}
+            if "/props" in url:
+                return props, {}
+            return None, {}
+
+        with (
+            patch("asiai.engines.openai_compat.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.llamacpp.http_get_json", side_effect=mock_get),
+        ):
             engine = LlamaCppEngine("http://localhost:8080")
             models = engine.list_running()
         assert len(models) == 1
         assert models[0].format == "GGUF"
+        assert models[0].context_length == 8192
+
+    def test_list_running_no_props(self):
+        data = {"data": [{"id": "my-gguf-model"}]}
+
+        def mock_get(url, timeout=5):
+            if "/v1/models" in url:
+                return data, {}
+            return None, {}
+
+        with (
+            patch("asiai.engines.openai_compat.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.llamacpp.http_get_json", side_effect=mock_get),
+        ):
+            engine = LlamaCppEngine("http://localhost:8080")
+            models = engine.list_running()
+        assert len(models) == 1
+        assert models[0].context_length == 0
 
 
 class TestVllmMlxEngine:
