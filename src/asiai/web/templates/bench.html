@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block title %}asiai — Benchmark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Benchmark</h2>
+    <p>Run cross-engine benchmarks with live progress</p>
+</div>
+
+<div class="card-grid-2 fade-in">
+    <!-- Benchmark form -->
+    <div class="card">
+        <h3 class="card-title">Configuration</h3>
+        <form id="bench-form">
+            <!-- Model -->
+            <div class="form-group">
+                <label class="form-label">Model (auto-detect if empty)</label>
+                <input type="text" name="model" class="form-input" placeholder="e.g. qwen2.5:7b">
+            </div>
+
+            <!-- Engines -->
+            <div class="form-group">
+                <label class="form-label">Engines</label>
+                {% for engine in engines %}
+                <label class="form-checkbox">
+                    <input type="checkbox" name="engines" value="{{ engine.name }}"
+                           {% if engine.reachable %}checked{% else %}disabled{% endif %}>
+                    <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
+                    {{ engine.name }}
+                    {% if not engine.reachable %}<span class="text-neutral-500">(offline)</span>{% endif %}
+                </label>
+                {% endfor %}
+                {% if not engines %}
+                <p class="text-neutral-400 text-sm">No engines detected</p>
+                {% endif %}
+            </div>
+
+            <!-- Prompts -->
+            <div class="form-group">
+                <label class="form-label">Prompts</label>
+                {% for prompt in prompts %}
+                <label class="form-checkbox">
+                    <input type="checkbox" name="prompts" value="{{ prompt.name }}" checked>
+                    {{ prompt.label }} <span class="text-neutral-500 text-xs">({{ prompt.max_tokens }} tokens)</span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- Runs -->
+            <div class="form-group">
+                <label class="form-label">Runs: <span id="runs-value">3</span></label>
+                <input type="range" name="runs" class="form-range" min="1" max="10" value="3"
+                       oninput="document.getElementById('runs-value').textContent = this.value">
+            </div>
+
+            <!-- Power -->
+            <div class="form-group">
+                <label class="form-checkbox">
+                    <input type="checkbox" name="power">
+                    Measure power (requires sudo)
+                </label>
+            </div>
+
+            <button type="submit" id="bench-submit" class="btn btn-primary"
+                    {% if bench_running %}disabled{% endif %}>
+                {% if bench_running %}
+                <span class="spinner"></span> Running...
+                {% else %}
+                Run Benchmark
+                {% endif %}
+            </button>
+        </form>
+    </div>
+
+    <!-- Progress & Status -->
+    <div class="card">
+        <h3 class="card-title">Status</h3>
+        <div id="bench-status">
+            {% if bench_running %}
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span class="spinner"></span>
+                <span class="text-sm animate-pulse">Benchmark in progress...</span>
+            </div>
+            {% else %}
+            <p class="text-neutral-400 text-sm">Ready to run. Configure and click "Run Benchmark".</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Results area -->
+<div id="bench-results" class="mt-6"></div>
+
+<!-- Charts -->
+<div class="card-grid-2 mt-6">
+    <div id="bench-tok-chart" class="chart-container" style="display: none;"></div>
+    <div id="bench-ttft-chart" class="chart-container" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const form = document.getElementById('bench-form');
+    const submitBtn = document.getElementById('bench-submit');
+    const statusDiv = document.getElementById('bench-status');
+    const resultsDiv = document.getElementById('bench-results');
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // Disable button
+        submitBtn.disabled = true;
+        submitBtn.textContent = '';
+        var spinner = document.createElement('span');
+        spinner.className = 'spinner';
+        submitBtn.appendChild(spinner);
+        submitBtn.appendChild(document.createTextNode(' Running...'));
+
+        // Show progress
+        statusDiv.textContent = '';
+        var progressRow = document.createElement('div');
+        progressRow.style.display = 'flex';
+        progressRow.style.alignItems = 'center';
+        progressRow.style.gap = '0.75rem';
+        var progressSpinner = document.createElement('span');
+        progressSpinner.className = 'spinner';
+        progressRow.appendChild(progressSpinner);
+        var progressText = document.createElement('span');
+        progressText.className = 'text-sm animate-pulse';
+        progressText.id = 'progress-text';
+        progressText.textContent = 'Starting benchmark...';
+        progressRow.appendChild(progressText);
+        statusDiv.appendChild(progressRow);
+
+        // POST form data
+        var formData = new FormData(form);
+
+        fetch('/bench/run', { method: 'POST', body: formData })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                startBenchSSE();
+            })
+            .catch(function(err) {
+                showError(err.message);
+            });
+    });
+
+    function startBenchSSE() {
+        var evtSource = new EventSource('/bench/stream');
+
+        evtSource.onmessage = function(event) {
+            var data = JSON.parse(event.data);
+
+            var progressText = document.getElementById('progress-text');
+            if (progressText) {
+                progressText.textContent = data.progress || 'Running...';
+            }
+
+            if (data.error) {
+                evtSource.close();
+                showError(data.error);
+                return;
+            }
+
+            if (data.done) {
+                evtSource.close();
+
+                statusDiv.textContent = '';
+                var doneP = document.createElement('p');
+                doneP.className = 'text-green-400 text-sm';
+                doneP.textContent = 'Benchmark complete!';
+                statusDiv.appendChild(doneP);
+
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Run Benchmark';
+
+                // Fetch results via JSON API and render with safe DOM methods
+                fetchAndRenderResults();
+            }
+        };
+
+        evtSource.onerror = function() {
+            evtSource.close();
+            showError('Lost connection to benchmark stream');
+        };
+    }
+
+    function fetchAndRenderResults() {
+        fetch('/api/benchmarks?hours=1')
+            .then(function(res) { return res.json(); })
+            .then(function(rows) {
+                if (!rows || rows.length === 0) return;
+
+                // Group by engine
+                var engines = {};
+                rows.forEach(function(r) {
+                    if (!engines[r.engine]) {
+                        engines[r.engine] = { tok_s_sum: 0, ttft_sum: 0, count: 0, vram: r.vram_bytes };
+                    }
+                    engines[r.engine].tok_s_sum += r.tok_per_sec;
+                    engines[r.engine].ttft_sum += r.ttft_ms;
+                    engines[r.engine].count++;
+                });
+
+                renderResultsTable(engines);
+                renderResultsCharts(engines);
+            })
+            .catch(function() { /* ignore render errors */ });
+    }
+
+    function renderResultsTable(engines) {
+        resultsDiv.textContent = '';
+
+        var card = document.createElement('div');
+        card.className = 'card fade-in';
+
+        var title = document.createElement('h3');
+        title.className = 'card-title';
+        title.textContent = 'Results';
+        card.appendChild(title);
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'overflow-x-auto';
+
+        var table = document.createElement('table');
+        table.className = 'results-table';
+
+        // Header
+        var thead = document.createElement('thead');
+        var headerRow = document.createElement('tr');
+        ['Engine', 'Avg tok/s', 'Avg TTFT', 'VRAM'].forEach(function(text) {
+            var th = document.createElement('th');
+            th.textContent = text;
+            th.className = text === 'Engine' ? 'text-left' : 'text-right';
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Find winner
+        var bestTokS = 0;
+        var winnerName = '';
+        Object.keys(engines).forEach(function(name) {
+            var avg = engines[name].tok_s_sum / engines[name].count;
+            if (avg > bestTokS) { bestTokS = avg; winnerName = name; }
+        });
+
+        // Body
+        var tbody = document.createElement('tbody');
+        Object.keys(engines).forEach(function(name) {
+            var e = engines[name];
+            var avgTok = e.tok_s_sum / e.count;
+            var avgTtft = e.ttft_sum / e.count;
+
+            var tr = document.createElement('tr');
+            if (name === winnerName && Object.keys(engines).length > 1) {
+                tr.className = 'winner-row';
+            }
+
+            var tdName = document.createElement('td');
+            tdName.className = 'font-medium';
+            tdName.style.fontFamily = 'var(--font-sans)';
+            tdName.textContent = name;
+            tr.appendChild(tdName);
+
+            var tdTok = document.createElement('td');
+            tdTok.className = 'text-right';
+            tdTok.textContent = avgTok.toFixed(1);
+            tr.appendChild(tdTok);
+
+            var tdTtft = document.createElement('td');
+            tdTtft.className = 'text-right';
+            tdTtft.textContent = avgTtft.toFixed(0) + ' ms';
+            tr.appendChild(tdTtft);
+
+            var tdVram = document.createElement('td');
+            tdVram.className = 'text-right';
+            tdVram.textContent = formatBytes(e.vram);
+            tr.appendChild(tdVram);
+
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrapper.appendChild(table);
+        card.appendChild(wrapper);
+        resultsDiv.appendChild(card);
+    }
+
+    function renderResultsCharts(engines) {
+        var names = Object.keys(engines);
+        if (names.length === 0) return;
+
+        var tokValues = names.map(function(n) {
+            return parseFloat((engines[n].tok_s_sum / engines[n].count).toFixed(1));
+        });
+        var ttftValues = names.map(function(n) {
+            return parseFloat((engines[n].ttft_sum / engines[n].count).toFixed(0));
+        });
+
+        var tokChart = document.getElementById('bench-tok-chart');
+        var ttftChart = document.getElementById('bench-ttft-chart');
+        tokChart.style.display = 'block';
+        ttftChart.style.display = 'block';
+
+        createBarChart('bench-tok-chart', names, tokValues, {
+            label: 'Throughput', unit: 'tok/s', height: 200,
+        });
+        createBarChart('bench-ttft-chart', names, ttftValues, {
+            label: 'TTFT', unit: 'ms', height: 200,
+        });
+    }
+
+    function showError(msg) {
+        statusDiv.textContent = '';
+        var errP = document.createElement('p');
+        errP.className = 'text-red-400 text-sm';
+        errP.textContent = 'Error: ' + msg;
+        statusDiv.appendChild(errP);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Run Benchmark';
+    }
+</script>
+{% endblock %}

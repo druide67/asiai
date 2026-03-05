@@ -1,0 +1,33 @@
+<!-- Doctor checks partial (htmx swappable) -->
+{% set categories = {} %}
+{% for check in checks %}
+    {% if check.category not in categories %}
+        {% set _ = categories.update({check.category: []}) %}
+    {% endif %}
+    {% set _ = categories[check.category].append(check) %}
+{% endfor %}
+
+<div id="doctor-checks" class="space-y-6">
+    {% for category in ['system', 'engine', 'database'] %}
+    {% set cat_checks = checks | selectattr('category', 'equalto', category) | list %}
+    {% if cat_checks %}
+    <div>
+        <h3 class="card-title" style="margin-bottom: 0.75rem;">{{ category | title }}</h3>
+        {% for check in cat_checks %}
+        <div class="check-card fade-in" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+            <div class="check-icon {{ check.status }}">
+                {% if check.status == 'ok' %}&#10003;{% elif check.status == 'warn' %}!{% else %}&#10007;{% endif %}
+            </div>
+            <div class="check-body">
+                <h4>{{ check.name }}</h4>
+                <p>{{ check.message }}</p>
+                {% if check.fix %}
+                <code class="check-fix" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy">{{ check.fix }}</code>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>

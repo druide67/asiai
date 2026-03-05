@@ -1,6 +1,6 @@
 # Benchmark Metrics Specification
 
-> **Version**: 0.3.2
+> **Version**: 0.4.0
 > **Status**: Implemented
 > **Scope**: `asiai bench` — all engines
 

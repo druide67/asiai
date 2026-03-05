@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}asiai — Doctor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Doctor</h2>
+    <p>Installation and environment diagnostics</p>
+</div>
+
+<div style="margin-bottom: 1.5rem;">
+    <button class="btn btn-primary"
+            hx-post="/doctor/refresh"
+            hx-target="#doctor-checks"
+            hx-swap="outerHTML"
+            hx-indicator="#refresh-spinner">
+        Refresh
+    </button>
+    <span id="refresh-spinner" class="spinner htmx-indicator" style="margin-left: 0.5rem;"></span>
+</div>
+
+<div class="fade-in">
+    {% include "partials/doctor_checks.html" %}
+</div>
+{% endblock %}

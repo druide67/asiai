@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}asiai — Apple Silicon AI bench{% endblock %}</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- htmx -->
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+
+    <!-- htmx SSE extension -->
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" integrity="sha384-fw+eTlCc7suMV/1w/7fr2/PmwElUIt5i82bi+qTiLXvjRXZ2/FkiTNA/w0MhXnGI" crossorigin="anonymous"></script>
+
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.54.1/dist/apexcharts.min.js" integrity="sha384-KNaFJ+EK516RuHsoycvreec5pD7BkTKJEkjMrVSQWu9KGTl7En4dhIDv7t1DFJ+g" crossorigin="anonymous"></script>
+
+    <!-- asiai styles & charts -->
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/charts.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar -->
+        <nav class="sidebar" aria-label="Main navigation">
+            <div class="sidebar-logo" style="text-align: center;">
+                <img src="/static/logo.svg" alt="asiai" width="160" height="160" style="border-radius: 12px; margin-bottom: 0.5rem;">
+                <div class="sidebar-tagline">Apple Silicon AI<br>inference bench</div>
+            </div>
+            <ul class="sidebar-nav">
+                <li>
+                    <a href="/" class="{% if nav_active == 'dashboard' %}active{% endif %}">
+                        <span class="nav-icon">&#9632;</span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/monitor" class="{% if nav_active == 'monitor' %}active{% endif %}">
+                        <span class="nav-icon">&#9679;</span>
+                        <span>Monitor</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/bench" class="{% if nav_active == 'bench' %}active{% endif %}">
+                        <span class="nav-icon">&#9654;</span>
+                        <span>Benchmark</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/history" class="{% if nav_active == 'history' %}active{% endif %}">
+                        <span class="nav-icon">&#9776;</span>
+                        <span>History</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/doctor" class="{% if nav_active == 'doctor' %}active{% endif %}">
+                        <span class="nav-icon">&#10010;</span>
+                        <span>Doctor</span>
+                    </a>
+                </li>
+            </ul>
+            <div style="margin-top: auto; padding: 1rem 1.5rem; border-top: 1px solid var(--border);">
+                <button id="theme-toggle" class="btn" style="width: 100%; justify-content: center;" onclick="toggleTheme()" aria-label="Toggle dark/light theme">
+                    <span id="theme-icon">&#9788;</span>
+                    <span id="theme-label">Light</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+    function toggleTheme() {
+        var current = document.documentElement.getAttribute('data-theme') || 'dark';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('asiai-theme', next);
+        updateThemeButton(next);
+    }
+
+    function updateThemeButton(theme) {
+        var icon = document.getElementById('theme-icon');
+        var label = document.getElementById('theme-label');
+        if (theme === 'light') {
+            icon.textContent = '\u263E';
+            label.textContent = 'Dark';
+        } else {
+            icon.textContent = '\u263C';
+            label.textContent = 'Light';
+        }
+    }
+
+    (function() {
+        var saved = localStorage.getItem('asiai-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        updateThemeButton(saved);
+    })();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

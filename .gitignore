@@ -47,3 +47,6 @@ site/
 # Environment
 .env
 .env.local
+
+# Claude Code (private project instructions)
+CLAUDE.md

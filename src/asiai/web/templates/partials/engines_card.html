@@ -1,0 +1,30 @@
+<!-- Engines card partial -->
+<div class="card">
+    <h3 class="card-title">Engines</h3>
+    {% if engines %}
+    <div class="space-y-4">
+        {% for engine in engines %}
+        <div class="metric-row">
+            <div style="display: flex; align-items: center;">
+                <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
+                <span class="font-medium">{{ engine.name }}</span>
+            </div>
+            <div class="text-right">
+                {% if engine.reachable %}
+                <span class="text-xs text-neutral-500 font-mono">{{ engine.version }}</span>
+                {% else %}
+                <span class="badge badge-gray">offline</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if engine.reachable %}
+        <div class="text-xs text-neutral-500" style="margin-top: -0.5rem; padding-left: 1.25rem;">
+            {{ engine.url }} &middot; {{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-neutral-400 text-sm">No engines detected</p>
+    {% endif %}
+</div>

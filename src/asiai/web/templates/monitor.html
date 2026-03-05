@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}asiai — Monitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Live Monitor</h2>
+    <p>Real-time system metrics — updates every 5 seconds</p>
+</div>
+
+<div class="card-grid fade-in">
+    <!-- CPU Load -->
+    <div class="card">
+        <h3 class="card-title">CPU Load</h3>
+        <div id="cpu-value" class="metric-value">{{ snapshot.cpu_load_1 | format_number if snapshot else '—' }}</div>
+        <div class="metric-label">1-min average</div>
+        <div id="cpu-sparkline" class="sparkline-container mt-4"></div>
+    </div>
+
+    <!-- Memory -->
+    <div class="card">
+        <h3 class="card-title">Memory</h3>
+        <div id="mem-gauge"></div>
+    </div>
+
+    <!-- Thermal -->
+    <div class="card">
+        <h3 class="card-title">Thermal</h3>
+        <div style="text-align: center; padding: 1rem 0;">
+            <div id="thermal-badge">
+                {% if snapshot and snapshot.thermal_level == 'nominal' %}
+                <span class="badge badge-green" style="font-size: 1rem; padding: 0.5rem 1rem;">nominal</span>
+                {% elif snapshot and snapshot.thermal_level == 'warning' %}
+                <span class="badge badge-yellow" style="font-size: 1rem; padding: 0.5rem 1rem;">warning</span>
+                {% elif snapshot and snapshot.thermal_level == 'critical' %}
+                <span class="badge badge-red" style="font-size: 1rem; padding: 0.5rem 1rem;">critical</span>
+                {% else %}
+                <span class="badge badge-gray" style="font-size: 1rem; padding: 0.5rem 1rem;">unknown</span>
+                {% endif %}
+            </div>
+            <div class="metric-label mt-4">Speed Limit</div>
+            <div id="speed-limit" class="metric-value text-sm">
+                {% if snapshot and snapshot.thermal_speed_limit >= 0 %}
+                    {{ snapshot.thermal_speed_limit }}%
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Uptime + Pressure -->
+<div class="card-grid mt-6 fade-in-delay-1">
+    <div class="card">
+        <h3 class="card-title">Uptime</h3>
+        <div id="uptime-value" class="metric-value">—</div>
+    </div>
+    <div class="card">
+        <h3 class="card-title">Memory Pressure</h3>
+        <div id="pressure-badge" style="text-align: center; padding: 0.5rem 0;">
+            <span class="badge badge-gray">—</span>
+        </div>
+    </div>
+</div>
+
+<!-- Models loaded -->
+<div class="mt-6 fade-in-delay-2">
+    <div class="card">
+        <h3 class="card-title">Models Loaded</h3>
+        <div id="models-list" class="text-sm text-neutral-400">Loading...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const cpuHistory = [];
+    let cpuChart = null;
+    let memGauge = null;
+
+    // Initial gauge
+    {% if snapshot and snapshot.mem_total > 0 %}
+    const initMemPct = {{ ((snapshot.mem_used / snapshot.mem_total) * 100) | int }};
+    memGauge = createGauge('mem-gauge', initMemPct, { label: 'RAM' });
+    {% else %}
+    memGauge = createGauge('mem-gauge', 0, { label: 'RAM' });
+    {% endif %}
+
+    // Helper: safely set badge content (no innerHTML with untrusted data)
+    function setBadge(elementId, text, badgeClass) {
+        const container = document.getElementById(elementId);
+        container.textContent = '';
+        const span = document.createElement('span');
+        span.className = 'badge ' + badgeClass;
+        span.textContent = text;
+        container.appendChild(span);
+    }
+
+    function setBadgeLarge(elementId, text, badgeClass) {
+        const container = document.getElementById(elementId);
+        container.textContent = '';
+        const span = document.createElement('span');
+        span.className = 'badge ' + badgeClass;
+        span.style.fontSize = '1rem';
+        span.style.padding = '0.5rem 1rem';
+        span.textContent = text;
+        container.appendChild(span);
+    }
+
+    function renderModels(models) {
+        const container = document.getElementById('models-list');
+        container.textContent = '';
+        if (!models || models.length === 0) {
+            const p = document.createElement('p');
+            p.className = 'text-neutral-400';
+            p.textContent = 'No models loaded';
+            container.appendChild(p);
+            return;
+        }
+        models.forEach(function(m) {
+            const row = document.createElement('div');
+            row.className = 'metric-row';
+
+            const nameSpan = document.createElement('span');
+            const dot = document.createElement('span');
+            dot.className = 'status-dot green';
+            nameSpan.appendChild(dot);
+            nameSpan.appendChild(document.createTextNode(m.name));
+            row.appendChild(nameSpan);
+
+            const infoSpan = document.createElement('span');
+            infoSpan.className = 'text-neutral-500';
+            infoSpan.textContent = m.engine + ' \u00B7 ' + formatBytes(m.size_vram || 0);
+            row.appendChild(infoSpan);
+
+            container.appendChild(row);
+        });
+    }
+
+    // SSE connection
+    const evtSource = new EventSource('/monitor/stream');
+
+    evtSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+
+        // CPU
+        document.getElementById('cpu-value').textContent = data.cpu_load_1.toFixed(1);
+        cpuHistory.push(data.cpu_load_1);
+        if (cpuHistory.length > 60) cpuHistory.shift();
+        if (cpuChart) {
+            cpuChart.updateSeries([{ data: cpuHistory }]);
+        } else if (cpuHistory.length >= 2) {
+            cpuChart = createSparkline('cpu-sparkline', cpuHistory, { color: '#3b82f6' });
+        }
+
+        // Memory gauge
+        if (data.mem_total > 0) {
+            const memPct = Math.round((data.mem_used / data.mem_total) * 100);
+            if (memGauge) {
+                memGauge.updateSeries([memPct]);
+            }
+        }
+
+        // Thermal
+        const thermalClassMap = {
+            'nominal': 'badge-green',
+            'warning': 'badge-yellow',
+            'critical': 'badge-red',
+        };
+        setBadgeLarge('thermal-badge', data.thermal_level,
+            thermalClassMap[data.thermal_level] || 'badge-gray');
+
+        const speedLimit = document.getElementById('speed-limit');
+        speedLimit.textContent = data.thermal_speed_limit >= 0 ? data.thermal_speed_limit + '%' : 'N/A';
+
+        // Uptime
+        document.getElementById('uptime-value').textContent = formatUptime(data.uptime);
+
+        // Pressure
+        const pressureClassMap = {
+            'normal': 'badge-green',
+            'warn': 'badge-yellow',
+            'critical': 'badge-red',
+        };
+        setBadge('pressure-badge', data.mem_pressure,
+            pressureClassMap[data.mem_pressure] || 'badge-gray');
+
+        // Models
+        renderModels(data.models);
+    };
+
+    evtSource.onerror = function() {
+        console.warn('Monitor SSE connection lost, will retry...');
+    };
+</script>
+{% endblock %}

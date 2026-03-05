@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}asiai — History{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>History</h2>
+    <p>Benchmark performance over time</p>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar fade-in">
+    <span class="text-xs text-neutral-500" style="margin-right: 0.5rem;">Time range:</span>
+    <button class="filter-chip" data-hours="24" onclick="setTimeRange(24, this)">24h</button>
+    <button class="filter-chip active" data-hours="168" onclick="setTimeRange(168, this)">7d</button>
+    <button class="filter-chip" data-hours="720" onclick="setTimeRange(720, this)">30d</button>
+    <button class="filter-chip" data-hours="2160" onclick="setTimeRange(2160, this)">90d</button>
+</div>
+
+<!-- Charts -->
+<div class="card-grid-2 fade-in-delay-1">
+    <div class="card">
+        <h3 class="card-title">Throughput (tok/s)</h3>
+        <div id="history-tok-chart" style="min-height: 300px;"></div>
+    </div>
+    <div class="card">
+        <h3 class="card-title">Time to First Token (ms)</h3>
+        <div id="history-ttft-chart" style="min-height: 300px;"></div>
+    </div>
+</div>
+
+<!-- Data table -->
+<div class="mt-6 fade-in-delay-2">
+    <div class="card">
+        <h3 class="card-title">Benchmark Data</h3>
+        <div class="overflow-x-auto">
+            <table class="results-table" id="history-table">
+                <thead>
+                    <tr>
+                        <th class="text-left">Date</th>
+                        <th class="text-left">Engine</th>
+                        <th class="text-left">Model</th>
+                        <th class="text-left">Prompt</th>
+                        <th class="text-right">tok/s</th>
+                        <th class="text-right">TTFT</th>
+                        <th class="text-right">Duration</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody">
+                </tbody>
+            </table>
+        </div>
+        <div id="history-empty" class="text-neutral-400 text-sm" style="display: none; padding: 1rem 0;">
+            No benchmark data in this time range
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var currentHours = 168;
+    var tokChart = null;
+    var ttftChart = null;
+
+    function setTimeRange(hours, btn) {
+        currentHours = hours;
+        document.querySelectorAll('.filter-chip').forEach(function(c) {
+            c.classList.remove('active');
+        });
+        btn.classList.add('active');
+        loadData();
+    }
+
+    function loadData() {
+        fetch('/api/benchmarks?hours=' + currentHours)
+            .then(function(res) { return res.json(); })
+            .then(function(rows) {
+                renderCharts(rows);
+                renderTable(rows);
+            })
+            .catch(function(err) {
+                console.error('Failed to load history:', err);
+            });
+    }
+
+    function renderCharts(rows) {
+        // Group by engine for time series
+        var engineData = {};
+        rows.forEach(function(r) {
+            if (!engineData[r.engine]) {
+                engineData[r.engine] = { tok_s: [], ttft: [] };
+            }
+            engineData[r.engine].tok_s.push([r.ts * 1000, r.tok_per_sec]);
+            engineData[r.engine].ttft.push([r.ts * 1000, r.ttft_ms]);
+        });
+
+        var tokSeries = Object.keys(engineData).map(function(name) {
+            return { name: name, data: engineData[name].tok_s };
+        });
+        var ttftSeries = Object.keys(engineData).map(function(name) {
+            return { name: name, data: engineData[name].ttft };
+        });
+
+        // Destroy existing charts
+        if (tokChart) { tokChart.destroy(); tokChart = null; }
+        if (ttftChart) { ttftChart.destroy(); ttftChart = null; }
+
+        if (tokSeries.length > 0) {
+            tokChart = createTimeChart('history-tok-chart', tokSeries, {
+                yTitle: 'tok/s',
+                yFormatter: function(v) { return v.toFixed(1); },
+            });
+            ttftChart = createTimeChart('history-ttft-chart', ttftSeries, {
+                yTitle: 'ms',
+                yFormatter: function(v) { return v.toFixed(0) + ' ms'; },
+            });
+        }
+    }
+
+    function renderTable(rows) {
+        var tbody = document.getElementById('history-tbody');
+        var emptyMsg = document.getElementById('history-empty');
+        tbody.textContent = '';
+
+        if (!rows || rows.length === 0) {
+            emptyMsg.style.display = 'block';
+            return;
+        }
+        emptyMsg.style.display = 'none';
+
+        // Show most recent first, limit to 100
+        var sorted = rows.slice().sort(function(a, b) { return b.ts - a.ts; }).slice(0, 100);
+
+        sorted.forEach(function(r) {
+            var tr = document.createElement('tr');
+
+            var tdDate = document.createElement('td');
+            tdDate.style.fontFamily = 'var(--font-sans)';
+            tdDate.textContent = new Date(r.ts * 1000).toLocaleString();
+            tr.appendChild(tdDate);
+
+            var tdEngine = document.createElement('td');
+            tdEngine.style.fontFamily = 'var(--font-sans)';
+            tdEngine.textContent = r.engine;
+            tr.appendChild(tdEngine);
+
+            var tdModel = document.createElement('td');
+            tdModel.style.fontFamily = 'var(--font-sans)';
+            tdModel.textContent = r.model;
+            tr.appendChild(tdModel);
+
+            var tdPrompt = document.createElement('td');
+            tdPrompt.style.fontFamily = 'var(--font-sans)';
+            tdPrompt.textContent = r.prompt_type;
+            tr.appendChild(tdPrompt);
+
+            var tdTok = document.createElement('td');
+            tdTok.className = 'text-right';
+            tdTok.textContent = r.tok_per_sec.toFixed(1);
+            tr.appendChild(tdTok);
+
+            var tdTtft = document.createElement('td');
+            tdTtft.className = 'text-right';
+            tdTtft.textContent = r.ttft_ms.toFixed(0) + ' ms';
+            tr.appendChild(tdTtft);
+
+            var tdDur = document.createElement('td');
+            tdDur.className = 'text-right';
+            tdDur.textContent = (r.total_duration_ms / 1000).toFixed(1) + ' s';
+            tr.appendChild(tdDur);
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Initial load
+    loadData();
+</script>
+{% endblock %}

@@ -1,0 +1,61 @@
+<!-- Models table partial -->
+{% set all_models = [] %}
+{% for engine in engines %}
+    {% if engine.reachable %}
+        {% for model in engine.models %}
+            {% set _ = all_models.append({'engine': engine.name, 'name': model.name, 'size_vram': model.size_vram, 'size_total': model.size_total, 'format': model.format, 'quantization': model.quantization, 'context_length': model.context_length}) %}
+        {% endfor %}
+    {% endif %}
+{% endfor %}
+
+{% if all_models %}
+<div class="card">
+    <h3 class="card-title">Models Loaded</h3>
+    <div class="overflow-x-auto">
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th class="text-left">Model</th>
+                    <th class="text-left">Engine</th>
+                    <th class="text-right">VRAM</th>
+                    <th class="text-left">Format</th>
+                    <th class="text-left">Quant</th>
+                    <th class="text-right">Context</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in all_models %}
+                <tr>
+                    <td class="font-medium" style="font-family: var(--font-sans);">{{ m.name }}</td>
+                    <td style="font-family: var(--font-sans);">
+                        <span class="status-dot green"></span>{{ m.engine }}
+                    </td>
+                    <td class="text-right">
+                        {{ m.size_vram | format_bytes }}
+                        {% if m.size_total > 0 %}
+                        <div class="progress-bar" style="width: 80px; display: inline-block; vertical-align: middle; margin-left: 0.5rem;">
+                            {% set vram_pct = (m.size_vram / m.size_total * 100) | int if m.size_total > 0 else 0 %}
+                            <div class="progress-fill blue" style="width: {{ vram_pct }}%"></div>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>{{ m.format or '—' }}</td>
+                    <td>{{ m.quantization or '—' }}</td>
+                    <td class="text-right">
+                        {% if m.context_length > 0 %}
+                            {% if m.context_length >= 1024 %}
+                                {{ (m.context_length / 1024) | int }}k
+                            {% else %}
+                                {{ m.context_length }}
+                            {% endif %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}

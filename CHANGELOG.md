@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased](https://github.com/druide67/asiai/compare/v0.4.0...HEAD)
 
+### Added
+
+- `asiai web` — interactive web dashboard (FastAPI + htmx + ApexCharts), optional `pip install asiai[web]`
+  - Dashboard with system info, engines, models, last benchmark summary
+  - Real-time monitor with SSE (CPU sparkline, memory gauge, thermal, models)
+  - Run benchmarks from the browser with live progress
+  - History page with time-series charts and filterable data table
+  - Doctor page with health check cards and refresh
+  - Dark/light theme toggle with localStorage persistence
+- `asiai bench --export FILE` — export benchmark results as JSON (schema_version, machine metadata, stats, raw runs)
+- `context_length` in ModelInfo — displayed in `asiai models` output (Ollama via `/api/show`, llama.cpp via `/props`)
+- Thermal drift detection — warns if tok/s decreases monotonically over 3+ runs (>5% drop)
+- Statistics section in benchmark output — CI 95%, P50/P90/P99, IQR outlier detection
+- Cooldown (3s) between engines during benchmark + token ratio warning
+
 ## [0.4.0](https://github.com/druide67/asiai/compare/v0.3.0...v0.4.0) — 2026-03-04
 
 ### Added

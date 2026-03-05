@@ -273,6 +273,54 @@ def cmd_daemon(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    """Handle 'web' command."""
+    try:
+        import uvicorn  # noqa: F401
+
+        has_fastapi = True
+    except ImportError:
+        has_fastapi = False
+
+    if not has_fastapi:
+        from asiai.display.formatters import dim, red
+
+        print(red("FastAPI is required for the web dashboard."), file=sys.stderr)
+        print(dim("Install with: pip install asiai[web]"), file=sys.stderr)
+        return 1
+
+    from asiai.storage.db import DEFAULT_DB_PATH, init_db
+    from asiai.web.app import create_app
+    from asiai.web.state import AppState
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    db_path = args.db or DEFAULT_DB_PATH
+    init_db(db_path)
+
+    state = AppState(engines=engines, db_path=db_path)
+    app = create_app(state)
+
+    host = args.host
+    port = args.port
+
+    # Open browser unless --no-open
+    if not args.no_open:
+        import threading
+        import webbrowser
+
+        def _open_browser():
+            import time as _time
+
+            _time.sleep(1.5)
+            webbrowser.open(f"http://{host}:{port}")
+
+        threading.Thread(target=_open_browser, daemon=True).start()
+
+    uvicorn.run(app, host=host, port=port, log_level="info")
+    return 0
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
     from asiai.benchmark.regression import detect_regressions
@@ -478,6 +526,22 @@ def main(argv: list[str] | None = None) -> int:
     tui_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
     tui_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
 
+    # web
+    web_parser = subparsers.add_parser(
+        "web", help="Launch web dashboard (requires fastapi)"
+    )
+    web_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
+    web_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
+    web_parser.add_argument(
+        "--port", type=int, default=8899, help="Port (default: 8899)"
+    )
+    web_parser.add_argument(
+        "--host", default="127.0.0.1", help="Host (default: 127.0.0.1)"
+    )
+    web_parser.add_argument(
+        "--no-open", action="store_true", help="Don't open browser automatically"
+    )
+
     # bench
     bench_parser = subparsers.add_parser("bench", help="Benchmark models across engines")
     bench_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
@@ -542,6 +606,7 @@ def main(argv: list[str] | None = None) -> int:
         "doctor": cmd_doctor,
         "daemon": cmd_daemon,
         "tui": cmd_tui,
+        "web": cmd_web,
     }
 
     handler = commands.get(args.command)

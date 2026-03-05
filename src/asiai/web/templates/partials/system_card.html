@@ -1,0 +1,63 @@
+<!-- System card partial -->
+<div class="card">
+    <h3 class="card-title">System</h3>
+    {% if snapshot %}
+    <div class="space-y-4">
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">CPU Load</div>
+                <div class="metric-value">{{ snapshot.cpu_load_1 | format_number }}</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">Cores</div>
+                <div class="metric-value text-sm">{{ snapshot.cpu_cores }}</div>
+            </div>
+        </div>
+
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">Memory</div>
+                <div class="metric-value">{{ snapshot.mem_used | format_bytes }}</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">Total</div>
+                <div class="metric-value text-sm">{{ snapshot.mem_total | format_bytes }}</div>
+            </div>
+        </div>
+        {% if snapshot.mem_total > 0 %}
+        <div class="progress-bar">
+            {% set mem_pct = (snapshot.mem_used / snapshot.mem_total * 100) | int %}
+            <div class="progress-fill {% if mem_pct > 90 %}red{% elif mem_pct > 70 %}yellow{% else %}blue{% endif %}"
+                 style="width: {{ mem_pct }}%"></div>
+        </div>
+        {% endif %}
+
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">Pressure</div>
+                {% if snapshot.mem_pressure == 'normal' %}
+                <span class="badge badge-green">normal</span>
+                {% elif snapshot.mem_pressure == 'warn' %}
+                <span class="badge badge-yellow">warn</span>
+                {% else %}
+                <span class="badge badge-red">{{ snapshot.mem_pressure }}</span>
+                {% endif %}
+            </div>
+            <div class="text-right">
+                <div class="metric-label">Thermal</div>
+                {% if snapshot.thermal_level == 'nominal' %}
+                <span class="badge badge-green">nominal</span>
+                {% elif snapshot.thermal_level == 'warning' %}
+                <span class="badge badge-yellow">warning</span>
+                {% elif snapshot.thermal_level == 'critical' %}
+                <span class="badge badge-red">critical</span>
+                {% else %}
+                <span class="badge badge-gray">{{ snapshot.thermal_level }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-neutral-400 text-sm">Unable to collect system metrics</p>
+    {% endif %}
+</div>

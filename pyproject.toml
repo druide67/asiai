@@ -38,7 +38,9 @@ classifiers = [
 
 [project.optional-dependencies]
 tui = ["textual>=0.80"]
-dev = ["pytest", "ruff", "pytest-asyncio", "pytest-cov"]
+web = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "jinja2>=3.1"]
+all = ["textual>=0.80", "fastapi>=0.115", "uvicorn[standard]>=0.34", "jinja2>=3.1"]
+dev = ["pytest", "ruff", "pytest-asyncio", "pytest-cov", "httpx"]
 docs = ["mkdocs-material"]
 
 [project.urls]
@@ -53,6 +55,10 @@ asiai = "asiai.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/asiai"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/asiai/web/templates" = "asiai/web/templates"
+"src/asiai/web/static" = "asiai/web/static"
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -62,7 +68,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.coverage.run]
 source = ["asiai"]
-omit = ["src/asiai/display/tui.py"]
+omit = ["src/asiai/display/tui.py", "src/asiai/web/*"]
 
 [tool.coverage.report]
 show_missing = true
