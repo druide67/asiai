@@ -1148,3 +1148,157 @@ class TestTokenRatioCheck:
         )
         run = run_benchmark([engine], "test-model", ["code"])
         assert not any("stopped early" in e for e in run.errors)
+
+
+# --- Export ---
+
+
+class TestExportBenchmark:
+    def test_export_writes_json(self):
+        """export_benchmark should write a valid JSON file."""
+        from asiai.benchmark.reporter import export_benchmark
+
+        raw_results = [
+            {
+                "ts": 1000000,
+                "engine": "ollama",
+                "model": "test-model",
+                "prompt_type": "code",
+                "tok_per_sec": 45.0,
+                "ttft_ms": 100.0,
+                "tokens_generated": 500,
+                "total_duration_ms": 2200.0,
+                "run_index": 0,
+                "hw_chip": "Apple M1 Max",
+                "os_version": "macOS 15.3",
+                "engine_version": "0.5.4",
+                "model_format": "gguf",
+                "model_quantization": "Q4_K_M",
+                "vram_bytes": 5_000_000_000,
+                "thermal_level": "nominal",
+            },
+        ]
+        report = aggregate_results(raw_results)
+        report["model"] = "test-model"
+
+        import json
+
+        fd, path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        try:
+            export_benchmark(raw_results, report, path)
+            with open(path) as f:
+                data = json.load(f)
+            assert data["schema_version"] == 1
+            assert data["machine"]["chip"] == "Apple M1 Max"
+            assert "ollama" in data["benchmark"]["engines"]
+            engine_data = data["benchmark"]["engines"]["ollama"]
+            assert engine_data["median_tok_s"] == 45.0
+            assert engine_data["engine_version"] == "0.5.4"
+            assert len(engine_data["raw_runs"]) == 1
+            assert data["benchmark"]["prompts"] == ["code"]
+        finally:
+            os.unlink(path)
+
+    def test_export_with_power(self):
+        """Export should include power data when available."""
+        from asiai.benchmark.reporter import export_benchmark
+
+        raw_results = [
+            {
+                "ts": 1000000,
+                "engine": "ollama",
+                "model": "m",
+                "prompt_type": "code",
+                "tok_per_sec": 50.0,
+                "ttft_ms": 100.0,
+                "tokens_generated": 500,
+                "total_duration_ms": 2000.0,
+                "run_index": 0,
+                "hw_chip": "M4 Pro",
+                "os_version": "macOS 15.3",
+                "power_watts": 20.0,
+                "tok_per_sec_per_watt": 2.5,
+                "vram_bytes": 0,
+                "thermal_level": "",
+            },
+        ]
+        report = aggregate_results(raw_results)
+
+        import json
+
+        fd, path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        try:
+            export_benchmark(raw_results, report, path)
+            with open(path) as f:
+                data = json.load(f)
+            engine_data = data["benchmark"]["engines"]["ollama"]
+            assert engine_data["avg_power_watts"] == 20.0
+            assert engine_data["avg_tok_per_sec_per_watt"] == 2.5
+        finally:
+            os.unlink(path)
+
+
+# --- Thermal drift detection ---
+
+
+class TestThermalDrift:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
+    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.collect_thermal")
+    @patch("asiai.benchmark.runner.collect_memory")
+    def test_drift_detected(self, mock_mem, mock_thermal, _procs, _hw, _os):
+        """Monotone tok/s decrease across 3+ runs should warn."""
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+        mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
+
+        # Simulate decreasing tok/s across 3 runs (50 -> 45 -> 40 = 20% drop)
+        call_count = [0]
+
+        def varying_generate(model, prompt, max_tokens=512):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # warmup
+                return GenerateResult(
+                    tokens_generated=1, tok_per_sec=50.0, model=model, engine="ollama"
+                )
+            tok_s = [50.0, 45.0, 40.0][call_count[0] - 2] if call_count[0] <= 4 else 40.0
+            return GenerateResult(
+                tokens_generated=500,
+                tok_per_sec=tok_s,
+                ttft_ms=100.0,
+                total_duration_ms=2000.0,
+                model=model,
+                engine="ollama",
+            )
+
+        engine = _mock_engine()
+        engine.generate.side_effect = varying_generate
+        run = run_benchmark([engine], "test-model", ["code"], runs=3)
+
+        assert any("thermal drift" in e for e in run.errors)
+
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
+    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.collect_thermal")
+    @patch("asiai.benchmark.runner.collect_memory")
+    def test_no_drift_stable(self, mock_mem, mock_thermal, _procs, _hw, _os):
+        """Stable tok/s across runs should not trigger drift warning."""
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+        mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
+
+        engine = _mock_engine(
+            generate_result=GenerateResult(
+                tokens_generated=500,
+                tok_per_sec=45.0,
+                ttft_ms=100.0,
+                total_duration_ms=2000.0,
+                model="test-model",
+                engine="ollama",
+            )
+        )
+        run = run_benchmark([engine], "test-model", ["code"], runs=3)
+        assert not any("thermal drift" in e for e in run.errors)

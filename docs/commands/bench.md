@@ -18,6 +18,7 @@ asiai bench [options]
 | `-r, --runs N` | Runs per prompt (default: 3, for median + stddev) |
 | `--power` | Measure GPU power via powermetrics (sudo required) |
 | `--context-size SIZE` | Context fill prompt: `4k`, `16k`, `32k`, `64k` |
+| `--export FILE` | Export results to JSON file |
 | `-H, --history PERIOD` | Show past benchmarks (e.g., `7d`, `24h`) |
 
 ## Example
@@ -57,6 +58,20 @@ Use `--context-size` to test with large context fill prompts instead.
 
 The runner resolves model names across engines automatically — `gemma2:9b` (Ollama) and `gemma-2-9b` (LM Studio) are matched as the same model.
 
+## JSON export
+
+Export results for sharing or analysis:
+
+```bash
+asiai bench -m qwen3.5 --export bench.json
+```
+
+The JSON includes machine metadata, per-engine statistics (median, CI 95%, P50/P90/P99), raw per-run data, and a schema version for forward compatibility.
+
 ## Regression detection
 
 After each benchmark, asiai compares results against the last 7 days of history and warns about performance regressions (e.g., after an engine update or macOS upgrade).
+
+## Thermal drift detection
+
+When running 3+ runs, asiai detects monotone tok/s degradation across consecutive runs. If tok/s drops consistently (>5%), a warning is emitted indicating possible thermal throttling buildup.

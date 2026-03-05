@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import statistics
 
@@ -224,3 +225,121 @@ def _determine_winner(engines: dict[str, dict]) -> dict | None:
         vram_delta = f"{sign}{vram_pct:.0f}% VRAM"
 
     return {"name": best_name, "tok_s_delta": tok_s_delta, "vram_delta": vram_delta}
+
+
+def export_benchmark(
+    raw_results: list[dict],
+    report: dict,
+    output_path: str,
+) -> str:
+    """Export benchmark results to a standardized JSON file.
+
+    Args:
+        raw_results: Raw per-run result dicts from BenchmarkRun.results.
+        report: Aggregated report from aggregate_results().
+        output_path: File path to write the JSON.
+
+    Returns:
+        The path written to.
+    """
+    from asiai import __version__
+
+    # Extract machine info from first result
+    first = raw_results[0] if raw_results else {}
+    hw_chip = first.get("hw_chip", "")
+    os_version = first.get("os_version", "")
+
+    # Distinct prompt types
+    prompts = sorted({r.get("prompt_type", "") for r in raw_results if r.get("prompt_type")})
+
+    # Runs per prompt
+    run_indices = {r.get("run_index", 0) for r in raw_results}
+    runs_per_prompt = len(run_indices)
+
+    # Build per-engine export
+    engines_export: dict[str, dict] = {}
+    for engine_name, data in report.get("engines", {}).items():
+        engine_data: dict = {
+            "median_tok_s": data.get("median_tok_s", 0.0),
+            "avg_tok_s": data.get("avg_tok_s", 0.0),
+            "std_dev_tok_s": data.get("std_dev_tok_s", 0.0),
+            "stability": data.get("stability", ""),
+            "runs_count": data.get("runs_count", 1),
+            "ci95": [data.get("ci95_lower", 0.0), data.get("ci95_upper", 0.0)],
+            "percentiles_tok_s": {
+                "p50": data.get("p50_tok_s", 0.0),
+                "p90": data.get("p90_tok_s", 0.0),
+                "p99": data.get("p99_tok_s", 0.0),
+            },
+            "median_ttft_ms": data.get("median_ttft_ms", 0.0),
+            "percentiles_ttft_ms": {
+                "p50": data.get("p50_ttft_ms", 0.0),
+                "p90": data.get("p90_ttft_ms", 0.0),
+                "p99": data.get("p99_ttft_ms", 0.0),
+            },
+            "vram_bytes": data.get("vram_bytes", 0),
+        }
+
+        # Engine version and model metadata from raw results
+        engine_results = [r for r in raw_results if r.get("engine") == engine_name]
+        if engine_results:
+            er = engine_results[0]
+            engine_data["engine_version"] = er.get("engine_version", "")
+            engine_data["model_format"] = er.get("model_format", "")
+            engine_data["model_quantization"] = er.get("model_quantization", "")
+
+        # Power data (if available)
+        power_vals = [
+            r.get("power_watts", 0) for r in engine_results if r.get("power_watts", 0) > 0
+        ]
+        if power_vals:
+            engine_data["avg_power_watts"] = round(sum(power_vals) / len(power_vals), 1)
+            eff_vals = [
+                r["tok_per_sec_per_watt"]
+                for r in engine_results
+                if r.get("tok_per_sec_per_watt", 0) > 0
+            ]
+            if eff_vals:
+                engine_data["avg_tok_per_sec_per_watt"] = round(sum(eff_vals) / len(eff_vals), 2)
+
+        # Outliers
+        outliers = data.get("outliers", [])
+        if outliers:
+            engine_data["outliers"] = outliers
+
+        # Raw per-run data (stripped to essential fields)
+        engine_data["raw_runs"] = [
+            {
+                "run_index": r.get("run_index", 0),
+                "prompt_type": r.get("prompt_type", ""),
+                "tok_per_sec": r.get("tok_per_sec", 0.0),
+                "ttft_ms": r.get("ttft_ms", 0.0),
+                "tokens_generated": r.get("tokens_generated", 0),
+                "total_duration_ms": r.get("total_duration_ms", 0.0),
+            }
+            for r in engine_results
+        ]
+
+        engines_export[engine_name] = engine_data
+
+    export = {
+        "schema_version": 1,
+        "asiai_version": __version__,
+        "timestamp": first.get("ts", 0),
+        "machine": {
+            "chip": hw_chip,
+            "os_version": os_version,
+        },
+        "benchmark": {
+            "model": report.get("model", ""),
+            "runs_per_prompt": runs_per_prompt,
+            "prompts": prompts,
+            "engines": engines_export,
+            "winner": report.get("winner"),
+        },
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(export, f, indent=2)
+
+    return output_path

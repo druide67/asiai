@@ -92,7 +92,13 @@ def cmd_models(args: argparse.Namespace) -> int:
             for m in running:
                 vram = format_bytes(m.size_vram) if m.size_vram else ""
                 quant = m.quantization or ""
-                print(f"  {green('●')} {m.name:<40} {vram:>10} {quant}")
+                ctx = ""
+                if m.context_length > 0:
+                    if m.context_length >= 1024:
+                        ctx = f"{m.context_length // 1024}k ctx"
+                    else:
+                        ctx = f"{m.context_length} ctx"
+                print(f"  {green('●')} {m.name:<40} {vram:>10} {quant:>6}  {dim(ctx)}")
         else:
             print(dim("  No models loaded."))
         print()
@@ -270,7 +276,7 @@ def cmd_daemon(args: argparse.Namespace) -> int:
 def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
     from asiai.benchmark.regression import detect_regressions
-    from asiai.benchmark.reporter import aggregate_results
+    from asiai.benchmark.reporter import aggregate_results, export_benchmark
     from asiai.benchmark.runner import find_common_model, run_benchmark
     from asiai.display.cli_renderer import render_bench, render_bench_history, render_regressions
     from asiai.display.formatters import red, yellow
@@ -356,6 +362,14 @@ def cmd_bench(args: argparse.Namespace) -> int:
     report = aggregate_results(bench_run.results)
     report["model"] = model  # Use user-requested name, not engine-resolved
     render_bench(report)
+
+    # Export to JSON if requested
+    export_path = getattr(args, "export", None)
+    if export_path and bench_run.results:
+        path = export_benchmark(bench_run.results, report, export_path)
+        from asiai.display.formatters import green
+
+        print(f"  {green('✓')} Exported to {path}")
 
     # Check for regressions against historical data
     if bench_run.results:
@@ -500,6 +514,12 @@ def main(argv: list[str] | None = None) -> int:
         "-C",
         metavar="SIZE",
         help="Fill context with N tokens to stress-test TTFT (e.g. 64k, 128k, 4096)",
+    )
+    bench_parser.add_argument(
+        "--export",
+        "-E",
+        metavar="FILE",
+        help="Export results to JSON file (e.g. bench.json)",
     )
     bench_parser.add_argument(
         "--history",
