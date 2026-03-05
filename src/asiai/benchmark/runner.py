@@ -223,6 +223,10 @@ def run_benchmark(
                 )
                 break  # One warning per engine is enough
 
+        # Thermal drift detection: warn if tok/s decreases monotonically across runs
+        if runs >= 3:
+            _check_thermal_drift(run, results_before, engine.name)
+
         # Token ratio check: warn if generation stopped early
         for result in run.results[results_before:]:
             prompt_obj = next((p for p in prompts if p.name == result.get("prompt_type")), None)
@@ -406,6 +410,46 @@ def _model_matches(running_name: str, target: str) -> bool:
     if norm_running == norm_target or norm_target in norm_running or norm_running in norm_target:
         return True
     return False
+
+
+def _check_thermal_drift(run: BenchmarkRun, results_start: int, engine_name: str) -> None:
+    """Detect monotone tok/s degradation across runs (thermal drift).
+
+    If tok/s decreases on every consecutive run and the total drop exceeds 5%,
+    warn the user that results may be affected by thermal buildup.
+    """
+    engine_results = run.results[results_start:]
+    if not engine_results:
+        return
+
+    # Group by prompt_type, check each for monotone decrease
+    by_prompt: dict[str, list[tuple[int, float]]] = {}
+    for r in engine_results:
+        pt = r.get("prompt_type", "")
+        idx = r.get("run_index", 0)
+        tok_s = r.get("tok_per_sec", 0.0)
+        if tok_s > 0:
+            by_prompt.setdefault(pt, []).append((idx, tok_s))
+
+    for pt, runs_data in by_prompt.items():
+        if len(runs_data) < 3:
+            continue
+        # Sort by run_index
+        runs_data.sort(key=lambda x: x[0])
+        values = [v for _, v in runs_data]
+
+        # Check monotone decrease
+        monotone = all(values[i] > values[i + 1] for i in range(len(values) - 1))
+        if not monotone:
+            continue
+
+        drop_pct = (values[0] - values[-1]) / values[0] * 100
+        if drop_pct >= 5:
+            run.errors.append(
+                f"{engine_name}/{pt}: thermal drift detected — tok/s dropped "
+                f"{drop_pct:.0f}% across runs ({values[0]:.1f} → {values[-1]:.1f})"
+            )
+            break  # One warning per engine
 
 
 def _extract_param_size(name: str) -> str:
