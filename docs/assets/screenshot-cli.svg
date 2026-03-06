@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="460" font-family="'JetBrains Mono','SF Mono','Menlo',monospace" font-size="13">
+  <defs>
+    <style>
+      .bg { fill: #1e1e2e; }
+      .frame { fill: #181825; rx: 12; }
+      .dot-r { fill: #f38ba8; }
+      .dot-y { fill: #f9e2af; }
+      .dot-g { fill: #a6e3a1; }
+      .title { fill: #cdd6f4; font-size: 13px; }
+      .dim { fill: #6c7086; }
+      .text { fill: #cdd6f4; }
+      .green { fill: #a6e3a1; }
+      .yellow { fill: #f9e2af; }
+      .cyan { fill: #89dceb; }
+      .red { fill: #f38ba8; }
+      .bold { font-weight: 700; }
+      .accent { fill: #00d4aa; }
+    </style>
+  </defs>
+  <!-- Window frame -->
+  <rect class="frame" width="680" height="460" rx="12"/>
+  <!-- Title bar -->
+  <rect class="bg" x="0" y="30" width="680" height="430" rx="0"/>
+  <rect fill="#181825" width="680" height="30" rx="12"/>
+  <rect fill="#181825" x="0" y="18" width="680" height="14"/>
+  <circle class="dot-r" cx="20" cy="15" r="6"/>
+  <circle class="dot-y" cx="40" cy="15" r="6"/>
+  <circle class="dot-g" cx="60" cy="15" r="6"/>
+  <text class="title" x="340" y="19" text-anchor="middle">asiai bench -m gemma-2-2b</text>
+
+  <!-- Content -->
+  <g transform="translate(20, 55)">
+    <text class="dim" y="0">Benchmarking gemma-2-2b on ollama, mlxlm, vllm_mlx...</text>
+
+    <text class="cyan bold" y="35">MacBookPro18,2 — Apple M1 Max</text>
+    <text class="dim" y="35" x="310">RAM: 64.0 GB</text>
+    <text class="dim" y="35" x="420">Pressure: nominal</text>
+
+    <text class="accent bold" y="70">Benchmark: gemma-2-2b</text>
+
+    <!-- Table header -->
+    <text class="dim" y="100">Engine</text>
+    <text class="dim" y="100" x="175">tok/s</text>
+    <text class="dim" y="100" x="330">Tokens</text>
+    <text class="dim" y="100" x="395">Duration</text>
+    <text class="dim" y="100" x="475">TTFT</text>
+    <text class="dim" y="100" x="530">VRAM</text>
+    <text class="dim" y="100" x="600">Thermal</text>
+
+    <!-- Separator -->
+    <text class="dim" y="115">────────────────────────────────────────────────────────────────────────────────</text>
+
+    <!-- mlxlm -->
+    <text class="text" y="135">mlxlm</text>
+    <text class="yellow" y="135" x="175">72.7 ± 2.4</text>
+    <text class="green" y="135" x="280">(stable)</text>
+    <text class="text" y="135" x="330">404</text>
+    <text class="text" y="135" x="395">5.46s</text>
+    <text class="text" y="135" x="475">0.27s</text>
+    <text class="dim" y="135" x="530">—</text>
+    <text class="green" y="135" x="600">nominal</text>
+
+    <!-- ollama (winner) -->
+    <text class="green bold" y="160">ollama</text>
+    <text class="green bold" y="160" x="175">115.8 ± 1.5</text>
+    <text class="green" y="160" x="280">(stable)</text>
+    <text class="text" y="160" x="330">496</text>
+    <text class="text" y="160" x="395">4.55s</text>
+    <text class="green" y="160" x="475">0.04s</text>
+    <text class="cyan" y="160" x="530">2.8 GB</text>
+    <text class="green" y="160" x="600">nominal</text>
+
+    <!-- vllm_mlx -->
+    <text class="text" y="185">vllm_mlx</text>
+    <text class="yellow" y="185" x="175">102.5 ± 2.7</text>
+    <text class="green" y="185" x="280">(stable)</text>
+    <text class="text" y="185" x="330">505</text>
+    <text class="text" y="185" x="395">5.41s</text>
+    <text class="text" y="185" x="475">0.32s</text>
+    <text class="dim" y="185" x="530">—</text>
+    <text class="green" y="185" x="600">nominal</text>
+
+    <!-- Winner -->
+    <text class="accent bold" y="220">Winner: ollama (+13% tok/s)</text>
+
+    <!-- Statistics -->
+    <text class="cyan bold" y="255">Statistics</text>
+    <text class="dim" y="275">mlxlm</text>
+    <text class="text" y="275" x="100">95% CI: [73.6, 77.0] tok/s</text>
+    <text class="text" y="275" x="320">P90: 96.3 tok/s</text>
+    <text class="text" y="275" x="470">P90 TTFT: 0.35s</text>
+    <text class="dim" y="295">ollama</text>
+    <text class="text" y="295" x="100">95% CI: [113.9, 115.9] tok/s</text>
+    <text class="text" y="295" x="320">P90: 117.2 tok/s</text>
+    <text class="text" y="295" x="470">P90 TTFT: 0.06s</text>
+    <text class="dim" y="315">vllm_mlx</text>
+    <text class="text" y="315" x="100">95% CI: [101.6, 105.4] tok/s</text>
+    <text class="text" y="315" x="320">P90: 113.7 tok/s</text>
+    <text class="text" y="315" x="470">P90 TTFT: 0.35s</text>
+
+    <!-- Regression -->
+    <text class="red bold" y="355">Regression Warnings</text>
+    <text class="red" y="375">!!! mlxlm: TTFT increased 41% (248ms → 350ms) — major</text>
+  </g>
+</svg>

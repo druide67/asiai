@@ -450,20 +450,20 @@
 
 {% set t = {
   "hero_title": {
-    "en": "Which LLM runs fastest on your Mac<br>&mdash; and on which engine?",
-    "fr": "Quel LLM est le plus rapide sur votre Mac<br>&mdash; et sur quel moteur ?",
-    "de": "Welches LLM ist am schnellsten auf Ihrem Mac<br>&mdash; und mit welcher Engine?",
-    "es": "Cual LLM es el mas rapido en tu Mac<br>&mdash; y en que motor?",
-    "it": "Quale LLM e il piu veloce sul tuo Mac<br>&mdash; e su quale motore?",
-    "pt": "Qual LLM e o mais rapido no seu Mac<br>&mdash; e em qual motor?"
+    "en": "Which LLM? Which engine?<br>Which combo wins on your Mac?",
+    "fr": "Quel LLM ? Quel moteur ?<br>Quelle combo gagne sur votre Mac ?",
+    "de": "Welches LLM? Welche Engine?<br>Welche Kombi gewinnt auf Ihrem Mac?",
+    "es": "Cual LLM? Cual motor?<br>Que combo gana en tu Mac?",
+    "it": "Quale LLM? Quale motore?<br>Quale combo vince sul tuo Mac?",
+    "pt": "Qual LLM? Qual motor?<br>Qual combo vence no seu Mac?"
   },
   "hero_tagline": {
-    "en": "One command. One web app. Same model. 5 engines. Real numbers.",
-    "fr": "Une commande. Une app web. Meme modele. 5 moteurs. Des vrais chiffres.",
-    "de": "Ein Befehl. Eine Web-App. Gleiches Modell. 5 Engines. Echte Zahlen.",
-    "es": "Un comando. Una app web. Mismo modelo. 5 motores. Numeros reales.",
-    "it": "Un comando. Una web app. Stesso modello. 5 motori. Numeri reali.",
-    "pt": "Um comando. Uma web app. Mesmo modelo. 5 motores. Numeros reais."
+    "en": "Benchmark to choose. Dashboard to monitor. History to spot problems.",
+    "fr": "Benchmarker pour choisir. Dashboard pour monitorer. Historique pour reperer les problemes.",
+    "de": "Benchmarken zum Auswahlen. Dashboard zum Uberwachen. Verlauf zum Erkennen von Problemen.",
+    "es": "Benchmark para elegir. Dashboard para monitorear. Historial para detectar problemas.",
+    "it": "Benchmark per scegliere. Dashboard per monitorare. Storico per individuare i problemi.",
+    "pt": "Benchmark para escolher. Dashboard para monitorar. Historico para detectar problemas."
   },
   "cta_start": {
     "en": "Get Started", "fr": "Demarrer", "de": "Loslegen",
@@ -742,6 +742,20 @@
         <span class="badge">Python 3.11+</span>
         <span class="badge">Apache 2.0</span>
         <span class="badge">Apple Silicon</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Screenshots ── -->
+  <section style="padding: 2rem 1.5rem 0;">
+    <div class="asiai-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+      <div style="text-align: center;">
+        <img src="{{ 'assets/screenshot-cli.svg' | url }}" alt="asiai CLI benchmark" style="max-width: 100%; border-radius: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest);" onerror="this.parentElement.style.display='none'">
+        <p style="font-size: 0.85rem; color: var(--md-default-fg-color--light); margin-top: 0.5rem;"><code>asiai bench</code></p>
+      </div>
+      <div style="text-align: center;">
+        <img src="{{ 'assets/screenshot-web.svg' | url }}" alt="asiai web dashboard" style="max-width: 100%; border-radius: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest);" onerror="this.parentElement.style.display='none'">
+        <p style="font-size: 0.85rem; color: var(--md-default-fg-color--light); margin-top: 0.5rem;"><code>asiai web</code></p>
       </div>
     </div>
   </section>

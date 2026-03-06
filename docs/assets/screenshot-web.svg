@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="460" font-family="'Inter','SF Pro','Helvetica Neue',sans-serif" font-size="12">
+  <defs>
+    <style>
+      .bg { fill: #1e1e2e; }
+      .frame { fill: #181825; }
+      .card { fill: #1e1e2e; rx: 8; stroke: #313244; stroke-width: 1; }
+      .sidebar { fill: #181825; }
+      .dot-r { fill: #f38ba8; }
+      .dot-y { fill: #f9e2af; }
+      .dot-g { fill: #a6e3a1; }
+      .title { fill: #cdd6f4; font-size: 13px; font-weight: 600; }
+      .dim { fill: #6c7086; font-size: 11px; }
+      .text { fill: #cdd6f4; }
+      .small { font-size: 10px; }
+      .green { fill: #a6e3a1; }
+      .yellow { fill: #f9e2af; }
+      .cyan { fill: #89dceb; }
+      .red { fill: #f38ba8; }
+      .accent { fill: #00d4aa; }
+      .bold { font-weight: 700; }
+      .nav-active { fill: #00d4aa; font-weight: 600; font-size: 12px; }
+      .nav-item { fill: #6c7086; font-size: 12px; }
+      .stat-big { fill: #cdd6f4; font-size: 28px; font-weight: 700; }
+      .stat-label { fill: #6c7086; font-size: 10px; }
+      .bar-bg { fill: #313244; }
+    </style>
+    <linearGradient id="chart1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00d4aa" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#00d4aa"/>
+    </linearGradient>
+    <linearGradient id="chart2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#89dceb" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#89dceb"/>
+    </linearGradient>
+    <linearGradient id="chart3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f9e2af" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#f9e2af"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window frame -->
+  <rect class="frame" width="680" height="460" rx="12"/>
+  <rect class="bg" x="0" y="30" width="680" height="430" rx="0"/>
+  <rect fill="#181825" width="680" height="30" rx="12"/>
+  <rect fill="#181825" x="0" y="18" width="680" height="14"/>
+  <circle class="dot-r" cx="20" cy="15" r="6"/>
+  <circle class="dot-y" cx="40" cy="15" r="6"/>
+  <circle class="dot-g" cx="60" cy="15" r="6"/>
+  <text class="title" x="340" y="19" text-anchor="middle" font-size="12">asiai — Dashboard</text>
+
+  <!-- Sidebar -->
+  <rect class="sidebar" x="0" y="30" width="130" height="430"/>
+  <text class="accent bold" x="20" y="60" font-size="16">asiai</text>
+  <text class="dim" x="20" y="75" font-size="9">v0.4.0</text>
+  <text class="nav-active" x="20" y="108">Dashboard</text>
+  <text class="nav-item" x="20" y="133">Monitor</text>
+  <text class="nav-item" x="20" y="158">Benchmark</text>
+  <text class="nav-item" x="20" y="183">History</text>
+  <text class="nav-item" x="20" y="208">Doctor</text>
+
+  <!-- Main content -->
+  <g transform="translate(145, 42)">
+    <!-- Header -->
+    <text class="title" y="15" font-size="15">Dashboard</text>
+    <text class="dim" y="15" x="440">M1 Max · 64 GB · macOS 15.3</text>
+
+    <!-- Stat cards row -->
+    <!-- Engines -->
+    <rect class="card" x="0" y="30" width="125" height="70" rx="8"/>
+    <text class="stat-big" x="15" y="70">3</text>
+    <text class="stat-label" x="15" y="88">ENGINES ONLINE</text>
+
+    <!-- Models -->
+    <rect class="card" x="135" y="30" width="125" height="70" rx="8"/>
+    <text class="stat-big" x="150" y="70">2</text>
+    <text class="stat-label" x="150" y="88">MODELS LOADED</text>
+
+    <!-- Last bench -->
+    <rect class="card" x="270" y="30" width="125" height="70" rx="8"/>
+    <text class="stat-big accent" x="285" y="70">115.8</text>
+    <text class="stat-label" x="285" y="88">BEST TOK/S</text>
+
+    <!-- Benchmarks -->
+    <rect class="card" x="405" y="30" width="115" height="70" rx="8"/>
+    <text class="stat-big" x="420" y="70">236</text>
+    <text class="stat-label" x="420" y="88">TOTAL RUNS</text>
+
+    <!-- Chart: Throughput comparison -->
+    <rect class="card" x="0" y="115" width="260" height="170" rx="8"/>
+    <text class="text bold" x="15" y="138" font-size="12">Throughput (tok/s)</text>
+    <text class="dim" x="15" y="152" font-size="9">gemma-2-2b · 3 engines</text>
+
+    <!-- Bar chart -->
+    <g transform="translate(15, 165)">
+      <text class="dim small" x="0" y="10">ollama</text>
+      <rect class="bar-bg" x="65" y="0" width="180" height="14" rx="3"/>
+      <rect fill="url(#chart1)" x="65" y="0" width="165" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="11">115.8</text>
+
+      <text class="dim small" x="0" y="35">vllm_mlx</text>
+      <rect class="bar-bg" x="65" y="25" width="180" height="14" rx="3"/>
+      <rect fill="url(#chart2)" x="65" y="25" width="146" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="36">102.5</text>
+
+      <text class="dim small" x="0" y="60">mlxlm</text>
+      <rect class="bar-bg" x="65" y="50" width="180" height="14" rx="3"/>
+      <rect fill="url(#chart3)" x="65" y="50" width="104" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="61">72.7</text>
+    </g>
+
+    <!-- Chart: TTFT comparison -->
+    <rect class="card" x="270" y="115" width="250" height="170" rx="8"/>
+    <text class="text bold" x="285" y="138" font-size="12">TTFT (ms)</text>
+    <text class="dim" x="285" y="152" font-size="9">Time to first token</text>
+
+    <!-- TTFT bars -->
+    <g transform="translate(285, 165)">
+      <text class="dim small" x="0" y="10">ollama</text>
+      <rect class="bar-bg" x="65" y="0" width="170" height="14" rx="3"/>
+      <rect fill="url(#chart1)" x="65" y="0" width="18" height="14" rx="3"/>
+      <text class="green small bold" x="88" y="11">40ms</text>
+
+      <text class="dim small" x="0" y="35">mlxlm</text>
+      <rect class="bar-bg" x="65" y="25" width="170" height="14" rx="3"/>
+      <rect fill="url(#chart3)" x="65" y="25" width="100" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="36">270ms</text>
+
+      <text class="dim small" x="0" y="60">vllm_mlx</text>
+      <rect class="bar-bg" x="65" y="50" width="170" height="14" rx="3"/>
+      <rect fill="url(#chart2)" x="65" y="50" width="115" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="61">320ms</text>
+    </g>
+
+    <!-- System status row -->
+    <rect class="card" x="0" y="300" width="165" height="80" rx="8"/>
+    <text class="text bold" x="15" y="322" font-size="11">CPU</text>
+    <!-- Mini sparkline -->
+    <polyline fill="none" stroke="#00d4aa" stroke-width="1.5" points="15,350 30,345 45,348 60,340 75,342 90,338 105,344 120,336 135,340 150,335"/>
+    <text class="accent bold" x="15" y="370" font-size="11">12%</text>
+    <text class="dim" x="45" y="370">nominal</text>
+
+    <rect class="card" x="175" y="300" width="165" height="80" rx="8"/>
+    <text class="text bold" x="190" y="322" font-size="11">Memory</text>
+    <!-- Memory gauge -->
+    <rect class="bar-bg" x="190" y="335" width="135" height="10" rx="5"/>
+    <rect fill="#f9e2af" x="190" y="335" width="107" height="10" rx="5"/>
+    <text class="yellow bold" x="190" y="370" font-size="11">79%</text>
+    <text class="dim" x="220" y="370">50.4 / 64 GB</text>
+
+    <rect class="card" x="350" y="300" width="170" height="80" rx="8"/>
+    <text class="text bold" x="365" y="322" font-size="11">Thermal</text>
+    <text class="green bold" x="365" y="355" font-size="20">nominal</text>
+    <text class="dim" x="365" y="370">Speed limit: 100%</text>
+  </g>
+</svg>
