@@ -20,15 +20,16 @@ class TestPowerMonitor:
         """Without sudo access, start() returns False."""
         mock_result = MagicMock()
         mock_result.returncode = 1
-        with patch("asiai.collectors.power.subprocess") as mock_sub:
-            mock_sub.run.return_value = mock_result
+        with patch("asiai.collectors.power.subprocess.run", return_value=mock_result):
             monitor = PowerMonitor()
             assert not monitor.start()
 
     def test_start_sudo_exception(self):
         """If sudo check throws, start() returns False."""
-        with patch("asiai.collectors.power.subprocess") as mock_sub:
-            mock_sub.run.side_effect = Exception("no sudo")
+        with patch(
+            "asiai.collectors.power.subprocess.run",
+            side_effect=OSError("no sudo"),
+        ):
             monitor = PowerMonitor()
             assert not monitor.start()
 

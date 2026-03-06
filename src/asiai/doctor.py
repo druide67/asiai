@@ -125,7 +125,7 @@ def _check_ollama() -> CheckResult:
             timeout=5,
         )
         installed = result.returncode == 0
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         logger.debug("Ollama 'which' check failed: %s", e)
         installed = False
 
@@ -222,7 +222,7 @@ def _check_mlxlm() -> CheckResult:
             timeout=10,
         )
         brew_out = result.stdout.strip()
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         logger.debug("mlx-lm brew check failed: %s", e)
         brew_out = ""
 
@@ -278,7 +278,7 @@ def _check_llamacpp() -> CheckResult:
             timeout=10,
         )
         brew_out = result.stdout.strip()
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         logger.debug("llama.cpp brew check failed: %s", e)
         brew_out = ""
 
@@ -335,7 +335,7 @@ def _check_vllm_mlx() -> CheckResult:
             timeout=10,
         )
         pip_out = result.stdout.strip()
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         logger.debug("vllm-mlx pip check failed: %s", e)
         pip_out = ""
 
@@ -417,7 +417,7 @@ def _check_db(db_path: str = DEFAULT_DB_PATH) -> CheckResult:
             last_ts = row[0] if row and row[0] else 0
         finally:
             conn.close()
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         return CheckResult(
             "database",
             "SQLite",

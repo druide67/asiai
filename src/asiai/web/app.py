@@ -42,6 +42,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # Same-origin check for state-changing requests (CSRF protection)
+        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            origin = request.headers.get("origin", "")
+            host = request.headers.get("host", "")
+            if origin and host:
+                from urllib.parse import urlparse
+
+                parsed = urlparse(origin)
+                origin_host = parsed.netloc
+                if origin_host != host:
+                    from fastapi.responses import JSONResponse
+
+                    return JSONResponse(
+                        {"error": "Cross-origin request rejected"},
+                        status_code=403,
+                    )
+
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"

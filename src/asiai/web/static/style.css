@@ -397,6 +397,17 @@ body {
     accent-color: var(--accent-blue);
 }
 
+.form-checkbox input[type="checkbox"]:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.form-checkbox input[type="checkbox"]:disabled + .status-dot,
+.form-checkbox:has(input:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .form-range {
     width: 100%;
     accent-color: var(--accent-blue);

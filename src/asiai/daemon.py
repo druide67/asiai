@@ -85,7 +85,7 @@ def daemon_start(interval: int = 60) -> dict:
             return {"status": "error", "message": result.stderr.strip()}
 
         return {"status": "started", "plist": PLIST_PATH, "interval": interval}
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, plistlib.InvalidFileException) as e:
         return {"status": "error", "message": str(e)}
 
 
@@ -105,7 +105,7 @@ def daemon_stop() -> dict:
             )
             os.remove(PLIST_PATH)
         return {"status": "stopped"}
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         return {"status": "error", "message": str(e)}
 
 
@@ -131,8 +131,8 @@ def daemon_status() -> dict:
             if m:
                 pid = int(m.group(1))
             return {"running": True, "pid": pid, "plist_exists": plist_exists}
-    except Exception:
-        pass
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.debug("launchctl list failed: %s", e)
 
     return {"running": False, "pid": None, "plist_exists": plist_exists}
 
@@ -153,5 +153,5 @@ def daemon_logs(lines: int = 50) -> str:
             timeout=5,
         )
         return result.stdout
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         return f"Error reading logs: {e}"

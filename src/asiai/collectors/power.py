@@ -37,6 +37,14 @@ class PowerMonitor:
             print(f"GPU power: {sample.gpu_watts}W")
         else:
             print("No sudo access, skipping power measurement")
+
+    Can also be used as a context manager::
+
+        with PowerMonitor() as monitor:
+            if monitor.started:
+                # ... run inference ...
+                pass
+        sample = monitor.result
     """
 
     def __init__(self) -> None:
@@ -44,6 +52,16 @@ class PowerMonitor:
         self._samples: list[dict[str, float]] = []
         self._thread: threading.Thread | None = None
         self._running = False
+        self.started = False
+        self.result: PowerSample = PowerSample()
+
+    def __enter__(self) -> PowerMonitor:
+        self.started = self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self.started:
+            self.result = self.stop()
 
     def start(self) -> bool:
         """Start powermetrics in background. Returns False if no sudo access."""
@@ -67,7 +85,7 @@ class PowerMonitor:
             if result.returncode != 0:
                 logger.info("No passwordless sudo access for powermetrics")
                 return False
-        except Exception as e:
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
             logger.debug("sudo powermetrics check failed: %s", e)
             return False
 
@@ -88,8 +106,16 @@ class PowerMonitor:
                 stderr=subprocess.DEVNULL,
                 text=True,
             )
-        except Exception as e:
+        except (FileNotFoundError, OSError) as e:
             logger.warning("Failed to start powermetrics: %s", e)
+            return False
+
+        # Validate subprocess actually started
+        if self._process.poll() is not None:
+            logger.warning(
+                "powermetrics exited immediately with code %d", self._process.returncode
+            )
+            self._process = None
             return False
 
         self._running = True
@@ -108,12 +134,15 @@ class PowerMonitor:
             try:
                 self._process.terminate()
                 self._process.wait(timeout=5)
-            except Exception as e:
-                logger.debug("powermetrics terminate failed: %s", e)
+            except subprocess.TimeoutExpired:
+                logger.debug("powermetrics did not terminate, killing")
                 try:
                     self._process.kill()
-                except Exception as e2:
-                    logger.debug("powermetrics kill failed: %s", e2)
+                    self._process.wait(timeout=3)
+                except OSError as e:
+                    logger.debug("powermetrics kill failed: %s", e)
+            except OSError as e:
+                logger.debug("powermetrics terminate failed: %s", e)
             self._process = None
 
         if self._thread:
