@@ -7,7 +7,7 @@ import json
 import time
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
 
@@ -37,29 +37,35 @@ async def monitor_stream(request: Request):
 
     state = request.app.state.app_state
 
+    if not state.acquire_sse():
+        return JSONResponse({"error": "Too many SSE connections"}, status_code=429)
+
     async def event_generator():
-        while True:
-            if await request.is_disconnected():
-                break
-            snapshot = await asyncio.to_thread(_get_snapshot, state)
-            data = json.dumps(
-                {
-                    "cpu_load_1": snapshot.get("cpu_load_1", 0),
-                    "cpu_load_5": snapshot.get("cpu_load_5", 0),
-                    "cpu_load_15": snapshot.get("cpu_load_15", 0),
-                    "cpu_cores": snapshot.get("cpu_cores", 1),
-                    "mem_total": snapshot.get("mem_total", 0),
-                    "mem_used": snapshot.get("mem_used", 0),
-                    "mem_pressure": snapshot.get("mem_pressure", "unknown"),
-                    "thermal_level": snapshot.get("thermal_level", "unknown"),
-                    "thermal_speed_limit": snapshot.get("thermal_speed_limit", -1),
-                    "uptime": snapshot.get("uptime", 0),
-                    "models": snapshot.get("models", []),
-                    "ts": int(time.time()),
-                }
-            )
-            yield f"data: {data}\n\n"
-            await asyncio.sleep(5)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                snapshot = await asyncio.to_thread(_get_snapshot, state)
+                data = json.dumps(
+                    {
+                        "cpu_load_1": snapshot.get("cpu_load_1", 0),
+                        "cpu_load_5": snapshot.get("cpu_load_5", 0),
+                        "cpu_load_15": snapshot.get("cpu_load_15", 0),
+                        "cpu_cores": snapshot.get("cpu_cores", 1),
+                        "mem_total": snapshot.get("mem_total", 0),
+                        "mem_used": snapshot.get("mem_used", 0),
+                        "mem_pressure": snapshot.get("mem_pressure", "unknown"),
+                        "thermal_level": snapshot.get("thermal_level", "unknown"),
+                        "thermal_speed_limit": snapshot.get("thermal_speed_limit", -1),
+                        "uptime": snapshot.get("uptime", 0),
+                        "models": snapshot.get("models", []),
+                        "ts": int(time.time()),
+                    }
+                )
+                yield f"data: {data}\n\n"
+                await asyncio.sleep(5)
+        finally:
+            state.release_sse()
 
     return StreamingResponse(
         event_generator(),

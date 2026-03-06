@@ -21,10 +21,12 @@
     <div class="card">
         <h3 class="card-title">Throughput (tok/s)</h3>
         <div id="history-tok-chart" style="min-height: 300px;"></div>
+        <div id="tok-chart-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 4rem 0;">No benchmark data — run a benchmark first</div>
     </div>
     <div class="card">
         <h3 class="card-title">Time to First Token (ms)</h3>
         <div id="history-ttft-chart" style="min-height: 300px;"></div>
+        <div id="ttft-chart-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 4rem 0;">No benchmark data — run a benchmark first</div>
     </div>
 </div>
 
@@ -105,7 +107,16 @@
         if (tokChart) { tokChart.destroy(); tokChart = null; }
         if (ttftChart) { ttftChart.destroy(); ttftChart = null; }
 
+        var tokEmpty = document.getElementById('tok-chart-empty');
+        var ttftEmpty = document.getElementById('ttft-chart-empty');
+        var tokEl = document.getElementById('history-tok-chart');
+        var ttftEl = document.getElementById('history-ttft-chart');
+
         if (tokSeries.length > 0) {
+            tokEl.style.display = '';
+            ttftEl.style.display = '';
+            tokEmpty.style.display = 'none';
+            ttftEmpty.style.display = 'none';
             tokChart = createTimeChart('history-tok-chart', tokSeries, {
                 yTitle: 'tok/s',
                 yFormatter: function(v) { return v.toFixed(1); },
@@ -114,6 +125,11 @@
                 yTitle: 'ms',
                 yFormatter: function(v) { return v.toFixed(0) + ' ms'; },
             });
+        } else {
+            tokEl.style.display = 'none';
+            ttftEl.style.display = 'none';
+            tokEmpty.style.display = 'block';
+            ttftEmpty.style.display = 'block';
         }
     }
 

@@ -175,6 +175,19 @@ asiai daemon logs               # View recent logs
 asiai daemon stop               # Stop and uninstall
 ```
 
+### `asiai web`
+
+Web dashboard with real-time monitoring, benchmark controls, and interactive charts. Requires `pip install asiai[web]`.
+
+```bash
+asiai web                    # Opens browser at http://127.0.0.1:8899
+asiai web --port 9000        # Custom port
+asiai web --host 0.0.0.0     # Listen on all interfaces
+asiai web --no-open          # Don't auto-open browser
+```
+
+Features: system overview, engine status, live benchmark with SSE progress, history charts, doctor checks, dark/light theme.
+
 ### `asiai tui`
 
 Interactive terminal dashboard with auto-refresh. Requires `pip install asiai[tui]`.
@@ -244,7 +257,9 @@ Use `--context-size 4k|16k|32k|64k` to test with large context fill prompts inst
 The core uses only the Python standard library — `urllib`, `sqlite3`, `subprocess`, `argparse`. No `requests`, no `psutil`, no `rich`. Just stdlib.
 
 Optional extras:
+- `asiai[web]` — FastAPI web dashboard with charts
 - `asiai[tui]` — Textual terminal dashboard
+- `asiai[all]` — Web + TUI
 - `asiai[dev]` — pytest, ruff
 
 ## Roadmap
@@ -254,6 +269,7 @@ Optional extras:
 | **v0.1** | detect + bench + monitor + models (CLI, stdlib) | **Done** |
 | **v0.2** | mlx-lm + doctor + daemon + TUI (Textual) | **Done** |
 | **v0.3** | 5 engines, power metrics, multi-run variance, regression detection | **Done** |
+| **v0.4** | CI, MkDocs, export JSON, thermal drift, web dashboard | **Done** |
 | v1.0 | Multi-server, community export, Homebrew Core | Planned |
 
 ## License

@@ -10,8 +10,6 @@ import threading
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from asiai.web.state import BenchStatus
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -34,7 +32,7 @@ async def bench_page(request: Request):
             "nav_active": "bench",
             "engines": engines_data,
             "prompts": prompts,
-            "bench_running": state.bench_status.running,
+            "bench_running": state.get_bench_snapshot()["running"],
         },
     )
 
@@ -45,7 +43,7 @@ async def bench_run(request: Request):
     state = request.app.state.app_state
     form = await request.form()
 
-    if state.bench_status.running:
+    if state.get_bench_snapshot()["running"]:
         return JSONResponse({"error": "Benchmark already running"}, status_code=409)
 
     # Parse form data
@@ -61,7 +59,7 @@ async def bench_run(request: Request):
     power = form.get("power") == "on"
 
     # Reset status
-    state.bench_status = BenchStatus(running=True, progress="Starting benchmark...")
+    state.reset_bench(running=True, progress="Starting benchmark...")
 
     # Run in background thread
     thread = threading.Thread(
@@ -81,30 +79,25 @@ async def bench_stream(request: Request):
 
     state = request.app.state.app_state
 
+    if not state.acquire_sse():
+        return JSONResponse({"error": "Too many SSE connections"}, status_code=429)
+
     async def event_generator():
-        last_progress = ""
-        while True:
-            if await request.is_disconnected():
-                break
-            status = state.bench_status
-            current = json.dumps(
-                {
-                    "running": status.running,
-                    "progress": status.progress,
-                    "engine": status.engine,
-                    "prompt": status.prompt,
-                    "run_index": status.run_index,
-                    "total_runs": status.total_runs,
-                    "done": status.done,
-                    "error": status.error,
-                }
-            )
-            if current != last_progress:
-                yield f"data: {current}\n\n"
-                last_progress = current
-            if status.done:
-                break
-            await asyncio.sleep(0.5)
+        try:
+            last_progress = ""
+            while True:
+                if await request.is_disconnected():
+                    break
+                snap = state.get_bench_snapshot()
+                current = json.dumps(snap)
+                if current != last_progress:
+                    yield f"data: {current}\n\n"
+                    last_progress = current
+                if snap["done"]:
+                    break
+                await asyncio.sleep(0.5)
+        finally:
+            state.release_sse()
 
     return StreamingResponse(
         event_generator(),
@@ -161,21 +154,16 @@ def _run_benchmark_thread(
             engines = [e for e in engines if e.name in wanted]
 
         if not engines:
-            state.bench_status.error = "No engines available"
-            state.bench_status.running = False
-            state.bench_status.done = True
+            state.update_bench(error="No engines available", running=False, done=True)
             return
 
         # Resolve model
         actual_model = find_common_model(engines, model)
         if not actual_model:
-            state.bench_status.error = "No model available to benchmark"
-            state.bench_status.running = False
-            state.bench_status.done = True
+            state.update_bench(error="No model available to benchmark", running=False, done=True)
             return
 
-        state.bench_status.progress = f"Benchmarking {actual_model}..."
-        state.bench_status.total_runs = runs
+        state.update_bench(progress=f"Benchmarking {actual_model}...", total_runs=runs)
 
         bench_run = run_benchmark(
             engines, actual_model, prompt_names, runs=runs, power=power,
@@ -189,15 +177,11 @@ def _run_benchmark_thread(
         report = aggregate_results(bench_run.results)
         report["model"] = actual_model
 
-        state.bench_status.progress = "Benchmark complete"
-        state.bench_status.running = False
-        state.bench_status.done = True
+        state.update_bench(progress="Benchmark complete", running=False, done=True)
 
     except Exception as e:
         logger.exception("Benchmark failed")
-        state.bench_status.error = str(e)
-        state.bench_status.running = False
-        state.bench_status.done = True
+        state.update_bench(error=str(e), running=False, done=True)
 
 
 def _get_engines_for_form(state) -> list[dict]:
