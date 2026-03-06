@@ -1,0 +1,1049 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+{{ super() }}
+
+<style>
+  /* Hide article/content padding for homepage */
+  .md-main__inner { margin: 0; }
+  .md-content { display: none; }
+
+  /* Ensure language dropdown shows all 6 items without scroll */
+  .md-header .md-select:hover .md-select__inner,
+  .md-header .md-select:focus-within .md-select__inner {
+    max-height: 20rem !important;
+  }
+  .md-header .md-select__inner .md-select__list {
+    max-height: 20rem !important;
+    overflow-y: visible !important;
+  }
+
+  /* ── Base ── */
+  .asiai-home {
+    font-family: var(--md-text-font-family);
+    color: var(--md-default-fg-color);
+    line-height: 1.6;
+  }
+  .asiai-home section {
+    padding: 4rem 1.5rem;
+  }
+  .asiai-home .asiai-container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .asiai-home h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+  .asiai-home .section-subtitle {
+    text-align: center;
+    color: var(--md-default-fg-color--light);
+    margin-bottom: 2.5rem;
+    font-size: 1.05rem;
+  }
+
+  /* ── Hero ── */
+  .asiai-hero {
+    text-align: center;
+    padding: 5rem 1.5rem 4rem;
+    background: linear-gradient(180deg, rgba(0, 212, 170, 0.12) 0%, transparent 100%);
+  }
+  .asiai-hero img {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1.5rem;
+  }
+  .asiai-hero h1 {
+    font-size: 2.4rem;
+    font-weight: 800;
+    margin: 0 0 0.75rem;
+    line-height: 1.2;
+  }
+  .asiai-hero .tagline {
+    font-size: 1.2rem;
+    color: var(--md-default-fg-color--light);
+    margin-bottom: 2rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .asiai-hero .cta-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .asiai-hero .cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.75rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .asiai-hero .cta-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3);
+  }
+  .asiai-hero .cta-primary {
+    background: #00d4aa;
+    color: #0f0f23;
+  }
+  .asiai-hero .cta-secondary {
+    background: var(--md-code-bg-color);
+    color: var(--md-default-fg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+  }
+  .asiai-hero .badges {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .asiai-hero .badge {
+    display: inline-block;
+    padding: 0.3rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: var(--md-code-bg-color);
+    color: var(--md-default-fg-color--light);
+    border: 1px solid var(--md-default-fg-color--lightest);
+  }
+
+  /* ── Pain Points ── */
+  .asiai-pain {
+    background: var(--md-code-bg-color);
+  }
+  .pain-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+  .pain-card {
+    text-align: center;
+    padding: 1.5rem;
+  }
+  .pain-card .pain-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  .pain-card h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .pain-card p {
+    font-size: 0.92rem;
+    color: var(--md-default-fg-color--light);
+    margin: 0;
+  }
+
+  /* ── Feature Cards ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .feature-card {
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    background: var(--md-code-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    transition: border-color 0.2s;
+  }
+  .feature-card:hover {
+    border-color: #00d4aa;
+  }
+  .feature-card .feature-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .feature-card h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem;
+  }
+  .feature-card p {
+    font-size: 0.9rem;
+    color: var(--md-default-fg-color--light);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* ── Use Cases ── */
+  .asiai-usecases {
+    background: var(--md-code-bg-color);
+  }
+  .usecase-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  .usecase-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background: var(--md-default-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+  }
+  .usecase-item .usecase-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  .usecase-item h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+  .usecase-item p {
+    font-size: 0.85rem;
+    color: var(--md-default-fg-color--light);
+    margin: 0;
+  }
+
+  /* ── How It Works ── */
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    text-align: center;
+  }
+  .step {
+    padding: 1.5rem;
+  }
+  .step .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: #00d4aa;
+    color: #0f0f23;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+  .step h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+  .step code {
+    display: block;
+    background: var(--md-code-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    font-size: 0.85rem;
+    text-align: left;
+    white-space: pre;
+    font-family: var(--md-code-font-family);
+    line-height: 1.6;
+  }
+
+  /* ── Discoveries ── */
+  .asiai-discoveries {
+    background: var(--md-code-bg-color);
+  }
+  .discovery-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .discovery-card {
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    background: var(--md-default-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    text-align: center;
+  }
+  .discovery-card .discovery-stat {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #00d4aa;
+    margin-bottom: 0.5rem;
+  }
+  .discovery-card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .discovery-card p {
+    font-size: 0.85rem;
+    color: var(--md-default-fg-color--light);
+    margin: 0;
+  }
+
+  /* ── Engines ── */
+  .engine-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  .engine-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid #00d4aa;
+    font-weight: 600;
+  }
+  .engine-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  }
+  .engine-table tr:last-child td {
+    border-bottom: none;
+  }
+  .engine-table code {
+    font-family: var(--md-code-font-family);
+    font-size: 0.85rem;
+    background: var(--md-code-bg-color);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+  }
+
+  /* ── Metrics ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  .metric-card {
+    text-align: center;
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    background: var(--md-code-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+  }
+  .metric-card .metric-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .metric-card h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem;
+  }
+  .metric-card p {
+    font-size: 0.8rem;
+    color: var(--md-default-fg-color--light);
+    margin: 0;
+  }
+
+  /* ── Bottom CTA ── */
+  .asiai-bottom-cta {
+    text-align: center;
+    background: linear-gradient(0deg, rgba(0, 212, 170, 0.12) 0%, transparent 100%);
+  }
+  .install-commands {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .install-block {
+    background: var(--md-code-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    text-align: left;
+    min-width: 280px;
+  }
+  .install-block .install-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--md-default-fg-color--light);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .install-block code {
+    display: block;
+    font-family: var(--md-code-font-family);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  .bottom-links {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .bottom-links a {
+    color: var(--md-default-fg-color--light);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.15s;
+  }
+  .bottom-links a:hover {
+    color: #00d4aa;
+  }
+
+  /* ── Dark mode overrides ── */
+  [data-md-color-scheme="slate"] .asiai-pain,
+  [data-md-color-scheme="slate"] .asiai-usecases,
+  [data-md-color-scheme="slate"] .asiai-discoveries {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  [data-md-color-scheme="slate"] .feature-card,
+  [data-md-color-scheme="slate"] .metric-card,
+  [data-md-color-scheme="slate"] .install-block {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  [data-md-color-scheme="slate"] .usecase-item,
+  [data-md-color-scheme="slate"] .discovery-card {
+    background: var(--md-default-bg-color);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  [data-md-color-scheme="slate"] .step code {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  [data-md-color-scheme="slate"] .badge {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  [data-md-color-scheme="slate"] .engine-table td {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .pain-grid,
+    .feature-grid,
+    .steps-grid,
+    .discovery-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 600px) {
+    .asiai-hero h1 { font-size: 1.8rem; }
+    .pain-grid,
+    .feature-grid,
+    .steps-grid,
+    .discovery-grid,
+    .usecase-grid,
+    .metrics-grid {
+      grid-template-columns: 1fr;
+    }
+    .asiai-home section {
+      padding: 2.5rem 1rem;
+    }
+  }
+</style>
+
+{% set lang = config.theme.language | default("en") %}
+
+{% set t = {
+  "hero_title": {
+    "en": "Which LLM runs fastest on your Mac<br>&mdash; and on which engine?",
+    "fr": "Quel LLM est le plus rapide sur votre Mac<br>&mdash; et sur quel moteur ?",
+    "de": "Welches LLM ist am schnellsten auf Ihrem Mac<br>&mdash; und mit welcher Engine?",
+    "es": "Cual LLM es el mas rapido en tu Mac<br>&mdash; y en que motor?",
+    "it": "Quale LLM e il piu veloce sul tuo Mac<br>&mdash; e su quale motore?",
+    "pt": "Qual LLM e o mais rapido no seu Mac<br>&mdash; e em qual motor?"
+  },
+  "hero_tagline": {
+    "en": "One command. One web app. Same model. 5 engines. Real numbers.",
+    "fr": "Une commande. Une app web. Meme modele. 5 moteurs. Des vrais chiffres.",
+    "de": "Ein Befehl. Eine Web-App. Gleiches Modell. 5 Engines. Echte Zahlen.",
+    "es": "Un comando. Una app web. Mismo modelo. 5 motores. Numeros reales.",
+    "it": "Un comando. Una web app. Stesso modello. 5 motori. Numeri reali.",
+    "pt": "Um comando. Uma web app. Mesmo modelo. 5 motores. Numeros reais."
+  },
+  "cta_start": {
+    "en": "Get Started", "fr": "Demarrer", "de": "Loslegen",
+    "es": "Empezar", "it": "Inizia", "pt": "Comecar"
+  },
+  "cta_github": {
+    "en": "View on GitHub", "fr": "Voir sur GitHub", "de": "Auf GitHub ansehen",
+    "es": "Ver en GitHub", "it": "Vedi su GitHub", "pt": "Ver no GitHub"
+  },
+  "pain_title": {
+    "en": "The Local LLM Problem", "fr": "Le probleme des LLM locaux", "de": "Das Problem lokaler LLMs",
+    "es": "El problema de los LLM locales", "it": "Il problema dei LLM locali", "pt": "O problema dos LLMs locais"
+  },
+  "pain_subtitle": {
+    "en": "Sound familiar?", "fr": "Ca vous dit quelque chose ?", "de": "Kommt Ihnen das bekannt vor?",
+    "es": "Te suena?", "it": "Ti suona familiare?", "pt": "Parece familiar?"
+  },
+  "pain1_title": {
+    "en": "Fragmented", "fr": "Fragmente", "de": "Fragmentiert",
+    "es": "Fragmentado", "it": "Frammentato", "pt": "Fragmentado"
+  },
+  "pain1_desc": {
+    "en": "Ollama, LM Studio, mlx-lm &mdash; each with its own CLI, formats, and metrics. No common ground.",
+    "fr": "Ollama, LM Studio, mlx-lm &mdash; chacun avec son CLI, ses formats et ses metriques. Aucun terrain commun.",
+    "de": "Ollama, LM Studio, mlx-lm &mdash; jede mit eigenem CLI, Formaten und Metriken. Kein gemeinsamer Nenner.",
+    "es": "Ollama, LM Studio, mlx-lm &mdash; cada uno con su CLI, formatos y metricas. Sin terreno comun.",
+    "it": "Ollama, LM Studio, mlx-lm &mdash; ognuno con il proprio CLI, formati e metriche. Nessun terreno comune.",
+    "pt": "Ollama, LM Studio, mlx-lm &mdash; cada um com seu CLI, formatos e metricas. Nenhum terreno comum."
+  },
+  "pain2_title": {
+    "en": "Blind", "fr": "A l'aveugle", "de": "Blind",
+    "es": "A ciegas", "it": "Alla cieca", "pt": "As cegas"
+  },
+  "pain2_desc": {
+    "en": "No real-time VRAM monitoring, no power tracking, no thermal alerts. You're flying blind.",
+    "fr": "Pas de monitoring VRAM temps reel, pas de suivi de puissance, pas d'alertes thermiques. Vous volez a l'aveugle.",
+    "de": "Kein Echtzeit-VRAM-Monitoring, kein Stromverbrauch-Tracking, keine Thermal-Warnungen. Sie fliegen blind.",
+    "es": "Sin monitoreo VRAM en tiempo real, sin seguimiento de consumo, sin alertas termicas. Vuelas a ciegas.",
+    "it": "Nessun monitoraggio VRAM in tempo reale, nessun tracking energetico, nessun allarme termico. Voli alla cieca.",
+    "pt": "Sem monitoramento VRAM em tempo real, sem rastreamento de energia, sem alertas termicos. Voce voa as cegas."
+  },
+  "pain3_title": {
+    "en": "Manual", "fr": "Manuel", "de": "Manuell",
+    "es": "Manual", "it": "Manuale", "pt": "Manual"
+  },
+  "pain3_desc": {
+    "en": "Benchmarking means curl scripts, copy-pasting numbers, and comparing in spreadsheets.",
+    "fr": "Benchmarker = scripts curl, copier-coller des chiffres, comparer dans des tableurs.",
+    "de": "Benchmarking bedeutet curl-Skripte, Zahlen kopieren und in Tabellen vergleichen.",
+    "es": "Benchmarking significa scripts curl, copiar numeros y comparar en hojas de calculo.",
+    "it": "Benchmark significa script curl, copiare numeri e confrontare nei fogli di calcolo.",
+    "pt": "Benchmark significa scripts curl, copiar numeros e comparar em planilhas."
+  },
+  "feat_title": {
+    "en": "Built for Apple Silicon Power Users", "fr": "Concu pour les power users Apple Silicon",
+    "de": "Entwickelt fur Apple Silicon Power User", "es": "Construido para power users de Apple Silicon",
+    "it": "Progettato per power user Apple Silicon", "pt": "Feito para power users Apple Silicon"
+  },
+  "feat_subtitle": {
+    "en": "Everything you need to benchmark, monitor, and optimize local inference.",
+    "fr": "Tout ce qu'il faut pour benchmarker, monitorer et optimiser l'inference locale.",
+    "de": "Alles was Sie brauchen, um lokale Inferenz zu benchmarken, uberwachen und optimieren.",
+    "es": "Todo lo que necesitas para benchmark, monitoreo y optimizacion de inferencia local.",
+    "it": "Tutto cio che serve per benchmark, monitoraggio e ottimizzazione dell'inferenza locale.",
+    "pt": "Tudo que voce precisa para benchmark, monitoramento e otimizacao de inferencia local."
+  },
+  "feat1_t": {"en": "Head-to-Head Benchmarks", "fr": "Benchmarks face-a-face", "de": "Direkte Vergleichs-Benchmarks", "es": "Benchmarks cara a cara", "it": "Benchmark testa a testa", "pt": "Benchmarks frente a frente"},
+  "feat1_d": {
+    "en": "Same model on Ollama vs LM Studio vs mlx-lm. One command, real numbers. No vibes.",
+    "fr": "Meme modele sur Ollama vs LM Studio vs mlx-lm. Une commande, des vrais chiffres.",
+    "de": "Gleiches Modell auf Ollama vs LM Studio vs mlx-lm. Ein Befehl, echte Zahlen.",
+    "es": "Mismo modelo en Ollama vs LM Studio vs mlx-lm. Un comando, numeros reales.",
+    "it": "Stesso modello su Ollama vs LM Studio vs mlx-lm. Un comando, numeri reali.",
+    "pt": "Mesmo modelo no Ollama vs LM Studio vs mlx-lm. Um comando, numeros reais."
+  },
+  "feat2_t": {"en": "Energy Efficiency", "fr": "Efficacite energetique", "de": "Energieeffizienz", "es": "Eficiencia energetica", "it": "Efficienza energetica", "pt": "Eficiencia energetica"},
+  "feat2_d": {
+    "en": "Measure GPU power during inference. Know your tok/s per watt &mdash; nobody else does this.",
+    "fr": "Mesurez la puissance GPU pendant l'inference. Connaissez vos tok/s par watt &mdash; personne d'autre ne le fait.",
+    "de": "GPU-Leistung wahrend der Inferenz messen. Kennen Sie Ihre tok/s pro Watt &mdash; das macht sonst niemand.",
+    "es": "Mide el consumo GPU durante la inferencia. Conoce tus tok/s por vatio &mdash; nadie mas lo hace.",
+    "it": "Misura la potenza GPU durante l'inferenza. Conosci i tuoi tok/s per watt &mdash; nessun altro lo fa.",
+    "pt": "Meca a potencia da GPU durante a inferencia. Conheca seus tok/s por watt &mdash; ninguem mais faz isso."
+  },
+  "feat3_t": {"en": "5 Engines, One CLI", "fr": "5 moteurs, un seul CLI", "de": "5 Engines, ein CLI", "es": "5 motores, un CLI", "it": "5 motori, un CLI", "pt": "5 motores, um CLI"},
+  "feat3_d": {
+    "en": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Auto-detected, auto-configured.",
+    "fr": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Detection et configuration automatiques.",
+    "de": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Automatisch erkannt und konfiguriert.",
+    "es": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Deteccion y configuracion automatica.",
+    "it": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Rilevamento e configurazione automatici.",
+    "pt": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Deteccao e configuracao automaticas."
+  },
+  "feat4_t": {"en": "Zero Dependencies", "fr": "Zero dependance", "de": "Keine Abhangigkeiten", "es": "Sin dependencias", "it": "Zero dipendenze", "pt": "Zero dependencias"},
+  "feat4_d": {
+    "en": "stdlib Python only. No requests, no psutil, no rich. Installs in seconds.",
+    "fr": "Stdlib Python uniquement. Pas de requests, pas de psutil, pas de rich. Installation en secondes.",
+    "de": "Nur Python-Standardbibliothek. Kein requests, kein psutil, kein rich. Installation in Sekunden.",
+    "es": "Solo stdlib Python. Sin requests, sin psutil, sin rich. Se instala en segundos.",
+    "it": "Solo stdlib Python. Nessun requests, nessun psutil, nessun rich. Si installa in secondi.",
+    "pt": "Apenas stdlib Python. Sem requests, sem psutil, sem rich. Instala em segundos."
+  },
+  "feat5_t": {"en": "Thermal Intelligence", "fr": "Intelligence thermique", "de": "Thermische Intelligenz", "es": "Inteligencia termica", "it": "Intelligenza termica", "pt": "Inteligencia termica"},
+  "feat5_d": {
+    "en": "Detects throttling during benchmarks. Alerts when your Mac overheats mid-inference.",
+    "fr": "Detecte le throttling pendant les benchmarks. Alerte quand votre Mac surchauffe en pleine inference.",
+    "de": "Erkennt Throttling wahrend Benchmarks. Warnt, wenn Ihr Mac wahrend der Inferenz uberhitzt.",
+    "es": "Detecta throttling durante benchmarks. Alerta cuando tu Mac se sobrecalienta durante la inferencia.",
+    "it": "Rileva il throttling durante i benchmark. Avvisa quando il Mac si surriscalda durante l'inferenza.",
+    "pt": "Detecta throttling durante benchmarks. Alerta quando seu Mac superaquece durante a inferencia."
+  },
+  "feat6_t": {"en": "Regression Detection", "fr": "Detection de regression", "de": "Regressionserkennung", "es": "Deteccion de regresiones", "it": "Rilevamento regressioni", "pt": "Deteccao de regressoes"},
+  "feat6_d": {
+    "en": "Auto-detects performance drops after OS or engine updates. SQLite history with 90-day retention.",
+    "fr": "Detecte les baisses de performances apres mise a jour OS ou moteur. Historique SQLite avec retention 90 jours.",
+    "de": "Erkennt Leistungseinbruche nach OS- oder Engine-Updates automatisch. SQLite-Verlauf mit 90 Tagen Aufbewahrung.",
+    "es": "Detecta caidas de rendimiento tras actualizaciones de OS o motor. Historial SQLite con retencion de 90 dias.",
+    "it": "Rileva automaticamente cali di prestazioni dopo aggiornamenti OS o motore. Storico SQLite con ritenzione 90 giorni.",
+    "pt": "Detecta quedas de desempenho apos atualizacoes de OS ou motor. Historico SQLite com retencao de 90 dias."
+  },
+  "uc_title": {
+    "en": "What Will You Discover?", "fr": "Qu'allez-vous decouvrir ?", "de": "Was werden Sie entdecken?",
+    "es": "Que vas a descubrir?", "it": "Cosa scoprirai?", "pt": "O que voce vai descobrir?"
+  },
+  "uc_subtitle": {
+    "en": "Real questions from r/LocalLLaMA, answered in one command.",
+    "fr": "Les vraies questions de r/LocalLLaMA, une commande suffit.",
+    "de": "Echte Fragen von r/LocalLLaMA, mit einem Befehl beantwortet.",
+    "es": "Preguntas reales de r/LocalLLaMA, respondidas con un comando.",
+    "it": "Domande reali da r/LocalLLaMA, risposte con un comando.",
+    "pt": "Perguntas reais do r/LocalLLaMA, respondidas com um comando."
+  },
+  "uc1_t": {"en": "Which engine is fastest?", "fr": "Quel moteur est le plus rapide ?", "de": "Welche Engine ist am schnellsten?", "es": "Cual motor es el mas rapido?", "it": "Quale motore e il piu veloce?", "pt": "Qual motor e o mais rapido?"},
+  "uc1_d": {"en": "Head-to-head comparison &mdash; the #1 question on r/LocalLLaMA.", "fr": "Comparaison face-a-face &mdash; la question n&deg;1 sur r/LocalLLaMA.", "de": "Direktvergleich &mdash; die Frage Nr. 1 auf r/LocalLLaMA.", "es": "Comparacion directa &mdash; la pregunta n&deg;1 en r/LocalLLaMA.", "it": "Confronto diretto &mdash; la domanda n&deg;1 su r/LocalLLaMA.", "pt": "Comparacao direta &mdash; a pergunta n&deg;1 no r/LocalLLaMA."},
+  "uc2_t": {"en": "Monitor a multi-agent swarm", "fr": "Monitorer un essaim multi-agents", "de": "Multi-Agent-Schwarm uberwachen", "es": "Monitorear un enjambre multi-agente", "it": "Monitorare uno sciame multi-agente", "pt": "Monitorar um enxame multi-agente"},
+  "uc2_d": {"en": "LLMs running 24/7 for AI agents &mdash; track VRAM, thermal, and performance.", "fr": "LLMs tournant 24/7 pour des agents IA &mdash; suivez VRAM, thermique et performances.", "de": "LLMs laufen 24/7 fur KI-Agenten &mdash; VRAM, Temperatur und Leistung verfolgen.", "es": "LLMs ejecutandose 24/7 para agentes IA &mdash; monitorea VRAM, temperatura y rendimiento.", "it": "LLM in esecuzione 24/7 per agenti IA &mdash; monitora VRAM, temperatura e prestazioni.", "pt": "LLMs rodando 24/7 para agentes IA &mdash; acompanhe VRAM, temperatura e desempenho."},
+  "uc3_t": {"en": "Compare energy efficiency", "fr": "Comparer l'efficacite energetique", "de": "Energieeffizienz vergleichen", "es": "Comparar eficiencia energetica", "it": "Confrontare l'efficienza energetica", "pt": "Comparar eficiencia energetica"},
+  "uc3_d": {"en": "tok/s per watt between engines. Critical for 24/7 Mac Mini homelabs.", "fr": "tok/s par watt entre moteurs. Essentiel pour les homelabs Mac Mini 24/7.", "de": "tok/s pro Watt zwischen Engines. Kritisch fur 24/7 Mac Mini Homelabs.", "es": "tok/s por vatio entre motores. Critico para homelabs Mac Mini 24/7.", "it": "tok/s per watt tra motori. Critico per homelab Mac Mini 24/7.", "pt": "tok/s por watt entre motores. Critico para homelabs Mac Mini 24/7."},
+  "uc4_t": {"en": "Detect regressions after updates", "fr": "Detecter les regressions apres mise a jour", "de": "Regressionen nach Updates erkennen", "es": "Detectar regresiones tras actualizaciones", "it": "Rilevare regressioni dopo aggiornamenti", "pt": "Detectar regressoes apos atualizacoes"},
+  "uc4_d": {"en": "Did the Ollama or macOS update break your performance? Auto-detection via SQLite.", "fr": "La mise a jour Ollama ou macOS a casse vos performances ? Detection auto via SQLite.", "de": "Hat das Ollama- oder macOS-Update Ihre Leistung verschlechtert? Automatische Erkennung via SQLite.", "es": "La actualizacion de Ollama o macOS rompio tu rendimiento? Deteccion automatica via SQLite.", "it": "L'aggiornamento Ollama o macOS ha peggiorato le prestazioni? Rilevamento automatico via SQLite.", "pt": "A atualizacao do Ollama ou macOS quebrou seu desempenho? Deteccao automatica via SQLite."},
+  "uc5_t": {"en": "Test long context support", "fr": "Tester le support long contexte", "de": "Langkontext-Unterstutzung testen", "es": "Probar soporte de contexto largo", "it": "Testare il supporto contesto lungo", "pt": "Testar suporte a contexto longo"},
+  "uc5_d": {"en": "<code>--context-size 64k</code> benchmarks. Does your model survive 256k context?", "fr": "Benchmarks <code>--context-size 64k</code>. Votre modele survit-il a 256k de contexte ?", "de": "<code>--context-size 64k</code> Benchmarks. Ubersteht Ihr Modell 256k Kontext?", "es": "Benchmarks <code>--context-size 64k</code>. Sobrevive tu modelo a 256k de contexto?", "it": "Benchmark <code>--context-size 64k</code>. Il tuo modello sopravvive a 256k di contesto?", "pt": "Benchmarks <code>--context-size 64k</code>. Seu modelo sobrevive a 256k de contexto?"},
+  "uc6_t": {"en": "Is my Mac thermal throttling?", "fr": "Mon Mac est-il en throttling thermique ?", "de": "Drosselt mein Mac thermisch?", "es": "Mi Mac tiene throttling termico?", "it": "Il mio Mac fa throttling termico?", "pt": "Meu Mac esta com throttling termico?"},
+  "uc6_d": {"en": "Drift detection across benchmark runs. Unique to asiai.", "fr": "Detection de derive thermique entre les runs. Unique a asiai.", "de": "Drift-Erkennung uber Benchmark-Laufe hinweg. Einzigartig bei asiai.", "es": "Deteccion de deriva termica entre ejecuciones. Unico en asiai.", "it": "Rilevamento deriva termica tra le esecuzioni. Unico in asiai.", "pt": "Deteccao de deriva termica entre execucoes. Unico no asiai."},
+  "uc7_t": {"en": "Reproducible benchmarks", "fr": "Benchmarks reproductibles", "de": "Reproduzierbare Benchmarks", "es": "Benchmarks reproducibles", "it": "Benchmark riproducibili", "pt": "Benchmarks reprodutiveis"},
+  "uc7_d": {"en": "MLPerf/SPEC methodology. Warmup, median, greedy decoding. Share with confidence.", "fr": "Methodologie MLPerf/SPEC. Warmup, mediane, decodage greedy. Partagez en confiance.", "de": "MLPerf/SPEC-Methodik. Warmup, Median, Greedy-Dekodierung. Mit Vertrauen teilen.", "es": "Metodologia MLPerf/SPEC. Warmup, mediana, decodificacion greedy. Comparte con confianza.", "it": "Metodologia MLPerf/SPEC. Warmup, mediana, decodifica greedy. Condividi con fiducia.", "pt": "Metodologia MLPerf/SPEC. Warmup, mediana, decodificacao greedy. Compartilhe com confianca."},
+  "uc8_t": {"en": "Health check in one command", "fr": "Diagnostic en une commande", "de": "Gesundheitscheck mit einem Befehl", "es": "Diagnostico en un comando", "it": "Diagnostica in un comando", "pt": "Diagnostico em um comando"},
+  "uc8_d": {"en": "<code>asiai doctor</code> diagnoses system, engines, and database with fix suggestions.", "fr": "<code>asiai doctor</code> diagnostique systeme, moteurs et base de donnees avec suggestions de corrections.", "de": "<code>asiai doctor</code> diagnostiziert System, Engines und Datenbank mit Losungsvorschlagen.", "es": "<code>asiai doctor</code> diagnostica sistema, motores y base de datos con sugerencias de solucion.", "it": "<code>asiai doctor</code> diagnostica sistema, motori e database con suggerimenti di correzione.", "pt": "<code>asiai doctor</code> diagnostica sistema, motores e banco de dados com sugestoes de correcao."},
+  "uc9_t": {"en": "Visual dashboard", "fr": "Dashboard visuel", "de": "Visuelles Dashboard", "es": "Dashboard visual", "it": "Dashboard visuale", "pt": "Dashboard visual"},
+  "uc9_d": {"en": "Dark/light web dashboard with live charts, SSE progress, benchmark controls.", "fr": "Dashboard web dark/light avec graphiques en direct, progression SSE, controles de benchmark.", "de": "Dark/Light Web-Dashboard mit Live-Charts, SSE-Fortschritt und Benchmark-Steuerung.", "es": "Dashboard web dark/light con graficos en vivo, progreso SSE y controles de benchmark.", "it": "Dashboard web dark/light con grafici live, avanzamento SSE e controlli benchmark.", "pt": "Dashboard web dark/light com graficos ao vivo, progresso SSE e controles de benchmark."},
+  "uc10_t": {"en": "Compare LLMs head-to-head", "fr": "Comparer les LLMs face-a-face", "de": "LLMs direkt vergleichen", "es": "Comparar LLMs cara a cara", "it": "Confrontare LLM testa a testa", "pt": "Comparar LLMs frente a frente"},
+  "uc10_d": {"en": "Same engine, different models. Which quantization wins?", "fr": "Meme moteur, differents modeles. Quelle quantification gagne ?", "de": "Gleiche Engine, verschiedene Modelle. Welche Quantisierung gewinnt?", "es": "Mismo motor, diferentes modelos. Que cuantizacion gana?", "it": "Stesso motore, modelli diversi. Quale quantizzazione vince?", "pt": "Mesmo motor, modelos diferentes. Qual quantizacao ganha?"},
+  "how_title": {
+    "en": "Up and Running in 60 Seconds", "fr": "Operationnel en 60 secondes", "de": "In 60 Sekunden startklar",
+    "es": "Funcionando en 60 segundos", "it": "Operativo in 60 secondi", "pt": "Funcionando em 60 segundos"
+  },
+  "how_subtitle": {
+    "en": "Three commands. That's it.", "fr": "Trois commandes. C'est tout.", "de": "Drei Befehle. Das war's.",
+    "es": "Tres comandos. Eso es todo.", "it": "Tre comandi. Tutto qui.", "pt": "Tres comandos. So isso."
+  },
+  "step1": {"en": "Install", "fr": "Installer", "de": "Installieren", "es": "Instalar", "it": "Installare", "pt": "Instalar"},
+  "step2": {"en": "Detect", "fr": "Detecter", "de": "Erkennen", "es": "Detectar", "it": "Rilevare", "pt": "Detectar"},
+  "step3": {"en": "Benchmark", "fr": "Benchmarker", "de": "Benchmarken", "es": "Benchmark", "it": "Benchmark", "pt": "Benchmark"},
+  "step2_out": {"en": "3 engines found", "fr": "3 moteurs trouves", "de": "3 Engines gefunden", "es": "3 motores encontrados", "it": "3 motori trovati", "pt": "3 motores encontrados"},
+  "disc_title": {
+    "en": "Real Discoveries", "fr": "Decouvertes reelles", "de": "Echte Entdeckungen",
+    "es": "Descubrimientos reales", "it": "Scoperte reali", "pt": "Descobertas reais"
+  },
+  "disc_subtitle": {
+    "en": "Numbers from actual benchmarks on Apple Silicon.",
+    "fr": "Chiffres issus de vrais benchmarks sur Apple Silicon.",
+    "de": "Zahlen aus echten Benchmarks auf Apple Silicon.",
+    "es": "Numeros de benchmarks reales en Apple Silicon.",
+    "it": "Numeri da benchmark reali su Apple Silicon.",
+    "pt": "Numeros de benchmarks reais em Apple Silicon."
+  },
+  "disc1_d": {
+    "en": "MLX is 2.3x faster for MoE architectures (Qwen3.5-35B-A3B) on Apple Silicon.",
+    "fr": "MLX est 2,3x plus rapide pour les architectures MoE (Qwen3.5-35B-A3B) sur Apple Silicon.",
+    "de": "MLX ist 2,3x schneller fur MoE-Architekturen (Qwen3.5-35B-A3B) auf Apple Silicon.",
+    "es": "MLX es 2,3x mas rapido para arquitecturas MoE (Qwen3.5-35B-A3B) en Apple Silicon.",
+    "it": "MLX e 2,3x piu veloce per architetture MoE (Qwen3.5-35B-A3B) su Apple Silicon.",
+    "pt": "MLX e 2,3x mais rapido para arquiteturas MoE (Qwen3.5-35B-A3B) em Apple Silicon."
+  },
+  "disc2_t": {
+    "en": "VRAM: 64k &rarr; 256k", "fr": "VRAM : 64k &rarr; 256k", "de": "VRAM: 64k &rarr; 256k",
+    "es": "VRAM: 64k &rarr; 256k", "it": "VRAM: 64k &rarr; 256k", "pt": "VRAM: 64k &rarr; 256k"
+  },
+  "disc2_d": {
+    "en": "VRAM stays constant from 64k to 256k context with DeltaNet &mdash; not documented anywhere else.",
+    "fr": "La VRAM reste constante de 64k a 256k de contexte avec DeltaNet &mdash; non documente ailleurs.",
+    "de": "VRAM bleibt konstant von 64k bis 256k Kontext mit DeltaNet &mdash; nirgendwo anders dokumentiert.",
+    "es": "La VRAM se mantiene constante de 64k a 256k con DeltaNet &mdash; no documentado en ningun otro lugar.",
+    "it": "La VRAM resta costante da 64k a 256k di contesto con DeltaNet &mdash; non documentato altrove.",
+    "pt": "A VRAM permanece constante de 64k a 256k de contexto com DeltaNet &mdash; nao documentado em nenhum outro lugar."
+  },
+  "disc3_t": {
+    "en": "Engine &gt; Model", "fr": "Moteur &gt; Modele", "de": "Engine &gt; Modell",
+    "es": "Motor &gt; Modelo", "it": "Motore &gt; Modello", "pt": "Motor &gt; Modelo"
+  },
+  "disc3_d": {
+    "en": "Same model, same Mac: 30 tok/s on one engine, 71 tok/s on another. The engine matters more.",
+    "fr": "Meme modele, meme Mac : 30 tok/s sur un moteur, 71 tok/s sur un autre. Le moteur compte plus.",
+    "de": "Gleiches Modell, gleicher Mac: 30 tok/s auf einer Engine, 71 tok/s auf einer anderen. Die Engine zahlt mehr.",
+    "es": "Mismo modelo, mismo Mac: 30 tok/s en un motor, 71 tok/s en otro. El motor importa mas.",
+    "it": "Stesso modello, stesso Mac: 30 tok/s su un motore, 71 tok/s su un altro. Il motore conta di piu.",
+    "pt": "Mesmo modelo, mesmo Mac: 30 tok/s em um motor, 71 tok/s em outro. O motor importa mais."
+  },
+  "eng_title": {
+    "en": "Supported Engines", "fr": "Moteurs supportes", "de": "Unterstutzte Engines",
+    "es": "Motores soportados", "it": "Motori supportati", "pt": "Motores suportados"
+  },
+  "eng_subtitle": {
+    "en": "Auto-detected, zero configuration needed.",
+    "fr": "Detection automatique, zero configuration.",
+    "de": "Automatisch erkannt, keine Konfiguration notig.",
+    "es": "Deteccion automatica, sin configuracion.",
+    "it": "Rilevamento automatico, zero configurazione.",
+    "pt": "Deteccao automatica, zero configuracao."
+  },
+  "eng_port": {"en": "Default Port", "fr": "Port par defaut", "de": "Standard-Port", "es": "Puerto por defecto", "it": "Porta predefinita", "pt": "Porta padrao"},
+  "eng_native": {"en": "Native", "fr": "Native", "de": "Nativ", "es": "Nativa", "it": "Nativa", "pt": "Nativa"},
+  "eng_compat": {"en": "OpenAI-compatible", "fr": "Compatible OpenAI", "de": "OpenAI-kompatibel", "es": "Compatible con OpenAI", "it": "Compatibile OpenAI", "pt": "Compativel com OpenAI"},
+  "met_title": {
+    "en": "What We Measure", "fr": "Ce qu'on mesure", "de": "Was wir messen",
+    "es": "Que medimos", "it": "Cosa misuriamo", "pt": "O que medimos"
+  },
+  "met_subtitle": {
+    "en": "8 metrics, consistent methodology, every run.",
+    "fr": "8 metriques, methodologie constante, a chaque run.",
+    "de": "8 Metriken, konsistente Methodik, bei jedem Lauf.",
+    "es": "8 metricas, metodologia consistente, cada ejecucion.",
+    "it": "8 metriche, metodologia coerente, ogni esecuzione.",
+    "pt": "8 metricas, metodologia consistente, cada execucao."
+  },
+  "m_toks": {"en": "Generation speed (tokens/sec)", "fr": "Vitesse de generation (tokens/sec)", "de": "Generierungsgeschwindigkeit (Tokens/Sek.)", "es": "Velocidad de generacion (tokens/seg)", "it": "Velocita di generazione (token/sec)", "pt": "Velocidade de geracao (tokens/seg)"},
+  "m_ttft": {"en": "Time to first token", "fr": "Temps au premier token", "de": "Zeit bis zum ersten Token", "es": "Tiempo al primer token", "it": "Tempo al primo token", "pt": "Tempo ao primeiro token"},
+  "m_power": {"en": "GPU power draw in watts", "fr": "Consommation GPU en watts", "de": "GPU-Leistungsaufnahme in Watt", "es": "Consumo GPU en vatios", "it": "Consumo GPU in watt", "pt": "Consumo GPU em watts"},
+  "m_eff": {"en": "Energy efficiency", "fr": "Efficacite energetique", "de": "Energieeffizienz", "es": "Eficiencia energetica", "it": "Efficienza energetica", "pt": "Eficiencia energetica"},
+  "m_stab": {"en": "Run-to-run variance", "fr": "Variance inter-runs", "de": "Lauf-zu-Lauf-Varianz", "es": "Varianza entre ejecuciones", "it": "Varianza tra esecuzioni", "pt": "Variancia entre execucoes"},
+  "m_vram": {"en": "GPU memory footprint", "fr": "Empreinte memoire GPU", "de": "GPU-Speicherbedarf", "es": "Huella de memoria GPU", "it": "Footprint memoria GPU", "pt": "Pegada de memoria GPU"},
+  "m_therm": {"en": "Throttling state", "fr": "Etat de throttling", "de": "Throttling-Status", "es": "Estado de throttling", "it": "Stato di throttling", "pt": "Estado de throttling"},
+  "m_ctx": {"en": "Long context perf scaling", "fr": "Scaling perf long contexte", "de": "Langkontext-Performance", "es": "Escalado contexto largo", "it": "Scaling contesto lungo", "pt": "Escala contexto longo"},
+  "cta_title": {
+    "en": "Get Started", "fr": "Demarrer", "de": "Loslegen",
+    "es": "Empezar", "it": "Inizia", "pt": "Comecar"
+  },
+  "cta_subtitle": {
+    "en": "Install in seconds. Zero dependencies.",
+    "fr": "Installation en secondes. Zero dependance.",
+    "de": "Installation in Sekunden. Keine Abhangigkeiten.",
+    "es": "Instalacion en segundos. Sin dependencias.",
+    "it": "Installazione in secondi. Zero dipendenze.",
+    "pt": "Instalacao em segundos. Zero dependencias."
+  },
+  "cta_doc": {"en": "Documentation", "fr": "Documentation", "de": "Dokumentation", "es": "Documentacion", "it": "Documentazione", "pt": "Documentacao"},
+  "cta_method": {"en": "Methodology", "fr": "Methodologie", "de": "Methodik", "es": "Metodologia", "it": "Metodologia", "pt": "Metodologia"}
+} %}
+
+{# Helper macro to get translation with fallback to English #}
+{% macro tr(key) %}{{ t[key][lang] | default(t[key]["en"]) }}{% endmacro %}
+
+<div class="asiai-home">
+
+  <!-- ── Hero ── -->
+  <section class="asiai-hero">
+    <div class="asiai-container">
+      <img src="{{ 'assets/logo.svg' | url }}" alt="asiai logo">
+      <h1>{{ tr("hero_title") }}</h1>
+      <p class="tagline">{{ tr("hero_tagline") }}</p>
+      <div class="cta-group">
+        <a href="getting-started/" class="cta-btn cta-primary">{{ tr("cta_start") }}</a>
+        <a href="https://github.com/druide67/asiai" class="cta-btn cta-secondary">{{ tr("cta_github") }}</a>
+      </div>
+      <div class="badges">
+        <span class="badge">Python 3.11+</span>
+        <span class="badge">Apache 2.0</span>
+        <span class="badge">Apple Silicon</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Pain Points ── -->
+  <section class="asiai-pain">
+    <div class="asiai-container">
+      <h2>{{ tr("pain_title") }}</h2>
+      <p class="section-subtitle">{{ tr("pain_subtitle") }}</p>
+      <div class="pain-grid">
+        <div class="pain-card">
+          <div class="pain-icon">&#x1F9E9;</div>
+          <h3>{{ tr("pain1_title") }}</h3>
+          <p>{{ tr("pain1_desc") }}</p>
+        </div>
+        <div class="pain-card">
+          <div class="pain-icon">&#x1F648;</div>
+          <h3>{{ tr("pain2_title") }}</h3>
+          <p>{{ tr("pain2_desc") }}</p>
+        </div>
+        <div class="pain-card">
+          <div class="pain-icon">&#x1F4CB;</div>
+          <h3>{{ tr("pain3_title") }}</h3>
+          <p>{{ tr("pain3_desc") }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ── -->
+  <section class="asiai-features">
+    <div class="asiai-container">
+      <h2>{{ tr("feat_title") }}</h2>
+      <p class="section-subtitle">{{ tr("feat_subtitle") }}</p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">&#x2694;&#xFE0F;</div>
+          <h3>{{ tr("feat1_t") }}</h3>
+          <p>{{ tr("feat1_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x26A1;</div>
+          <h3>{{ tr("feat2_t") }}</h3>
+          <p>{{ tr("feat2_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F527;</div>
+          <h3>{{ tr("feat3_t") }}</h3>
+          <p>{{ tr("feat3_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4E6;</div>
+          <h3>{{ tr("feat4_t") }}</h3>
+          <p>{{ tr("feat4_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F321;&#xFE0F;</div>
+          <h3>{{ tr("feat5_t") }}</h3>
+          <p>{{ tr("feat5_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4C9;</div>
+          <h3>{{ tr("feat6_t") }}</h3>
+          <p>{{ tr("feat6_d") }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Use Cases ── -->
+  <section class="asiai-usecases">
+    <div class="asiai-container">
+      <h2>{{ tr("uc_title") }}</h2>
+      <p class="section-subtitle">{{ tr("uc_subtitle") }}</p>
+      <div class="usecase-grid">
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F3C6;</div>
+          <div><h4>"{{ tr("uc1_t") }}"</h4><p>{{ tr("uc1_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F916;</div>
+          <div><h4>"{{ tr("uc2_t") }}"</h4><p>{{ tr("uc2_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F50B;</div>
+          <div><h4>"{{ tr("uc3_t") }}"</h4><p>{{ tr("uc3_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F6A8;</div>
+          <div><h4>"{{ tr("uc4_t") }}"</h4><p>{{ tr("uc4_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F4CF;</div>
+          <div><h4>"{{ tr("uc5_t") }}"</h4><p>{{ tr("uc5_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F525;</div>
+          <div><h4>"{{ tr("uc6_t") }}"</h4><p>{{ tr("uc6_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F4CA;</div>
+          <div><h4>"{{ tr("uc7_t") }}"</h4><p>{{ tr("uc7_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1FA7A;</div>
+          <div><h4>"{{ tr("uc8_t") }}"</h4><p>{{ tr("uc8_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F4BB;</div>
+          <div><h4>"{{ tr("uc9_t") }}"</h4><p>{{ tr("uc9_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F504;</div>
+          <div><h4>"{{ tr("uc10_t") }}"</h4><p>{{ tr("uc10_d") }}</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How It Works ── -->
+  <section class="asiai-howto">
+    <div class="asiai-container">
+      <h2>{{ tr("how_title") }}</h2>
+      <p class="section-subtitle">{{ tr("how_subtitle") }}</p>
+      <div class="steps-grid">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>{{ tr("step1") }}</h3>
+          <code>brew install asiai</code>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>{{ tr("step2") }}</h3>
+          <code>$ asiai detect
+&#x2714; ollama (11434)
+&#x2714; lmstudio (1234)
+&#x2714; mlx-lm (8080)
+&#x2192; {{ tr("step2_out") }}</code>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>{{ tr("step3") }}</h3>
+          <code>$ asiai bench -m qwen3.5
+Engine     tok/s  TTFT
+lmstudio   71.2   42ms
+ollama     54.8   61ms
+mlx-lm     30.1   38ms</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Real Discoveries ── -->
+  <section class="asiai-discoveries">
+    <div class="asiai-container">
+      <h2>{{ tr("disc_title") }}</h2>
+      <p class="section-subtitle">{{ tr("disc_subtitle") }}</p>
+      <div class="discovery-grid">
+        <div class="discovery-card">
+          <div class="discovery-stat">2.3x</div>
+          <h3>MLX vs llama.cpp</h3>
+          <p>{{ tr("disc1_d") }}</p>
+        </div>
+        <div class="discovery-card">
+          <div class="discovery-stat">Flat</div>
+          <h3>{{ tr("disc2_t") }}</h3>
+          <p>{{ tr("disc2_d") }}</p>
+        </div>
+        <div class="discovery-card">
+          <div class="discovery-stat">30 vs 71</div>
+          <h3>{{ tr("disc3_t") }}</h3>
+          <p>{{ tr("disc3_d") }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Supported Engines ── -->
+  <section class="asiai-engines">
+    <div class="asiai-container">
+      <h2>{{ tr("eng_title") }}</h2>
+      <p class="section-subtitle">{{ tr("eng_subtitle") }}</p>
+      <table class="engine-table">
+        <thead>
+          <tr>
+            <th>Engine</th>
+            <th>{{ tr("eng_port") }}</th>
+            <th>API</th>
+            <th>VRAM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="engines/ollama/">Ollama</a></td>
+            <td><code>11434</code></td>
+            <td>{{ tr("eng_native") }}</td>
+            <td>&#x2714;</td>
+          </tr>
+          <tr>
+            <td><a href="engines/lmstudio/">LM Studio</a></td>
+            <td><code>1234</code></td>
+            <td>{{ tr("eng_compat") }}</td>
+            <td>&#x2014;</td>
+          </tr>
+          <tr>
+            <td><a href="engines/mlxlm/">mlx-lm</a></td>
+            <td><code>8080</code></td>
+            <td>{{ tr("eng_compat") }}</td>
+            <td>&#x2014;</td>
+          </tr>
+          <tr>
+            <td><a href="engines/llamacpp/">llama.cpp</a></td>
+            <td><code>8080</code></td>
+            <td>{{ tr("eng_compat") }}</td>
+            <td>&#x2014;</td>
+          </tr>
+          <tr>
+            <td><a href="engines/vllm-mlx/">vllm-mlx</a></td>
+            <td><code>8000</code></td>
+            <td>{{ tr("eng_compat") }}</td>
+            <td>&#x2014;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Metrics ── -->
+  <section class="asiai-metrics">
+    <div class="asiai-container">
+      <h2>{{ tr("met_title") }}</h2>
+      <p class="section-subtitle">{{ tr("met_subtitle") }}</p>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-icon">&#x1F680;</div>
+          <h4>tok/s</h4>
+          <p>{{ tr("m_toks") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x23F1;&#xFE0F;</div>
+          <h4>TTFT</h4>
+          <p>{{ tr("m_ttft") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x26A1;</div>
+          <h4>Power (W)</h4>
+          <p>{{ tr("m_power") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x1F50B;</div>
+          <h4>tok/s/W</h4>
+          <p>{{ tr("m_eff") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x1F4C8;</div>
+          <h4>Stability</h4>
+          <p>{{ tr("m_stab") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x1F4BE;</div>
+          <h4>VRAM</h4>
+          <p>{{ tr("m_vram") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x1F321;&#xFE0F;</div>
+          <h4>Thermal</h4>
+          <p>{{ tr("m_therm") }}</p>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">&#x1F4CF;</div>
+          <h4>Context</h4>
+          <p>{{ tr("m_ctx") }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Bottom CTA ── -->
+  <section class="asiai-bottom-cta">
+    <div class="asiai-container">
+      <h2>{{ tr("cta_title") }}</h2>
+      <p class="section-subtitle">{{ tr("cta_subtitle") }}</p>
+      <div class="install-commands">
+        <div class="install-block">
+          <div class="install-label">Homebrew</div>
+          <code>brew tap druide67/tap
+brew install asiai</code>
+        </div>
+        <div class="install-block">
+          <div class="install-label">pip</div>
+          <code>pip install asiai</code>
+        </div>
+      </div>
+      <div class="bottom-links">
+        <a href="https://github.com/druide67/asiai">GitHub</a>
+        <a href="getting-started/">{{ tr("cta_doc") }}</a>
+        <a href="methodology/">{{ tr("cta_method") }}</a>
+        <a href="https://github.com/druide67/asiai/blob/main/LICENSE">Apache 2.0</a>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+{% endblock %}
