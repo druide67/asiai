@@ -20,9 +20,10 @@ async def bench_page(request: Request):
     state = request.app.state.app_state
     templates = request.app.state.templates
 
-    engines_data, prompts = await asyncio.gather(
+    engines_data, prompts, power_available = await asyncio.gather(
         asyncio.to_thread(_get_engines_for_form, state),
         asyncio.to_thread(_get_prompts),
+        asyncio.to_thread(_check_power_available),
     )
 
     return templates.TemplateResponse(
@@ -33,6 +34,7 @@ async def bench_page(request: Request):
             "engines": engines_data,
             "prompts": prompts,
             "bench_running": state.get_bench_snapshot()["running"],
+            "power_available": power_available,
         },
     )
 
@@ -218,3 +220,18 @@ def _get_latest_bench_rows(state) -> list[dict]:
         return []
     latest_ts = max(r["ts"] for r in rows)
     return [r for r in rows if r["ts"] == latest_ts]
+
+
+def _check_power_available() -> bool:
+    """Check if sudo powermetrics is available without a password prompt."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "powermetrics", "--help"],
+            capture_output=True,
+            timeout=3,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False

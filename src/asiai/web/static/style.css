@@ -273,22 +273,29 @@ body {
     font-size: 0.875rem;
 }
 
-.results-table th {
+.results-table th,
+.results-table td {
     padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.results-table th {
     text-align: left;
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
 }
 
 .results-table td {
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--border);
     font-family: var(--font-mono);
     font-size: 0.8125rem;
+}
+
+.results-table th.text-right,
+.results-table td.text-right {
+    text-align: right;
 }
 
 .results-table tr:hover {

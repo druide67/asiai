@@ -56,8 +56,13 @@
             <!-- Power -->
             <div class="form-group">
                 <label class="form-checkbox">
-                    <input type="checkbox" name="power">
-                    Measure power (requires sudo)
+                    <input type="checkbox" name="power" {% if not power_available %}disabled{% endif %}>
+                    Measure power
+                    {% if power_available %}
+                    <span class="text-neutral-500 text-xs">(via powermetrics)</span>
+                    {% else %}
+                    <span class="text-neutral-500 text-xs">(requires sudo NOPASSWD for powermetrics)</span>
+                    {% endif %}
                 </label>
             </div>
 
@@ -92,9 +97,15 @@
 <div id="bench-results" class="mt-6"></div>
 
 <!-- Charts -->
-<div class="card-grid-2 mt-6">
-    <div id="bench-tok-chart" class="chart-container" style="display: none;"></div>
-    <div id="bench-ttft-chart" class="chart-container" style="display: none;"></div>
+<div class="card-grid-2 mt-6" id="bench-charts-row" style="display: none;">
+    <div class="card">
+        <h3 class="card-title">Throughput (tok/s)</h3>
+        <div id="bench-tok-chart" class="chart-container"></div>
+    </div>
+    <div class="card">
+        <h3 class="card-title">Time to First Token (ms)</h3>
+        <div id="bench-ttft-chart" class="chart-container"></div>
+    </div>
 </div>
 {% endblock %}
 
@@ -268,17 +279,17 @@
             tr.appendChild(tdName);
 
             var tdTok = document.createElement('td');
-            tdTok.className = 'text-right';
+            tdTok.className = 'text-right font-mono';
             tdTok.textContent = avgTok.toFixed(1);
             tr.appendChild(tdTok);
 
             var tdTtft = document.createElement('td');
-            tdTtft.className = 'text-right';
+            tdTtft.className = 'text-right font-mono';
             tdTtft.textContent = avgTtft.toFixed(0) + ' ms';
             tr.appendChild(tdTtft);
 
             var tdVram = document.createElement('td');
-            tdVram.className = 'text-right';
+            tdVram.className = 'text-right font-mono';
             tdVram.textContent = formatBytes(e.vram);
             tr.appendChild(tdVram);
 
@@ -301,10 +312,7 @@
             return parseFloat((engines[n].ttft_sum / engines[n].count).toFixed(0));
         });
 
-        var tokChart = document.getElementById('bench-tok-chart');
-        var ttftChart = document.getElementById('bench-ttft-chart');
-        tokChart.style.display = 'block';
-        ttftChart.style.display = 'block';
+        document.getElementById('bench-charts-row').style.display = '';
 
         createBarChart('bench-tok-chart', names, tokValues, {
             label: 'Throughput', unit: 'tok/s', height: 200,
