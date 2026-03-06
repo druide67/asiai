@@ -92,7 +92,7 @@ The runner resolves model names across engines automatically — `gemma2:9b` (Ol
 
 ### `asiai models`
 
-List loaded models across all engines.
+List loaded models across all engines. Use `--json` for machine-readable output.
 
 ```
 $ asiai models
@@ -106,7 +106,7 @@ lmstudio  http://localhost:1234
 
 ### `asiai monitor`
 
-System and inference metrics snapshot, stored in SQLite.
+System and inference metrics snapshot, stored in SQLite. Use `--json` for machine-readable output.
 
 ```
 $ asiai monitor
@@ -131,6 +131,7 @@ Options:
 ```
 -w, --watch SEC            Refresh every SEC seconds
 -q, --quiet                Collect and store without output (for daemon use)
+    --json                 Output as JSON (for scripting)
 -H, --history PERIOD       Show history (e.g. 24h, 1h)
 -a, --analyze HOURS        Comprehensive analysis with trends
 -c, --compare TS TS        Compare two timestamps
@@ -247,6 +248,35 @@ Four standardized prompts test different generation patterns:
 
 Use `--context-size 4k|16k|32k|64k` to test with large context fill prompts instead.
 
+## API & Prometheus
+
+When running `asiai web`, three REST API endpoints are available for programmatic access:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/status` | Lightweight health check (< 500ms) — engine reachability, memory pressure, thermal |
+| `GET /api/snapshot` | Full system + engine snapshot with loaded models, VRAM, versions |
+| `GET /api/metrics` | Prometheus exposition format — 15 gauges for system, engines, models, benchmarks |
+
+### Prometheus integration
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'asiai'
+    static_configs:
+      - targets: ['localhost:8899']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+```
+
+### CLI JSON output
+
+```bash
+asiai monitor --json | jq '.mem_pressure'
+asiai models --json | jq '.engines[].models[].name'
+```
+
 ## Requirements
 
 - macOS on Apple Silicon (M1 / M2 / M3 / M4)
@@ -271,6 +301,7 @@ Optional extras:
 | **v0.2** | mlx-lm + doctor + daemon + TUI (Textual) | **Done** |
 | **v0.3** | 5 engines, power metrics, multi-run variance, regression detection | **Done** |
 | **v0.4** | CI, MkDocs, export JSON, thermal drift, web dashboard | **Done** |
+| **v0.5** | REST API, Prometheus /metrics, CLI --json, engine uptime tracking | **Done** |
 | v1.0 | Multi-server, community export, Homebrew Core | Planned |
 
 ## License

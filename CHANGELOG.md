@@ -5,10 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased](https://github.com/druide67/asiai/compare/v0.4.0...HEAD)
+## [0.5.0](https://github.com/druide67/asiai/compare/v0.4.0...v0.5.0) — 2026-03-07
 
 ### Added
 
+- REST API endpoints: `GET /api/snapshot`, `GET /api/status`, `GET /api/metrics` (Prometheus exposition format)
+- Prometheus native metrics — 15 gauges covering system, engine, model, and benchmark data
+- `asiai monitor --json` and `asiai models --json` for scripting and machine-to-machine integration
+- Engine reachability persistence in SQLite (`engine_status` table) with uptime tracking
+- Snapshot cache with configurable TTL in AppState for sub-500ms API responses
 - `asiai web` — interactive web dashboard (FastAPI + htmx + ApexCharts), optional `pip install asiai[web]`
   - Dashboard with system info, engines, models, last benchmark summary
   - Real-time monitor with SSE (CPU sparkline, memory gauge, thermal, models)
@@ -21,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Thermal drift detection — warns if tok/s decreases monotonically over 3+ runs (>5% drop)
 - Statistics section in benchmark output — CI 95%, P50/P90/P99, IQR outlier detection
 - Cooldown (3s) between engines during benchmark + token ratio warning
+- Marketing homepage for docs site with i18n (6 languages: EN, FR, DE, ES, IT, PT)
 
 ## [0.4.0](https://github.com/druide67/asiai/compare/v0.3.0...v0.4.0) — 2026-03-04
 

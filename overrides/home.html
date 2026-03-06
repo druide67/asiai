@@ -148,7 +148,7 @@
   /* ── Feature Cards ── */
   .feature-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
   }
   .feature-card {
@@ -584,6 +584,24 @@
     "it": "Rileva automaticamente cali di prestazioni dopo aggiornamenti OS o motore. Storico SQLite con ritenzione 90 giorni.",
     "pt": "Detecta quedas de desempenho após atualizações de OS ou motor. Histórico SQLite com retenção de 90 dias."
   },
+  "feat7_t": {"en": "REST API", "fr": "API REST", "de": "REST-API", "es": "API REST", "it": "API REST", "pt": "API REST"},
+  "feat7_d": {
+    "en": "Full JSON API for automation. /api/snapshot, /api/status, /api/metrics &mdash; integrate with any stack.",
+    "fr": "API JSON complète pour l'automatisation. /api/snapshot, /api/status, /api/metrics &mdash; intégration avec n'importe quel stack.",
+    "de": "Vollständige JSON-API für Automatisierung. /api/snapshot, /api/status, /api/metrics &mdash; Integration mit jedem Stack.",
+    "es": "API JSON completa para automatización. /api/snapshot, /api/status, /api/metrics &mdash; integración con cualquier stack.",
+    "it": "API JSON completa per l'automazione. /api/snapshot, /api/status, /api/metrics &mdash; integrazione con qualsiasi stack.",
+    "pt": "API JSON completa para automação. /api/snapshot, /api/status, /api/metrics &mdash; integração com qualquer stack."
+  },
+  "feat8_t": {"en": "Prometheus Native", "fr": "Prometheus natif", "de": "Prometheus nativ", "es": "Prometheus nativo", "it": "Prometheus nativo", "pt": "Prometheus nativo"},
+  "feat8_d": {
+    "en": "Built-in /metrics endpoint. Plug into Grafana, Datadog, or any Prometheus-compatible tool. Zero config.",
+    "fr": "Endpoint /metrics intégré. Connectez Grafana, Datadog ou tout outil compatible Prometheus. Zéro config.",
+    "de": "Integrierter /metrics-Endpunkt. Anbindung an Grafana, Datadog oder jedes Prometheus-kompatible Tool. Null Konfiguration.",
+    "es": "Endpoint /metrics integrado. Conecta Grafana, Datadog o cualquier herramienta compatible con Prometheus. Sin configuración.",
+    "it": "Endpoint /metrics integrato. Collega Grafana, Datadog o qualsiasi strumento compatibile con Prometheus. Zero configurazione.",
+    "pt": "Endpoint /metrics integrado. Conecte Grafana, Datadog ou qualquer ferramenta compatível com Prometheus. Zero configuração."
+  },
   "uc_title": {
     "en": "What Will You Discover?", "fr": "Qu'allez-vous découvrir ?", "de": "Was werden Sie entdecken?",
     "es": "¿Qué vas a descubrir?", "it": "Cosa scoprirai?", "pt": "O que você vai descobrir?"
@@ -616,6 +634,15 @@
   "uc9_d": {"en": "Dark/light web dashboard with live charts, SSE progress, benchmark controls.", "fr": "Dashboard web dark/light avec graphiques en direct, progression SSE, contrôles de benchmark.", "de": "Dark/Light Web-Dashboard mit Live-Charts, SSE-Fortschritt und Benchmark-Steuerung.", "es": "Dashboard web dark/light con gráficos en vivo, progreso SSE y controles de benchmark.", "it": "Dashboard web dark/light con grafici live, avanzamento SSE e controlli benchmark.", "pt": "Dashboard web dark/light com gráficos ao vivo, progresso SSE e controles de benchmark."},
   "uc10_t": {"en": "Compare LLMs head-to-head", "fr": "Comparer les LLMs face-à-face", "de": "LLMs direkt vergleichen", "es": "Comparar LLMs cara a cara", "it": "Confrontare LLM testa a testa", "pt": "Comparar LLMs frente a frente"},
   "uc10_d": {"en": "Same engine, different models. Which quantization wins?", "fr": "Même moteur, différents modèles. Quelle quantification gagne ?", "de": "Gleiche Engine, verschiedene Modelle. Welche Quantisierung gewinnt?", "es": "Mismo motor, diferentes modelos. ¿Qué cuantización gana?", "it": "Stesso motore, modelli diversi. Quale quantizzazione vince?", "pt": "Mesmo motor, modelos diferentes. Qual quantização ganha?"},
+  "uc11_t": {"en": "Prometheus + Grafana monitoring", "fr": "Monitoring Prometheus + Grafana", "de": "Prometheus + Grafana Monitoring", "es": "Monitoreo Prometheus + Grafana", "it": "Monitoraggio Prometheus + Grafana", "pt": "Monitoramento Prometheus + Grafana"},
+  "uc11_d": {
+    "en": "Expose /metrics, scrape with Prometheus, visualize in Grafana. Production-grade observability.",
+    "fr": "Exposez /metrics, scrapez avec Prometheus, visualisez dans Grafana. Observabilité production-ready.",
+    "de": "Exponieren Sie /metrics, scrapen mit Prometheus, visualisieren in Grafana. Produktionsreife Observability.",
+    "es": "Expone /metrics, scrape con Prometheus, visualiza en Grafana. Observabilidad de nivel producción.",
+    "it": "Esponi /metrics, scrape con Prometheus, visualizza in Grafana. Osservabilità production-grade.",
+    "pt": "Exponha /metrics, scrape com Prometheus, visualize no Grafana. Observabilidade de nível produção."
+  },
   "how_title": {
     "en": "Up and Running in 60 Seconds", "fr": "Opérationnel en 60 secondes", "de": "In 60 Sekunden startklar",
     "es": "Funcionando en 60 segundos", "it": "Operativo in 60 secondi", "pt": "Funcionando em 60 segundos"
@@ -821,6 +848,16 @@
           <h3>{{ tr("feat6_t") }}</h3>
           <p>{{ tr("feat6_d") }}</p>
         </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F310;</div>
+          <h3>{{ tr("feat7_t") }}</h3>
+          <p>{{ tr("feat7_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4C8;</div>
+          <h3>{{ tr("feat8_t") }}</h3>
+          <p>{{ tr("feat8_d") }}</p>
+        </div>
       </div>
     </div>
   </section>
@@ -870,6 +907,10 @@
         <div class="usecase-item">
           <div class="usecase-icon">&#x1F504;</div>
           <div><h4>"{{ tr("uc10_t") }}"</h4><p>{{ tr("uc10_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F4E1;</div>
+          <div><h4>"{{ tr("uc11_t") }}"</h4><p>{{ tr("uc11_d") }}</p></div>
         </div>
       </div>
     </div>
