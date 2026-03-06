@@ -59,7 +59,7 @@ asiai bench -m qwen3.5 --runs 3 --power
 
 ## Zéro dépendance
 
-Le coeur utilise uniquement la bibliothèque standard Python — `urllib`, `sqlite3`, `subprocess`, `argparse`. Pas de `requests`, pas de `psutil`, pas de `rich`.
+Le cœur utilise uniquement la bibliothèque standard Python — `urllib`, `sqlite3`, `subprocess`, `argparse`. Pas de `requests`, pas de `psutil`, pas de `rich`.
 
 Extras optionnels :
 
