@@ -55,10 +55,6 @@ asiai = "asiai.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/asiai"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/asiai/web/templates" = "asiai/web/templates"
-"src/asiai/web/static" = "asiai/web/static"
-
 [tool.ruff]
 target-version = "py311"
 line-length = 100
