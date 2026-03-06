@@ -527,17 +527,11 @@ def main(argv: list[str] | None = None) -> int:
     tui_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
 
     # web
-    web_parser = subparsers.add_parser(
-        "web", help="Launch web dashboard (requires fastapi)"
-    )
+    web_parser = subparsers.add_parser("web", help="Launch web dashboard (requires fastapi)")
     web_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
     web_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
-    web_parser.add_argument(
-        "--port", type=int, default=8899, help="Port (default: 8899)"
-    )
-    web_parser.add_argument(
-        "--host", default="127.0.0.1", help="Host (default: 127.0.0.1)"
-    )
+    web_parser.add_argument("--port", type=int, default=8899, help="Port (default: 8899)")
+    web_parser.add_argument("--host", default="127.0.0.1", help="Host (default: 127.0.0.1)")
     web_parser.add_argument(
         "--no-open", action="store_true", help="Don't open browser automatically"
     )

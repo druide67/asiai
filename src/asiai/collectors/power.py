@@ -112,9 +112,7 @@ class PowerMonitor:
 
         # Validate subprocess actually started
         if self._process.poll() is not None:
-            logger.warning(
-                "powermetrics exited immediately with code %d", self._process.returncode
-            )
+            logger.warning("powermetrics exited immediately with code %d", self._process.returncode)
             self._process = None
             return False
 

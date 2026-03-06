@@ -140,8 +140,12 @@ async def bench_export(request: Request):
 
 
 def _run_benchmark_thread(
-    state, model: str, engine_names: list[str], prompt_names: list[str] | None,
-    runs: int, power: bool,
+    state,
+    model: str,
+    engine_names: list[str],
+    prompt_names: list[str] | None,
+    runs: int,
+    power: bool,
 ) -> None:
     """Run benchmark in background thread, updating state.bench_status."""
     try:
@@ -168,7 +172,11 @@ def _run_benchmark_thread(
         state.update_bench(progress=f"Benchmarking {actual_model}...", total_runs=runs)
 
         bench_run = run_benchmark(
-            engines, actual_model, prompt_names, runs=runs, power=power,
+            engines,
+            actual_model,
+            prompt_names,
+            runs=runs,
+            power=power,
         )
 
         # Store results
@@ -193,9 +201,7 @@ def _get_engines_for_form(state) -> list[dict]:
         try:
             reachable = engine.status().reachable
             models = [m.name for m in engine.list_running()] if reachable else []
-            results.append(
-                {"name": engine.name, "reachable": reachable, "models": models}
-            )
+            results.append({"name": engine.name, "reachable": reachable, "models": models})
         except Exception:
             results.append({"name": engine.name, "reachable": False, "models": []})
     return results
@@ -206,8 +212,7 @@ def _get_prompts() -> list[dict]:
     from asiai.benchmark.prompts import PROMPTS
 
     return [
-        {"name": p.name, "label": p.label, "max_tokens": p.max_tokens}
-        for p in PROMPTS.values()
+        {"name": p.name, "label": p.label, "max_tokens": p.max_tokens} for p in PROMPTS.values()
     ]
 
 
