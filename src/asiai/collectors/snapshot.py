@@ -77,6 +77,56 @@ def collect_snapshot(engines: list[InferenceEngine]) -> dict:
     }
 
 
+def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
+    """Collect status for each engine without failing on unreachable ones.
+
+    Returns:
+        List of dicts: {name, url, reachable, version, models, vram_total}
+    """
+    statuses = []
+    for engine in engines:
+        entry: dict = {
+            "name": engine.name,
+            "url": engine.base_url,
+            "reachable": False,
+            "version": "",
+            "models": [],
+            "vram_total": 0,
+        }
+        try:
+            entry["reachable"] = engine.is_reachable()
+            if entry["reachable"]:
+                entry["version"] = engine.version() or ""
+                running = engine.list_running()
+                vram_total = 0
+                for m in running:
+                    entry["models"].append(
+                        {
+                            "name": m.name,
+                            "size_vram": m.size_vram,
+                            "format": m.format,
+                            "quantization": m.quantization,
+                            "context_length": m.context_length,
+                        }
+                    )
+                    vram_total += m.size_vram
+                entry["vram_total"] = vram_total
+        except Exception as e:
+            logger.warning("Engine %s status error: %s", engine.name, e)
+        statuses.append(entry)
+    return statuses
+
+
+def collect_full_snapshot(engines: list[InferenceEngine]) -> dict:
+    """Extended snapshot: system metrics + per-engine status.
+
+    Combines collect_snapshot() data with detailed per-engine status.
+    """
+    base = collect_snapshot(engines)
+    base["engines_status"] = collect_engines_status(engines)
+    return base
+
+
 class CollectorThread(threading.Thread):
     """Background thread that periodically collects and stores snapshots."""
 

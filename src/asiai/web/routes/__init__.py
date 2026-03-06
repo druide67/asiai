@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from asiai.web.routes.api import router as api_router
 from asiai.web.routes.bench import router as bench_router
 from asiai.web.routes.dashboard import router as dashboard_router
 from asiai.web.routes.doctor import router as doctor_router
@@ -18,3 +19,4 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(history_router)
     app.include_router(monitor_router)
     app.include_router(doctor_router)
+    app.include_router(api_router)

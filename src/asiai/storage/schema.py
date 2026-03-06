@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS benchmarks (
 
 CREATE INDEX IF NOT EXISTS idx_benchmarks_ts ON benchmarks(ts);
 CREATE INDEX IF NOT EXISTS idx_benchmarks_model ON benchmarks(model);
+
+CREATE TABLE IF NOT EXISTS engine_status (
+    ts INTEGER NOT NULL,
+    engine TEXT NOT NULL,
+    reachable INTEGER NOT NULL DEFAULT 0,
+    version TEXT DEFAULT '',
+    models_loaded INTEGER DEFAULT 0,
+    vram_total INTEGER DEFAULT 0,
+    url TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_engine_status_ts ON engine_status(ts);
+CREATE INDEX IF NOT EXISTS idx_engine_status_engine ON engine_status(engine);
 """
 
 # Migrations from earlier schema versions.
@@ -132,5 +145,11 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN hw_chip TEXT DEFAULT ''",
             "ALTER TABLE benchmarks ADD COLUMN os_version TEXT DEFAULT ''",
         ],
+    },
+    # v0.5: engine_status table (created in SCHEMA_SQL, migration is a no-op marker)
+    {
+        "table": "engine_status",
+        "columns": ["ts"],
+        "sql": [],
     },
 ]

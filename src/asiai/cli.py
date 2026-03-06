@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -82,8 +83,34 @@ def cmd_models(args: argparse.Namespace) -> int:
     engines = _discover_engines(urls)
 
     if not engines:
-        print(dim("No inference engines detected."))
+        if getattr(args, "json_output", False):
+            print(json.dumps({"engines": []}, indent=2))
+        else:
+            print(dim("No inference engines detected."))
         return 1
+
+    if getattr(args, "json_output", False):
+        data = {"engines": []}
+        for engine in engines:
+            running = engine.list_running()
+            entry = {
+                "name": engine.name,
+                "url": engine.base_url,
+                "version": engine.version() or "",
+                "models": [
+                    {
+                        "name": m.name,
+                        "size_vram": m.size_vram,
+                        "format": m.format,
+                        "quantization": m.quantization,
+                        "context_length": m.context_length,
+                    }
+                    for m in running
+                ],
+            }
+            data["engines"].append(entry)
+        print(json.dumps(data, indent=2))
+        return 0
 
     for engine in engines:
         print(bold(f"{engine.name}") + f"  {dim(engine.base_url)}")
@@ -156,6 +183,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         return 0
 
     quiet = getattr(args, "quiet", False)
+    json_output = getattr(args, "json_output", False)
 
     if args.watch is not None and args.watch < 1:
         args.watch = 1
@@ -168,7 +196,9 @@ def cmd_monitor(args: argparse.Namespace) -> int:
                     subprocess.run(["clear"], check=False)
                 snap = collect_snapshot(engines)
                 store_snapshot(db_path, snap)
-                if not quiet:
+                if json_output:
+                    print(json.dumps(snap, indent=2))
+                elif not quiet:
                     render_snapshot(snap)
                 time.sleep(args.watch)
         except KeyboardInterrupt:
@@ -178,7 +208,9 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     else:
         snap = collect_snapshot(engines)
         store_snapshot(db_path, snap)
-        if not quiet:
+        if json_output:
+            print(json.dumps(snap, indent=2))
+        elif not quiet:
             render_snapshot(snap)
         return 0
 
@@ -449,6 +481,9 @@ def main(argv: list[str] | None = None) -> int:
     # models
     models_parser = subparsers.add_parser("models", help="List loaded models across engines")
     models_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
+    models_parser.add_argument(
+        "--json", action="store_true", dest="json_output", help="Output as JSON"
+    )
 
     # monitor
     monitor_parser = subparsers.add_parser(
@@ -491,6 +526,9 @@ def main(argv: list[str] | None = None) -> int:
         "-q",
         action="store_true",
         help="Collect and store without output (for daemon use)",
+    )
+    monitor_parser.add_argument(
+        "--json", action="store_true", dest="json_output", help="Output as JSON"
     )
 
     # doctor

@@ -47,6 +47,8 @@ class AppState:
     _bench_lock: threading.Lock = field(default_factory=threading.Lock)
     _sse_connections: int = 0
     max_sse_connections: int = 10
+    _snapshot_cache: dict | None = field(default=None, repr=False)
+    _snapshot_ts: float = 0.0
 
     def refresh_engines_if_stale(self, max_age: float = 30.0) -> list:
         """Return cached engines, refreshing if older than max_age seconds."""
@@ -86,3 +88,16 @@ class AppState:
         """Release an SSE connection slot."""
         with self._lock:
             self._sse_connections = max(0, self._sse_connections - 1)
+
+    def get_cached_snapshot(self, max_age: float = 10.0) -> dict | None:
+        """Return cached snapshot if fresh enough, else None."""
+        with self._lock:
+            if self._snapshot_cache and (time.time() - self._snapshot_ts) < max_age:
+                return dict(self._snapshot_cache)
+        return None
+
+    def set_snapshot_cache(self, snapshot: dict) -> None:
+        """Update the cached snapshot (thread-safe)."""
+        with self._lock:
+            self._snapshot_cache = dict(snapshot)
+            self._snapshot_ts = time.time()

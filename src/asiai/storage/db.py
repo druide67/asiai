@@ -200,6 +200,70 @@ def query_benchmarks(db_path: str, hours: int = 0, model: str = "") -> list[dict
         conn.close()
 
 
+def store_engine_status(db_path: str, statuses: list[dict]) -> None:
+    """Persist engine reachability status to SQLite."""
+    conn = sqlite3.connect(db_path)
+    try:
+        ts = int(time.time())
+        for s in statuses:
+            conn.execute(
+                """INSERT INTO engine_status
+                   (ts, engine, reachable, version, models_loaded, vram_total, url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    ts,
+                    s["name"],
+                    1 if s.get("reachable") else 0,
+                    s.get("version", ""),
+                    len(s.get("models", [])),
+                    s.get("vram_total", 0),
+                    s.get("url", ""),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def query_engine_uptime(db_path: str, engine: str, hours: int = 24) -> float:
+    """Calculate engine uptime percentage over the last N hours.
+
+    Returns a float between 0.0 and 100.0.
+    """
+    since = int(time.time()) - (hours * 3600)
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as total, SUM(reachable) as up "
+            "FROM engine_status WHERE engine = ? AND ts >= ?",
+            (engine, since),
+        ).fetchone()
+        if row and row[0] > 0:
+            return (row[1] / row[0]) * 100.0
+        return 0.0
+    finally:
+        conn.close()
+
+
+def query_latest_benchmarks(db_path: str) -> list[dict]:
+    """Return the most recent benchmark result per engine+model pair."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """SELECT engine, model, tok_per_sec, ttft_ms, power_watts
+               FROM benchmarks
+               WHERE (engine, model, ts) IN (
+                   SELECT engine, model, MAX(ts)
+                   FROM benchmarks
+                   GROUP BY engine, model
+               )"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:
     """Compare metrics at two timestamps (nearest match)."""
     conn = sqlite3.connect(db_path)

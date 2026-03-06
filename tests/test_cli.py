@@ -1,8 +1,10 @@
 """Tests for asiai CLI."""
 
-from unittest.mock import patch
+import json
+from unittest.mock import MagicMock, patch
 
 from asiai.cli import main
+from asiai.engines.base import ModelInfo
 
 
 def test_version(capsys):
@@ -68,7 +70,6 @@ def test_bench_help(capsys):
 
 
 def _make_mock_engine(name, models=None):
-    from unittest.mock import MagicMock
 
     from asiai.engines.base import InferenceEngine
 
@@ -79,3 +80,71 @@ def _make_mock_engine(name, models=None):
     engine.list_running.return_value = models or []
     engine.list_available.return_value = []
     return engine
+
+
+def test_models_json_output(capsys, tmp_path):
+    """models --json outputs valid JSON."""
+    model = ModelInfo(
+        name="qwen3.5:35b-a3b",
+        size_vram=26_000_000_000,
+        format="gguf",
+        quantization="Q4_K_M",
+        context_length=32768,
+    )
+    engine = _make_mock_engine("ollama", models=[model])
+    engine.version.return_value = "0.17.4"
+
+    with patch("asiai.cli._discover_engines", return_value=[engine]):
+        ret = main(["models", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "engines" in data
+    assert len(data["engines"]) == 1
+    assert data["engines"][0]["name"] == "ollama"
+    assert data["engines"][0]["models"][0]["name"] == "qwen3.5:35b-a3b"
+    assert data["engines"][0]["models"][0]["context_length"] == 32768
+
+
+def test_models_json_no_engines(capsys):
+    """models --json with no engines outputs empty structure."""
+    with patch("asiai.cli._discover_engines", return_value=[]):
+        ret = main(["models", "--json"])
+    assert ret == 1
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["engines"] == []
+
+
+def test_monitor_json_output(capsys, tmp_path):
+    """monitor --json outputs valid JSON."""
+    db_path = str(tmp_path / "test.db")
+    mock_snap = {
+        "ts": 1709700000,
+        "cpu_load_1": 2.5,
+        "cpu_load_5": 2.0,
+        "cpu_load_15": 1.5,
+        "cpu_cores": 10,
+        "mem_total": 68_719_476_736,
+        "mem_used": 34_000_000_000,
+        "mem_pressure": "normal",
+        "thermal_level": "nominal",
+        "thermal_speed_limit": 100,
+        "uptime": 86400,
+        "inference_engine": "ollama",
+        "engine_version": "ollama/0.17.4",
+        "models": [],
+    }
+
+    with (
+        patch("asiai.cli._discover_engines", return_value=[]),
+        patch("asiai.collectors.snapshot.collect_snapshot", return_value=mock_snap),
+        patch("asiai.storage.db.store_snapshot"),
+        patch("asiai.storage.db.init_db"),
+    ):
+        ret = main(["monitor", "--json", "--db", db_path])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["ts"] == 1709700000
+    assert data["cpu_load_1"] == 2.5
