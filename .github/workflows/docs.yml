@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "overrides/**"
       - "mkdocs.yml"
 
 permissions:
@@ -31,7 +32,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install mkdocs-material
-        run: pip install mkdocs-material
+        run: pip install mkdocs-material mkdocs-static-i18n
 
       - name: Build docs
         run: mkdocs build
