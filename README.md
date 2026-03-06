@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/asiai/"><img src="https://img.shields.io/pypi/v/asiai.svg" alt="PyPI"></a>
   <a href="https://github.com/druide67/asiai/actions/workflows/ci.yml"><img src="https://github.com/druide67/asiai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/gh/druide67/asiai"><img src="https://codecov.io/gh/druide67/asiai/branch/main/graph/badge.svg" alt="Coverage"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
