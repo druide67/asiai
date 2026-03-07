@@ -70,7 +70,7 @@ Where CV = `(std_dev / mean) * 100`.
 
 ### Unified Memory
 
-Apple Silicon shares memory between CPU and GPU. asiai runs engines **sequentially** to avoid memory contention. Only Ollama reports VRAM per model — other engines show "—".
+Apple Silicon shares memory between CPU and GPU. asiai runs engines **sequentially** to avoid memory contention. Ollama and LM Studio report VRAM per model — other engines show "—".
 
 ### Thermal Throttling
 

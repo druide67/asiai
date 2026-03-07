@@ -11,11 +11,13 @@ asiai models
 ## Output
 
 ```
-ollama  http://localhost:11434
+ollama  v0.17.5  http://localhost:11434
   ● qwen3.5:35b-a3b                             26.0 GB Q4_K_M
 
-lmstudio  http://localhost:1234
-  ● qwen3.5-35b-a3b                                 MLX
+lmstudio  v0.4.6  http://localhost:1234
+  ● qwen3.5-35b-a3b                              9.2 GB    MLX
 ```
 
-Shows model name, VRAM usage (when available), format, and quantization level for each engine.
+Shows engine version, model name, VRAM usage (when available), format, and quantization level for each engine.
+
+VRAM reporting is supported by Ollama and LM Studio. Other engines show "—".

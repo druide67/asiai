@@ -38,7 +38,7 @@ asiai bench -m qwen3.5 --runs 3 --power
 | **Power** | GPU-Leistungsaufnahme in Watt (`sudo powermetrics`) |
 | **tok/s/W** | Energieeffizienz — Tokens pro Sekunde pro Watt |
 | **Stability** | Lauf-zu-Lauf-Varianz: stabil (<5%), variabel (<10%), instabil (>10%) |
-| **VRAM** | GPU-Speicherbedarf (nur Ollama) |
+| **VRAM** | GPU-Speicherbedarf (Ollama, LM Studio) |
 | **Thermal** | CPU-Throttling-Status und Geschwindigkeitsbegrenzung |
 
 ## Unterstützte Engines
