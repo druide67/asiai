@@ -260,8 +260,16 @@ def cmd_tui(args: argparse.Namespace) -> int:
 
 def cmd_daemon(args: argparse.Namespace) -> int:
     """Handle 'daemon' command."""
-    from asiai.daemon import daemon_logs, daemon_start, daemon_status, daemon_stop
-    from asiai.display.formatters import bold, dim, green, red
+    from asiai.daemon import (
+        SERVICES,
+        _read_plist_config,
+        daemon_logs,
+        daemon_start,
+        daemon_status_all,
+        daemon_stop,
+        daemon_stop_all,
+    )
+    from asiai.display.formatters import bold, dim, green, red, yellow
 
     action = args.action
     if not action:
@@ -269,37 +277,75 @@ def cmd_daemon(args: argparse.Namespace) -> int:
         return 1
 
     if action == "start":
-        interval = args.interval if hasattr(args, "interval") else 60
-        result = daemon_start(interval)
+        service = getattr(args, "service", "monitor")
+        kwargs: dict = {}
+        if service == "monitor":
+            kwargs["interval"] = getattr(args, "interval", 60)
+        elif service == "web":
+            kwargs["port"] = getattr(args, "port", 8899)
+            kwargs["host"] = getattr(args, "host", "127.0.0.1")
+            if kwargs["host"] != "127.0.0.1":
+                print(yellow(f"Warning: binding to {kwargs['host']} exposes the dashboard."))
+                print(yellow("No authentication is configured. Use with caution."))
+
+        result = daemon_start(service, **kwargs)
         if result["status"] == "started":
-            print(green("Daemon started"))
-            print(f"  Plist:    {result['plist']}")
-            print(f"  Interval: {result['interval']}s")
+            profile = SERVICES[service]
+            print(green(f"{profile.description} started"))
+            print(f"  Plist: {result['plist']}")
+            if service == "monitor":
+                print(f"  Interval: {result.get('interval', 60)}s")
+            elif service == "web":
+                host = result.get("host", "127.0.0.1")
+                port = result.get("port", 8899)
+                print(f"  URL: http://{host}:{port}")
         else:
             print(red(f"Error: {result['message']}"), file=sys.stderr)
             return 1
 
     elif action == "stop":
-        result = daemon_stop()
-        if result["status"] == "stopped":
-            print(green("Daemon stopped"))
+        if getattr(args, "stop_all", False):
+            results = daemon_stop_all()
+            for svc_name, result in results.items():
+                profile = SERVICES[svc_name]
+                print(f"  {profile.description}: {result['status']}")
         else:
-            print(red(f"Error: {result['message']}"), file=sys.stderr)
-            return 1
+            service = getattr(args, "service", "monitor")
+            result = daemon_stop(service)
+            profile = SERVICES[service]
+            if result["status"] == "stopped":
+                print(green(f"{profile.description} stopped"))
+            else:
+                print(red(f"Error: {result['message']}"), file=sys.stderr)
+                return 1
 
     elif action == "status":
-        status = daemon_status()
-        if status["running"]:
-            pid_str = f" (PID {status['pid']})" if status["pid"] else ""
-            print(f"{green('●')} {bold('Running')}{pid_str}")
-        else:
-            print(f"{dim('○')} {dim('Not running')}")
-            if not status["plist_exists"]:
-                print(dim("  No plist installed. Run: asiai daemon start"))
+        statuses = daemon_status_all()
+        print(bold("Services"))
+        for svc_name, status in statuses.items():
+            profile = SERVICES[svc_name]
+            if status["running"]:
+                pid_str = f" (PID {status['pid']})" if status["pid"] else ""
+                extra = ""
+                config = _read_plist_config(svc_name)
+                if svc_name == "monitor" and config.get("interval"):
+                    extra = f"  every {config['interval']}s"
+                elif svc_name == "web":
+                    host = config.get("host", "127.0.0.1")
+                    port = config.get("port", 8899)
+                    extra = f"  http://{host}:{port}"
+                print(f"  {green('●')} {bold(profile.description)}{pid_str}{dim(extra)}")
+            else:
+                if status["plist_exists"]:
+                    detail = dim("  installed but not running")
+                else:
+                    detail = dim("  not installed")
+                print(f"  {dim('○')} {dim(profile.description)}{detail}")
 
     elif action == "logs":
-        lines = args.lines if hasattr(args, "lines") else 50
-        output = daemon_logs(lines)
+        service = getattr(args, "service", "monitor")
+        lines = getattr(args, "lines", 50)
+        output = daemon_logs(service, lines)
         print(output)
 
     return 0
@@ -536,20 +582,50 @@ def main(argv: list[str] | None = None) -> int:
     doctor_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
 
     # daemon
-    daemon_parser = subparsers.add_parser("daemon", help="Manage monitoring daemon")
+    daemon_parser = subparsers.add_parser("daemon", help="Manage background services")
     daemon_sub = daemon_parser.add_subparsers(dest="action")
-    daemon_start_p = daemon_sub.add_parser("start", help="Start the monitoring daemon")
+    daemon_start_p = daemon_sub.add_parser("start", help="Start a background service")
+    daemon_start_p.add_argument(
+        "service",
+        nargs="?",
+        default="monitor",
+        choices=["monitor", "web"],
+        help="Service to start (default: monitor)",
+    )
     daemon_start_p.add_argument(
         "--interval",
         "-i",
         type=int,
         default=60,
         metavar="SEC",
-        help="Collection interval in seconds (default: 60)",
+        help="Monitor collection interval in seconds (default: 60)",
     )
-    daemon_sub.add_parser("stop", help="Stop the monitoring daemon")
-    daemon_sub.add_parser("status", help="Check daemon status")
-    daemon_logs_p = daemon_sub.add_parser("logs", help="Show daemon logs")
+    daemon_start_p.add_argument(
+        "--port", type=int, default=8899, help="Web dashboard port (default: 8899)"
+    )
+    daemon_start_p.add_argument(
+        "--host", default="127.0.0.1", help="Web dashboard host (default: 127.0.0.1)"
+    )
+    daemon_stop_p = daemon_sub.add_parser("stop", help="Stop a background service")
+    daemon_stop_p.add_argument(
+        "service",
+        nargs="?",
+        default="monitor",
+        choices=["monitor", "web"],
+        help="Service to stop (default: monitor)",
+    )
+    daemon_stop_p.add_argument(
+        "--all", action="store_true", dest="stop_all", help="Stop all services"
+    )
+    daemon_sub.add_parser("status", help="Show all service statuses")
+    daemon_logs_p = daemon_sub.add_parser("logs", help="Show service logs")
+    daemon_logs_p.add_argument(
+        "service",
+        nargs="?",
+        default="monitor",
+        choices=["monitor", "web"],
+        help="Service to show logs for (default: monitor)",
+    )
     daemon_logs_p.add_argument(
         "--lines",
         "-n",

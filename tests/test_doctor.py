@@ -364,8 +364,10 @@ class TestRunChecks:
             patch("asiai.doctor._check_llamacpp") as m8a,
             patch("asiai.doctor._check_vllm_mlx") as m8b,
             patch("asiai.doctor._check_db") as m9,
+            patch("asiai.doctor._check_daemon") as m10,
         ):
             for m in [m1, m2, m3, m4, m5, m6, m7, m8a, m8b, m9]:
                 m.return_value = CheckResult("test", "test", "ok", "ok")
+            m10.return_value = [CheckResult("daemon", "test", "ok", "ok")]
             checks = run_checks()
-        assert len(checks) == 10
+        assert len(checks) == 11

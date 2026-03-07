@@ -453,6 +453,45 @@ def _check_db(db_path: str = DEFAULT_DB_PATH) -> CheckResult:
     return CheckResult("database", "SQLite", status, msg)
 
 
+def _check_daemon() -> list[CheckResult]:
+    """Check LaunchAgent status for all services."""
+    from asiai.daemon import SERVICES, daemon_status
+
+    results = []
+    for name, profile in SERVICES.items():
+        status = daemon_status(name)
+        if status["running"]:
+            pid_str = f" PID {status['pid']}" if status["pid"] else ""
+            results.append(
+                CheckResult(
+                    "daemon",
+                    profile.description,
+                    "ok",
+                    f"running{pid_str}",
+                )
+            )
+        elif status["plist_exists"]:
+            results.append(
+                CheckResult(
+                    "daemon",
+                    profile.description,
+                    "warn",
+                    "plist installed but not running",
+                    fix=f"asiai daemon start {name}",
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    "daemon",
+                    profile.description,
+                    "ok",
+                    "not installed",
+                )
+            )
+    return results
+
+
 def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
     """Run all diagnostic checks and return results."""
     checks: list[CheckResult] = []
@@ -472,5 +511,8 @@ def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
 
     # Database checks
     checks.append(_check_db(db_path))
+
+    # Daemon checks
+    checks.extend(_check_daemon())
 
     return checks
