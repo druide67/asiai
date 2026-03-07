@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0](https://github.com/druide67/asiai/compare/v0.5.1...v0.6.0) — 2026-03-07
+
+### Added
+
+- Multi-service LaunchAgent: `asiai daemon start web` — persistent web dashboard via launchd (`KeepAlive`, auto-restart on crash)
+- `asiai daemon stop --all` — stop all services at once
+- `asiai daemon status` — shows all registered services (monitor + web) with PID, port, interval
+- `asiai daemon logs web` — separate log files per service
+- `asiai doctor` now reports LaunchAgent status for each service (daemon category)
+- `--port` and `--host` options for `asiai daemon start web`
+- Security warning when binding web dashboard to non-localhost
+
 ## [0.5.1](https://github.com/druide67/asiai/compare/v0.5.0...v0.5.1) — 2026-03-07
 
 ### Fixed
