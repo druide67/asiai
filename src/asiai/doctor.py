@@ -492,6 +492,116 @@ def _check_daemon() -> list[CheckResult]:
     return results
 
 
+_OLLAMA_PARAMS: dict[str, str] = {
+    "OLLAMA_HOST": "127.0.0.1:11434",
+    "OLLAMA_NUM_PARALLEL": "1",
+    "OLLAMA_MAX_LOADED_MODELS": "auto",
+    "OLLAMA_KEEP_ALIVE": "5m",
+    "OLLAMA_FLASH_ATTENTION": "0",
+}
+
+
+def _check_ollama_config() -> list[CheckResult]:
+    """Report key Ollama runtime parameters from the running process."""
+    results: list[CheckResult] = []
+
+    # Find Ollama PID via port
+    try:
+        lsof = subprocess.run(
+            ["lsof", "-ti", ":11434"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        pid = lsof.stdout.strip().splitlines()[0] if lsof.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError, IndexError):
+        pid = ""
+
+    if not pid:
+        return results
+
+    # Read env vars from running process
+    try:
+        ps = subprocess.run(
+            ["ps", "eww", "-p", pid],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        env_line = ps.stdout if ps.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        env_line = ""
+
+    # Parse OLLAMA_* vars
+    env_vars: dict[str, str] = {}
+    for token in env_line.split():
+        if token.startswith("OLLAMA_") and "=" in token:
+            k, _, v = token.partition("=")
+            env_vars[k] = v
+
+    # Report each key param
+    parts = []
+    for key, default in _OLLAMA_PARAMS.items():
+        val = env_vars.get(key, default)
+        short = key.replace("OLLAMA_", "").lower()
+        if val != default:
+            parts.append(f"{short}={val}")
+        else:
+            parts.append(f"{short}={val} (default)")
+
+    results.append(
+        CheckResult("engine", "Ollama config", "ok", ", ".join(parts))
+    )
+    return results
+
+
+def _check_alerting() -> list[CheckResult]:
+    """Check alerting webhook configuration."""
+    from asiai.daemon import _read_plist_config
+
+    results = []
+    config = _read_plist_config("monitor")
+    webhook_url = config.get("webhook_url")
+
+    if not webhook_url:
+        results.append(
+            CheckResult(
+                "alerting",
+                "Webhook",
+                "ok",
+                "not configured",
+                fix="asiai daemon start monitor --alert-webhook URL",
+            )
+        )
+        return results
+
+    results.append(
+        CheckResult("alerting", "Webhook URL", "ok", webhook_url)
+    )
+
+    # Test connectivity
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(webhook_url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            results.append(
+                CheckResult("alerting", "Webhook reachable", "ok", f"HTTP {resp.status}")
+            )
+    except Exception as e:
+        results.append(
+            CheckResult(
+                "alerting",
+                "Webhook reachable",
+                "warn",
+                str(e),
+                fix="Check webhook URL and network connectivity.",
+            )
+        )
+
+    return results
+
+
 def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
     """Run all diagnostic checks and return results."""
     checks: list[CheckResult] = []
@@ -504,6 +614,7 @@ def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
 
     # Engine checks
     checks.append(_check_ollama())
+    checks.extend(_check_ollama_config())
     checks.append(_check_lmstudio())
     checks.append(_check_mlxlm())
     checks.append(_check_llamacpp())
@@ -514,5 +625,8 @@ def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
 
     # Daemon checks
     checks.extend(_check_daemon())
+
+    # Alerting checks
+    checks.extend(_check_alerting())
 
     return checks

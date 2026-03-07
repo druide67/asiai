@@ -43,7 +43,7 @@ def render_doctor(checks: list) -> None:
         categories[cat].append(check)
 
     status_icons = {"ok": green("✓"), "warn": yellow("⚠"), "fail": red("✗")}
-    category_order = ["system", "engine", "database", "daemon"]
+    category_order = ["system", "engine", "database", "daemon", "alerting"]
 
     print(bold("Doctor"))
     print()

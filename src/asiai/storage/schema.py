@@ -63,6 +63,20 @@ CREATE TABLE IF NOT EXISTS engine_status (
 
 CREATE INDEX IF NOT EXISTS idx_engine_status_ts ON engine_status(ts);
 CREATE INDEX IF NOT EXISTS idx_engine_status_engine ON engine_status(engine);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    alert_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    message TEXT NOT NULL,
+    details TEXT,
+    webhook_sent INTEGER DEFAULT 0,
+    webhook_status INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);
+CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(alert_type);
 """
 
 # Migrations from earlier schema versions.

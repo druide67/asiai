@@ -113,7 +113,9 @@ def cmd_models(args: argparse.Namespace) -> int:
         return 0
 
     for engine in engines:
-        print(bold(f"{engine.name}") + f"  {dim(engine.base_url)}")
+        ver = engine.version()
+        ver_str = f"  {dim('v' + ver)}" if ver else ""
+        print(bold(f"{engine.name}") + ver_str + f"  {dim(engine.base_url)}")
         running = engine.list_running()
         if running:
             for m in running:
@@ -184,9 +186,12 @@ def cmd_monitor(args: argparse.Namespace) -> int:
 
     quiet = getattr(args, "quiet", False)
     json_output = getattr(args, "json_output", False)
+    webhook_url = getattr(args, "alert_webhook", None)
 
     if args.watch is not None and args.watch < 1:
         args.watch = 1
+
+    prev_snapshot: dict | None = None
 
     # Default: snapshot (with optional --watch)
     if args.watch:
@@ -196,6 +201,11 @@ def cmd_monitor(args: argparse.Namespace) -> int:
                     subprocess.run(["clear"], check=False)
                 snap = collect_snapshot(engines)
                 store_snapshot(db_path, snap)
+                if webhook_url:
+                    from asiai.alerting import check_and_alert
+
+                    check_and_alert(snap, prev_snapshot, webhook_url, db_path)
+                    prev_snapshot = snap
                 if json_output:
                     print(json.dumps(snap, indent=2))
                 elif not quiet:
@@ -208,6 +218,10 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     else:
         snap = collect_snapshot(engines)
         store_snapshot(db_path, snap)
+        if webhook_url:
+            from asiai.alerting import check_and_alert
+
+            check_and_alert(snap, prev_snapshot, webhook_url, db_path)
         if json_output:
             print(json.dumps(snap, indent=2))
         elif not quiet:
@@ -281,6 +295,9 @@ def cmd_daemon(args: argparse.Namespace) -> int:
         kwargs: dict = {}
         if service == "monitor":
             kwargs["interval"] = getattr(args, "interval", 60)
+            webhook = getattr(args, "alert_webhook", None)
+            if webhook:
+                kwargs["webhook_url"] = webhook
         elif service == "web":
             kwargs["port"] = getattr(args, "port", 8899)
             kwargs["host"] = getattr(args, "host", "127.0.0.1")
@@ -295,6 +312,8 @@ def cmd_daemon(args: argparse.Namespace) -> int:
             print(f"  Plist: {result['plist']}")
             if service == "monitor":
                 print(f"  Interval: {result.get('interval', 60)}s")
+                if kwargs.get("webhook_url"):
+                    print(f"  Webhook: {kwargs['webhook_url']}")
             elif service == "web":
                 host = result.get("host", "127.0.0.1")
                 port = result.get("port", 8899)
@@ -330,6 +349,8 @@ def cmd_daemon(args: argparse.Namespace) -> int:
                 config = _read_plist_config(svc_name)
                 if svc_name == "monitor" and config.get("interval"):
                     extra = f"  every {config['interval']}s"
+                    if config.get("webhook_url"):
+                        extra += f"  webhook: {config['webhook_url']}"
                 elif svc_name == "web":
                     host = config.get("host", "127.0.0.1")
                     port = config.get("port", 8899)
@@ -576,6 +597,11 @@ def main(argv: list[str] | None = None) -> int:
     monitor_parser.add_argument(
         "--json", action="store_true", dest="json_output", help="Output as JSON"
     )
+    monitor_parser.add_argument(
+        "--alert-webhook",
+        metavar="URL",
+        help="POST alerts to webhook URL on state transitions",
+    )
 
     # doctor
     doctor_parser = subparsers.add_parser("doctor", help="Diagnose installation and environment")
@@ -605,6 +631,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     daemon_start_p.add_argument(
         "--host", default="127.0.0.1", help="Web dashboard host (default: 127.0.0.1)"
+    )
+    daemon_start_p.add_argument(
+        "--alert-webhook",
+        metavar="URL",
+        help="POST alerts to webhook URL (monitor service only)",
     )
     daemon_stop_p = daemon_sub.add_parser("stop", help="Stop a background service")
     daemon_stop_p.add_argument(

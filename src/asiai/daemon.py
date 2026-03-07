@@ -89,6 +89,9 @@ def generate_plist(service: str = "monitor", **kwargs: int | str) -> dict:
     if service == "monitor":
         interval = int(kwargs.get("interval", 60))
         cmd += ["monitor", "--quiet"]
+        webhook_url = kwargs.get("webhook_url")
+        if webhook_url:
+            cmd += ["--alert-webhook", str(webhook_url)]
         return {
             "Label": profile.label,
             "ProgramArguments": cmd,
@@ -276,5 +279,8 @@ def _read_plist_config(service: str) -> dict:
                 config["host"] = args[i + 1]
     elif service == "monitor":
         config["interval"] = plist.get("StartInterval", 60)
+        for i, arg in enumerate(args):
+            if arg == "--alert-webhook" and i + 1 < len(args):
+                config["webhook_url"] = args[i + 1]
 
     return config

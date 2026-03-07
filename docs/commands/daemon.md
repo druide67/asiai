@@ -15,6 +15,7 @@ Manage background services via macOS launchd LaunchAgents.
 # Monitor daemon (default)
 asiai daemon start                     # Start monitoring (every 60s)
 asiai daemon start --interval 30       # Custom interval
+asiai daemon start --alert-webhook URL # Enable webhook alerts
 
 # Web dashboard service
 asiai daemon start web                 # Start web on 127.0.0.1:8899
@@ -39,7 +40,7 @@ asiai daemon logs web -n 100           # Last 100 lines
 
 Each service installs a separate launchd LaunchAgent plist in `~/Library/LaunchAgents/`:
 
-- **Monitor**: runs `asiai monitor --quiet` at the configured interval (default: 60s). Data is stored in SQLite.
+- **Monitor**: runs `asiai monitor --quiet` at the configured interval (default: 60s). Data is stored in SQLite. If `--alert-webhook` is provided, alerts are POSTed on state transitions (memory pressure, thermal, engine down).
 - **Web**: runs `asiai web --no-open` as a persistent process. Automatically restarts if it crashes (`KeepAlive: true`, `ThrottleInterval: 10s`).
 
 Both services start automatically on login (`RunAtLoad: true`).

@@ -264,6 +264,59 @@ def query_latest_benchmarks(db_path: str) -> list[dict]:
         conn.close()
 
 
+def store_alert(db_path: str, alert: dict) -> None:
+    """Persist an alert to SQLite."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO alerts
+               (ts, alert_type, severity, message, details, webhook_sent, webhook_status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                alert["ts"],
+                alert["alert_type"],
+                alert["severity"],
+                alert["message"],
+                alert.get("details", ""),
+                1 if alert.get("webhook_sent") else 0,
+                alert.get("webhook_status"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def query_recent_alerts(db_path: str, alert_type: str, seconds: int = 300) -> list[dict]:
+    """Return alerts of a given type within the last N seconds (for cooldown)."""
+    since = int(time.time()) - seconds
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM alerts WHERE alert_type = ? AND ts >= ? ORDER BY ts DESC",
+            (alert_type, since),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def query_alert_history(db_path: str, hours: int = 24) -> list[dict]:
+    """Return all alerts from the last N hours."""
+    since = int(time.time()) - (hours * 3600)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM alerts WHERE ts >= ? ORDER BY ts DESC",
+            (since,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:
     """Compare metrics at two timestamps (nearest match)."""
     conn = sqlite3.connect(db_path)

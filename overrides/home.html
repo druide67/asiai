@@ -148,7 +148,7 @@
   /* ── Feature Cards ── */
   .feature-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
   }
   .feature-card {
@@ -602,6 +602,15 @@
     "it": "Endpoint /metrics integrato. Collega Grafana, Datadog o qualsiasi strumento compatibile con Prometheus. Zero configurazione.",
     "pt": "Endpoint /metrics integrado. Conecte Grafana, Datadog ou qualquer ferramenta compatível com Prometheus. Zero configuração."
   },
+  "feat9_t": {"en": "Alert Webhooks", "fr": "Alertes webhook", "de": "Alert-Webhooks", "es": "Alertas webhook", "it": "Alert webhook", "pt": "Alertas webhook"},
+  "feat9_d": {
+    "en": "POST to Slack, Discord, or any URL on memory pressure, thermal throttling, or engine down. Transition-based &mdash; no spam.",
+    "fr": "POST vers Slack, Discord ou toute URL en cas de pression mémoire, throttling thermique ou moteur down. Basé sur les transitions &mdash; pas de spam.",
+    "de": "POST an Slack, Discord oder jede URL bei Speicherdruck, thermischer Drosselung oder Engine-Ausfall. Transitionsbasiert &mdash; kein Spam.",
+    "es": "POST a Slack, Discord o cualquier URL ante presión de memoria, throttling térmico o motor caído. Basado en transiciones &mdash; sin spam.",
+    "it": "POST a Slack, Discord o qualsiasi URL in caso di pressione memoria, throttling termico o motore down. Basato su transizioni &mdash; niente spam.",
+    "pt": "POST para Slack, Discord ou qualquer URL em caso de pressão de memória, throttling térmico ou motor indisponível. Baseado em transições &mdash; sem spam."
+  },
   "uc_title": {
     "en": "What Will You Discover?", "fr": "Qu'allez-vous découvrir ?", "de": "Was werden Sie entdecken?",
     "es": "¿Qué vas a descubrir?", "it": "Cosa scoprirai?", "pt": "O que você vai descobrir?"
@@ -857,6 +866,11 @@
           <div class="feature-icon">&#x1F4C8;</div>
           <h3>{{ tr("feat8_t") }}</h3>
           <p>{{ tr("feat8_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F514;</div>
+          <h3>{{ tr("feat9_t") }}</h3>
+          <p>{{ tr("feat9_d") }}</p>
         </div>
       </div>
     </div>

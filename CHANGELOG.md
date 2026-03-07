@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0](https://github.com/druide67/asiai/compare/v0.6.0...v0.7.0) — 2026-03-07
+
+### Added
+
+- **Alert webhooks**: `asiai monitor --alert-webhook URL` — POST JSON alerts on state transitions (memory pressure, thermal throttling, engine down)
+  - Transition-based alerting (fires on state change, not absolute value) with 5-minute cooldown per alert type
+  - Fire-and-forget HTTP POST, alert history stored in SQLite
+  - `asiai daemon start monitor --alert-webhook URL` — persistent alerting via launchd
+- **LM Studio VRAM**: retrieves real VRAM usage via `~/.lmstudio/bin/lms ps --json` (API returns 0)
+  - Fallback to `lms ls --json` for lazy-loading scenarios (model available but not yet actively loaded)
+  - Graceful degradation: falls back to 0 if `lms` CLI is unavailable
+  - VRAM data propagates automatically to monitor, benchmark, web dashboard, and Prometheus metrics
+- `asiai doctor` now checks alerting webhook configuration and connectivity (new "alerting" category)
+- `asiai doctor` now displays Ollama runtime parameters (host, num_parallel, max_loaded_models, keep_alive, flash_attention)
+- `asiai models` now shows engine version alongside engine name (e.g., `ollama v0.17.5`)
+
 ## [0.6.0](https://github.com/druide67/asiai/compare/v0.5.1...v0.6.0) — 2026-03-07
 
 ### Added

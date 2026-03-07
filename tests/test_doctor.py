@@ -13,6 +13,7 @@ from asiai.doctor import (
     _check_memory_pressure,
     _check_mlxlm,
     _check_ollama,
+    _check_ollama_config,
     _check_ram,
     _check_thermal,
     _check_vllm_mlx,
@@ -314,6 +315,67 @@ class TestCheckVllmMlx:
         assert "mlx-model" in result.message
 
 
+class TestCheckOllamaConfig:
+    def test_ollama_not_running_returns_empty(self):
+        mock_lsof = MagicMock()
+        mock_lsof.returncode = 1
+        mock_lsof.stdout = ""
+        with patch("asiai.doctor.subprocess.run", return_value=mock_lsof):
+            results = _check_ollama_config()
+        assert results == []
+
+    def test_custom_env_vars(self):
+        mock_lsof = MagicMock()
+        mock_lsof.returncode = 0
+        mock_lsof.stdout = "12345"
+
+        env_line = (
+            "  PID COMMAND\n"
+            "12345 ollama serve OLLAMA_NUM_PARALLEL=4 OLLAMA_KEEP_ALIVE=-1 "
+            "OLLAMA_FLASH_ATTENTION=1 HOME=/Users/test"
+        )
+        mock_ps = MagicMock()
+        mock_ps.returncode = 0
+        mock_ps.stdout = env_line
+
+        def mock_run(cmd, **_kw):
+            if cmd[0] == "lsof":
+                return mock_lsof
+            return mock_ps
+
+        with patch("asiai.doctor.subprocess.run", side_effect=mock_run):
+            results = _check_ollama_config()
+
+        assert len(results) == 1
+        msg = results[0].message
+        assert "num_parallel=4" in msg
+        assert "keep_alive=-1" in msg
+        assert "flash_attention=1" in msg
+        # defaults should still show
+        assert "host=127.0.0.1:11434 (default)" in msg
+
+    def test_all_defaults(self):
+        mock_lsof = MagicMock()
+        mock_lsof.returncode = 0
+        mock_lsof.stdout = "12345"
+
+        mock_ps = MagicMock()
+        mock_ps.returncode = 0
+        mock_ps.stdout = "  PID COMMAND\n12345 ollama serve HOME=/Users/test"
+
+        def mock_run(cmd, **_kw):
+            if cmd[0] == "lsof":
+                return mock_lsof
+            return mock_ps
+
+        with patch("asiai.doctor.subprocess.run", side_effect=mock_run):
+            results = _check_ollama_config()
+
+        assert len(results) == 1
+        # All should show (default)
+        assert results[0].message.count("(default)") == 5
+
+
 class TestCheckDb:
     def test_db_not_exists(self):
         result = _check_db("/nonexistent/path/metrics.db")
@@ -359,15 +421,19 @@ class TestRunChecks:
             patch("asiai.doctor._check_memory_pressure") as m3,
             patch("asiai.doctor._check_thermal") as m4,
             patch("asiai.doctor._check_ollama") as m5,
+            patch("asiai.doctor._check_ollama_config") as m5b,
             patch("asiai.doctor._check_lmstudio") as m6,
             patch("asiai.doctor._check_mlxlm") as m7,
             patch("asiai.doctor._check_llamacpp") as m8a,
             patch("asiai.doctor._check_vllm_mlx") as m8b,
             patch("asiai.doctor._check_db") as m9,
             patch("asiai.doctor._check_daemon") as m10,
+            patch("asiai.doctor._check_alerting") as m11,
         ):
             for m in [m1, m2, m3, m4, m5, m6, m7, m8a, m8b, m9]:
                 m.return_value = CheckResult("test", "test", "ok", "ok")
+            m5b.return_value = [CheckResult("engine", "Ollama config", "ok", "ok")]
             m10.return_value = [CheckResult("daemon", "test", "ok", "ok")]
+            m11.return_value = [CheckResult("alerting", "test", "ok", "ok")]
             checks = run_checks()
-        assert len(checks) == 11
+        assert len(checks) == 13

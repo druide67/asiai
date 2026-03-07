@@ -135,6 +135,7 @@ Options:
 -H, --history PERIOD       Show history (e.g. 24h, 1h)
 -a, --analyze HOURS        Comprehensive analysis with trends
 -c, --compare TS TS        Compare two timestamps
+    --alert-webhook URL    POST alerts on state transitions (memory, thermal, engine down)
 ```
 
 ### `asiai doctor`
@@ -217,7 +218,7 @@ asiai tui
 | **Power** | GPU power draw in watts (`sudo powermetrics`) |
 | **tok/s/W** | Energy efficiency — tokens per second per watt |
 | **Stability** | Run-to-run variance: stable (CV<5%), variable (<10%), unstable (>10%) |
-| **VRAM** | GPU memory footprint (Ollama only) |
+| **VRAM** | GPU memory footprint (Ollama, LM Studio via `lms` CLI) |
 | **Thermal** | CPU throttling state and speed limit percentage |
 
 All metrics stored in SQLite (`~/.local/share/asiai/metrics.db`) with 90-day retention and automatic regression detection.

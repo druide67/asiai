@@ -89,6 +89,19 @@ class TestGeneratePlist:
             plist = generate_plist(interval=120)
         assert plist["StartInterval"] == 120
 
+    def test_monitor_with_webhook(self):
+        with patch("asiai.daemon.shutil.which", return_value="/usr/local/bin/asiai"):
+            plist = generate_plist(webhook_url="https://example.com/hook")
+        args = plist["ProgramArguments"]
+        assert "--alert-webhook" in args
+        idx = args.index("--alert-webhook")
+        assert args[idx + 1] == "https://example.com/hook"
+
+    def test_monitor_without_webhook(self):
+        with patch("asiai.daemon.shutil.which", return_value="/usr/local/bin/asiai"):
+            plist = generate_plist()
+        assert "--alert-webhook" not in plist["ProgramArguments"]
+
 
 class TestGeneratePlistWeb:
     def test_web_defaults(self):
@@ -388,6 +401,28 @@ class TestReadPlistConfig:
             config = _read_plist_config("monitor")
 
         assert config["interval"] == 120
+
+    def test_read_monitor_config_with_webhook(self):
+        plist_data = {
+            "StartInterval": 60,
+            "ProgramArguments": [
+                "/usr/local/bin/asiai",
+                "monitor",
+                "--quiet",
+                "--alert-webhook",
+                "https://example.com/hook",
+            ],
+        }
+
+        with (
+            patch("asiai.daemon.os.path.exists", return_value=True),
+            patch("asiai.daemon.plistlib.load", return_value=plist_data),
+            patch("builtins.open", mock_open()),
+        ):
+            config = _read_plist_config("monitor")
+
+        assert config["interval"] == 60
+        assert config["webhook_url"] == "https://example.com/hook"
 
     def test_no_plist_returns_empty(self):
         with patch("asiai.daemon.os.path.exists", return_value=False):

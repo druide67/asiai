@@ -16,9 +16,15 @@ Start the local server from the LM Studio app, then load a model.
 |----------|-------|
 | Default port | 1234 |
 | API type | OpenAI-compatible |
-| VRAM reporting | No (not exposed via API) |
+| VRAM reporting | Yes (via `lms ps --json` CLI) |
 | Model format | GGUF, MLX |
 | Detection | `/lms/version` endpoint or app bundle plist |
+
+## VRAM reporting
+
+Since v0.7.0, asiai retrieves VRAM usage from the LM Studio CLI (`~/.lmstudio/bin/lms ps --json`). This provides accurate model size data that the OpenAI-compatible API does not expose.
+
+If the `lms` CLI is not installed or unavailable, asiai gracefully falls back to reporting VRAM as 0 (same behavior as before v0.7.0).
 
 ## Notes
 

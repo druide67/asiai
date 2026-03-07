@@ -116,6 +116,54 @@ def test_models_json_no_engines(capsys):
     assert data["engines"] == []
 
 
+def test_monitor_alert_webhook_arg(capsys, tmp_path):
+    """monitor --alert-webhook is parsed without error."""
+    db_path = str(tmp_path / "test.db")
+    mock_snap = {
+        "ts": 1709700000,
+        "cpu_load_1": 2.5,
+        "cpu_load_5": 2.0,
+        "cpu_load_15": 1.5,
+        "cpu_cores": 10,
+        "mem_total": 68_719_476_736,
+        "mem_used": 34_000_000_000,
+        "mem_pressure": "normal",
+        "thermal_level": "nominal",
+        "thermal_speed_limit": 100,
+        "uptime": 86400,
+        "inference_engine": "ollama",
+        "engine_version": "ollama/0.17.4",
+        "models": [],
+    }
+
+    with (
+        patch("asiai.cli._discover_engines", return_value=[]),
+        patch("asiai.collectors.snapshot.collect_snapshot", return_value=mock_snap),
+        patch("asiai.storage.db.store_snapshot"),
+        patch("asiai.storage.db.init_db"),
+        patch("asiai.alerting.check_and_alert", return_value=[]) as mock_alert,
+    ):
+        ret = main(["monitor", "--json", "--db", db_path,
+                     "--alert-webhook", "https://example.com/hook"])
+    assert ret == 0
+    # prev_snapshot is None on first call → no alert fired
+    mock_alert.assert_called_once()
+    assert mock_alert.call_args[0][1] is None  # prev_snapshot
+
+
+def test_daemon_start_webhook(capsys, tmp_path):
+    """daemon start monitor --alert-webhook passes URL to generate_plist."""
+    with (
+        patch("asiai.daemon.daemon_status", return_value={"running": False}),
+        patch("asiai.daemon.daemon_start") as mock_start,
+    ):
+        mock_start.return_value = {"status": "started", "plist": "/tmp/test.plist", "interval": 60}
+        main(["daemon", "start", "monitor", "--alert-webhook", "https://example.com/hook"])
+    mock_start.assert_called_once()
+    call_kwargs = mock_start.call_args
+    assert call_kwargs[1].get("webhook_url") == "https://example.com/hook"
+
+
 def test_monitor_json_output(capsys, tmp_path):
     """monitor --json outputs valid JSON."""
     db_path = str(tmp_path / "test.db")
