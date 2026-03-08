@@ -15,7 +15,7 @@ from asiai.collectors.system import (
     collect_uptime,
 )
 from asiai.engines.base import InferenceEngine
-from asiai.engines.detect import _extract_port
+from asiai.engines.detect import extract_port
 
 logger = logging.getLogger("asiai.collectors.snapshot")
 
@@ -123,7 +123,7 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                 entry["vram_total"] = vram_total
 
                 # Inference activity: TCP connections + scraped metrics
-                port = _extract_port(engine.base_url)
+                port = extract_port(engine.base_url)
                 entry["tcp_connections"] = count_tcp_connections(port)
                 scraped = engine.scrape_metrics()
                 entry["requests_processing"] = scraped.get("requests_processing", 0)

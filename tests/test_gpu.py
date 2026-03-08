@@ -99,6 +99,17 @@ class TestCollectGpu:
         gpu = collect_gpu()
         assert gpu.utilization_pct == -1.0
 
+    @patch("asiai.collectors.gpu.subprocess.run")
+    def test_perf_stats_not_dict(self, mock_run):
+        """PerformanceStatistics that is not a dict gives defaults."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=plistlib.dumps([{"PerformanceStatistics": "not_a_dict"}]),
+        )
+        gpu = collect_gpu()
+        assert gpu.utilization_pct == -1.0
+        assert gpu.mem_in_use == 0
+
 
 class TestHelpers:
     """Tests for _pct and _int helpers."""

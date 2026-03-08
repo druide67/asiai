@@ -135,7 +135,7 @@ def detect_port_process(port: int) -> str:
     return ""
 
 
-def _extract_port(base_url: str) -> int:
+def extract_port(base_url: str) -> int:
     """Extract port number from a base URL."""
     try:
         # "http://localhost:8080" -> "8080"
@@ -207,7 +207,7 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                     return "vllm_mlx", ""
 
         # 2d. Process detection via lsof
-        port = _extract_port(base_url)
+        port = extract_port(base_url)
         if port:
             process_engine = detect_port_process(port)
             if process_engine:

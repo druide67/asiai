@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from asiai.web.state import AppState
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
@@ -10,7 +14,7 @@ from fastapi.responses import JSONResponse, Response
 router = APIRouter(prefix="/api", tags=["api"])
 
 
-def _get_or_refresh_snapshot(state) -> dict:
+def _get_or_refresh_snapshot(state: AppState) -> dict:
     """Get cached snapshot or collect a fresh one."""
     cached = state.get_cached_snapshot(max_age=5.0)
     if cached:

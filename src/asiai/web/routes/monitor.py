@@ -5,6 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from asiai.web.state import AppState
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -83,7 +87,7 @@ async def monitor_stream(request: Request) -> Response:
     )
 
 
-def _get_snapshot(state) -> dict:
+def _get_snapshot(state: AppState) -> dict:
     """Collect system snapshot."""
     from asiai.collectors.snapshot import collect_snapshot
 
