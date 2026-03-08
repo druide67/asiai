@@ -29,6 +29,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Leaderboard: leaderboard.md
   - Getting Started: getting-started.md
   - Installation: installation.md
   - Commands:
