@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0](https://github.com/druide67/asiai/compare/v0.7.0...v1.0.0) — 2026-03-08
+
+### Added
+
+- **Community Benchmark Database** — share and compare results with the community
+  - `asiai bench --share` — opt-in anonymous submission to `api.asiai.dev`
+  - `asiai leaderboard` — browse community benchmarks by chip and model
+  - `asiai compare` — compare your results against community medians (delta tok/s, %)
+  - Zero-dependency client (stdlib `urllib`), offline-first (network failures never block benchmarks)
+  - Local audit trail in SQLite (`community_submissions` table)
+- **Smart Recommendations** — `asiai recommend` suggests the best engine for your hardware
+  - Three data sources by priority: local benchmarks → community data → heuristics
+  - Scoring by use-case: `--use-case throughput|latency|efficiency`
+  - RAM-aware model filtering (16 GB → 7B, 64 GB → 35B, 128 GB → 70B)
+  - Confidence levels: high (5+ local runs), medium (1-4 runs), low (heuristic only)
+- **Exo engine** — 6th inference engine for distributed inference across Apple Silicon devices
+  - `OpenAICompatEngine` pattern (shared with 4 other engines), port 52415
+  - Cluster topology display (node count, total VRAM)
+  - `asiai doctor` checks Exo reachability
+- **Community API backend** — `api.asiai.dev` (PHP 8 + MySQL)
+  - 3 endpoints: POST /benchmarks, GET /leaderboard, GET /compare
+  - Defense-in-depth: rate limiting (10/day), payload validation, IP anonymization (daily-salt SHA256), PDO prepared statements
+  - Anonymous by design — no accounts, no tracking, GDPR-friendly
+
+### Changed
+
+- Homepage: 3 new feature cards (Community Leaderboard, Smart Recommendations, Distributed Inference) in 9 languages
+
 ## [0.7.0](https://github.com/druide67/asiai/compare/v0.6.0...v0.7.0) — 2026-03-07
 
 ### Added

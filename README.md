@@ -19,6 +19,8 @@
 
 **asiai** compares inference engines side-by-side on your Mac. Load the same model on Ollama and LM Studio, run `asiai bench`, get the numbers. No guessing, no vibes — just tok/s, TTFT, power efficiency, and stability per engine.
 
+Share your results with the community (`--share`), compare against other Apple Silicon users (`asiai compare`), and get smart engine recommendations (`asiai recommend`).
+
 Born from the OpenClaw project, where we needed hard data to pick the fastest engine for multi-agent swarms on Mac Mini M4 Pro.
 
 ## Quick start
@@ -40,7 +42,7 @@ pip install -e .
 
 ### `asiai detect`
 
-Auto-detect running inference engines across 5 ports.
+Auto-detect running inference engines across 6 ports.
 
 ```
 $ asiai detect
@@ -85,6 +87,7 @@ Options:
 -r, --runs N               Runs per prompt (default: 3, for median + stddev)
     --power                Measure GPU power via powermetrics (sudo required)
     --context-size SIZE    Context fill prompt: 4k, 16k, 32k, 64k
+    --share                Share results with the community (anonymous, opt-in)
 -H, --history PERIOD       Show past benchmarks (e.g. 7d, 24h)
 ```
 
@@ -191,6 +194,34 @@ asiai web --no-open          # Don't auto-open browser
 
 Features: system overview, engine status, live benchmark with SSE progress, history charts, doctor checks, dark/light theme.
 
+### `asiai leaderboard`
+
+Browse community benchmarks. Filter by chip or model.
+
+```bash
+asiai leaderboard                      # All results
+asiai leaderboard --chip "M4 Pro"      # Filter by chip
+asiai leaderboard --model qwen2.5      # Filter by model
+```
+
+### `asiai compare`
+
+Compare your local results against community medians.
+
+```bash
+asiai compare --chip "Apple M1 Max" --model qwen2.5:7b
+```
+
+### `asiai recommend`
+
+Get engine recommendations based on your hardware and benchmarks.
+
+```bash
+asiai recommend                                # Best engine for your Mac
+asiai recommend --use-case latency             # Optimize for TTFT
+asiai recommend --model qwen2.5 --community    # Include community data
+```
+
 ### `asiai tui`
 
 Interactive terminal dashboard with auto-refresh. Requires `pip install asiai[tui]`.
@@ -208,6 +239,7 @@ asiai tui
 | [mlx-lm](https://github.com/ml-explore/mlx-examples) | 8080 | `brew install mlx-lm` | OpenAI-compatible |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | 8080 | `brew install llama.cpp` | OpenAI-compatible |
 | [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | `pip install vllm-mlx` | OpenAI-compatible |
+| [Exo](https://github.com/exo-explore/exo) | 52415 | `pip install exo` | OpenAI-compatible |
 
 ## What it measures
 
@@ -280,7 +312,7 @@ asiai models --json | jq '.engines[].models[].name'
 
 ## Requirements
 
-- macOS on Apple Silicon (M1 / M2 / M3 / M4)
+- macOS on Apple Silicon (M1 / M2 / M3 / M4 families)
 - Python 3.11+
 - At least one inference engine running locally
 
@@ -303,7 +335,10 @@ Optional extras:
 | **v0.3** | 5 engines, power metrics, multi-run variance, regression detection | **Done** |
 | **v0.4** | CI, MkDocs, export JSON, thermal drift, web dashboard | **Done** |
 | **v0.5** | REST API, Prometheus /metrics, CLI --json, engine uptime tracking | **Done** |
-| v1.0 | Multi-server, community export, Homebrew Core | Planned |
+| **v0.6** | Multi-service LaunchAgent (`daemon start web`), daemon status/logs/stop --all | **Done** |
+| **v0.7** | Alert webhooks, LM Studio VRAM, Ollama config in doctor | **Done** |
+| **v1.0** | Community Benchmark DB, smart recommendations, Exo engine, leaderboard | **Done** |
+| v1.1 | HuggingFace model discovery (`--discover`), leaderboard web page | Planned |
 
 ## License
 
