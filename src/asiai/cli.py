@@ -569,7 +569,7 @@ def cmd_leaderboard(args: argparse.Namespace) -> int:
         mdl = entry.get("model", "?")
         tok = entry.get("median_tok_s", 0.0)
         ttft = entry.get("median_ttft_ms", 0.0)
-        samples = entry.get("submissions", 0)
+        samples = entry.get("samples", entry.get("submissions", 0))
         print(f"  {green(eng):<12} {mdl:<30} {tok:>8.1f} {ttft:>7.0f}ms {samples:>8}")
 
     return 0
