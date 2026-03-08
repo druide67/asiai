@@ -604,17 +604,17 @@
     "ja": "Python標準ライブラリのみ。requests不要、psutil不要、rich不要。秒速インストール。",
     "ko": "Python 표준 라이브러리만 사용. requests, psutil, rich 불필요. 초 단위 설치."
   },
-  "feat5_t": {"en": "Thermal Intelligence", "fr": "Intelligence thermique", "de": "Thermische Intelligenz", "es": "Inteligencia térmica", "it": "Intelligenza termica", "pt": "Inteligência térmica", "zh": "温度智能监控", "ja": "サーマルインテリジェンス", "ko": "온도 인텔리전스"},
+  "feat5_t": {"en": "GPU Observability", "fr": "Observabilité GPU", "de": "GPU-Observability", "es": "Observabilidad GPU", "it": "Osservabilità GPU", "pt": "Observabilidade GPU", "zh": "GPU可观测性", "ja": "GPUオブザーバビリティ", "ko": "GPU 관측성"},
   "feat5_d": {
-    "en": "Detects throttling during benchmarks. Alerts when your Mac overheats mid-inference.",
-    "fr": "Détecte le throttling pendant les benchmarks. Alerte quand votre Mac surchauffe en pleine inférence.",
-    "de": "Erkennt Throttling während Benchmarks. Warnt, wenn Ihr Mac während der Inferenz überhitzt.",
-    "es": "Detecta throttling durante benchmarks. Alerta cuando tu Mac se sobrecalienta durante la inferencia.",
-    "it": "Rileva il throttling durante i benchmark. Avvisa quando il Mac si surriscalda durante l'inferenza.",
-    "pt": "Detecta throttling durante benchmarks. Alerta quando seu Mac superaquece durante a inferência.",
-    "zh": "在跑分期间检测降频。推理过程中Mac过热时自动告警。",
-    "ja": "ベンチマーク中のスロットリングを検出。推論中にMacが過熱するとアラート。",
-    "ko": "벤치마크 중 스로틀링 감지. 추론 중 Mac 과열 시 알림."
+    "en": "Real-time GPU utilization, renderer, tiler, and memory &mdash; via passive IOReport. Live gauges, sparklines, historical charts. See your Apple Silicon GPU like never before.",
+    "fr": "Utilisation GPU en temps réel, renderer, tiler et mémoire &mdash; via IOReport passif. Jauges live, sparklines, courbes historiques. Voyez votre GPU Apple Silicon comme jamais.",
+    "de": "GPU-Auslastung, Renderer, Tiler und Speicher in Echtzeit &mdash; via passivem IOReport. Live-Gauges, Sparklines, historische Charts. Sehen Sie Ihre Apple Silicon GPU wie nie zuvor.",
+    "es": "Utilización GPU en tiempo real, renderer, tiler y memoria &mdash; via IOReport pasivo. Gauges en vivo, sparklines, gráficos históricos. Ve tu GPU Apple Silicon como nunca.",
+    "it": "Utilizzo GPU in tempo reale, renderer, tiler e memoria &mdash; tramite IOReport passivo. Gauge live, sparkline, grafici storici. Guarda la tua GPU Apple Silicon come mai prima.",
+    "pt": "Utilização GPU em tempo real, renderer, tiler e memória &mdash; via IOReport passivo. Gauges ao vivo, sparklines, gráficos históricos. Veja sua GPU Apple Silicon como nunca.",
+    "zh": "实时GPU利用率、渲染器、Tiler和内存 &mdash; 通过被动IOReport。实时仪表、迷你图、历史图表。以前所未有的方式观察Apple Silicon GPU。",
+    "ja": "GPU使用率、レンダラー、タイラー、メモリをリアルタイム計測 &mdash; パッシブIOReportで。ライブゲージ、スパークライン、履歴チャート。Apple Silicon GPUをかつてない精度で可視化。",
+    "ko": "실시간 GPU 사용률, 렌더러, 타일러, 메모리 &mdash; 패시브 IOReport 방식. 라이브 게이지, 스파크라인, 히스토리 차트. Apple Silicon GPU를 전례 없는 수준으로 확인."
   },
   "feat6_t": {"en": "Regression Detection", "fr": "Détection de régression", "de": "Regressionserkennung", "es": "Detección de regresiones", "it": "Rilevamento regressioni", "pt": "Detecção de regressões", "zh": "回归检测", "ja": "リグレッション検出", "ko": "회귀 감지"},
   "feat6_d": {
@@ -747,6 +747,18 @@
     "zh": "暴露/metrics，用Prometheus抓取，在Grafana中可视化。生产级可观测性。",
     "ja": "/metricsを公開、Prometheusでスクレイプ、Grafanaで可視化。本番品質の可観測性。",
     "ko": "/metrics 노출, Prometheus로 스크레이프, Grafana에서 시각화. 프로덕션 수준 관측성."
+  },
+  "uc12_t": {"en": "Track AI agent inference", "fr": "Suivre l'inférence des agents IA", "de": "KI-Agent-Inferenz verfolgen", "es": "Rastrear inferencia de agentes IA", "it": "Monitorare l'inferenza degli agenti IA", "pt": "Rastrear inferência de agentes IA", "zh": "追踪AI智能体推理", "ja": "AIエージェント推論を追跡", "ko": "AI 에이전트 추론 추적"},
+  "uc12_d": {
+    "en": "GPU activity, TCP connections, KV cache &mdash; know when your agents are thinking, idle, or overloaded. API-ready for swarm orchestrators.",
+    "fr": "Activité GPU, connexions TCP, cache KV &mdash; sachez quand vos agents réfléchissent, sont inactifs ou surchargés. API prête pour les orchestrateurs de swarm.",
+    "de": "GPU-Aktivität, TCP-Verbindungen, KV-Cache &mdash; wissen, wann Ihre Agenten denken, idle oder überlastet sind. API-bereit für Schwarm-Orchestratoren.",
+    "es": "Actividad GPU, conexiones TCP, caché KV &mdash; sabe cuándo tus agentes piensan, están inactivos o sobrecargados. API lista para orquestadores de swarm.",
+    "it": "Attività GPU, connessioni TCP, cache KV &mdash; sappi quando i tuoi agenti pensano, sono inattivi o sovraccarichi. API pronta per orchestratori di swarm.",
+    "pt": "Atividade GPU, conexões TCP, cache KV &mdash; saiba quando seus agentes estão pensando, ociosos ou sobrecarregados. API pronta para orquestradores de swarm.",
+    "zh": "GPU活动、TCP连接、KV缓存 &mdash; 了解你的智能体何时在推理、空闲或过载。API可直接对接集群编排器。",
+    "ja": "GPUアクティビティ、TCP接続、KVキャッシュ &mdash; エージェントが推論中か、アイドルか、過負荷かを把握。スウォームオーケストレーターに対応するAPI。",
+    "ko": "GPU 활동, TCP 연결, KV 캐시 &mdash; 에이전트가 추론 중인지, 유휴 상태인지, 과부하인지 파악. 스웜 오케스트레이터용 API 지원."
   },
   "how_title": {
     "en": "Up and Running in 60 Seconds", "fr": "Opérationnel en 60 secondes", "de": "In 60 Sekunden startklar",
@@ -975,7 +987,7 @@
           <p>{{ tr("feat4_d") }}</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F321;&#xFE0F;</div>
+          <div class="feature-icon">&#x1F50D;</div>
           <h3>{{ tr("feat5_t") }}</h3>
           <p>{{ tr("feat5_d") }}</p>
         </div>
@@ -1067,6 +1079,10 @@
         <div class="usecase-item">
           <div class="usecase-icon">&#x1F4E1;</div>
           <div><h4>"{{ tr("uc11_t") }}"</h4><p>{{ tr("uc11_d") }}</p></div>
+        </div>
+        <div class="usecase-item">
+          <div class="usecase-icon">&#x1F9E0;</div>
+          <div><h4>"{{ tr("uc12_t") }}"</h4><p>{{ tr("uc12_d") }}</p></div>
         </div>
       </div>
     </div>
