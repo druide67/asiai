@@ -8,13 +8,13 @@
   .md-main__inner { margin: 0; }
   .md-content { display: none; }
 
-  /* Ensure language dropdown shows all 6 items without scroll */
+  /* Ensure language dropdown shows all 9 items without scroll */
   .md-header .md-select:hover .md-select__inner,
   .md-header .md-select:focus-within .md-select__inner {
-    max-height: 20rem !important;
+    max-height: 30rem !important;
   }
   .md-header .md-select__inner .md-select__list {
-    max-height: 20rem !important;
+    max-height: 30rem !important;
     overflow-y: visible !important;
   }
 
@@ -455,7 +455,10 @@
     "de": "Welches LLM? Welche Engine?<br>Welche Kombi gewinnt auf Ihrem Mac?",
     "es": "¿Cuál LLM? ¿Cuál motor?<br>¿Qué combo gana en tu Mac?",
     "it": "Quale LLM? Quale motore?<br>Quale combo vince sul tuo Mac?",
-    "pt": "Qual LLM? Qual motor?<br>Qual combo vence no seu Mac?"
+    "pt": "Qual LLM? Qual motor?<br>Qual combo vence no seu Mac?",
+    "zh": "哪个LLM？哪个引擎？<br>哪种组合在你的Mac上最强？",
+    "ja": "どのLLM？どのエンジン？<br>あなたのMacで最強の組み合わせは？",
+    "ko": "어떤 LLM? 어떤 엔진?<br>당신의 Mac에서 최강 조합은?"
   },
   "hero_tagline": {
     "en": "Benchmark to choose. Dashboard to monitor. History to spot problems.",
@@ -463,27 +466,35 @@
     "de": "Benchmarken zum Auswählen. Dashboard zum Überwachen. Verlauf zum Erkennen von Problemen.",
     "es": "Benchmark para elegir. Dashboard para monitorear. Historial para detectar problemas.",
     "it": "Benchmark per scegliere. Dashboard per monitorare. Storico per individuare i problemi.",
-    "pt": "Benchmark para escolher. Dashboard para monitorar. Histórico para detectar problemas."
+    "pt": "Benchmark para escolher. Dashboard para monitorar. Histórico para detectar problemas.",
+    "zh": "跑分来选择。仪表盘来监控。历史记录来发现问题。",
+    "ja": "ベンチマークで選ぶ。ダッシュボードで監視。履歴で問題を発見。",
+    "ko": "벤치마크로 선택하고. 대시보드로 모니터링하고. 이력으로 문제를 발견하세요."
   },
   "cta_start": {
     "en": "Get Started", "fr": "Démarrer", "de": "Loslegen",
-    "es": "Empezar", "it": "Inizia", "pt": "Começar"
+    "es": "Empezar", "it": "Inizia", "pt": "Começar",
+    "zh": "开始", "ja": "始める", "ko": "시작하기"
   },
   "cta_github": {
     "en": "View on GitHub", "fr": "Voir sur GitHub", "de": "Auf GitHub ansehen",
-    "es": "Ver en GitHub", "it": "Vedi su GitHub", "pt": "Ver no GitHub"
+    "es": "Ver en GitHub", "it": "Vedi su GitHub", "pt": "Ver no GitHub",
+    "zh": "在GitHub上查看", "ja": "GitHubで見る", "ko": "GitHub에서 보기"
   },
   "pain_title": {
     "en": "The Local LLM Problem", "fr": "Le problème des LLM locaux", "de": "Das Problem lokaler LLMs",
-    "es": "El problema de los LLM locales", "it": "Il problema dei LLM locali", "pt": "O problema dos LLMs locais"
+    "es": "El problema de los LLM locales", "it": "Il problema dei LLM locali", "pt": "O problema dos LLMs locais",
+    "zh": "本地LLM的问题", "ja": "ローカルLLMの課題", "ko": "로컬 LLM의 문제"
   },
   "pain_subtitle": {
     "en": "Sound familiar?", "fr": "Ça vous dit quelque chose ?", "de": "Kommt Ihnen das bekannt vor?",
-    "es": "¿Te suena?", "it": "Ti suona familiare?", "pt": "Parece familiar?"
+    "es": "¿Te suena?", "it": "Ti suona familiare?", "pt": "Parece familiar?",
+    "zh": "听起来熟悉吗？", "ja": "心当たりありませんか？", "ko": "익숙하지 않으세요?"
   },
   "pain1_title": {
     "en": "Fragmented", "fr": "Fragmenté", "de": "Fragmentiert",
-    "es": "Fragmentado", "it": "Frammentato", "pt": "Fragmentado"
+    "es": "Fragmentado", "it": "Frammentato", "pt": "Fragmentado",
+    "zh": "碎片化", "ja": "断片化", "ko": "파편화"
   },
   "pain1_desc": {
     "en": "Ollama, LM Studio, mlx-lm &mdash; each with its own CLI, formats, and metrics. No common ground.",
@@ -491,11 +502,15 @@
     "de": "Ollama, LM Studio, mlx-lm &mdash; jede mit eigenem CLI, Formaten und Metriken. Kein gemeinsamer Nenner.",
     "es": "Ollama, LM Studio, mlx-lm &mdash; cada uno con su CLI, formatos y métricas. Sin terreno común.",
     "it": "Ollama, LM Studio, mlx-lm &mdash; ognuno con il proprio CLI, formati e metriche. Nessun terreno comune.",
-    "pt": "Ollama, LM Studio, mlx-lm &mdash; cada um com seu CLI, formatos e métricas. Nenhum terreno comum."
+    "pt": "Ollama, LM Studio, mlx-lm &mdash; cada um com seu CLI, formatos e métricas. Nenhum terreno comum.",
+    "zh": "Ollama、LM Studio、mlx-lm &mdash; 各有各的CLI、格式和指标。毫无统一标准。",
+    "ja": "Ollama、LM Studio、mlx-lm &mdash; それぞれ独自のCLI、フォーマット、指標。共通基盤なし。",
+    "ko": "Ollama, LM Studio, mlx-lm &mdash; 각각 다른 CLI, 형식, 지표. 공통 기반 없음."
   },
   "pain2_title": {
     "en": "Blind", "fr": "À l'aveugle", "de": "Blind",
-    "es": "A ciegas", "it": "Alla cieca", "pt": "Às cegas"
+    "es": "A ciegas", "it": "Alla cieca", "pt": "Às cegas",
+    "zh": "盲目", "ja": "盲目", "ko": "맹목"
   },
   "pain2_desc": {
     "en": "No real-time VRAM monitoring, no power tracking, no thermal alerts. You're flying blind.",
@@ -503,11 +518,15 @@
     "de": "Kein Echtzeit-VRAM-Monitoring, kein Stromverbrauch-Tracking, keine Thermal-Warnungen. Sie fliegen blind.",
     "es": "Sin monitoreo VRAM en tiempo real, sin seguimiento de consumo, sin alertas térmicas. Vuelas a ciegas.",
     "it": "Nessun monitoraggio VRAM in tempo reale, nessun tracking energetico, nessun allarme termico. Voli alla cieca.",
-    "pt": "Sem monitoramento VRAM em tempo real, sem rastreamento de energia, sem alertas térmicos. Você voa às cegas."
+    "pt": "Sem monitoramento VRAM em tempo real, sem rastreamento de energia, sem alertas térmicos. Você voa às cegas.",
+    "zh": "没有实时VRAM监控，没有功耗追踪，没有温度告警。完全在盲飞。",
+    "ja": "リアルタイムVRAM監視なし、電力追跡なし、温度アラートなし。完全に盲目飛行。",
+    "ko": "실시간 VRAM 모니터링 없음, 전력 추적 없음, 온도 알림 없음. 눈을 감고 날고 있는 셈."
   },
   "pain3_title": {
     "en": "Manual", "fr": "Manuel", "de": "Manuell",
-    "es": "Manual", "it": "Manuale", "pt": "Manual"
+    "es": "Manual", "it": "Manuale", "pt": "Manual",
+    "zh": "手动", "ja": "手動", "ko": "수동"
   },
   "pain3_desc": {
     "en": "Benchmarking means curl scripts, copy-pasting numbers, and comparing in spreadsheets.",
@@ -515,12 +534,16 @@
     "de": "Benchmarking bedeutet curl-Skripte, Zahlen kopieren und in Tabellen vergleichen.",
     "es": "Benchmarking significa scripts curl, copiar números y comparar en hojas de cálculo.",
     "it": "Benchmark significa script curl, copiare numeri e confrontare nei fogli di calcolo.",
-    "pt": "Benchmark significa scripts curl, copiar números e comparar em planilhas."
+    "pt": "Benchmark significa scripts curl, copiar números e comparar em planilhas.",
+    "zh": "跑分意味着curl脚本、复制粘贴数字、用电子表格比较。",
+    "ja": "ベンチマーク＝curlスクリプト、数値のコピペ、スプレッドシートで比較。",
+    "ko": "벤치마크란 curl 스크립트, 숫자 복붙, 스프레드시트에서 비교하는 것."
   },
   "feat_title": {
     "en": "Built for Apple Silicon Power Users", "fr": "Conçu pour les power users Apple Silicon",
     "de": "Entwickelt für Apple Silicon Power User", "es": "Construido para power users de Apple Silicon",
-    "it": "Progettato per power user Apple Silicon", "pt": "Feito para power users Apple Silicon"
+    "it": "Progettato per power user Apple Silicon", "pt": "Feito para power users Apple Silicon",
+    "zh": "为Apple Silicon高级用户打造", "ja": "Apple Siliconパワーユーザーのために設計", "ko": "Apple Silicon 파워유저를 위해 제작"
   },
   "feat_subtitle": {
     "en": "Everything you need to benchmark, monitor, and optimize local inference.",
@@ -528,92 +551,123 @@
     "de": "Alles was Sie brauchen, um lokale Inferenz zu benchmarken, überwachen und optimieren.",
     "es": "Todo lo que necesitas para benchmark, monitoreo y optimización de inferencia local.",
     "it": "Tutto ciò che serve per benchmark, monitoraggio e ottimizzazione dell'inferenza locale.",
-    "pt": "Tudo que você precisa para benchmark, monitoramento e otimização de inferência local."
+    "pt": "Tudo que você precisa para benchmark, monitoramento e otimização de inferência local.",
+    "zh": "跑分、监控、优化本地推理所需的一切。",
+    "ja": "ローカル推論のベンチマーク、監視、最適化に必要なすべて。",
+    "ko": "로컬 추론의 벤치마크, 모니터링, 최적화에 필요한 모든 것."
   },
-  "feat1_t": {"en": "Head-to-Head Benchmarks", "fr": "Benchmarks face-à-face", "de": "Direkte Vergleichs-Benchmarks", "es": "Benchmarks cara a cara", "it": "Benchmark testa a testa", "pt": "Benchmarks frente a frente"},
+  "feat1_t": {"en": "Head-to-Head Benchmarks", "fr": "Benchmarks face-à-face", "de": "Direkte Vergleichs-Benchmarks", "es": "Benchmarks cara a cara", "it": "Benchmark testa a testa", "pt": "Benchmarks frente a frente", "zh": "一对一跑分对决", "ja": "ヘッドツーヘッド・ベンチマーク", "ko": "1:1 벤치마크 대결"},
   "feat1_d": {
     "en": "Same model on Ollama vs LM Studio vs mlx-lm. One command, real numbers. No vibes.",
     "fr": "Même modèle sur Ollama vs LM Studio vs mlx-lm. Une commande, des vrais chiffres.",
     "de": "Gleiches Modell auf Ollama vs LM Studio vs mlx-lm. Ein Befehl, echte Zahlen.",
     "es": "Mismo modelo en Ollama vs LM Studio vs mlx-lm. Un comando, números reales.",
     "it": "Stesso modello su Ollama vs LM Studio vs mlx-lm. Un comando, numeri reali.",
-    "pt": "Mesmo modelo no Ollama vs LM Studio vs mlx-lm. Um comando, números reais."
+    "pt": "Mesmo modelo no Ollama vs LM Studio vs mlx-lm. Um comando, números reais.",
+    "zh": "同一模型在Ollama vs LM Studio vs mlx-lm上对比。一条命令，真实数据。",
+    "ja": "同じモデルをOllama vs LM Studio vs mlx-lmで比較。コマンド一発、実測値。",
+    "ko": "같은 모델을 Ollama vs LM Studio vs mlx-lm에서 비교. 명령어 하나, 실측 수치."
   },
-  "feat2_t": {"en": "Energy Efficiency", "fr": "Efficacité énergétique", "de": "Energieeffizienz", "es": "Eficiencia energética", "it": "Efficienza energetica", "pt": "Eficiência energética"},
+  "feat2_t": {"en": "Energy Efficiency", "fr": "Efficacité énergétique", "de": "Energieeffizienz", "es": "Eficiencia energética", "it": "Efficienza energetica", "pt": "Eficiência energética", "zh": "能效测量", "ja": "エネルギー効率", "ko": "에너지 효율"},
   "feat2_d": {
     "en": "Measure GPU power during inference. Know your tok/s per watt &mdash; nobody else does this.",
     "fr": "Mesurez la puissance GPU pendant l'inférence. Connaissez vos tok/s par watt &mdash; personne d'autre ne le fait.",
     "de": "GPU-Leistung während der Inferenz messen. Kennen Sie Ihre tok/s pro Watt &mdash; das macht sonst niemand.",
     "es": "Mide el consumo GPU durante la inferencia. Conoce tus tok/s por vatio &mdash; nadie más lo hace.",
     "it": "Misura la potenza GPU durante l'inferenza. Conosci i tuoi tok/s per watt &mdash; nessun altro lo fa.",
-    "pt": "Meça a potência da GPU durante a inferência. Conheça seus tok/s por watt &mdash; ninguém mais faz isso."
+    "pt": "Meça a potência da GPU durante a inferência. Conheça seus tok/s por watt &mdash; ninguém mais faz isso.",
+    "zh": "测量推理时的GPU功耗。了解你的tok/s每瓦特 &mdash; 没有其他工具能做到。",
+    "ja": "推論中のGPU消費電力を測定。tok/sあたりのワット数を把握 &mdash; 他にはない機能。",
+    "ko": "추론 중 GPU 소비전력 측정. 와트당 tok/s를 파악 &mdash; 다른 도구에는 없는 기능."
   },
-  "feat3_t": {"en": "5 Engines, One CLI", "fr": "5 moteurs, un seul CLI", "de": "5 Engines, ein CLI", "es": "5 motores, un CLI", "it": "5 motori, un CLI", "pt": "5 motores, um CLI"},
+  "feat3_t": {"en": "5 Engines, One CLI", "fr": "5 moteurs, un seul CLI", "de": "5 Engines, ein CLI", "es": "5 motores, un CLI", "it": "5 motori, un CLI", "pt": "5 motores, um CLI", "zh": "5个引擎，一个CLI", "ja": "5エンジン、1つのCLI", "ko": "5개 엔진, 하나의 CLI"},
   "feat3_d": {
     "en": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Auto-detected, auto-configured.",
     "fr": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Détection et configuration automatiques.",
     "de": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Automatisch erkannt und konfiguriert.",
     "es": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Detección y configuración automática.",
     "it": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Rilevamento e configurazione automatici.",
-    "pt": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Detecção e configuração automáticas."
+    "pt": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. Detecção e configuração automáticas.",
+    "zh": "Ollama、LM Studio、mlx-lm、llama.cpp、vllm-mlx。自动检测，自动配置。",
+    "ja": "Ollama、LM Studio、mlx-lm、llama.cpp、vllm-mlx。自動検出、自動設定。",
+    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx. 자동 감지, 자동 설정."
   },
-  "feat4_t": {"en": "Zero Dependencies", "fr": "Zéro dépendance", "de": "Keine Abhängigkeiten", "es": "Sin dependencias", "it": "Zero dipendenze", "pt": "Zero dependências"},
+  "feat4_t": {"en": "Zero Dependencies", "fr": "Zéro dépendance", "de": "Keine Abhängigkeiten", "es": "Sin dependencias", "it": "Zero dipendenze", "pt": "Zero dependências", "zh": "零依赖", "ja": "依存関係ゼロ", "ko": "의존성 제로"},
   "feat4_d": {
     "en": "stdlib Python only. No requests, no psutil, no rich. Installs in seconds.",
     "fr": "Stdlib Python uniquement. Pas de requests, pas de psutil, pas de rich. Installation en secondes.",
     "de": "Nur Python-Standardbibliothek. Kein requests, kein psutil, kein rich. Installation in Sekunden.",
     "es": "Solo stdlib Python. Sin requests, sin psutil, sin rich. Se instala en segundos.",
     "it": "Solo stdlib Python. Nessun requests, nessun psutil, nessun rich. Si installa in secondi.",
-    "pt": "Apenas stdlib Python. Sem requests, sem psutil, sem rich. Instala em segundos."
+    "pt": "Apenas stdlib Python. Sem requests, sem psutil, sem rich. Instala em segundos.",
+    "zh": "仅用Python标准库。无需requests、psutil、rich。秒级安装。",
+    "ja": "Python標準ライブラリのみ。requests不要、psutil不要、rich不要。秒速インストール。",
+    "ko": "Python 표준 라이브러리만 사용. requests, psutil, rich 불필요. 초 단위 설치."
   },
-  "feat5_t": {"en": "Thermal Intelligence", "fr": "Intelligence thermique", "de": "Thermische Intelligenz", "es": "Inteligencia térmica", "it": "Intelligenza termica", "pt": "Inteligência térmica"},
+  "feat5_t": {"en": "Thermal Intelligence", "fr": "Intelligence thermique", "de": "Thermische Intelligenz", "es": "Inteligencia térmica", "it": "Intelligenza termica", "pt": "Inteligência térmica", "zh": "温度智能监控", "ja": "サーマルインテリジェンス", "ko": "온도 인텔리전스"},
   "feat5_d": {
     "en": "Detects throttling during benchmarks. Alerts when your Mac overheats mid-inference.",
     "fr": "Détecte le throttling pendant les benchmarks. Alerte quand votre Mac surchauffe en pleine inférence.",
     "de": "Erkennt Throttling während Benchmarks. Warnt, wenn Ihr Mac während der Inferenz überhitzt.",
     "es": "Detecta throttling durante benchmarks. Alerta cuando tu Mac se sobrecalienta durante la inferencia.",
     "it": "Rileva il throttling durante i benchmark. Avvisa quando il Mac si surriscalda durante l'inferenza.",
-    "pt": "Detecta throttling durante benchmarks. Alerta quando seu Mac superaquece durante a inferência."
+    "pt": "Detecta throttling durante benchmarks. Alerta quando seu Mac superaquece durante a inferência.",
+    "zh": "在跑分期间检测降频。推理过程中Mac过热时自动告警。",
+    "ja": "ベンチマーク中のスロットリングを検出。推論中にMacが過熱するとアラート。",
+    "ko": "벤치마크 중 스로틀링 감지. 추론 중 Mac 과열 시 알림."
   },
-  "feat6_t": {"en": "Regression Detection", "fr": "Détection de régression", "de": "Regressionserkennung", "es": "Detección de regresiones", "it": "Rilevamento regressioni", "pt": "Detecção de regressões"},
+  "feat6_t": {"en": "Regression Detection", "fr": "Détection de régression", "de": "Regressionserkennung", "es": "Detección de regresiones", "it": "Rilevamento regressioni", "pt": "Detecção de regressões", "zh": "回归检测", "ja": "リグレッション検出", "ko": "회귀 감지"},
   "feat6_d": {
     "en": "Auto-detects performance drops after OS or engine updates. SQLite history with 90-day retention.",
     "fr": "Détecte les baisses de performances après mise à jour OS ou moteur. Historique SQLite avec rétention 90 jours.",
     "de": "Erkennt Leistungseinbrüche nach OS- oder Engine-Updates automatisch. SQLite-Verlauf mit 90 Tagen Aufbewahrung.",
     "es": "Detecta caídas de rendimiento tras actualizaciones de OS o motor. Historial SQLite con retención de 90 días.",
     "it": "Rileva automaticamente cali di prestazioni dopo aggiornamenti OS o motore. Storico SQLite con ritenzione 90 giorni.",
-    "pt": "Detecta quedas de desempenho após atualizações de OS ou motor. Histórico SQLite com retenção de 90 dias."
+    "pt": "Detecta quedas de desempenho após atualizações de OS ou motor. Histórico SQLite com retenção de 90 dias.",
+    "zh": "OS或引擎更新后自动检测性能下降。SQLite历史记录，保留90天。",
+    "ja": "OSやエンジンの更新後にパフォーマンス低下を自動検出。SQLite履歴、90日保持。",
+    "ko": "OS 또는 엔진 업데이트 후 성능 저하 자동 감지. SQLite 이력, 90일 보존."
   },
-  "feat7_t": {"en": "REST API", "fr": "API REST", "de": "REST-API", "es": "API REST", "it": "API REST", "pt": "API REST"},
+  "feat7_t": {"en": "REST API", "fr": "API REST", "de": "REST-API", "es": "API REST", "it": "API REST", "pt": "API REST", "zh": "REST API", "ja": "REST API", "ko": "REST API"},
   "feat7_d": {
     "en": "Full JSON API for automation. /api/snapshot, /api/status, /api/metrics &mdash; integrate with any stack.",
     "fr": "API JSON complète pour l'automatisation. /api/snapshot, /api/status, /api/metrics &mdash; intégration avec n'importe quel stack.",
     "de": "Vollständige JSON-API für Automatisierung. /api/snapshot, /api/status, /api/metrics &mdash; Integration mit jedem Stack.",
     "es": "API JSON completa para automatización. /api/snapshot, /api/status, /api/metrics &mdash; integración con cualquier stack.",
     "it": "API JSON completa per l'automazione. /api/snapshot, /api/status, /api/metrics &mdash; integrazione con qualsiasi stack.",
-    "pt": "API JSON completa para automação. /api/snapshot, /api/status, /api/metrics &mdash; integração com qualquer stack."
+    "pt": "API JSON completa para automação. /api/snapshot, /api/status, /api/metrics &mdash; integração com qualquer stack.",
+    "zh": "完整JSON API用于自动化。/api/snapshot、/api/status、/api/metrics &mdash; 集成任何技术栈。",
+    "ja": "自動化のための完全なJSON API。/api/snapshot、/api/status、/api/metrics &mdash; あらゆるスタックと統合。",
+    "ko": "자동화를 위한 완전한 JSON API. /api/snapshot, /api/status, /api/metrics &mdash; 모든 스택과 통합."
   },
-  "feat8_t": {"en": "Prometheus Native", "fr": "Prometheus natif", "de": "Prometheus nativ", "es": "Prometheus nativo", "it": "Prometheus nativo", "pt": "Prometheus nativo"},
+  "feat8_t": {"en": "Prometheus Native", "fr": "Prometheus natif", "de": "Prometheus nativ", "es": "Prometheus nativo", "it": "Prometheus nativo", "pt": "Prometheus nativo", "zh": "原生Prometheus支持", "ja": "Prometheusネイティブ", "ko": "Prometheus 네이티브"},
   "feat8_d": {
     "en": "Built-in /metrics endpoint. Plug into Grafana, Datadog, or any Prometheus-compatible tool. Zero config.",
     "fr": "Endpoint /metrics intégré. Connectez Grafana, Datadog ou tout outil compatible Prometheus. Zéro config.",
     "de": "Integrierter /metrics-Endpunkt. Anbindung an Grafana, Datadog oder jedes Prometheus-kompatible Tool. Null Konfiguration.",
     "es": "Endpoint /metrics integrado. Conecta Grafana, Datadog o cualquier herramienta compatible con Prometheus. Sin configuración.",
     "it": "Endpoint /metrics integrato. Collega Grafana, Datadog o qualsiasi strumento compatibile con Prometheus. Zero configurazione.",
-    "pt": "Endpoint /metrics integrado. Conecte Grafana, Datadog ou qualquer ferramenta compatível com Prometheus. Zero configuração."
+    "pt": "Endpoint /metrics integrado. Conecte Grafana, Datadog ou qualquer ferramenta compatível com Prometheus. Zero configuração.",
+    "zh": "内置/metrics端点。连接Grafana、Datadog或任何兼容Prometheus的工具。零配置。",
+    "ja": "組み込み/metricsエンドポイント。Grafana、Datadog、その他Prometheus互換ツールに接続。設定不要。",
+    "ko": "내장 /metrics 엔드포인트. Grafana, Datadog 또는 Prometheus 호환 도구에 연결. 설정 불필요."
   },
-  "feat9_t": {"en": "Alert Webhooks", "fr": "Alertes webhook", "de": "Alert-Webhooks", "es": "Alertas webhook", "it": "Alert webhook", "pt": "Alertas webhook"},
+  "feat9_t": {"en": "Alert Webhooks", "fr": "Alertes webhook", "de": "Alert-Webhooks", "es": "Alertas webhook", "it": "Alert webhook", "pt": "Alertas webhook", "zh": "告警Webhook", "ja": "アラートWebhook", "ko": "알림 Webhook"},
   "feat9_d": {
     "en": "POST to Slack, Discord, or any URL on memory pressure, thermal throttling, or engine down. Transition-based &mdash; no spam.",
     "fr": "POST vers Slack, Discord ou toute URL en cas de pression mémoire, throttling thermique ou moteur down. Basé sur les transitions &mdash; pas de spam.",
     "de": "POST an Slack, Discord oder jede URL bei Speicherdruck, thermischer Drosselung oder Engine-Ausfall. Transitionsbasiert &mdash; kein Spam.",
     "es": "POST a Slack, Discord o cualquier URL ante presión de memoria, throttling térmico o motor caído. Basado en transiciones &mdash; sin spam.",
     "it": "POST a Slack, Discord o qualsiasi URL in caso di pressione memoria, throttling termico o motore down. Basato su transizioni &mdash; niente spam.",
-    "pt": "POST para Slack, Discord ou qualquer URL em caso de pressão de memória, throttling térmico ou motor indisponível. Baseado em transições &mdash; sem spam."
+    "pt": "POST para Slack, Discord ou qualquer URL em caso de pressão de memória, throttling térmico ou motor indisponível. Baseado em transições &mdash; sem spam.",
+    "zh": "内存压力、温度降频或引擎宕机时POST到Slack、Discord或任意URL。基于状态转换 &mdash; 不刷屏。",
+    "ja": "メモリ逼迫、サーマルスロットリング、エンジンダウン時にSlack、Discord、任意URLへPOST。状態遷移ベース &mdash; スパムなし。",
+    "ko": "메모리 압력, 서멀 스로틀링, 엔진 다운 시 Slack, Discord 또는 모든 URL로 POST. 상태 전환 기반 &mdash; 스팸 없음."
   },
   "uc_title": {
     "en": "What Will You Discover?", "fr": "Qu'allez-vous découvrir ?", "de": "Was werden Sie entdecken?",
-    "es": "¿Qué vas a descubrir?", "it": "Cosa scoprirai?", "pt": "O que você vai descobrir?"
+    "es": "¿Qué vas a descubrir?", "it": "Cosa scoprirai?", "pt": "O que você vai descobrir?",
+    "zh": "你会发现什么？", "ja": "何を発見できる？", "ko": "무엇을 발견하게 될까?"
   },
   "uc_subtitle": {
     "en": "Real questions from r/LocalLLaMA, answered in one command.",
@@ -621,52 +675,61 @@
     "de": "Echte Fragen von r/LocalLLaMA, mit einem Befehl beantwortet.",
     "es": "Preguntas reales de r/LocalLLaMA, respondidas con un comando.",
     "it": "Domande reali da r/LocalLLaMA, risposte con un comando.",
-    "pt": "Perguntas reais do r/LocalLLaMA, respondidas com um comando."
+    "pt": "Perguntas reais do r/LocalLLaMA, respondidas com um comando.",
+    "zh": "来自r/LocalLLaMA的真实问题，一条命令解答。",
+    "ja": "r/LocalLLaMAからのリアルな疑問に、コマンド一発で回答。",
+    "ko": "r/LocalLLaMA의 실제 질문, 명령어 하나로 해결."
   },
-  "uc1_t": {"en": "Which engine is fastest?", "fr": "Quel moteur est le plus rapide ?", "de": "Welche Engine ist am schnellsten?", "es": "¿Cuál motor es el más rápido?", "it": "Quale motore è il più veloce?", "pt": "Qual motor é o mais rápido?"},
-  "uc1_d": {"en": "Head-to-head comparison &mdash; the #1 question on r/LocalLLaMA.", "fr": "Comparaison face-à-face &mdash; la question n&deg;1 sur r/LocalLLaMA.", "de": "Direktvergleich &mdash; die Frage Nr. 1 auf r/LocalLLaMA.", "es": "Comparación directa &mdash; la pregunta n&deg;1 en r/LocalLLaMA.", "it": "Confronto diretto &mdash; la domanda n&deg;1 su r/LocalLLaMA.", "pt": "Comparação direta &mdash; a pergunta n&deg;1 no r/LocalLLaMA."},
-  "uc2_t": {"en": "Monitor a multi-agent swarm", "fr": "Monitorer un essaim multi-agents", "de": "Multi-Agent-Schwarm überwachen", "es": "Monitorear un enjambre multi-agente", "it": "Monitorare uno sciame multi-agente", "pt": "Monitorar um enxame multi-agente"},
-  "uc2_d": {"en": "LLMs running 24/7 for AI agents &mdash; track VRAM, thermal, and performance.", "fr": "LLMs tournant 24/7 pour des agents IA &mdash; suivez VRAM, thermique et performances.", "de": "LLMs laufen 24/7 für KI-Agenten &mdash; VRAM, Temperatur und Leistung verfolgen.", "es": "LLMs ejecutándose 24/7 para agentes IA &mdash; monitorea VRAM, temperatura y rendimiento.", "it": "LLM in esecuzione 24/7 per agenti IA &mdash; monitora VRAM, temperatura e prestazioni.", "pt": "LLMs rodando 24/7 para agentes IA &mdash; acompanhe VRAM, temperatura e desempenho."},
-  "uc3_t": {"en": "Compare energy efficiency", "fr": "Comparer l'efficacité énergétique", "de": "Energieeffizienz vergleichen", "es": "Comparar eficiencia energética", "it": "Confrontare l'efficienza energetica", "pt": "Comparar eficiência energética"},
-  "uc3_d": {"en": "tok/s per watt between engines. Critical for 24/7 Mac Mini homelabs.", "fr": "tok/s par watt entre moteurs. Essentiel pour les homelabs Mac Mini 24/7.", "de": "tok/s pro Watt zwischen Engines. Kritisch für 24/7 Mac Mini Homelabs.", "es": "tok/s por vatio entre motores. Crítico para homelabs Mac Mini 24/7.", "it": "tok/s per watt tra motori. Critico per homelab Mac Mini 24/7.", "pt": "tok/s por watt entre motores. Crítico para homelabs Mac Mini 24/7."},
-  "uc4_t": {"en": "Detect regressions after updates", "fr": "Détecter les régressions après mise à jour", "de": "Regressionen nach Updates erkennen", "es": "Detectar regresiones tras actualizaciones", "it": "Rilevare regressioni dopo aggiornamenti", "pt": "Detectar regressões após atualizações"},
-  "uc4_d": {"en": "Did the Ollama or macOS update break your performance? Auto-detection via SQLite.", "fr": "La mise à jour Ollama ou macOS a cassé vos performances ? Détection auto via SQLite.", "de": "Hat das Ollama- oder macOS-Update Ihre Leistung verschlechtert? Automatische Erkennung via SQLite.", "es": "¿La actualización de Ollama o macOS rompió tu rendimiento? Detección automática via SQLite.", "it": "L'aggiornamento Ollama o macOS ha peggiorato le prestazioni? Rilevamento automatico via SQLite.", "pt": "A atualização do Ollama ou macOS quebrou seu desempenho? Detecção automática via SQLite."},
-  "uc5_t": {"en": "Test long context support", "fr": "Tester le support long contexte", "de": "Langkontext-Unterstützung testen", "es": "Probar soporte de contexto largo", "it": "Testare il supporto contesto lungo", "pt": "Testar suporte a contexto longo"},
-  "uc5_d": {"en": "<code>--context-size 64k</code> benchmarks. Does your model survive 256k context?", "fr": "Benchmarks <code>--context-size 64k</code>. Votre modèle survit-il à 256k de contexte ?", "de": "<code>--context-size 64k</code> Benchmarks. Übersteht Ihr Modell 256k Kontext?", "es": "Benchmarks <code>--context-size 64k</code>. Sobrevive tu modelo a 256k de contexto?", "it": "Benchmark <code>--context-size 64k</code>. Il tuo modello sopravvive a 256k di contesto?", "pt": "Benchmarks <code>--context-size 64k</code>. Seu modelo sobrevive a 256k de contexto?"},
-  "uc6_t": {"en": "Is my Mac thermal throttling?", "fr": "Mon Mac est-il en throttling thermique ?", "de": "Drosselt mein Mac thermisch?", "es": "¿Mi Mac tiene throttling térmico?", "it": "Il mio Mac fa throttling termico?", "pt": "Meu Mac está com throttling térmico?"},
-  "uc6_d": {"en": "Drift detection across benchmark runs. Unique to asiai.", "fr": "Détection de dérive thermique entre les runs. Unique à asiai.", "de": "Drift-Erkennung über Benchmark-Läufe hinweg. Einzigartig bei asiai.", "es": "Detección de deriva térmica entre ejecuciones. Único en asiai.", "it": "Rilevamento deriva termica tra le esecuzioni. Unico in asiai.", "pt": "Detecção de deriva térmica entre execuções. Único no asiai."},
-  "uc7_t": {"en": "Reproducible benchmarks", "fr": "Benchmarks reproductibles", "de": "Reproduzierbare Benchmarks", "es": "Benchmarks reproducibles", "it": "Benchmark riproducibili", "pt": "Benchmarks reprodutíveis"},
-  "uc7_d": {"en": "MLPerf/SPEC methodology. Warmup, median, greedy decoding. Share with confidence.", "fr": "Méthodologie MLPerf/SPEC. Warmup, médiane, décodage greedy. Partagez en confiance.", "de": "MLPerf/SPEC-Methodik. Warmup, Median, Greedy-Dekodierung. Mit Vertrauen teilen.", "es": "Metodología MLPerf/SPEC. Warmup, mediana, decodificación greedy. Comparte con confianza.", "it": "Metodologia MLPerf/SPEC. Warmup, mediana, decodifica greedy. Condividi con fiducia.", "pt": "Metodologia MLPerf/SPEC. Warmup, mediana, decodificação greedy. Compartilhe com confiança."},
-  "uc8_t": {"en": "Health check in one command", "fr": "Diagnostic en une commande", "de": "Gesundheitscheck mit einem Befehl", "es": "Diagnóstico en un comando", "it": "Diagnostica in un comando", "pt": "Diagnóstico em um comando"},
-  "uc8_d": {"en": "<code>asiai doctor</code> diagnoses system, engines, and database with fix suggestions.", "fr": "<code>asiai doctor</code> diagnostique système, moteurs et base de données avec suggestions de corrections.", "de": "<code>asiai doctor</code> diagnostiziert System, Engines und Datenbank mit Lösungsvorschlägen.", "es": "<code>asiai doctor</code> diagnostica sistema, motores y base de datos con sugerencias de solución.", "it": "<code>asiai doctor</code> diagnostica sistema, motori e database con suggerimenti di correzione.", "pt": "<code>asiai doctor</code> diagnostica sistema, motores e banco de dados com sugestões de correção."},
-  "uc9_t": {"en": "Visual dashboard", "fr": "Dashboard visuel", "de": "Visuelles Dashboard", "es": "Dashboard visual", "it": "Dashboard visuale", "pt": "Dashboard visual"},
-  "uc9_d": {"en": "Dark/light web dashboard with live charts, SSE progress, benchmark controls.", "fr": "Dashboard web dark/light avec graphiques en direct, progression SSE, contrôles de benchmark.", "de": "Dark/Light Web-Dashboard mit Live-Charts, SSE-Fortschritt und Benchmark-Steuerung.", "es": "Dashboard web dark/light con gráficos en vivo, progreso SSE y controles de benchmark.", "it": "Dashboard web dark/light con grafici live, avanzamento SSE e controlli benchmark.", "pt": "Dashboard web dark/light com gráficos ao vivo, progresso SSE e controles de benchmark."},
-  "uc10_t": {"en": "Compare LLMs head-to-head", "fr": "Comparer les LLMs face-à-face", "de": "LLMs direkt vergleichen", "es": "Comparar LLMs cara a cara", "it": "Confrontare LLM testa a testa", "pt": "Comparar LLMs frente a frente"},
-  "uc10_d": {"en": "Same engine, different models. Which quantization wins?", "fr": "Même moteur, différents modèles. Quelle quantification gagne ?", "de": "Gleiche Engine, verschiedene Modelle. Welche Quantisierung gewinnt?", "es": "Mismo motor, diferentes modelos. ¿Qué cuantización gana?", "it": "Stesso motore, modelli diversi. Quale quantizzazione vince?", "pt": "Mesmo motor, modelos diferentes. Qual quantização ganha?"},
-  "uc11_t": {"en": "Prometheus + Grafana monitoring", "fr": "Monitoring Prometheus + Grafana", "de": "Prometheus + Grafana Monitoring", "es": "Monitoreo Prometheus + Grafana", "it": "Monitoraggio Prometheus + Grafana", "pt": "Monitoramento Prometheus + Grafana"},
+  "uc1_t": {"en": "Which engine is fastest?", "fr": "Quel moteur est le plus rapide ?", "de": "Welche Engine ist am schnellsten?", "es": "¿Cuál motor es el más rápido?", "it": "Quale motore è il più veloce?", "pt": "Qual motor é o mais rápido?", "zh": "哪个引擎最快？", "ja": "どのエンジンが最速？", "ko": "어떤 엔진이 가장 빠를까?"},
+  "uc1_d": {"en": "Head-to-head comparison &mdash; the #1 question on r/LocalLLaMA.", "fr": "Comparaison face-à-face &mdash; la question n&deg;1 sur r/LocalLLaMA.", "de": "Direktvergleich &mdash; die Frage Nr. 1 auf r/LocalLLaMA.", "es": "Comparación directa &mdash; la pregunta n&deg;1 en r/LocalLLaMA.", "it": "Confronto diretto &mdash; la domanda n&deg;1 su r/LocalLLaMA.", "pt": "Comparação direta &mdash; a pergunta n&deg;1 no r/LocalLLaMA.", "zh": "一对一对比 &mdash; r/LocalLLaMA上的头号问题。", "ja": "直接対決 &mdash; r/LocalLLaMAで最も多い質問。", "ko": "1:1 비교 &mdash; r/LocalLLaMA에서 가장 많은 질문."},
+  "uc2_t": {"en": "Monitor a multi-agent swarm", "fr": "Monitorer un essaim multi-agents", "de": "Multi-Agent-Schwarm überwachen", "es": "Monitorear un enjambre multi-agente", "it": "Monitorare uno sciame multi-agente", "pt": "Monitorar um enxame multi-agente", "zh": "监控多智能体集群", "ja": "マルチエージェント群の監視", "ko": "멀티 에이전트 스웜 모니터링"},
+  "uc2_d": {"en": "LLMs running 24/7 for AI agents &mdash; track VRAM, thermal, and performance.", "fr": "LLMs tournant 24/7 pour des agents IA &mdash; suivez VRAM, thermique et performances.", "de": "LLMs laufen 24/7 für KI-Agenten &mdash; VRAM, Temperatur und Leistung verfolgen.", "es": "LLMs ejecutándose 24/7 para agentes IA &mdash; monitorea VRAM, temperatura y rendimiento.", "it": "LLM in esecuzione 24/7 per agenti IA &mdash; monitora VRAM, temperatura e prestazioni.", "pt": "LLMs rodando 24/7 para agentes IA &mdash; acompanhe VRAM, temperatura e desempenho.", "zh": "LLM全天候运行AI智能体 &mdash; 追踪VRAM、温度和性能。", "ja": "AIエージェント用LLMを24時間稼働 &mdash; VRAM、温度、パフォーマンスを追跡。", "ko": "AI 에이전트용 LLM 24시간 가동 &mdash; VRAM, 온도, 성능 추적."},
+  "uc3_t": {"en": "Compare energy efficiency", "fr": "Comparer l'efficacité énergétique", "de": "Energieeffizienz vergleichen", "es": "Comparar eficiencia energética", "it": "Confrontare l'efficienza energetica", "pt": "Comparar eficiência energética", "zh": "对比能效", "ja": "エネルギー効率を比較", "ko": "에너지 효율 비교"},
+  "uc3_d": {"en": "tok/s per watt between engines. Critical for 24/7 Mac Mini homelabs.", "fr": "tok/s par watt entre moteurs. Essentiel pour les homelabs Mac Mini 24/7.", "de": "tok/s pro Watt zwischen Engines. Kritisch für 24/7 Mac Mini Homelabs.", "es": "tok/s por vatio entre motores. Crítico para homelabs Mac Mini 24/7.", "it": "tok/s per watt tra motori. Critico per homelab Mac Mini 24/7.", "pt": "tok/s por watt entre motores. Crítico para homelabs Mac Mini 24/7.", "zh": "不同引擎间的tok/s每瓦特。对7x24小时Mac Mini家庭实验室至关重要。", "ja": "エンジン間のワットあたりtok/s。24時間稼働のMac Miniホームラボに不可欠。", "ko": "엔진 간 와트당 tok/s. 24시간 Mac Mini 홈랩에 필수."},
+  "uc4_t": {"en": "Detect regressions after updates", "fr": "Détecter les régressions après mise à jour", "de": "Regressionen nach Updates erkennen", "es": "Detectar regresiones tras actualizaciones", "it": "Rilevare regressioni dopo aggiornamenti", "pt": "Detectar regressões após atualizações", "zh": "更新后检测回归", "ja": "更新後のリグレッション検出", "ko": "업데이트 후 회귀 감지"},
+  "uc4_d": {"en": "Did the Ollama or macOS update break your performance? Auto-detection via SQLite.", "fr": "La mise à jour Ollama ou macOS a cassé vos performances ? Détection auto via SQLite.", "de": "Hat das Ollama- oder macOS-Update Ihre Leistung verschlechtert? Automatische Erkennung via SQLite.", "es": "¿La actualización de Ollama o macOS rompió tu rendimiento? Detección automática via SQLite.", "it": "L'aggiornamento Ollama o macOS ha peggiorato le prestazioni? Rilevamento automatico via SQLite.", "pt": "A atualização do Ollama ou macOS quebrou seu desempenho? Detecção automática via SQLite.", "zh": "Ollama或macOS更新导致性能下降？通过SQLite自动检测。", "ja": "OllamaやmacOSのアップデートでパフォーマンスが低下？SQLiteで自動検出。", "ko": "Ollama 또는 macOS 업데이트로 성능이 떨어졌나요? SQLite로 자동 감지."},
+  "uc5_t": {"en": "Test long context support", "fr": "Tester le support long contexte", "de": "Langkontext-Unterstützung testen", "es": "Probar soporte de contexto largo", "it": "Testare il supporto contesto lungo", "pt": "Testar suporte a contexto longo", "zh": "测试长上下文支持", "ja": "ロングコンテキスト対応をテスト", "ko": "긴 컨텍스트 지원 테스트"},
+  "uc5_d": {"en": "<code>--context-size 64k</code> benchmarks. Does your model survive 256k context?", "fr": "Benchmarks <code>--context-size 64k</code>. Votre modèle survit-il à 256k de contexte ?", "de": "<code>--context-size 64k</code> Benchmarks. Übersteht Ihr Modell 256k Kontext?", "es": "Benchmarks <code>--context-size 64k</code>. Sobrevive tu modelo a 256k de contexto?", "it": "Benchmark <code>--context-size 64k</code>. Il tuo modello sopravvive a 256k di contesto?", "pt": "Benchmarks <code>--context-size 64k</code>. Seu modelo sobrevive a 256k de contexto?", "zh": "<code>--context-size 64k</code>跑分。你的模型能扛住256k上下文吗？", "ja": "<code>--context-size 64k</code>ベンチマーク。あなたのモデルは256kコンテキストに耐えられる？", "ko": "<code>--context-size 64k</code> 벤치마크. 당신의 모델이 256k 컨텍스트를 견딜 수 있을까?"},
+  "uc6_t": {"en": "Is my Mac thermal throttling?", "fr": "Mon Mac est-il en throttling thermique ?", "de": "Drosselt mein Mac thermisch?", "es": "¿Mi Mac tiene throttling térmico?", "it": "Il mio Mac fa throttling termico?", "pt": "Meu Mac está com throttling térmico?", "zh": "我的Mac是否在温度降频？", "ja": "Macがサーマルスロットリングしてる？", "ko": "내 Mac이 서멀 스로틀링 중인가?"},
+  "uc6_d": {"en": "Drift detection across benchmark runs. Unique to asiai.", "fr": "Détection de dérive thermique entre les runs. Unique à asiai.", "de": "Drift-Erkennung über Benchmark-Läufe hinweg. Einzigartig bei asiai.", "es": "Detección de deriva térmica entre ejecuciones. Único en asiai.", "it": "Rilevamento deriva termica tra le esecuzioni. Unico in asiai.", "pt": "Detecção de deriva térmica entre execuções. Único no asiai.", "zh": "跨跑分轮次的漂移检测。asiai独有功能。", "ja": "ベンチマーク間のドリフト検出。asiai独自の機能。", "ko": "벤치마크 실행 간 드리프트 감지. asiai만의 고유 기능."},
+  "uc7_t": {"en": "Reproducible benchmarks", "fr": "Benchmarks reproductibles", "de": "Reproduzierbare Benchmarks", "es": "Benchmarks reproducibles", "it": "Benchmark riproducibili", "pt": "Benchmarks reprodutíveis", "zh": "可复现的跑分", "ja": "再現可能なベンチマーク", "ko": "재현 가능한 벤치마크"},
+  "uc7_d": {"en": "MLPerf/SPEC methodology. Warmup, median, greedy decoding. Share with confidence.", "fr": "Méthodologie MLPerf/SPEC. Warmup, médiane, décodage greedy. Partagez en confiance.", "de": "MLPerf/SPEC-Methodik. Warmup, Median, Greedy-Dekodierung. Mit Vertrauen teilen.", "es": "Metodología MLPerf/SPEC. Warmup, mediana, decodificación greedy. Comparte con confianza.", "it": "Metodologia MLPerf/SPEC. Warmup, mediana, decodifica greedy. Condividi con fiducia.", "pt": "Metodologia MLPerf/SPEC. Warmup, mediana, decodificação greedy. Compartilhe com confiança.", "zh": "MLPerf/SPEC方法论。预热、中位数、greedy解码。放心分享。", "ja": "MLPerf/SPEC準拠の方法論。ウォームアップ、中央値、greedy decoding。自信を持って共有。", "ko": "MLPerf/SPEC 방법론. 워밍업, 중앙값, greedy decoding. 자신있게 공유."},
+  "uc8_t": {"en": "Health check in one command", "fr": "Diagnostic en une commande", "de": "Gesundheitscheck mit einem Befehl", "es": "Diagnóstico en un comando", "it": "Diagnostica in un comando", "pt": "Diagnóstico em um comando", "zh": "一条命令健康检查", "ja": "コマンド一発でヘルスチェック", "ko": "명령어 하나로 상태 점검"},
+  "uc8_d": {"en": "<code>asiai doctor</code> diagnoses system, engines, and database with fix suggestions.", "fr": "<code>asiai doctor</code> diagnostique système, moteurs et base de données avec suggestions de corrections.", "de": "<code>asiai doctor</code> diagnostiziert System, Engines und Datenbank mit Lösungsvorschlägen.", "es": "<code>asiai doctor</code> diagnostica sistema, motores y base de datos con sugerencias de solución.", "it": "<code>asiai doctor</code> diagnostica sistema, motori e database con suggerimenti di correzione.", "pt": "<code>asiai doctor</code> diagnostica sistema, motores e banco de dados com sugestões de correção.", "zh": "<code>asiai doctor</code>诊断系统、引擎和数据库，并提供修复建议。", "ja": "<code>asiai doctor</code>がシステム、エンジン、データベースを診断し修正案を提示。", "ko": "<code>asiai doctor</code>가 시스템, 엔진, 데이터베이스를 진단하고 수정 제안."},
+  "uc9_t": {"en": "Visual dashboard", "fr": "Dashboard visuel", "de": "Visuelles Dashboard", "es": "Dashboard visual", "it": "Dashboard visuale", "pt": "Dashboard visual", "zh": "可视化仪表盘", "ja": "ビジュアルダッシュボード", "ko": "시각적 대시보드"},
+  "uc9_d": {"en": "Dark/light web dashboard with live charts, SSE progress, benchmark controls.", "fr": "Dashboard web dark/light avec graphiques en direct, progression SSE, contrôles de benchmark.", "de": "Dark/Light Web-Dashboard mit Live-Charts, SSE-Fortschritt und Benchmark-Steuerung.", "es": "Dashboard web dark/light con gráficos en vivo, progreso SSE y controles de benchmark.", "it": "Dashboard web dark/light con grafici live, avanzamento SSE e controlli benchmark.", "pt": "Dashboard web dark/light com gráficos ao vivo, progresso SSE e controles de benchmark.", "zh": "深色/浅色Web仪表盘，实时图表、SSE进度、跑分控制。", "ja": "ダーク/ライト対応Webダッシュボード。ライブチャート、SSE進捗、ベンチマーク操作。", "ko": "다크/라이트 웹 대시보드. 실시간 차트, SSE 진행률, 벤치마크 컨트롤."},
+  "uc10_t": {"en": "Compare LLMs head-to-head", "fr": "Comparer les LLMs face-à-face", "de": "LLMs direkt vergleichen", "es": "Comparar LLMs cara a cara", "it": "Confrontare LLM testa a testa", "pt": "Comparar LLMs frente a frente", "zh": "LLM一对一比较", "ja": "LLMを直接対決で比較", "ko": "LLM 1:1 비교"},
+  "uc10_d": {"en": "Same engine, different models. Which quantization wins?", "fr": "Même moteur, différents modèles. Quelle quantification gagne ?", "de": "Gleiche Engine, verschiedene Modelle. Welche Quantisierung gewinnt?", "es": "Mismo motor, diferentes modelos. ¿Qué cuantización gana?", "it": "Stesso motore, modelli diversi. Quale quantizzazione vince?", "pt": "Mesmo motor, modelos diferentes. Qual quantização ganha?", "zh": "同一引擎，不同模型。哪种量化方案胜出？", "ja": "同じエンジン、異なるモデル。どの量子化が勝つ？", "ko": "같은 엔진, 다른 모델. 어떤 양자화가 이길까?"},
+  "uc11_t": {"en": "Prometheus + Grafana monitoring", "fr": "Monitoring Prometheus + Grafana", "de": "Prometheus + Grafana Monitoring", "es": "Monitoreo Prometheus + Grafana", "it": "Monitoraggio Prometheus + Grafana", "pt": "Monitoramento Prometheus + Grafana", "zh": "Prometheus + Grafana监控", "ja": "Prometheus + Grafana監視", "ko": "Prometheus + Grafana 모니터링"},
   "uc11_d": {
     "en": "Expose /metrics, scrape with Prometheus, visualize in Grafana. Production-grade observability.",
     "fr": "Exposez /metrics, scrapez avec Prometheus, visualisez dans Grafana. Observabilité production-ready.",
     "de": "Exponieren Sie /metrics, scrapen mit Prometheus, visualisieren in Grafana. Produktionsreife Observability.",
     "es": "Expone /metrics, scrape con Prometheus, visualiza en Grafana. Observabilidad de nivel producción.",
     "it": "Esponi /metrics, scrape con Prometheus, visualizza in Grafana. Osservabilità production-grade.",
-    "pt": "Exponha /metrics, scrape com Prometheus, visualize no Grafana. Observabilidade de nível produção."
+    "pt": "Exponha /metrics, scrape com Prometheus, visualize no Grafana. Observabilidade de nível produção.",
+    "zh": "暴露/metrics，用Prometheus抓取，在Grafana中可视化。生产级可观测性。",
+    "ja": "/metricsを公開、Prometheusでスクレイプ、Grafanaで可視化。本番品質の可観測性。",
+    "ko": "/metrics 노출, Prometheus로 스크레이프, Grafana에서 시각화. 프로덕션 수준 관측성."
   },
   "how_title": {
     "en": "Up and Running in 60 Seconds", "fr": "Opérationnel en 60 secondes", "de": "In 60 Sekunden startklar",
-    "es": "Funcionando en 60 segundos", "it": "Operativo in 60 secondi", "pt": "Funcionando em 60 segundos"
+    "es": "Funcionando en 60 segundos", "it": "Operativo in 60 secondi", "pt": "Funcionando em 60 segundos",
+    "zh": "60秒启动运行", "ja": "60秒で稼働開始", "ko": "60초 만에 실행"
   },
   "how_subtitle": {
     "en": "Three commands. That's it.", "fr": "Trois commandes. C'est tout.", "de": "Drei Befehle. Das war's.",
-    "es": "Tres comandos. Eso es todo.", "it": "Tre comandi. Tutto qui.", "pt": "Três comandos. Só isso."
+    "es": "Tres comandos. Eso es todo.", "it": "Tre comandi. Tutto qui.", "pt": "Três comandos. Só isso.",
+    "zh": "三条命令，搞定。", "ja": "コマンド3つ。以上。", "ko": "명령어 세 개. 끝."
   },
-  "step1": {"en": "Install", "fr": "Installer", "de": "Installieren", "es": "Instalar", "it": "Installare", "pt": "Instalar"},
-  "step2": {"en": "Detect", "fr": "Détecter", "de": "Erkennen", "es": "Detectar", "it": "Rilevare", "pt": "Detectar"},
-  "step3": {"en": "Benchmark", "fr": "Benchmarker", "de": "Benchmarken", "es": "Benchmark", "it": "Benchmark", "pt": "Benchmark"},
-  "step2_out": {"en": "3 engines found", "fr": "3 moteurs trouvés", "de": "3 Engines gefunden", "es": "3 motores encontrados", "it": "3 motori trovati", "pt": "3 motores encontrados"},
+  "step1": {"en": "Install", "fr": "Installer", "de": "Installieren", "es": "Instalar", "it": "Installare", "pt": "Instalar", "zh": "安装", "ja": "インストール", "ko": "설치"},
+  "step2": {"en": "Detect", "fr": "Détecter", "de": "Erkennen", "es": "Detectar", "it": "Rilevare", "pt": "Detectar", "zh": "检测", "ja": "検出", "ko": "감지"},
+  "step3": {"en": "Benchmark", "fr": "Benchmarker", "de": "Benchmarken", "es": "Benchmark", "it": "Benchmark", "pt": "Benchmark", "zh": "跑分", "ja": "ベンチマーク", "ko": "벤치마크"},
+  "step2_out": {"en": "3 engines found", "fr": "3 moteurs trouvés", "de": "3 Engines gefunden", "es": "3 motores encontrados", "it": "3 motori trovati", "pt": "3 motores encontrados", "zh": "发现3个引擎", "ja": "3つのエンジンを検出", "ko": "엔진 3개 발견"},
   "disc_title": {
     "en": "Real Discoveries", "fr": "Découvertes réelles", "de": "Echte Entdeckungen",
-    "es": "Descubrimientos reales", "it": "Scoperte reali", "pt": "Descobertas reais"
+    "es": "Descubrimientos reales", "it": "Scoperte reali", "pt": "Descobertas reais",
+    "zh": "真实发现", "ja": "実際の発見", "ko": "실제 발견"
   },
   "disc_subtitle": {
     "en": "Numbers from actual benchmarks on Apple Silicon.",
@@ -674,7 +737,10 @@
     "de": "Zahlen aus echten Benchmarks auf Apple Silicon.",
     "es": "Números de benchmarks reales en Apple Silicon.",
     "it": "Numeri da benchmark reali su Apple Silicon.",
-    "pt": "Números de benchmarks reais em Apple Silicon."
+    "pt": "Números de benchmarks reais em Apple Silicon.",
+    "zh": "Apple Silicon上真实跑分的数据。",
+    "ja": "Apple Silicon上での実際のベンチマークデータ。",
+    "ko": "Apple Silicon에서의 실제 벤치마크 수치."
   },
   "disc1_d": {
     "en": "MLX is 2.3x faster for MoE architectures (Qwen3.5-35B-A3B) on Apple Silicon.",
@@ -682,11 +748,15 @@
     "de": "MLX ist 2,3x schneller für MoE-Architekturen (Qwen3.5-35B-A3B) auf Apple Silicon.",
     "es": "MLX es 2,3x más rápido para arquitecturas MoE (Qwen3.5-35B-A3B) en Apple Silicon.",
     "it": "MLX è 2,3x più veloce per architetture MoE (Qwen3.5-35B-A3B) su Apple Silicon.",
-    "pt": "MLX é 2,3x mais rápido para arquiteturas MoE (Qwen3.5-35B-A3B) em Apple Silicon."
+    "pt": "MLX é 2,3x mais rápido para arquiteturas MoE (Qwen3.5-35B-A3B) em Apple Silicon.",
+    "zh": "在Apple Silicon上，MLX对MoE架构（Qwen3.5-35B-A3B）快2.3倍。",
+    "ja": "Apple SiliconでMoEアーキテクチャ（Qwen3.5-35B-A3B）にはMLXが2.3倍高速。",
+    "ko": "Apple Silicon에서 MoE 아키텍처(Qwen3.5-35B-A3B)에 MLX가 2.3배 빠름."
   },
   "disc2_t": {
     "en": "VRAM: 64k &rarr; 256k", "fr": "VRAM : 64k &rarr; 256k", "de": "VRAM: 64k &rarr; 256k",
-    "es": "VRAM: 64k &rarr; 256k", "it": "VRAM: 64k &rarr; 256k", "pt": "VRAM: 64k &rarr; 256k"
+    "es": "VRAM: 64k &rarr; 256k", "it": "VRAM: 64k &rarr; 256k", "pt": "VRAM: 64k &rarr; 256k",
+    "zh": "VRAM: 64k &rarr; 256k", "ja": "VRAM: 64k &rarr; 256k", "ko": "VRAM: 64k &rarr; 256k"
   },
   "disc2_d": {
     "en": "VRAM stays constant from 64k to 256k context with DeltaNet &mdash; not documented anywhere else.",
@@ -694,11 +764,15 @@
     "de": "VRAM bleibt konstant von 64k bis 256k Kontext mit DeltaNet &mdash; nirgendwo anders dokumentiert.",
     "es": "La VRAM se mantiene constante de 64k a 256k con DeltaNet &mdash; no documentado en ningún otro lugar.",
     "it": "La VRAM resta costante da 64k a 256k di contesto con DeltaNet &mdash; non documentato altrove.",
-    "pt": "A VRAM permanece constante de 64k a 256k de contexto com DeltaNet &mdash; não documentado em nenhum outro lugar."
+    "pt": "A VRAM permanece constante de 64k a 256k de contexto com DeltaNet &mdash; não documentado em nenhum outro lugar.",
+    "zh": "使用DeltaNet时，VRAM从64k到256k上下文保持不变 &mdash; 其他地方从未记录。",
+    "ja": "DeltaNetでは64kから256kコンテキストでもVRAMが一定 &mdash; 他のどこにも文書化されていない。",
+    "ko": "DeltaNet 사용 시 64k에서 256k 컨텍스트까지 VRAM 일정 &mdash; 다른 곳에서는 문서화되지 않음."
   },
   "disc3_t": {
     "en": "Engine &gt; Model", "fr": "Moteur &gt; Modèle", "de": "Engine &gt; Modell",
-    "es": "Motor &gt; Modelo", "it": "Motore &gt; Modello", "pt": "Motor &gt; Modelo"
+    "es": "Motor &gt; Modelo", "it": "Motore &gt; Modello", "pt": "Motor &gt; Modelo",
+    "zh": "引擎 &gt; 模型", "ja": "エンジン &gt; モデル", "ko": "엔진 &gt; 모델"
   },
   "disc3_d": {
     "en": "Same model, same Mac: 30 tok/s on one engine, 71 tok/s on another. The engine matters more.",
@@ -706,11 +780,15 @@
     "de": "Gleiches Modell, gleicher Mac: 30 tok/s auf einer Engine, 71 tok/s auf einer anderen. Die Engine zählt mehr.",
     "es": "Mismo modelo, mismo Mac: 30 tok/s en un motor, 71 tok/s en otro. El motor importa más.",
     "it": "Stesso modello, stesso Mac: 30 tok/s su un motore, 71 tok/s su un altro. Il motore conta di più.",
-    "pt": "Mesmo modelo, mesmo Mac: 30 tok/s em um motor, 71 tok/s em outro. O motor importa mais."
+    "pt": "Mesmo modelo, mesmo Mac: 30 tok/s em um motor, 71 tok/s em outro. O motor importa mais.",
+    "zh": "同一模型，同一Mac：一个引擎30 tok/s，另一个71 tok/s。引擎比模型更重要。",
+    "ja": "同じモデル、同じMac：一方のエンジンで30 tok/s、別のエンジンで71 tok/s。エンジンの方が重要。",
+    "ko": "같은 모델, 같은 Mac: 한 엔진에서 30 tok/s, 다른 엔진에서 71 tok/s. 엔진이 더 중요."
   },
   "eng_title": {
     "en": "Supported Engines", "fr": "Moteurs supportés", "de": "Unterstützte Engines",
-    "es": "Motores soportados", "it": "Motori supportati", "pt": "Motores suportados"
+    "es": "Motores soportados", "it": "Motori supportati", "pt": "Motores suportados",
+    "zh": "支持的引擎", "ja": "対応エンジン", "ko": "지원 엔진"
   },
   "eng_subtitle": {
     "en": "Auto-detected, zero configuration needed.",
@@ -718,14 +796,18 @@
     "de": "Automatisch erkannt, keine Konfiguration nötig.",
     "es": "Detección automática, sin configuración.",
     "it": "Rilevamento automatico, zero configurazione.",
-    "pt": "Detecção automática, zero configuração."
+    "pt": "Detecção automática, zero configuração.",
+    "zh": "自动检测，无需配置。",
+    "ja": "自動検出、設定不要。",
+    "ko": "자동 감지, 설정 불필요."
   },
-  "eng_port": {"en": "Default Port", "fr": "Port par défaut", "de": "Standard-Port", "es": "Puerto por defecto", "it": "Porta predefinita", "pt": "Porta padrão"},
-  "eng_native": {"en": "Native", "fr": "Native", "de": "Nativ", "es": "Nativa", "it": "Nativa", "pt": "Nativa"},
-  "eng_compat": {"en": "OpenAI-compatible", "fr": "Compatible OpenAI", "de": "OpenAI-kompatibel", "es": "Compatible con OpenAI", "it": "Compatibile OpenAI", "pt": "Compatível com OpenAI"},
+  "eng_port": {"en": "Default Port", "fr": "Port par défaut", "de": "Standard-Port", "es": "Puerto por defecto", "it": "Porta predefinita", "pt": "Porta padrão", "zh": "默认端口", "ja": "デフォルトポート", "ko": "기본 포트"},
+  "eng_native": {"en": "Native", "fr": "Native", "de": "Nativ", "es": "Nativa", "it": "Nativa", "pt": "Nativa", "zh": "原生", "ja": "ネイティブ", "ko": "네이티브"},
+  "eng_compat": {"en": "OpenAI-compatible", "fr": "Compatible OpenAI", "de": "OpenAI-kompatibel", "es": "Compatible con OpenAI", "it": "Compatibile OpenAI", "pt": "Compatível com OpenAI", "zh": "兼容OpenAI", "ja": "OpenAI互換", "ko": "OpenAI 호환"},
   "met_title": {
     "en": "What We Measure", "fr": "Ce qu'on mesure", "de": "Was wir messen",
-    "es": "Qué medimos", "it": "Cosa misuriamo", "pt": "O que medimos"
+    "es": "Qué medimos", "it": "Cosa misuriamo", "pt": "O que medimos",
+    "zh": "我们测量什么", "ja": "何を測定するか", "ko": "측정 항목"
   },
   "met_subtitle": {
     "en": "8 metrics, consistent methodology, every run.",
@@ -733,19 +815,23 @@
     "de": "8 Metriken, konsistente Methodik, bei jedem Lauf.",
     "es": "8 métricas, metodología consistente, cada ejecución.",
     "it": "8 metriche, metodologia coerente, ogni esecuzione.",
-    "pt": "8 métricas, metodologia consistente, cada execução."
+    "pt": "8 métricas, metodologia consistente, cada execução.",
+    "zh": "8项指标，一致的方法论，每次运行。",
+    "ja": "8つの指標、一貫した方法論、毎回。",
+    "ko": "8개 지표, 일관된 방법론, 매 실행마다."
   },
-  "m_toks": {"en": "Generation speed (tokens/sec)", "fr": "Vitesse de génération (tokens/sec)", "de": "Generierungsgeschwindigkeit (Tokens/Sek.)", "es": "Velocidad de generación (tokens/seg)", "it": "Velocità di generazione (token/sec)", "pt": "Velocidade de geração (tokens/seg)"},
-  "m_ttft": {"en": "Time to first token", "fr": "Temps au premier token", "de": "Zeit bis zum ersten Token", "es": "Tiempo al primer token", "it": "Tempo al primo token", "pt": "Tempo ao primeiro token"},
-  "m_power": {"en": "GPU power draw in watts", "fr": "Consommation GPU en watts", "de": "GPU-Leistungsaufnahme in Watt", "es": "Consumo GPU en vatios", "it": "Consumo GPU in watt", "pt": "Consumo GPU em watts"},
-  "m_eff": {"en": "Energy efficiency", "fr": "Efficacité énergétique", "de": "Energieeffizienz", "es": "Eficiencia energética", "it": "Efficienza energetica", "pt": "Eficiência energética"},
-  "m_stab": {"en": "Run-to-run variance", "fr": "Variance inter-runs", "de": "Lauf-zu-Lauf-Varianz", "es": "Varianza entre ejecuciones", "it": "Varianza tra esecuzioni", "pt": "Variância entre execuções"},
-  "m_vram": {"en": "GPU memory footprint", "fr": "Empreinte mémoire GPU", "de": "GPU-Speicherbedarf", "es": "Huella de memoria GPU", "it": "Footprint memoria GPU", "pt": "Pegada de memória GPU"},
-  "m_therm": {"en": "Throttling state", "fr": "État de throttling", "de": "Throttling-Status", "es": "Estado de throttling", "it": "Stato di throttling", "pt": "Estado de throttling"},
-  "m_ctx": {"en": "Long context perf scaling", "fr": "Scaling perf long contexte", "de": "Langkontext-Performance", "es": "Escalado contexto largo", "it": "Scaling contesto lungo", "pt": "Escala contexto longo"},
+  "m_toks": {"en": "Generation speed (tokens/sec)", "fr": "Vitesse de génération (tokens/sec)", "de": "Generierungsgeschwindigkeit (Tokens/Sek.)", "es": "Velocidad de generación (tokens/seg)", "it": "Velocità di generazione (token/sec)", "pt": "Velocidade de geração (tokens/seg)", "zh": "生成速度 (tokens/sec)", "ja": "生成速度 (tokens/sec)", "ko": "생성 속도 (tokens/sec)"},
+  "m_ttft": {"en": "Time to first token", "fr": "Temps au premier token", "de": "Zeit bis zum ersten Token", "es": "Tiempo al primer token", "it": "Tempo al primo token", "pt": "Tempo ao primeiro token", "zh": "首token延迟", "ja": "最初のトークンまでの時間", "ko": "첫 토큰까지 시간"},
+  "m_power": {"en": "GPU power draw in watts", "fr": "Consommation GPU en watts", "de": "GPU-Leistungsaufnahme in Watt", "es": "Consumo GPU en vatios", "it": "Consumo GPU in watt", "pt": "Consumo GPU em watts", "zh": "GPU功耗（瓦特）", "ja": "GPU消費電力（ワット）", "ko": "GPU 전력 소비 (와트)"},
+  "m_eff": {"en": "Energy efficiency", "fr": "Efficacité énergétique", "de": "Energieeffizienz", "es": "Eficiencia energética", "it": "Efficienza energetica", "pt": "Eficiência energética", "zh": "能效", "ja": "エネルギー効率", "ko": "에너지 효율"},
+  "m_stab": {"en": "Run-to-run variance", "fr": "Variance inter-runs", "de": "Lauf-zu-Lauf-Varianz", "es": "Varianza entre ejecuciones", "it": "Varianza tra esecuzioni", "pt": "Variância entre execuções", "zh": "跨轮次方差", "ja": "実行間バラつき", "ko": "실행 간 분산"},
+  "m_vram": {"en": "GPU memory footprint", "fr": "Empreinte mémoire GPU", "de": "GPU-Speicherbedarf", "es": "Huella de memoria GPU", "it": "Footprint memoria GPU", "pt": "Pegada de memória GPU", "zh": "GPU显存占用", "ja": "GPUメモリ使用量", "ko": "GPU 메모리 사용량"},
+  "m_therm": {"en": "Throttling state", "fr": "État de throttling", "de": "Throttling-Status", "es": "Estado de throttling", "it": "Stato di throttling", "pt": "Estado de throttling", "zh": "降频状态", "ja": "スロットリング状態", "ko": "스로틀링 상태"},
+  "m_ctx": {"en": "Long context perf scaling", "fr": "Scaling perf long contexte", "de": "Langkontext-Performance", "es": "Escalado contexto largo", "it": "Scaling contesto lungo", "pt": "Escala contexto longo", "zh": "长上下文性能伸缩", "ja": "ロングコンテキスト性能スケーリング", "ko": "긴 컨텍스트 성능 스케일링"},
   "cta_title": {
     "en": "Get Started", "fr": "Démarrer", "de": "Loslegen",
-    "es": "Empezar", "it": "Inizia", "pt": "Começar"
+    "es": "Empezar", "it": "Inizia", "pt": "Começar",
+    "zh": "开始使用", "ja": "始めよう", "ko": "시작하기"
   },
   "cta_subtitle": {
     "en": "Install in seconds. Zero dependencies.",
@@ -753,10 +839,13 @@
     "de": "Installation in Sekunden. Keine Abhängigkeiten.",
     "es": "Instalación en segundos. Sin dependencias.",
     "it": "Installazione in secondi. Zero dipendenze.",
-    "pt": "Instalação em segundos. Zero dependências."
+    "pt": "Instalação em segundos. Zero dependências.",
+    "zh": "秒级安装。零依赖。",
+    "ja": "秒速インストール。依存関係ゼロ。",
+    "ko": "초 단위 설치. 의존성 제로."
   },
-  "cta_doc": {"en": "Documentation", "fr": "Documentation", "de": "Dokumentation", "es": "Documentación", "it": "Documentazione", "pt": "Documentação"},
-  "cta_method": {"en": "Methodology", "fr": "Méthodologie", "de": "Methodik", "es": "Metodología", "it": "Metodologia", "pt": "Metodologia"}
+  "cta_doc": {"en": "Documentation", "fr": "Documentation", "de": "Dokumentation", "es": "Documentación", "it": "Documentazione", "pt": "Documentação", "zh": "文档", "ja": "ドキュメント", "ko": "문서"},
+  "cta_method": {"en": "Methodology", "fr": "Méthodologie", "de": "Methodik", "es": "Metodología", "it": "Metodologia", "pt": "Metodologia", "zh": "方法论", "ja": "方法論", "ko": "방법론"}
 } %}
 
 {# Helper macro to get translation with fallback to English #}
@@ -1112,6 +1201,18 @@ brew install asiai</code>
       </div>
     </div>
   </section>
+
+  {% if lang in ("zh", "ja", "ko") %}
+  <div style="text-align: center; padding: 1rem; font-size: 0.85rem; color: var(--md-default-fg-color--light); border-top: 1px solid var(--md-default-fg-color--lightest);">
+    {% if lang == "zh" %}
+      &#x1F30D; 本页翻译由机器生成，可能不完全准确。欢迎通过 <a href="https://github.com/druide67/asiai/issues" style="color: var(--md-accent-fg-color);">GitHub Issue</a> 提交修正。
+    {% elif lang == "ja" %}
+      &#x1F30D; このページは機械翻訳です。正確でない場合があります。修正は <a href="https://github.com/druide67/asiai/issues" style="color: var(--md-accent-fg-color);">GitHub Issue</a> でお寄せください。
+    {% elif lang == "ko" %}
+      &#x1F30D; 이 페이지는 기계 번역입니다. 정확하지 않을 수 있습니다. 수정 사항은 <a href="https://github.com/druide67/asiai/issues" style="color: var(--md-accent-fg-color);">GitHub Issue</a>로 제출해 주세요.
+    {% endif %}
+  </div>
+  {% endif %}
 
 </div>
 

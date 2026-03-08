@@ -73,6 +73,15 @@ plugins:
         - locale: pt
           name: Português
           build: true
+        - locale: zh
+          name: 中文
+          build: true
+        - locale: ja
+          name: 日本語
+          build: true
+        - locale: ko
+          name: 한국어
+          build: true
 
 markdown_extensions:
   - admonition
