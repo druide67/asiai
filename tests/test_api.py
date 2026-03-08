@@ -27,6 +27,7 @@ def mock_engine():
     model.quantization = "Q4_K_M"
     model.context_length = 32768
     engine.list_running.return_value = [model]
+    engine.scrape_metrics.return_value = {}
 
     return engine
 
@@ -163,3 +164,105 @@ class TestApiMetrics:
         body = response.text
         assert "# TYPE asiai_cpu_load_1m gauge" in body
         assert "# HELP asiai_cpu_load_1m" in body
+
+
+class TestApiHistory:
+    def test_history_returns_gpu_fields(self, client, app_state):
+        import time
+
+        from asiai.storage.db import store_snapshot
+
+        store_snapshot(app_state.db_path, {
+            "ts": int(time.time()),
+            "cpu_load_1": 1.5, "cpu_load_5": 1.2, "cpu_load_15": 1.0,
+            "mem_total": 64_000_000_000, "mem_used": 32_000_000_000,
+            "mem_pressure": "normal", "thermal_level": "nominal",
+            "thermal_speed_limit": 100, "uptime": 86400,
+            "gpu_utilization_pct": 45.2, "gpu_renderer_pct": 30.1,
+            "gpu_tiler_pct": 15.0, "gpu_mem_in_use": 8_000_000_000,
+            "gpu_mem_allocated": 16_000_000_000,
+        })
+
+        response = client.get("/api/history?hours=2160")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 1
+        row = data[-1]
+        assert row["gpu_utilization_pct"] == 45.2
+        assert row["gpu_renderer_pct"] == 30.1
+        assert row["gpu_tiler_pct"] == 15.0
+        assert row["gpu_mem_in_use"] == 8_000_000_000
+        assert row["gpu_mem_allocated"] == 16_000_000_000
+
+
+class TestApiEngineHistory:
+    def test_engine_history_returns_200(self, client, app_state):
+        from asiai.storage.db import store_engine_status
+
+        store_engine_status(app_state.db_path, [{
+            "name": "ollama", "reachable": True, "version": "0.17.4",
+            "models": [{"name": "test"}], "vram_total": 26_000_000_000,
+            "url": "http://localhost:11434",
+            "tcp_connections": 3, "requests_processing": 1,
+            "tokens_predicted_total": 5000, "kv_cache_usage_ratio": 0.42,
+        }])
+
+        response = client.get("/api/engine-history?hours=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 1
+        row = data[0]
+        assert row["engine"] == "ollama"
+        assert row["reachable"] == 1
+        assert row["tcp_connections"] == 3
+        assert row["kv_cache_usage_ratio"] == 0.42
+
+    def test_engine_history_filters_by_engine(self, client, app_state):
+        from asiai.storage.db import store_engine_status
+
+        store_engine_status(app_state.db_path, [
+            {"name": "ollama", "reachable": True, "version": "0.17.4",
+             "models": [], "vram_total": 0, "url": "http://localhost:11434"},
+            {"name": "lmstudio", "reachable": False, "version": "",
+             "models": [], "vram_total": 0, "url": "http://localhost:1234"},
+        ])
+
+        response = client.get("/api/engine-history?hours=1&engine=ollama")
+        data = response.json()
+        for row in data:
+            assert row["engine"] == "ollama"
+
+    def test_engine_history_empty(self, client):
+        response = client.get("/api/engine-history?hours=1&engine=nonexistent")
+        assert response.status_code == 200
+        assert response.json() == []
+
+
+class TestQueryEngineStatusHistory:
+    def test_returns_filtered_rows(self, app_state):
+        from asiai.storage.db import query_engine_status_history, store_engine_status
+
+        store_engine_status(app_state.db_path, [{
+            "name": "ollama", "reachable": True, "version": "0.17.4",
+            "models": [], "vram_total": 0, "url": "http://localhost:11434",
+            "tcp_connections": 5, "requests_processing": 2,
+            "tokens_predicted_total": 1000, "kv_cache_usage_ratio": 0.5,
+        }])
+
+        rows = query_engine_status_history(app_state.db_path, hours=1)
+        assert len(rows) >= 1
+        assert rows[0]["engine"] == "ollama"
+        assert rows[0]["tcp_connections"] == 5
+
+    def test_filters_by_engine(self, app_state):
+        from asiai.storage.db import query_engine_status_history, store_engine_status
+
+        store_engine_status(app_state.db_path, [
+            {"name": "ollama", "reachable": True, "version": "0.17.4",
+             "models": [], "vram_total": 0, "url": "http://localhost:11434"},
+            {"name": "lmstudio", "reachable": False, "version": "",
+             "models": [], "vram_total": 0, "url": "http://localhost:1234"},
+        ])
+
+        rows = query_engine_status_history(app_state.db_path, hours=1, engine="lmstudio")
+        assert all(r["engine"] == "lmstudio" for r in rows)

@@ -67,16 +67,20 @@ async def api_status(request: Request) -> JSONResponse:
     else:
         status = "error"
 
-    return JSONResponse(
-        {
-            "status": status,
-            "ts": snapshot.get("ts", int(time.time())),
-            "uptime": snapshot.get("uptime", 0),
-            "engines": engines_up,
-            "memory_pressure": snapshot.get("mem_pressure", "unknown"),
-            "thermal_level": snapshot.get("thermal_level", "unknown"),
-        }
-    )
+    result = {
+        "status": status,
+        "ts": snapshot.get("ts", int(time.time())),
+        "uptime": snapshot.get("uptime", 0),
+        "engines": engines_up,
+        "memory_pressure": snapshot.get("mem_pressure", "unknown"),
+        "thermal_level": snapshot.get("thermal_level", "unknown"),
+    }
+
+    gpu_util = snapshot.get("gpu_utilization_pct", -1)
+    if gpu_util >= 0:
+        result["gpu_utilization_pct"] = gpu_util
+
+    return JSONResponse(result)
 
 
 @router.get("/metrics")

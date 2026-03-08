@@ -49,8 +49,46 @@
     </div>
 </div>
 
+<!-- GPU -->
+<div id="gpu-row" class="card-grid mt-6 fade-in-delay-1" style="display: none;">
+    <!-- GPU Utilization Gauge -->
+    <div class="card">
+        <h3 class="card-title">GPU Utilization</h3>
+        <div id="gpu-gauge"></div>
+    </div>
+
+    <!-- GPU Activity Sparkline -->
+    <div class="card">
+        <h3 class="card-title">GPU Activity</h3>
+        <div id="gpu-value" class="metric-value">—</div>
+        <div class="metric-label">utilization %</div>
+        <div id="gpu-sparkline" class="sparkline-container mt-4"></div>
+        <div class="metric-row mt-4">
+            <div>
+                <div class="metric-label">Renderer</div>
+                <div id="gpu-renderer" class="metric-value text-sm">—</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">Tiler</div>
+                <div id="gpu-tiler" class="metric-value text-sm">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GPU Memory -->
+    <div class="card">
+        <h3 class="card-title">GPU Memory</h3>
+        <div style="text-align: center; padding: 1rem 0;">
+            <div class="metric-label">In Use</div>
+            <div id="gpu-mem-in-use" class="metric-value">—</div>
+            <div class="metric-label mt-4">Allocated</div>
+            <div id="gpu-mem-allocated" class="metric-value text-sm">—</div>
+        </div>
+    </div>
+</div>
+
 <!-- Uptime + Pressure -->
-<div class="card-grid mt-6 fade-in-delay-1">
+<div class="card-grid mt-6 fade-in-delay-2">
     <div class="card">
         <h3 class="card-title">Uptime</h3>
         <div id="uptime-value" class="metric-value">—</div>
@@ -64,7 +102,7 @@
 </div>
 
 <!-- Models loaded -->
-<div class="mt-6 fade-in-delay-2">
+<div class="mt-6 fade-in-delay-3">
     <div class="card">
         <h3 class="card-title">Models Loaded</h3>
         <div id="models-list" class="text-sm text-neutral-400">Loading...</div>
@@ -75,8 +113,11 @@
 {% block scripts %}
 <script>
     const cpuHistory = [];
+    const gpuHistory = [];
     let cpuChart = null;
     let memGauge = null;
+    let gpuGauge = null;
+    let gpuChart = null;
 
     // Initial gauge
     {% if snapshot and snapshot.mem_total > 0 %}
@@ -187,6 +228,42 @@
 
         // Models
         renderModels(data.models);
+
+        // GPU
+        var gpuPct = data.gpu_utilization_pct;
+        var gpuRow = document.getElementById('gpu-row');
+        if (gpuPct >= 0) {
+            gpuRow.style.display = '';
+
+            // GPU value + sparkline
+            document.getElementById('gpu-value').textContent = gpuPct.toFixed(1);
+            gpuHistory.push(gpuPct);
+            if (gpuHistory.length > 60) gpuHistory.shift();
+            if (gpuChart) {
+                gpuChart.updateSeries([{ data: gpuHistory }]);
+            } else if (gpuHistory.length >= 2) {
+                gpuChart = createSparkline('gpu-sparkline', gpuHistory, { color: '#22c55e' });
+            }
+
+            // GPU gauge
+            if (gpuGauge) {
+                gpuGauge.updateSeries([Math.round(gpuPct)]);
+            } else {
+                gpuGauge = createGauge('gpu-gauge', gpuPct, { label: 'GPU' });
+            }
+
+            // Renderer / Tiler
+            document.getElementById('gpu-renderer').textContent =
+                data.gpu_renderer_pct >= 0 ? data.gpu_renderer_pct.toFixed(1) + '%' : 'N/A';
+            document.getElementById('gpu-tiler').textContent =
+                data.gpu_tiler_pct >= 0 ? data.gpu_tiler_pct.toFixed(1) + '%' : 'N/A';
+
+            // GPU Memory
+            document.getElementById('gpu-mem-in-use').textContent = formatBytes(data.gpu_mem_in_use);
+            document.getElementById('gpu-mem-allocated').textContent = formatBytes(data.gpu_mem_allocated);
+        } else {
+            gpuRow.style.display = 'none';
+        }
     };
 
     evtSource.onerror = function() {

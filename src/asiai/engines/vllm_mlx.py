@@ -31,3 +31,9 @@ class VllmMlxEngine(OpenAICompatEngine):
         if data and isinstance(data, dict) and "version" in data:
             return data["version"]
         return ""
+
+    def scrape_metrics(self) -> dict:
+        """Scrape vllm-mlx /metrics for inference activity."""
+        from asiai.collectors.inference import scrape_prometheus_metrics
+
+        return scrape_prometheus_metrics(f"{self.base_url}/metrics")

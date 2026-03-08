@@ -64,6 +64,41 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
         _gauge("asiai_thermal_speed_limit_pct", "CPU speed limit percentage", speed_limit)
     )
 
+    # GPU metrics (conditional — only if ioreg data available)
+    gpu_util = snapshot.get("gpu_utilization_pct", -1)
+    if gpu_util >= 0:
+        sections.append(
+            _gauge("asiai_gpu_utilization_pct", "GPU device utilization percentage", gpu_util)
+        )
+        gpu_renderer = snapshot.get("gpu_renderer_pct", -1)
+        if gpu_renderer >= 0:
+            sections.append(
+                _gauge(
+                    "asiai_gpu_renderer_pct",
+                    "GPU renderer utilization percentage",
+                    gpu_renderer,
+                )
+            )
+        gpu_tiler = snapshot.get("gpu_tiler_pct", -1)
+        if gpu_tiler >= 0:
+            sections.append(
+                _gauge("asiai_gpu_tiler_pct", "GPU tiler utilization percentage", gpu_tiler)
+            )
+        sections.append(
+            _gauge(
+                "asiai_gpu_memory_in_use_bytes",
+                "GPU system memory in use",
+                snapshot.get("gpu_mem_in_use", 0),
+            )
+        )
+        sections.append(
+            _gauge(
+                "asiai_gpu_memory_allocated_bytes",
+                "GPU system memory allocated",
+                snapshot.get("gpu_mem_allocated", 0),
+            )
+        )
+
     # Per-engine metrics
     engines_status = snapshot.get("engines_status", [])
     if engines_status:
@@ -84,6 +119,19 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             "# TYPE asiai_engine_version_info gauge",
         ]
 
+        tcp_lines: list[str] = [
+            "# HELP asiai_engine_tcp_connections Established TCP connections to engine",
+            "# TYPE asiai_engine_tcp_connections gauge",
+        ]
+        req_lines: list[str] = [
+            "# HELP asiai_engine_requests_processing Requests currently being processed",
+            "# TYPE asiai_engine_requests_processing gauge",
+        ]
+        kv_lines: list[str] = [
+            "# HELP asiai_engine_kv_cache_usage_ratio KV cache usage ratio",
+            "# TYPE asiai_engine_kv_cache_usage_ratio gauge",
+        ]
+
         for es in engines_status:
             name = _escape_label(es["name"])
             reachable = 1 if es.get("reachable") else 0
@@ -97,10 +145,23 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             version = _escape_label(es.get("version", ""))
             info_lines.append(f'asiai_engine_version_info{{engine="{name}",version="{version}"}} 1')
 
+            # Inference activity gauges
+            tcp = es.get("tcp_connections", 0)
+            tcp_lines.append(f'asiai_engine_tcp_connections{{engine="{name}"}} {tcp}')
+            req = es.get("requests_processing", 0)
+            req_lines.append(f'asiai_engine_requests_processing{{engine="{name}"}} {req}')
+            kv = es.get("kv_cache_usage_ratio", -1)
+            if kv >= 0:
+                kv_lines.append(f'asiai_engine_kv_cache_usage_ratio{{engine="{name}"}} {kv}')
+
         sections.append("\n".join(engine_lines))
         sections.append("\n".join(models_loaded_lines))
         sections.append("\n".join(vram_lines))
         sections.append("\n".join(info_lines))
+        sections.append("\n".join(tcp_lines))
+        sections.append("\n".join(req_lines))
+        if len(kv_lines) > 2:
+            sections.append("\n".join(kv_lines))
 
         # Per-model metrics
         model_vram: list[str] = [

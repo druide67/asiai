@@ -84,6 +84,14 @@ class InferenceEngine(ABC):
         """
         return 0.0
 
+    def scrape_metrics(self) -> dict:
+        """Scrape engine-native /metrics endpoint.
+
+        Returns a dict of normalized metrics, or {} by default.
+        Override in engines that expose Prometheus metrics (llama.cpp, vllm-mlx).
+        """
+        return {}
+
     def status(self) -> EngineStatus:
         """Collect full engine status."""
         return EngineStatus(

@@ -17,7 +17,12 @@ CREATE TABLE IF NOT EXISTS metrics (
     thermal_speed_limit INTEGER,
     uptime INTEGER,
     inference_engine TEXT,
-    engine_version TEXT
+    engine_version TEXT,
+    gpu_utilization_pct REAL DEFAULT -1,
+    gpu_renderer_pct REAL DEFAULT -1,
+    gpu_tiler_pct REAL DEFAULT -1,
+    gpu_mem_in_use INTEGER DEFAULT 0,
+    gpu_mem_allocated INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS models (
@@ -58,7 +63,11 @@ CREATE TABLE IF NOT EXISTS engine_status (
     version TEXT DEFAULT '',
     models_loaded INTEGER DEFAULT 0,
     vram_total INTEGER DEFAULT 0,
-    url TEXT DEFAULT ''
+    url TEXT DEFAULT '',
+    tcp_connections INTEGER DEFAULT 0,
+    requests_processing INTEGER DEFAULT 0,
+    tokens_predicted_total INTEGER DEFAULT 0,
+    kv_cache_usage_ratio REAL DEFAULT -1
 );
 
 CREATE INDEX IF NOT EXISTS idx_engine_status_ts ON engine_status(ts);
@@ -177,5 +186,39 @@ MIGRATIONS = [
         "table": "engine_status",
         "columns": ["ts"],
         "sql": [],
+    },
+    # v1.0: GPU utilization on metrics
+    {
+        "table": "metrics",
+        "columns": [
+            "gpu_utilization_pct",
+            "gpu_renderer_pct",
+            "gpu_tiler_pct",
+            "gpu_mem_in_use",
+            "gpu_mem_allocated",
+        ],
+        "sql": [
+            "ALTER TABLE metrics ADD COLUMN gpu_utilization_pct REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN gpu_renderer_pct REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN gpu_tiler_pct REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN gpu_mem_in_use INTEGER DEFAULT 0",
+            "ALTER TABLE metrics ADD COLUMN gpu_mem_allocated INTEGER DEFAULT 0",
+        ],
+    },
+    # v1.0: inference activity on engine_status
+    {
+        "table": "engine_status",
+        "columns": [
+            "tcp_connections",
+            "requests_processing",
+            "tokens_predicted_total",
+            "kv_cache_usage_ratio",
+        ],
+        "sql": [
+            "ALTER TABLE engine_status ADD COLUMN tcp_connections INTEGER DEFAULT 0",
+            "ALTER TABLE engine_status ADD COLUMN requests_processing INTEGER DEFAULT 0",
+            "ALTER TABLE engine_status ADD COLUMN tokens_predicted_total INTEGER DEFAULT 0",
+            "ALTER TABLE engine_status ADD COLUMN kv_cache_usage_ratio REAL DEFAULT -1",
+        ],
     },
 ]

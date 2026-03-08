@@ -45,6 +45,11 @@ async def api_history(
                 "mem_total": r.get("mem_total", 0),
                 "thermal_level": r.get("thermal_level", "unknown"),
                 "mem_pressure": r.get("mem_pressure", "unknown"),
+                "gpu_utilization_pct": r.get("gpu_utilization_pct", -1),
+                "gpu_renderer_pct": r.get("gpu_renderer_pct", -1),
+                "gpu_tiler_pct": r.get("gpu_tiler_pct", -1),
+                "gpu_mem_in_use": r.get("gpu_mem_in_use", 0),
+                "gpu_mem_allocated": r.get("gpu_mem_allocated", 0),
             }
             for r in rows
         ]
@@ -86,3 +91,20 @@ async def api_benchmarks(
             for r in rows
         ]
     )
+
+
+@router.get("/api/engine-history")
+async def api_engine_history(
+    request: Request,
+    hours: int = Query(default=168, ge=1, le=2160),
+    engine: str = Query(default=""),
+) -> JSONResponse:
+    """JSON API: engine status history for observability."""
+    state = request.app.state.app_state
+
+    from asiai.storage.db import query_engine_status_history
+
+    rows = await asyncio.to_thread(
+        query_engine_status_history, state.db_path, hours, engine
+    )
+    return JSONResponse(rows)

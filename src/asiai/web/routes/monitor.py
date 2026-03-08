@@ -59,6 +59,11 @@ async def monitor_stream(request: Request) -> Response:
                         "thermal_speed_limit": snapshot.get("thermal_speed_limit", -1),
                         "uptime": snapshot.get("uptime", 0),
                         "models": snapshot.get("models", []),
+                        "gpu_utilization_pct": snapshot.get("gpu_utilization_pct", -1),
+                        "gpu_renderer_pct": snapshot.get("gpu_renderer_pct", -1),
+                        "gpu_tiler_pct": snapshot.get("gpu_tiler_pct", -1),
+                        "gpu_mem_in_use": snapshot.get("gpu_mem_in_use", 0),
+                        "gpu_mem_allocated": snapshot.get("gpu_mem_allocated", 0),
                         "ts": int(time.time()),
                     }
                 )

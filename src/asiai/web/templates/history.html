@@ -16,8 +16,30 @@
     <button class="filter-chip" data-hours="2160" onclick="setTimeRange(2160, this)">90d</button>
 </div>
 
+<!-- System Metrics -->
+<div id="system-charts-section" class="fade-in-delay-1">
+    <h3 style="margin-bottom: 0.75rem; color: var(--text-secondary);">System Metrics</h3>
+    <div class="card-grid">
+        <div class="card">
+            <h3 class="card-title">CPU Load</h3>
+            <div id="sys-cpu-chart" style="min-height: 200px;"></div>
+            <div id="sys-cpu-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 2rem 0;">No system data</div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">Memory %</h3>
+            <div id="sys-mem-chart" style="min-height: 200px;"></div>
+            <div id="sys-mem-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 2rem 0;">No system data</div>
+        </div>
+        <div class="card" id="sys-gpu-card" style="display: none;">
+            <h3 class="card-title">GPU Utilization %</h3>
+            <div id="sys-gpu-chart" style="min-height: 200px;"></div>
+            <div id="sys-gpu-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 2rem 0;">No GPU data</div>
+        </div>
+    </div>
+</div>
+
 <!-- Charts -->
-<div class="card-grid-2 fade-in-delay-1">
+<div class="card-grid-2 fade-in-delay-2">
     <div class="card">
         <h3 class="card-title">Throughput (tok/s)</h3>
         <div id="history-tok-chart" style="min-height: 300px;"></div>
@@ -31,7 +53,7 @@
 </div>
 
 <!-- Data table -->
-<div class="mt-6 fade-in-delay-2">
+<div class="mt-6 fade-in-delay-3">
     <div class="card">
         <h3 class="card-title">Benchmark Data</h3>
         <div class="overflow-x-auto">
@@ -63,6 +85,9 @@
     var currentHours = 168;
     var tokChart = null;
     var ttftChart = null;
+    var sysCpuChart = null;
+    var sysMemChart = null;
+    var sysGpuChart = null;
 
     function setTimeRange(hours, btn) {
         currentHours = hours;
@@ -81,8 +106,79 @@
                 renderTable(rows);
             })
             .catch(function(err) {
-                console.error('Failed to load history:', err);
+                console.error('Failed to load benchmarks:', err);
             });
+
+        fetch('/api/history?hours=' + currentHours)
+            .then(function(res) { return res.json(); })
+            .then(function(rows) {
+                renderSystemCharts(rows);
+            })
+            .catch(function(err) {
+                console.error('Failed to load system history:', err);
+            });
+    }
+
+    function renderSystemCharts(rows) {
+        // Destroy existing charts
+        if (sysCpuChart) { sysCpuChart.destroy(); sysCpuChart = null; }
+        if (sysMemChart) { sysMemChart.destroy(); sysMemChart = null; }
+        if (sysGpuChart) { sysGpuChart.destroy(); sysGpuChart = null; }
+
+        var cpuData = [];
+        var memData = [];
+        var gpuData = [];
+
+        rows.forEach(function(r) {
+            var tsMs = r.ts * 1000;
+            cpuData.push([tsMs, r.cpu_load_1]);
+            if (r.mem_total > 0) {
+                memData.push([tsMs, Math.round((r.mem_used / r.mem_total) * 100)]);
+            }
+            if (r.gpu_utilization_pct >= 0) {
+                gpuData.push([tsMs, r.gpu_utilization_pct]);
+            }
+        });
+
+        var cpuEl = document.getElementById('sys-cpu-chart');
+        var cpuEmpty = document.getElementById('sys-cpu-empty');
+        if (cpuData.length > 0) {
+            cpuEl.style.display = '';
+            cpuEmpty.style.display = 'none';
+            sysCpuChart = createTimeChart('sys-cpu-chart',
+                [{ name: 'CPU Load', data: cpuData }],
+                { height: 200, yTitle: 'Load', yFormatter: function(v) { return v.toFixed(1); } });
+        } else {
+            cpuEl.style.display = 'none';
+            cpuEmpty.style.display = 'block';
+        }
+
+        var memEl = document.getElementById('sys-mem-chart');
+        var memEmpty = document.getElementById('sys-mem-empty');
+        if (memData.length > 0) {
+            memEl.style.display = '';
+            memEmpty.style.display = 'none';
+            sysMemChart = createTimeChart('sys-mem-chart',
+                [{ name: 'Memory %', data: memData }],
+                { height: 200, yTitle: '%', yFormatter: function(v) { return v.toFixed(0) + '%'; } });
+        } else {
+            memEl.style.display = 'none';
+            memEmpty.style.display = 'block';
+        }
+
+        var gpuCard = document.getElementById('sys-gpu-card');
+        var gpuEl = document.getElementById('sys-gpu-chart');
+        var gpuEmpty = document.getElementById('sys-gpu-empty');
+        if (gpuData.length > 0) {
+            gpuCard.style.display = '';
+            gpuEl.style.display = '';
+            gpuEmpty.style.display = 'none';
+            sysGpuChart = createTimeChart('sys-gpu-chart',
+                [{ name: 'GPU %', data: gpuData }],
+                { height: 200, yTitle: '%', yFormatter: function(v) { return v.toFixed(0) + '%'; } });
+        } else {
+            gpuCard.style.display = 'none';
+        }
     }
 
     function renderCharts(rows) {

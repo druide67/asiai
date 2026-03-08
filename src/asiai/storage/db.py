@@ -51,8 +51,10 @@ def store_snapshot(db_path: str, snap: dict) -> None:
                (ts, cpu_load_1, cpu_load_5, cpu_load_15,
                 mem_total, mem_used, mem_pressure,
                 thermal_level, thermal_speed_limit, uptime,
-                inference_engine, engine_version)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                inference_engine, engine_version,
+                gpu_utilization_pct, gpu_renderer_pct, gpu_tiler_pct,
+                gpu_mem_in_use, gpu_mem_allocated)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 snap["ts"],
                 snap["cpu_load_1"],
@@ -66,6 +68,11 @@ def store_snapshot(db_path: str, snap: dict) -> None:
                 snap["uptime"],
                 snap.get("inference_engine"),
                 snap.get("engine_version"),
+                snap.get("gpu_utilization_pct", -1),
+                snap.get("gpu_renderer_pct", -1),
+                snap.get("gpu_tiler_pct", -1),
+                snap.get("gpu_mem_in_use", 0),
+                snap.get("gpu_mem_allocated", 0),
             ),
         )
         for model in snap.get("models", []):
@@ -208,8 +215,10 @@ def store_engine_status(db_path: str, statuses: list[dict]) -> None:
         for s in statuses:
             conn.execute(
                 """INSERT INTO engine_status
-                   (ts, engine, reachable, version, models_loaded, vram_total, url)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (ts, engine, reachable, version, models_loaded, vram_total, url,
+                    tcp_connections, requests_processing,
+                    tokens_predicted_total, kv_cache_usage_ratio)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     ts,
                     s["name"],
@@ -218,6 +227,10 @@ def store_engine_status(db_path: str, statuses: list[dict]) -> None:
                     len(s.get("models", [])),
                     s.get("vram_total", 0),
                     s.get("url", ""),
+                    s.get("tcp_connections", 0),
+                    s.get("requests_processing", 0),
+                    s.get("tokens_predicted_total", 0),
+                    s.get("kv_cache_usage_ratio", -1),
                 ),
             )
         conn.commit()
@@ -241,6 +254,29 @@ def query_engine_uptime(db_path: str, engine: str, hours: int = 24) -> float:
         if row and row[0] > 0:
             return (row[1] / row[0]) * 100.0
         return 0.0
+    finally:
+        conn.close()
+
+
+def query_engine_status_history(
+    db_path: str, hours: int = 24, engine: str = ""
+) -> list[dict]:
+    """Return engine_status rows for the last N hours, optionally filtered by engine."""
+    since = int(time.time()) - (hours * 3600)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        query = (
+            "SELECT ts, engine, reachable, version, models_loaded, vram_total, "
+            "tcp_connections, requests_processing, tokens_predicted_total, "
+            "kv_cache_usage_ratio FROM engine_status WHERE ts >= ?"
+        )
+        params: list = [since]
+        if engine:
+            query += " AND engine = ?"
+            params.append(engine)
+        query += " ORDER BY ts"
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
     finally:
         conn.close()
 

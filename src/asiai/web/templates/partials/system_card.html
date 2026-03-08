@@ -56,6 +56,19 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if snapshot.gpu_utilization_pct is defined and snapshot.gpu_utilization_pct >= 0 %}
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">GPU</div>
+                <div class="metric-value text-sm">{{ snapshot.gpu_utilization_pct | format_number }}%</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">GPU Memory</div>
+                <div class="metric-value text-sm">{{ snapshot.gpu_mem_in_use | format_bytes }}</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% else %}
     <p class="text-neutral-400 text-sm">Unable to collect system metrics</p>

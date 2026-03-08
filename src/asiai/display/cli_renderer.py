@@ -126,6 +126,40 @@ def render_snapshot(snap: dict) -> None:
     )
     print()
 
+    # GPU (conditional — only if ioreg data available)
+    gpu_util = snap.get("gpu_utilization_pct", -1)
+    if gpu_util >= 0:
+        print(bold("GPU"))
+        renderer = snap.get("gpu_renderer_pct", -1)
+        tiler = snap.get("gpu_tiler_pct", -1)
+
+        # Color utilization: >90% red, >60% yellow, else green
+        if gpu_util > 90:
+            util_str = red(f"{gpu_util:.0f}%")
+        elif gpu_util > 60:
+            util_str = yellow(f"{gpu_util:.0f}%")
+        else:
+            util_str = green(f"{gpu_util:.0f}%")
+
+        detail_parts = []
+        if renderer >= 0:
+            detail_parts.append(f"renderer {renderer:.0f}%")
+        if tiler >= 0:
+            detail_parts.append(f"tiler {tiler:.0f}%")
+        detail_str = ", ".join(detail_parts)
+        detail = f"  {dim('(' + detail_str + ')')}" if detail_parts else ""
+
+        print(f"  Utilization: {util_str}{detail}")
+
+        mem_in_use = snap.get("gpu_mem_in_use", 0)
+        mem_allocated = snap.get("gpu_mem_allocated", 0)
+        if mem_in_use > 0 or mem_allocated > 0:
+            print(
+                f"  Memory:      {format_bytes(mem_in_use)} in use"
+                f" / {format_bytes(mem_allocated)} allocated"
+            )
+        print()
+
     # Engines
     engine_str = snap.get("inference_engine", "none")
     version_str = snap.get("engine_version", "")

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import time
 
+from asiai.collectors.gpu import collect_gpu
+from asiai.collectors.inference import count_tcp_connections
 from asiai.collectors.system import (
     collect_cpu_cores,
     collect_cpu_load,
@@ -13,6 +15,7 @@ from asiai.collectors.system import (
     collect_uptime,
 )
 from asiai.engines.base import InferenceEngine
+from asiai.engines.detect import _extract_port
 
 logger = logging.getLogger("asiai.collectors.snapshot")
 
@@ -29,6 +32,7 @@ def collect_snapshot(engines: list[InferenceEngine]) -> dict:
     cpu = collect_cpu_load()
     mem = collect_memory()
     thermal = collect_thermal()
+    gpu = collect_gpu()
 
     # Collect models from all engines
     models: list[dict] = []
@@ -71,6 +75,11 @@ def collect_snapshot(engines: list[InferenceEngine]) -> dict:
         "inference_engine": ",".join(engine_names) if engine_names else "none",
         "engine_version": ",".join(engine_versions) if engine_versions else "",
         "models": models,
+        "gpu_utilization_pct": gpu.utilization_pct,
+        "gpu_renderer_pct": gpu.renderer_pct,
+        "gpu_tiler_pct": gpu.tiler_pct,
+        "gpu_mem_in_use": gpu.mem_in_use,
+        "gpu_mem_allocated": gpu.mem_allocated,
     }
 
 
@@ -89,6 +98,10 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
             "version": "",
             "models": [],
             "vram_total": 0,
+            "tcp_connections": 0,
+            "requests_processing": 0,
+            "tokens_predicted_total": 0,
+            "kv_cache_usage_ratio": -1.0,
         }
         try:
             entry["reachable"] = engine.is_reachable()
@@ -108,6 +121,18 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                     )
                     vram_total += m.size_vram
                 entry["vram_total"] = vram_total
+
+                # Inference activity: TCP connections + scraped metrics
+                port = _extract_port(engine.base_url)
+                entry["tcp_connections"] = count_tcp_connections(port)
+                scraped = engine.scrape_metrics()
+                entry["requests_processing"] = scraped.get("requests_processing", 0)
+                entry["tokens_predicted_total"] = scraped.get(
+                    "tokens_predicted_total", 0
+                )
+                entry["kv_cache_usage_ratio"] = scraped.get(
+                    "kv_cache_usage_ratio", -1.0
+                )
         except Exception as e:
             logger.warning("Engine %s status error: %s", engine.name, e)
         statuses.append(entry)

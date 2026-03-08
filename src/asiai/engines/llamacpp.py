@@ -71,3 +71,9 @@ class LlamaCppEngine(OpenAICompatEngine):
             for m in models:
                 m.context_length = ctx_len
         return models
+
+    def scrape_metrics(self) -> dict:
+        """Scrape llama.cpp /metrics for inference activity."""
+        from asiai.collectors.inference import scrape_prometheus_metrics
+
+        return scrape_prometheus_metrics(f"{self.base_url}/metrics")
