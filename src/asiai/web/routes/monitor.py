@@ -6,14 +6,14 @@ import asyncio
 import json
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
 
 
 @router.get("/monitor", response_class=HTMLResponse)
-async def monitor_page(request: Request):
+async def monitor_page(request: Request) -> HTMLResponse:
     """Render the monitor page."""
     state = request.app.state.app_state
     templates = request.app.state.templates
@@ -31,7 +31,7 @@ async def monitor_page(request: Request):
 
 
 @router.get("/monitor/stream")
-async def monitor_stream(request: Request):
+async def monitor_stream(request: Request) -> Response:
     """SSE endpoint for real-time monitoring data."""
     from starlette.responses import StreamingResponse
 

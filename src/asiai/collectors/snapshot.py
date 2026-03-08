@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time
 
 from asiai.collectors.system import (
@@ -14,8 +13,6 @@ from asiai.collectors.system import (
     collect_uptime,
 )
 from asiai.engines.base import InferenceEngine
-from asiai.storage.db import purge_old, store_snapshot
-from asiai.storage.schema import RETENTION_DAYS
 
 logger = logging.getLogger("asiai.collectors.snapshot")
 
@@ -127,42 +124,3 @@ def collect_full_snapshot(engines: list[InferenceEngine]) -> dict:
     return base
 
 
-class CollectorThread(threading.Thread):
-    """Background thread that periodically collects and stores snapshots."""
-
-    def __init__(
-        self,
-        db_path: str,
-        interval: int,
-        engines: list[InferenceEngine],
-    ) -> None:
-        super().__init__(daemon=True)
-        self.db_path = db_path
-        self.interval = interval
-        self.engines = engines
-        self._stop_event = threading.Event()
-        self.last_snapshot: dict | None = None
-
-    def run(self) -> None:
-        logger.info("Collector started (interval=%ds)", self.interval)
-        while not self._stop_event.is_set():
-            try:
-                snap = collect_snapshot(self.engines)
-                self.last_snapshot = snap
-                store_snapshot(self.db_path, snap)
-                # Purge approximately every 24h
-                if snap["ts"] % 86400 < self.interval:
-                    deleted = purge_old(self.db_path)
-                    if deleted:
-                        logger.info(
-                            "Purged %d entries older than %d days",
-                            deleted,
-                            RETENTION_DAYS,
-                        )
-            except Exception as e:
-                logger.error("Collector error: %s", e)
-            self._stop_event.wait(self.interval)
-
-    def stop(self) -> None:
-        """Signal the collector to stop."""
-        self._stop_event.set()

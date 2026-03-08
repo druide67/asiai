@@ -410,7 +410,7 @@ def cmd_web(args: argparse.Namespace) -> int:
         import threading
         import webbrowser
 
-        def _open_browser():
+        def _open_browser() -> None:
             import time as _time
 
             _time.sleep(1.5)

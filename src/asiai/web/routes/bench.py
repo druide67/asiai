@@ -7,7 +7,7 @@ import json
 import logging
 import threading
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/bench", response_class=HTMLResponse)
-async def bench_page(request: Request):
+async def bench_page(request: Request) -> HTMLResponse:
     """Render the benchmark page with form and results area."""
     state = request.app.state.app_state
     templates = request.app.state.templates
@@ -40,7 +40,7 @@ async def bench_page(request: Request):
 
 
 @router.post("/bench/run")
-async def bench_run(request: Request):
+async def bench_run(request: Request) -> JSONResponse:
     """Start a benchmark in a background thread."""
     state = request.app.state.app_state
     form = await request.form()
@@ -75,7 +75,7 @@ async def bench_run(request: Request):
 
 
 @router.get("/bench/stream")
-async def bench_stream(request: Request):
+async def bench_stream(request: Request) -> Response:
     """SSE endpoint for benchmark progress."""
     from starlette.responses import StreamingResponse
 
@@ -113,7 +113,7 @@ async def bench_stream(request: Request):
 
 
 @router.get("/bench/export")
-async def bench_export(request: Request):
+async def bench_export(request: Request) -> JSONResponse:
     """Export last benchmark results as JSON."""
     state = request.app.state.app_state
 

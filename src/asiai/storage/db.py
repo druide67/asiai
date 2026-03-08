@@ -340,25 +340,6 @@ def store_community_submission(db_path: str, submission: dict) -> None:
         conn.close()
 
 
-def query_community_submissions(
-    db_path: str, hours: int = 24, model: str = ""
-) -> list[dict]:
-    """Return recent community submissions."""
-    since = int(time.time()) - (hours * 3600)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        query = "SELECT * FROM community_submissions WHERE ts >= ?"
-        params: list = [since]
-        if model:
-            query += " AND model = ?"
-            params.append(model)
-        query += " ORDER BY ts DESC"
-        rows = conn.execute(query, params).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
-
 
 def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:
     """Compare metrics at two timestamps (nearest match)."""

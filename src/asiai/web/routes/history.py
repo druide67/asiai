@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/history", response_class=HTMLResponse)
-async def history_page(request: Request):
+async def history_page(request: Request) -> HTMLResponse:
     """Render the history page with charts and data table."""
     templates = request.app.state.templates
 
@@ -28,7 +28,7 @@ async def history_page(request: Request):
 async def api_history(
     request: Request,
     hours: int = Query(default=168, ge=1, le=2160),
-):
+) -> JSONResponse:
     """JSON API: monitoring history for charts."""
     state = request.app.state.app_state
 
@@ -57,7 +57,7 @@ async def api_benchmarks(
     hours: int = Query(default=168, ge=0, le=2160),
     model: str = Query(default=""),
     engine: str = Query(default=""),
-):
+) -> JSONResponse:
     """JSON API: benchmark results for charts."""
     state = request.app.state.app_state
 

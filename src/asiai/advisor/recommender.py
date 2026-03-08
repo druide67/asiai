@@ -266,7 +266,7 @@ _HEURISTIC_MODELS: list[tuple[str, float]] = [
     ("llama3.1:70b", 70),
 ]
 
-_ENGINE_ORDER = ["ollama", "mlxlm", "lmstudio"]
+_ENGINE_ORDER = ["ollama", "mlxlm", "lmstudio", "llamacpp", "vllm_mlx", "exo"]
 
 
 def _from_heuristics(

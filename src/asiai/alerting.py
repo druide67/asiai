@@ -149,6 +149,13 @@ def _send_webhook(url: str, payload: dict, timeout: int = 10) -> bool:
 
     Returns True if HTTP 2xx, False otherwise.
     """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        logger.warning("Webhook URL must use http(s), ignoring: %s", url)
+        return False
+
     try:
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(

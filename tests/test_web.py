@@ -112,6 +112,31 @@ class TestAppState:
 
 
 # ---------------------------------------------------------------------------
+# Security tests — CSRF
+# ---------------------------------------------------------------------------
+
+
+class TestCSRF:
+    def test_post_without_origin_returns_403(self, client):
+        response = client.post("/doctor/refresh")
+        assert response.status_code == 403
+
+    def test_post_with_wrong_origin_returns_403(self, client):
+        response = client.post(
+            "/doctor/refresh", headers={"Origin": "http://evil.com"}
+        )
+        assert response.status_code == 403
+
+    def test_post_with_correct_origin_passes(self, client):
+        with patch("asiai.web.routes.doctor._run_checks") as mock_checks:
+            mock_checks.return_value = []
+            response = client.post(
+                "/doctor/refresh", headers={"Origin": "http://testserver"}
+            )
+            assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # Route tests — Dashboard
 # ---------------------------------------------------------------------------
 
@@ -206,7 +231,9 @@ class TestDoctor:
                 "fix": "",
             },
         ]
-        response = client.post("/doctor/refresh")
+        response = client.post(
+            "/doctor/refresh", headers={"Origin": "http://testserver"}
+        )
         assert response.status_code == 200
         assert "RAM" in response.text
 
@@ -233,7 +260,11 @@ class TestBench:
 
     def test_bench_run_conflict_when_running(self, client, app_state):
         app_state.bench_status.running = True
-        response = client.post("/bench/run", data={"model": "test"})
+        response = client.post(
+            "/bench/run",
+            data={"model": "test"},
+            headers={"Origin": "http://testserver"},
+        )
         assert response.status_code == 409
 
 

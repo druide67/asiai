@@ -38,4 +38,4 @@ asiai leaderboard --chip "M4 Pro"
 
 - Requires the community API at `api.asiai.dev`.
 - Results are anonymized. No personal or machine-identifying data is shared.
-- Contribute your own results with `asiai bench --export` and the upcoming `asiai push` command.
+- Contribute your own results with `asiai bench --share`.

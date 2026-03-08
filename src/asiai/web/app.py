@@ -46,6 +46,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if request.method in ("POST", "PUT", "DELETE", "PATCH"):
             origin = request.headers.get("origin", "")
             host = request.headers.get("host", "")
+
+            # Fallback to Referer header if Origin is absent
+            if not origin:
+                referer = request.headers.get("referer", "")
+                if referer:
+                    from urllib.parse import urlparse
+
+                    parsed_ref = urlparse(referer)
+                    origin = f"{parsed_ref.scheme}://{parsed_ref.netloc}"
+
             if origin and host:
                 from urllib.parse import urlparse
 
@@ -58,6 +68,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                         {"error": "Cross-origin request rejected"},
                         status_code=403,
                     )
+            elif not origin:
+                # No Origin or Referer on a state-changing request — reject
+                from fastapi.responses import JSONResponse
+
+                return JSONResponse(
+                    {"error": "Missing Origin header"},
+                    status_code=403,
+                )
 
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"

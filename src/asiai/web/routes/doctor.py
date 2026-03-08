@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/doctor", response_class=HTMLResponse)
-async def doctor_page(request: Request):
+async def doctor_page(request: Request) -> HTMLResponse:
     """Render the doctor page with health checks."""
     state = request.app.state.app_state
     templates = request.app.state.templates
@@ -29,7 +29,7 @@ async def doctor_page(request: Request):
 
 
 @router.post("/doctor/refresh", response_class=HTMLResponse)
-async def doctor_refresh(request: Request):
+async def doctor_refresh(request: Request) -> HTMLResponse:
     """htmx partial: re-run checks and return updated cards."""
     state = request.app.state.app_state
     templates = request.app.state.templates

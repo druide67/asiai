@@ -46,13 +46,6 @@ def red(text: str) -> str:
     return _wrap("31", text)
 
 
-def blue(text: str) -> str:
-    return _wrap("34", text)
-
-
-def cyan(text: str) -> str:
-    return _wrap("36", text)
-
 
 # --- Value formatters ---
 
