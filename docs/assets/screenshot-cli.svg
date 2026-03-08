@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" height="460" font-family="'JetBrains Mono','SF Mono','Menlo',monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="480" font-family="'JetBrains Mono','SF Mono','Menlo',monospace" font-size="13">
   <defs>
     <style>
       .bg { fill: #1e1e2e; }
@@ -18,88 +18,79 @@
     </style>
   </defs>
   <!-- Window frame -->
-  <rect class="frame" width="680" height="460" rx="12"/>
+  <rect class="frame" width="680" height="480" rx="12"/>
   <!-- Title bar -->
-  <rect class="bg" x="0" y="30" width="680" height="430" rx="0"/>
+  <rect class="bg" x="0" y="30" width="680" height="450" rx="0"/>
   <rect fill="#181825" width="680" height="30" rx="12"/>
   <rect fill="#181825" x="0" y="18" width="680" height="14"/>
   <circle class="dot-r" cx="20" cy="15" r="6"/>
   <circle class="dot-y" cx="40" cy="15" r="6"/>
   <circle class="dot-g" cx="60" cy="15" r="6"/>
-  <text class="title" x="340" y="19" text-anchor="middle">asiai bench -m gemma-2-2b</text>
+  <text class="title" x="340" y="19" text-anchor="middle">asiai bench -m qwen3.5 --runs 3 --share</text>
 
   <!-- Content -->
   <g transform="translate(20, 55)">
-    <text class="dim" y="0">Benchmarking gemma-2-2b on ollama, mlxlm, vllm_mlx...</text>
+    <text class="dim" y="0">Benchmarking qwen3.5 on ollama, lmstudio...</text>
 
-    <text class="cyan bold" y="35">MacBookPro18,2 — Apple M1 Max</text>
-    <text class="dim" y="35" x="310">RAM: 64.0 GB</text>
-    <text class="dim" y="35" x="420">Pressure: nominal</text>
+    <text class="cyan bold" y="35">Mac Mini M4 Pro — Apple M4 Pro</text>
+    <text class="dim" y="35" x="310">RAM: 64.0 GB (42%)</text>
+    <text class="dim" y="35" x="450">Pressure: normal</text>
 
-    <text class="accent bold" y="70">Benchmark: gemma-2-2b</text>
+    <text class="accent bold" y="70">Benchmark: qwen3.5</text>
 
     <!-- Table header -->
     <text class="dim" y="100">Engine</text>
-    <text class="dim" y="100" x="175">tok/s</text>
-    <text class="dim" y="100" x="330">Tokens</text>
-    <text class="dim" y="100" x="395">Duration</text>
-    <text class="dim" y="100" x="475">TTFT</text>
-    <text class="dim" y="100" x="530">VRAM</text>
-    <text class="dim" y="100" x="600">Thermal</text>
+    <text class="dim" y="100" x="120">tok/s (±stddev)</text>
+    <text class="dim" y="100" x="290">Tokens</text>
+    <text class="dim" y="100" x="355">Duration</text>
+    <text class="dim" y="100" x="440">TTFT</text>
+    <text class="dim" y="100" x="500">VRAM</text>
+    <text class="dim" y="100" x="575">Thermal</text>
 
     <!-- Separator -->
     <text class="dim" y="115">────────────────────────────────────────────────────────────────────────────────</text>
 
-    <!-- mlxlm -->
-    <text class="text" y="135">mlxlm</text>
-    <text class="yellow" y="135" x="175">72.7 ± 2.4</text>
-    <text class="green" y="135" x="280">(stable)</text>
-    <text class="text" y="135" x="330">404</text>
-    <text class="text" y="135" x="395">5.46s</text>
-    <text class="text" y="135" x="475">0.27s</text>
-    <text class="dim" y="135" x="530">—</text>
-    <text class="green" y="135" x="600">nominal</text>
+    <!-- lmstudio (winner) -->
+    <text class="green bold" y="135">lmstudio</text>
+    <text class="green bold" y="135" x="120">72.6 ± 0.8</text>
+    <text class="green" y="135" x="230">(stable)</text>
+    <text class="text" y="135" x="290">435</text>
+    <text class="text" y="135" x="355">6.20s</text>
+    <text class="green" y="135" x="440">0.28s</text>
+    <text class="cyan" y="135" x="500">18.2 GB</text>
+    <text class="green" y="135" x="575">nominal</text>
 
-    <!-- ollama (winner) -->
-    <text class="green bold" y="160">ollama</text>
-    <text class="green bold" y="160" x="175">115.8 ± 1.5</text>
-    <text class="green" y="160" x="280">(stable)</text>
-    <text class="text" y="160" x="330">496</text>
-    <text class="text" y="160" x="395">4.55s</text>
-    <text class="green" y="160" x="475">0.04s</text>
-    <text class="cyan" y="160" x="530">2.8 GB</text>
-    <text class="green" y="160" x="600">nominal</text>
-
-    <!-- vllm_mlx -->
-    <text class="text" y="185">vllm_mlx</text>
-    <text class="yellow" y="185" x="175">102.5 ± 2.7</text>
-    <text class="green" y="185" x="280">(stable)</text>
-    <text class="text" y="185" x="330">505</text>
-    <text class="text" y="185" x="395">5.41s</text>
-    <text class="text" y="185" x="475">0.32s</text>
-    <text class="dim" y="185" x="530">—</text>
-    <text class="green" y="185" x="600">nominal</text>
+    <!-- ollama -->
+    <text class="text" y="160">ollama</text>
+    <text class="yellow" y="160" x="120">30.4 ± 0.1</text>
+    <text class="green" y="160" x="230">(stable)</text>
+    <text class="text" y="160" x="290">448</text>
+    <text class="text" y="160" x="355">15.28s</text>
+    <text class="text" y="160" x="440">0.25s</text>
+    <text class="cyan" y="160" x="500">26.0 GB</text>
+    <text class="green" y="160" x="575">nominal</text>
 
     <!-- Winner -->
-    <text class="accent bold" y="220">Winner: ollama (+13% tok/s)</text>
+    <text class="accent bold" y="200">Winner: lmstudio (2.4x faster)</text>
 
     <!-- Statistics -->
-    <text class="cyan bold" y="255">Statistics</text>
-    <text class="dim" y="275">mlxlm</text>
-    <text class="text" y="275" x="100">95% CI: [73.6, 77.0] tok/s</text>
-    <text class="text" y="275" x="320">P90: 96.3 tok/s</text>
-    <text class="text" y="275" x="470">P90 TTFT: 0.35s</text>
-    <text class="dim" y="295">ollama</text>
-    <text class="text" y="295" x="100">95% CI: [113.9, 115.9] tok/s</text>
-    <text class="text" y="295" x="320">P90: 117.2 tok/s</text>
-    <text class="text" y="295" x="470">P90 TTFT: 0.06s</text>
-    <text class="dim" y="315">vllm_mlx</text>
-    <text class="text" y="315" x="100">95% CI: [101.6, 105.4] tok/s</text>
-    <text class="text" y="315" x="320">P90: 113.7 tok/s</text>
-    <text class="text" y="315" x="470">P90 TTFT: 0.35s</text>
+    <text class="cyan bold" y="235">Statistics</text>
+    <text class="dim" y="255">lmstudio</text>
+    <text class="text" y="255" x="100">95% CI: [71.2, 74.0] tok/s</text>
+    <text class="text" y="255" x="320">P90: 73.8 tok/s</text>
+    <text class="text" y="255" x="470">P90 TTFT: 0.31s</text>
+    <text class="dim" y="275">ollama</text>
+    <text class="text" y="275" x="100">95% CI: [30.2, 30.6] tok/s</text>
+    <text class="text" y="275" x="320">P90: 30.5 tok/s</text>
+    <text class="text" y="275" x="470">P90 TTFT: 0.27s</text>
 
-    <!-- Regression -->
-    <text class="red bold" y="355">Regression Warnings</text>
-    <text class="red" y="375">!!! mlxlm: TTFT increased 41% (248ms → 350ms) — major</text>
+    <!-- Community share -->
+    <text class="accent bold" y="320">Community</text>
+    <text class="green" y="340">✓ Shared to community (a3f7b2c1...)</text>
+    <text class="dim" y="360">Your lmstudio is 8% faster than community median (67.2 tok/s, 12 samples)</text>
+
+    <!-- Recommend teaser -->
+    <text class="cyan bold" y="400">$ asiai recommend --use-case throughput</text>
+    <text class="text" y="400" x="420" font-size="11" class="dim">↵</text>
   </g>
 </svg>

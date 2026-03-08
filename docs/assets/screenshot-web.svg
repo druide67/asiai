@@ -51,7 +51,7 @@
   <!-- Sidebar -->
   <rect class="sidebar" x="0" y="30" width="130" height="430"/>
   <text class="accent bold" x="20" y="60" font-size="16">asiai</text>
-  <text class="dim" x="20" y="75" font-size="9">v0.4.0</text>
+  <text class="dim" x="20" y="75" font-size="9">v1.0.0</text>
   <text class="nav-active" x="20" y="108">Dashboard</text>
   <text class="nav-item" x="20" y="133">Monitor</text>
   <text class="nav-item" x="20" y="158">Benchmark</text>
@@ -62,73 +62,70 @@
   <g transform="translate(145, 42)">
     <!-- Header -->
     <text class="title" y="15" font-size="15">Dashboard</text>
-    <text class="dim" y="15" x="440">M1 Max · 64 GB · macOS 15.3</text>
+    <text class="dim" y="15" x="420">M4 Pro · 64 GB · macOS 15.3</text>
 
     <!-- Stat cards row -->
     <!-- Engines -->
     <rect class="card" x="0" y="30" width="125" height="70" rx="8"/>
-    <text class="stat-big" x="15" y="70">3</text>
+    <text class="stat-big" x="15" y="70">4</text>
     <text class="stat-label" x="15" y="88">ENGINES ONLINE</text>
 
     <!-- Models -->
     <rect class="card" x="135" y="30" width="125" height="70" rx="8"/>
-    <text class="stat-big" x="150" y="70">2</text>
+    <text class="stat-big" x="150" y="70">3</text>
     <text class="stat-label" x="150" y="88">MODELS LOADED</text>
 
     <!-- Last bench -->
     <rect class="card" x="270" y="30" width="125" height="70" rx="8"/>
-    <text class="stat-big accent" x="285" y="70">115.8</text>
+    <text class="stat-big accent" x="285" y="70">72.6</text>
     <text class="stat-label" x="285" y="88">BEST TOK/S</text>
 
-    <!-- Benchmarks -->
+    <!-- Community -->
     <rect class="card" x="405" y="30" width="115" height="70" rx="8"/>
-    <text class="stat-big" x="420" y="70">236</text>
-    <text class="stat-label" x="420" y="88">TOTAL RUNS</text>
+    <text class="stat-big cyan" x="420" y="70">48</text>
+    <text class="stat-label" x="420" y="88">COMMUNITY</text>
 
     <!-- Chart: Throughput comparison -->
     <rect class="card" x="0" y="115" width="260" height="170" rx="8"/>
     <text class="text bold" x="15" y="138" font-size="12">Throughput (tok/s)</text>
-    <text class="dim" x="15" y="152" font-size="9">gemma-2-2b · 3 engines</text>
+    <text class="dim" x="15" y="152" font-size="9">qwen3.5-35b · 4 engines</text>
 
     <!-- Bar chart -->
     <g transform="translate(15, 165)">
-      <text class="dim small" x="0" y="10">ollama</text>
+      <text class="dim small" x="0" y="10">lmstudio</text>
       <rect class="bar-bg" x="65" y="0" width="180" height="14" rx="3"/>
-      <rect fill="url(#chart1)" x="65" y="0" width="165" height="14" rx="3"/>
-      <text class="text small bold" x="70" y="11">115.8</text>
+      <rect fill="url(#chart1)" x="65" y="0" width="180" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="11">72.6</text>
 
-      <text class="dim small" x="0" y="35">vllm_mlx</text>
+      <text class="dim small" x="0" y="35">exo (2x)</text>
       <rect class="bar-bg" x="65" y="25" width="180" height="14" rx="3"/>
-      <rect fill="url(#chart2)" x="65" y="25" width="146" height="14" rx="3"/>
-      <text class="text small bold" x="70" y="36">102.5</text>
+      <rect fill="url(#chart2)" x="65" y="25" width="95" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="36">38.4</text>
 
-      <text class="dim small" x="0" y="60">mlxlm</text>
+      <text class="dim small" x="0" y="60">ollama</text>
       <rect class="bar-bg" x="65" y="50" width="180" height="14" rx="3"/>
-      <rect fill="url(#chart3)" x="65" y="50" width="104" height="14" rx="3"/>
-      <text class="text small bold" x="70" y="61">72.7</text>
+      <rect fill="url(#chart3)" x="65" y="50" width="75" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="61">30.4</text>
     </g>
 
-    <!-- Chart: TTFT comparison -->
+    <!-- Chart: Community comparison -->
     <rect class="card" x="270" y="115" width="250" height="170" rx="8"/>
-    <text class="text bold" x="285" y="138" font-size="12">TTFT (ms)</text>
-    <text class="dim" x="285" y="152" font-size="9">Time to first token</text>
+    <text class="text bold" x="285" y="138" font-size="12">You vs Community</text>
+    <text class="dim" x="285" y="152" font-size="9">qwen3.5-35b · M4 Pro · 12 samples</text>
 
-    <!-- TTFT bars -->
+    <!-- Comparison bars -->
     <g transform="translate(285, 165)">
-      <text class="dim small" x="0" y="10">ollama</text>
+      <text class="dim small" x="0" y="10">lmstudio</text>
       <rect class="bar-bg" x="65" y="0" width="170" height="14" rx="3"/>
-      <rect fill="url(#chart1)" x="65" y="0" width="18" height="14" rx="3"/>
-      <text class="green small bold" x="88" y="11">40ms</text>
+      <rect fill="url(#chart1)" x="65" y="0" width="170" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="11">72.6 (+8%)</text>
 
-      <text class="dim small" x="0" y="35">mlxlm</text>
+      <text class="dim small" x="0" y="35">community</text>
       <rect class="bar-bg" x="65" y="25" width="170" height="14" rx="3"/>
-      <rect fill="url(#chart3)" x="65" y="25" width="100" height="14" rx="3"/>
-      <text class="text small bold" x="70" y="36">270ms</text>
+      <rect fill="#6c7086" x="65" y="25" width="157" height="14" rx="3"/>
+      <text class="text small bold" x="70" y="36">67.2 (median)</text>
 
-      <text class="dim small" x="0" y="60">vllm_mlx</text>
-      <rect class="bar-bg" x="65" y="50" width="170" height="14" rx="3"/>
-      <rect fill="url(#chart2)" x="65" y="50" width="115" height="14" rx="3"/>
-      <text class="text small bold" x="70" y="61">320ms</text>
+      <text class="green bold" x="65" y="70" font-size="11">Your Mac is 8% faster than average</text>
     </g>
 
     <!-- System status row -->
@@ -136,16 +133,16 @@
     <text class="text bold" x="15" y="322" font-size="11">CPU</text>
     <!-- Mini sparkline -->
     <polyline fill="none" stroke="#00d4aa" stroke-width="1.5" points="15,350 30,345 45,348 60,340 75,342 90,338 105,344 120,336 135,340 150,335"/>
-    <text class="accent bold" x="15" y="370" font-size="11">12%</text>
-    <text class="dim" x="45" y="370">nominal</text>
+    <text class="accent bold" x="15" y="370" font-size="11">8%</text>
+    <text class="dim" x="40" y="370">nominal</text>
 
     <rect class="card" x="175" y="300" width="165" height="80" rx="8"/>
     <text class="text bold" x="190" y="322" font-size="11">Memory</text>
     <!-- Memory gauge -->
     <rect class="bar-bg" x="190" y="335" width="135" height="10" rx="5"/>
-    <rect fill="#f9e2af" x="190" y="335" width="107" height="10" rx="5"/>
-    <text class="yellow bold" x="190" y="370" font-size="11">79%</text>
-    <text class="dim" x="220" y="370">50.4 / 64 GB</text>
+    <rect fill="#a6e3a1" x="190" y="335" width="56" height="10" rx="5"/>
+    <text class="green bold" x="190" y="370" font-size="11">42%</text>
+    <text class="dim" x="220" y="370">26.8 / 64 GB</text>
 
     <rect class="card" x="350" y="300" width="170" height="80" rx="8"/>
     <text class="text bold" x="365" y="322" font-size="11">Thermal</text>
