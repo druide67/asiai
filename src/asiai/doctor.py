@@ -385,6 +385,48 @@ def _check_vllm_mlx() -> CheckResult:
     )
 
 
+def _check_exo() -> CheckResult:
+    """Check Exo installation and reachability."""
+    # Check if installed
+    try:
+        result = subprocess.run(
+            ["which", "exo"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        installed = result.returncode == 0
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.debug("Exo 'which' check failed: %s", e)
+        installed = False
+
+    if not installed:
+        return CheckResult(
+            "engine",
+            "Exo",
+            "fail",
+            "not installed",
+            fix="pip install exo-inference",
+        )
+
+    # Check if reachable
+    data, _ = http_get_json("http://localhost:52415/v1/models")
+    if data is None:
+        return CheckResult(
+            "engine",
+            "Exo",
+            "warn",
+            "installed but not running",
+            fix="exo",
+        )
+
+    models = data.get("data", [])
+    if models:
+        names = ", ".join(m.get("id", "?") for m in models)
+        return CheckResult("engine", "Exo", "ok", f"{len(models)} model(s): {names}")
+    return CheckResult("engine", "Exo", "ok", "running — no models loaded")
+
+
 def _check_db(db_path: str = DEFAULT_DB_PATH) -> CheckResult:
     """Check database existence, integrity, and freshness."""
     if not os.path.exists(db_path):
@@ -619,6 +661,7 @@ def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
     checks.append(_check_mlxlm())
     checks.append(_check_llamacpp())
     checks.append(_check_vllm_mlx())
+    checks.append(_check_exo())
 
     # Database checks
     checks.append(_check_db(db_path))

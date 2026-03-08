@@ -317,6 +317,49 @@ def query_alert_history(db_path: str, hours: int = 24) -> list[dict]:
         conn.close()
 
 
+def store_community_submission(db_path: str, submission: dict) -> None:
+    """Record a community benchmark submission attempt."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """INSERT OR REPLACE INTO community_submissions
+               (id, ts, model, status, response_status, error, payload_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                submission["id"],
+                submission["ts"],
+                submission["model"],
+                submission.get("status", "pending"),
+                submission.get("response_status"),
+                submission.get("error", ""),
+                submission.get("payload_hash", ""),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def query_community_submissions(
+    db_path: str, hours: int = 24, model: str = ""
+) -> list[dict]:
+    """Return recent community submissions."""
+    since = int(time.time()) - (hours * 3600)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        query = "SELECT * FROM community_submissions WHERE ts >= ?"
+        params: list = [since]
+        if model:
+            query += " AND model = ?"
+            params.append(model)
+        query += " ORDER BY ts DESC"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:
     """Compare metrics at two timestamps (nearest match)."""
     conn = sqlite3.connect(db_path)

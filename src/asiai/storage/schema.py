@@ -77,6 +77,18 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);
 CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(alert_type);
+
+CREATE TABLE IF NOT EXISTS community_submissions (
+    id TEXT PRIMARY KEY,
+    ts INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    response_status INTEGER,
+    error TEXT DEFAULT '',
+    payload_hash TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_ts ON community_submissions(ts);
 """
 
 # Migrations from earlier schema versions.

@@ -22,6 +22,7 @@ _PORT_PROCESS_MAP: dict[str, str] = {
     "llama-server": "llamacpp",
     "llama_server": "llamacpp",
     "vllm": "vllm_mlx",
+    "exo": "exo",
 }
 
 # Default ports to scan when no explicit URL is given.
@@ -30,6 +31,7 @@ DEFAULT_URLS = [
     "http://localhost:1234",  # LM Studio default
     "http://localhost:8080",  # mlx-lm / llama.cpp default
     "http://localhost:8000",  # vllm-mlx default
+    "http://localhost:52415",  # Exo default
 ]
 
 

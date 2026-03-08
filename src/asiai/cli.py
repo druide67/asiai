@@ -14,6 +14,7 @@ from asiai import __version__
 def _discover_engines(urls: list[str] | None = None) -> list:
     """Detect inference engines and return instantiated adapters."""
     from asiai.engines.detect import detect_engines
+    from asiai.engines.exo import ExoEngine
     from asiai.engines.llamacpp import LlamaCppEngine
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
@@ -26,6 +27,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "mlxlm": MlxLmEngine,
         "llamacpp": LlamaCppEngine,
         "vllm_mlx": VllmMlxEngine,
+        "exo": ExoEngine,
     }
 
     found = detect_engines(urls)
@@ -524,6 +526,172 @@ def cmd_bench(args: argparse.Namespace) -> int:
         if regressions:
             render_regressions(regressions)
 
+    # Community share (opt-in)
+    if getattr(args, "share", False) and bench_run.results:
+        from asiai.community import build_submission, submit_benchmark
+        from asiai.display.formatters import dim, green
+
+        payload = build_submission(bench_run.results, report)
+        result = submit_benchmark(payload, db_path=db_path)
+        if result.success:
+            print(f"  {green('✓')} Shared to community ({result.submission_id[:8]}...)")
+        else:
+            print(f"  {dim('⚠ Share failed: ' + result.error)}")
+
+    return 0
+
+
+def cmd_leaderboard(args: argparse.Namespace) -> int:
+    """Handle 'leaderboard' command."""
+    from asiai.community import fetch_leaderboard
+    from asiai.display.formatters import bold, dim, green
+
+    chip = getattr(args, "chip", "")
+    model = getattr(args, "model", "")
+
+    entries = fetch_leaderboard(chip=chip, model=model)
+    if not entries:
+        print(dim("No community data available (server may be unreachable)."))
+        return 1
+
+    print(bold("Community Leaderboard"))
+    if chip:
+        print(dim(f"  Chip: {chip}"))
+    if model:
+        print(dim(f"  Model: {model}"))
+    print()
+
+    # Table header
+    print(f"  {'Engine':<12} {'Model':<30} {'tok/s':>8} {'TTFT':>8} {'Samples':>8}")
+    print(f"  {'─' * 12} {'─' * 30} {'─' * 8} {'─' * 8} {'─' * 8}")
+    for entry in entries:
+        eng = entry.get("engine", "?")
+        mdl = entry.get("model", "?")
+        tok = entry.get("median_tok_s", 0.0)
+        ttft = entry.get("median_ttft_ms", 0.0)
+        samples = entry.get("submissions", 0)
+        print(f"  {green(eng):<12} {mdl:<30} {tok:>8.1f} {ttft:>7.0f}ms {samples:>8}")
+
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """Handle 'compare' command."""
+    from asiai.benchmark.reporter import aggregate_results
+    from asiai.community import fetch_comparison
+    from asiai.display.formatters import bold, dim, green, red
+    from asiai.storage.db import DEFAULT_DB_PATH, init_db, query_benchmarks
+
+    db_path = args.db or DEFAULT_DB_PATH
+    init_db(db_path)
+
+    chip = getattr(args, "chip", "")
+    model = getattr(args, "model", "")
+
+    if not chip:
+        from asiai.collectors.system import collect_machine_info
+
+        chip = collect_machine_info().split(" — ")[0] if " — " in collect_machine_info() else ""
+        if not chip:
+            from asiai.collectors.system import collect_hw_chip
+
+            chip = collect_hw_chip()
+
+    # Get local data
+    rows = query_benchmarks(db_path, model=model)
+    if not rows:
+        print(dim("No local benchmarks found. Run 'asiai bench' first."))
+        return 1
+
+    local_report = aggregate_results(rows)
+    comparison = fetch_comparison(chip, model or local_report.get("model", ""), local_report)
+
+    if not comparison:
+        print(dim("Could not fetch community data for comparison."))
+        return 1
+
+    print(bold(f"Your {chip} vs Community"))
+    print()
+    for eng_name, data in comparison.get("engines", {}).items():
+        local_tok = data.get("local_median_tok_s", 0)
+        comm_tok = data.get("community_median_tok_s", 0)
+        delta_pct = data.get("delta_pct", 0)
+        samples = data.get("community_samples", 0)
+
+        if delta_pct > 0:
+            delta_str = green(f"+{delta_pct:.1f}%")
+        elif delta_pct < 0:
+            delta_str = red(f"{delta_pct:.1f}%")
+        else:
+            delta_str = dim("=")
+
+        print(
+            f"  {eng_name:<12}  "
+            f"you: {local_tok:.1f} tok/s  "
+            f"community: {comm_tok:.1f} tok/s  "
+            f"{delta_str}  "
+            f"{dim(f'({samples} samples)')}"
+        )
+
+    return 0
+
+
+def cmd_recommend(args: argparse.Namespace) -> int:
+    """Handle 'recommend' command."""
+    from asiai.advisor.recommender import recommend
+    from asiai.collectors.system import collect_hw_chip, collect_memory
+    from asiai.display.formatters import bold, dim, green, yellow
+    from asiai.storage.db import DEFAULT_DB_PATH, init_db
+
+    db_path = args.db or DEFAULT_DB_PATH
+    init_db(db_path)
+
+    chip = collect_hw_chip()
+    mem = collect_memory()
+    ram_gb = round(mem.total / (1024**3))
+
+    use_case = getattr(args, "use_case", "throughput")
+    model_filter = getattr(args, "model", "") or ""
+    community = getattr(args, "community", False)
+    community_url = ""
+    if community:
+        from asiai.community import get_api_url
+
+        community_url = get_api_url()
+
+    recs = recommend(
+        chip=chip,
+        ram_gb=ram_gb,
+        use_case=use_case,
+        model_filter=model_filter,
+        db_path=db_path,
+        community_url=community_url,
+    )
+
+    if not recs:
+        print(dim("No recommendations available. Run 'asiai bench' first."))
+        return 1
+
+    print(bold(f"Recommendations for {chip} ({ram_gb} GB)"))
+    if use_case != "throughput":
+        print(dim(f"  Optimizing for: {use_case}"))
+    print()
+
+    for i, rec in enumerate(recs[:10], 1):
+        score_color = green if rec.score >= 70 else (yellow if rec.score >= 40 else dim)
+        conf_str = dim(f"[{rec.confidence}]")
+        src_str = dim(f"({rec.source})")
+
+        tok_str = f"{rec.median_tok_s:.1f} tok/s" if rec.median_tok_s else ""
+        ttft_str = f"{rec.median_ttft_ms:.0f}ms TTFT" if rec.median_ttft_ms else ""
+        metrics = ", ".join(filter(None, [tok_str, ttft_str]))
+
+        line = f"  {i:>2}. {score_color(f'{rec.score:.0f}')} {rec.engine:<12} {rec.model:<30}"
+        print(f"{line} {metrics}")
+        print(f"      {dim(rec.reason)} {conf_str} {src_str}")
+        for caveat in rec.caveats:
+            print(f"      {yellow('⚠')} {caveat}")
+
     return 0
 
 
@@ -730,6 +898,44 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PERIOD",
         help="Show past benchmarks (e.g. 7d, 24h)",
     )
+    bench_parser.add_argument(
+        "--share",
+        action="store_true",
+        help="Share results to community benchmark database",
+    )
+
+    # leaderboard
+    leaderboard_parser = subparsers.add_parser(
+        "leaderboard", help="Show community benchmark leaderboard"
+    )
+    leaderboard_parser.add_argument("--chip", help="Filter by chip (e.g. 'Apple M4 Pro')")
+    leaderboard_parser.add_argument("--model", "-m", help="Filter by model name")
+
+    # compare
+    compare_parser = subparsers.add_parser(
+        "compare", help="Compare your benchmarks against community data"
+    )
+    compare_parser.add_argument("--chip", help="Hardware chip (default: auto-detect)")
+    compare_parser.add_argument("--model", "-m", help="Model to compare")
+    compare_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
+
+    # recommend
+    recommend_parser = subparsers.add_parser(
+        "recommend", help="Get engine recommendations for your hardware"
+    )
+    recommend_parser.add_argument("--model", "-m", help="Filter by model name")
+    recommend_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
+    recommend_parser.add_argument(
+        "--use-case",
+        choices=["throughput", "latency", "efficiency"],
+        default="throughput",
+        help="Optimize for (default: throughput)",
+    )
+    recommend_parser.add_argument(
+        "--community",
+        action="store_true",
+        help="Include community data in recommendations",
+    )
 
     args = parser.parse_args(argv)
 
@@ -746,6 +952,9 @@ def main(argv: list[str] | None = None) -> int:
         "daemon": cmd_daemon,
         "tui": cmd_tui,
         "web": cmd_web,
+        "leaderboard": cmd_leaderboard,
+        "compare": cmd_compare,
+        "recommend": cmd_recommend,
     }
 
     handler = commands.get(args.command)
