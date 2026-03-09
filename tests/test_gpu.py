@@ -29,16 +29,16 @@ class TestCollectGpu:
     @patch("asiai.collectors.gpu.subprocess.run")
     def test_full_data(self, mock_run):
         """All GPU fields populated from ioreg output."""
-        plist_data = self._make_plist({
-            "Device Utilization %": 42,
-            "Renderer Utilization %": 38,
-            "Tiler Utilization %": 15,
-            "In use system memory": 2_000_000_000,
-            "Allocated system memory": 4_000_000_000,
-        })
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout=plist_data
+        plist_data = self._make_plist(
+            {
+                "Device Utilization %": 42,
+                "Renderer Utilization %": 38,
+                "Tiler Utilization %": 15,
+                "In use system memory": 2_000_000_000,
+                "Allocated system memory": 4_000_000_000,
+            }
         )
+        mock_run.return_value = MagicMock(returncode=0, stdout=plist_data)
         gpu = collect_gpu()
         assert gpu.utilization_pct == 42.0
         assert gpu.renderer_pct == 38.0
@@ -49,9 +49,11 @@ class TestCollectGpu:
     @patch("asiai.collectors.gpu.subprocess.run")
     def test_partial_data(self, mock_run):
         """Missing fields get default values."""
-        plist_data = self._make_plist({
-            "Device Utilization %": 10,
-        })
+        plist_data = self._make_plist(
+            {
+                "Device Utilization %": 10,
+            }
+        )
         mock_run.return_value = MagicMock(returncode=0, stdout=plist_data)
         gpu = collect_gpu()
         assert gpu.utilization_pct == 10.0
@@ -84,9 +86,7 @@ class TestCollectGpu:
     @patch("asiai.collectors.gpu.subprocess.run")
     def test_empty_entries(self, mock_run):
         """Empty plist array gives defaults."""
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout=plistlib.dumps([])
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout=plistlib.dumps([]))
         gpu = collect_gpu()
         assert gpu.utilization_pct == -1.0
 

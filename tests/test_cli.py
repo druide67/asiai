@@ -145,8 +145,9 @@ def test_monitor_alert_webhook_arg(capsys, tmp_path):
         patch("asiai.storage.db.init_db"),
         patch("asiai.alerting.check_and_alert", return_value=[]) as mock_alert,
     ):
-        ret = main(["monitor", "--json", "--db", db_path,
-                     "--alert-webhook", "https://example.com/hook"])
+        ret = main(
+            ["monitor", "--json", "--db", db_path, "--alert-webhook", "https://example.com/hook"]
+        )
     assert ret == 0
     # prev_snapshot is None on first call → no alert fired
     mock_alert.assert_called_once()
@@ -305,10 +306,19 @@ def test_compare_no_community_data(capsys, tmp_path):
     """compare with local data but no community response returns 1."""
     db_path = str(tmp_path / "test.db")
     rows = [
-        {"engine": "ollama", "model": "qwen:7b", "tok_per_sec": 45.0,
-         "ttft_ms": 200.0, "ts": 1709700000, "prompt_type": "code",
-         "total_duration_ms": 5000, "vram_bytes": 0, "power_watts": 0,
-         "tok_per_sec_per_watt": 0, "run_index": 0},
+        {
+            "engine": "ollama",
+            "model": "qwen:7b",
+            "tok_per_sec": 45.0,
+            "ttft_ms": 200.0,
+            "ts": 1709700000,
+            "prompt_type": "code",
+            "total_duration_ms": 5000,
+            "vram_bytes": 0,
+            "power_watts": 0,
+            "tok_per_sec_per_watt": 0,
+            "run_index": 0,
+        },
     ]
     with (
         patch("asiai.storage.db.init_db"),
@@ -342,8 +352,11 @@ def test_recommend_heuristic_fallback(capsys, tmp_path):
 
         mock_rec.return_value = [
             Recommendation(
-                engine="ollama", model="qwen3.5:35b-a3b", score=50.0,
-                source="heuristic", confidence="low",
+                engine="ollama",
+                model="qwen3.5:35b-a3b",
+                score=50.0,
+                source="heuristic",
+                confidence="low",
                 reason="Estimated based on Apple M4 Pro with 64GB RAM",
             ),
         ]
@@ -372,8 +385,11 @@ def test_recommend_help(capsys):
 def test_models_with_engines(capsys):
     """models shows engine info when engines are found."""
     model = ModelInfo(
-        name="gemma2:9b", size_vram=8_000_000_000,
-        format="gguf", quantization="Q4_K_M", context_length=8192,
+        name="gemma2:9b",
+        size_vram=8_000_000_000,
+        format="gguf",
+        quantization="Q4_K_M",
+        context_length=8192,
     )
     engine = _make_mock_engine("ollama", models=[model])
     engine.version.return_value = "0.17.4"
@@ -427,11 +443,19 @@ def test_bench_share_flag(capsys, tmp_path):
     mock_run = MagicMock()
     mock_run.results = [
         {
-            "engine": "ollama", "model": "gemma2:9b", "prompt_type": "code",
-            "tok_per_sec": 45.0, "ttft_ms": 200.0, "total_duration_ms": 5000,
-            "tokens_generated": 200, "vram_bytes": 8_000_000_000,
-            "power_watts": 0, "tok_per_sec_per_watt": 0, "run_index": 0,
-            "ts": 1709700000, "thermal_level": "nominal",
+            "engine": "ollama",
+            "model": "gemma2:9b",
+            "prompt_type": "code",
+            "tok_per_sec": 45.0,
+            "ttft_ms": 200.0,
+            "total_duration_ms": 5000,
+            "tokens_generated": 200,
+            "vram_bytes": 8_000_000_000,
+            "power_watts": 0,
+            "tok_per_sec_per_watt": 0,
+            "run_index": 0,
+            "ts": 1709700000,
+            "thermal_level": "nominal",
         }
     ]
 
@@ -448,7 +472,9 @@ def test_bench_share_flag(capsys, tmp_path):
         from asiai.community import SubmitResult
 
         mock_submit.return_value = SubmitResult(
-            success=True, submission_id="abc12345", http_status=201,
+            success=True,
+            submission_id="abc12345",
+            http_status=201,
         )
         ret = main(["bench", "--db", db_path, "--share"])
     assert ret == 0

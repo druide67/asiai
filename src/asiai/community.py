@@ -119,9 +119,7 @@ def build_submission(
             "runs_count": data.get("runs_count", 1),
         }
 
-    prompts = sorted(
-        {r.get("prompt_type", "") for r in raw_results if r.get("prompt_type")}
-    )
+    prompts = sorted({r.get("prompt_type", "") for r in raw_results if r.get("prompt_type")})
     run_indices = {r.get("run_index", 0) for r in raw_results}
 
     payload: dict[str, Any] = {
@@ -200,9 +198,7 @@ def submit_benchmark(
     except HTTPError as exc:
         result.http_status = exc.code
         result.error = f"HTTP {exc.code}"
-        logger.warning(
-            "Community submission HTTP error %d: %s", exc.code, url
-        )
+        logger.warning("Community submission HTTP error %d: %s", exc.code, url)
     except (URLError, OSError) as exc:
         result.error = str(exc)
         logger.warning("Community submission failed: %s (%s)", exc, url)

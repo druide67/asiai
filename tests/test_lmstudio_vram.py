@@ -61,10 +61,15 @@ class TestGetVramFromLms:
 
     def test_lms_success(self):
         engine = LMStudioEngine("http://localhost:1234")
-        lms_output = json.dumps([
-            {"modelKey": "gemma-2-9b", "path": "mlx-community/gemma-2-9b-8bit",
-             "sizeBytes": 9837652042}
-        ])
+        lms_output = json.dumps(
+            [
+                {
+                    "modelKey": "gemma-2-9b",
+                    "path": "mlx-community/gemma-2-9b-8bit",
+                    "sizeBytes": 9837652042,
+                }
+            ]
+        )
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = lms_output
@@ -121,10 +126,15 @@ class TestGetVramFromLms:
         ps_result.returncode = 0
         ps_result.stdout = "[]"
 
-        ls_output = json.dumps([
-            {"modelKey": "gemma-2-9b", "path": "mlx-community/gemma-2-9b-8bit",
-             "sizeBytes": 9837652042}
-        ])
+        ls_output = json.dumps(
+            [
+                {
+                    "modelKey": "gemma-2-9b",
+                    "path": "mlx-community/gemma-2-9b-8bit",
+                    "sizeBytes": 9837652042,
+                }
+            ]
+        )
         ls_result = MagicMock()
         ls_result.returncode = 0
         ls_result.stdout = ls_output
@@ -145,10 +155,15 @@ class TestGetVramFromLms:
     def test_lms_ps_has_data_skips_ls(self):
         """When lms ps returns data, don't call lms ls."""
         engine = LMStudioEngine("http://localhost:1234")
-        ps_output = json.dumps([
-            {"modelKey": "gemma-2-9b", "path": "mlx-community/gemma-2-9b-8bit",
-             "sizeBytes": 9837652042}
-        ])
+        ps_output = json.dumps(
+            [
+                {
+                    "modelKey": "gemma-2-9b",
+                    "path": "mlx-community/gemma-2-9b-8bit",
+                    "sizeBytes": 9837652042,
+                }
+            ]
+        )
         ps_result = MagicMock()
         ps_result.returncode = 0
         ps_result.stdout = ps_output
@@ -200,10 +215,12 @@ class TestListRunningVram:
         api_response = {"data": [{"id": "mlx-community/gemma-2-9b-8bit"}]}
 
         with (
-            patch("asiai.engines.openai_compat.http_get_json",
-                   return_value=(api_response, {})),
-            patch.object(engine, "_get_vram_from_lms",
-                         return_value={"mlx-community/gemma-2-9b-8bit": 9837652042}),
+            patch("asiai.engines.openai_compat.http_get_json", return_value=(api_response, {})),
+            patch.object(
+                engine,
+                "_get_vram_from_lms",
+                return_value={"mlx-community/gemma-2-9b-8bit": 9837652042},
+            ),
         ):
             models = engine.list_running()
 
@@ -216,8 +233,7 @@ class TestListRunningVram:
         api_response = {"data": [{"id": "mlx-community/gemma-2-9b-8bit"}]}
 
         with (
-            patch("asiai.engines.openai_compat.http_get_json",
-                   return_value=(api_response, {})),
+            patch("asiai.engines.openai_compat.http_get_json", return_value=(api_response, {})),
             patch.object(engine, "_get_vram_from_lms", return_value={}),
         ):
             models = engine.list_running()
@@ -229,8 +245,7 @@ class TestListRunningVram:
         engine = LMStudioEngine("http://localhost:1234")
 
         with (
-            patch("asiai.engines.openai_compat.http_get_json",
-                   return_value=(None, {})),
+            patch("asiai.engines.openai_compat.http_get_json", return_value=(None, {})),
             patch.object(engine, "_get_vram_from_lms") as mock_lms,
         ):
             models = engine.list_running()

@@ -186,36 +186,45 @@ class TestShouldFire:
         assert _should_fire("mem_pressure_warn", db) is True
 
     def test_recent_alert_blocks(self, db):
-        store_alert(db, {
-            "ts": int(__import__("time").time()),
-            "alert_type": "mem_pressure_warn",
-            "severity": "warning",
-            "message": "test",
-            "details": "{}",
-            "webhook_sent": True,
-        })
+        store_alert(
+            db,
+            {
+                "ts": int(__import__("time").time()),
+                "alert_type": "mem_pressure_warn",
+                "severity": "warning",
+                "message": "test",
+                "details": "{}",
+                "webhook_sent": True,
+            },
+        )
         assert _should_fire("mem_pressure_warn", db) is False
 
     def test_different_type_not_blocked(self, db):
-        store_alert(db, {
-            "ts": int(__import__("time").time()),
-            "alert_type": "thermal_degraded",
-            "severity": "warning",
-            "message": "test",
-            "details": "{}",
-            "webhook_sent": True,
-        })
+        store_alert(
+            db,
+            {
+                "ts": int(__import__("time").time()),
+                "alert_type": "thermal_degraded",
+                "severity": "warning",
+                "message": "test",
+                "details": "{}",
+                "webhook_sent": True,
+            },
+        )
         assert _should_fire("mem_pressure_warn", db) is True
 
     def test_old_alert_allows_fire(self, db):
-        store_alert(db, {
-            "ts": int(__import__("time").time()) - 600,
-            "alert_type": "mem_pressure_warn",
-            "severity": "warning",
-            "message": "test",
-            "details": "{}",
-            "webhook_sent": True,
-        })
+        store_alert(
+            db,
+            {
+                "ts": int(__import__("time").time()) - 600,
+                "alert_type": "mem_pressure_warn",
+                "severity": "warning",
+                "message": "test",
+                "details": "{}",
+                "webhook_sent": True,
+            },
+        )
         assert _should_fire("mem_pressure_warn", db, cooldown=300) is True
 
 

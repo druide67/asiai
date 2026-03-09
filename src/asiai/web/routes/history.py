@@ -104,7 +104,5 @@ async def api_engine_history(
 
     from asiai.storage.db import query_engine_status_history
 
-    rows = await asyncio.to_thread(
-        query_engine_status_history, state.db_path, hours, engine
-    )
+    rows = await asyncio.to_thread(query_engine_status_history, state.db_path, hours, engine)
     return JSONResponse(rows)

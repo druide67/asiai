@@ -591,9 +591,7 @@ def _check_ollama_config() -> list[CheckResult]:
         else:
             parts.append(f"{short}={val} (default)")
 
-    results.append(
-        CheckResult("engine", "Ollama config", "ok", ", ".join(parts))
-    )
+    results.append(CheckResult("engine", "Ollama config", "ok", ", ".join(parts)))
     return results
 
 
@@ -617,9 +615,7 @@ def _check_alerting() -> list[CheckResult]:
         )
         return results
 
-    results.append(
-        CheckResult("alerting", "Webhook URL", "ok", webhook_url)
-    )
+    results.append(CheckResult("alerting", "Webhook URL", "ok", webhook_url))
 
     # Test connectivity
     try:

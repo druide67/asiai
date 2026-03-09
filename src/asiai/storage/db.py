@@ -258,9 +258,7 @@ def query_engine_uptime(db_path: str, engine: str, hours: int = 24) -> float:
         conn.close()
 
 
-def query_engine_status_history(
-    db_path: str, hours: int = 24, engine: str = ""
-) -> list[dict]:
+def query_engine_status_history(db_path: str, hours: int = 24, engine: str = "") -> list[dict]:
     """Return engine_status rows for the last N hours, optionally filtered by engine."""
     since = int(time.time()) - (hours * 3600)
     conn = sqlite3.connect(db_path)
@@ -374,7 +372,6 @@ def store_community_submission(db_path: str, submission: dict) -> None:
         conn.commit()
     finally:
         conn.close()
-
 
 
 def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:

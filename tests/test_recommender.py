@@ -138,7 +138,10 @@ def test_heuristics_large_ram():
 def test_heuristics_model_filter():
     """Model filter narrows results to matching models only."""
     recs = _from_heuristics(
-        chip="Apple M4 Pro", ram_gb=64, use_case="throughput", model_filter="gemma",
+        chip="Apple M4 Pro",
+        ram_gb=64,
+        use_case="throughput",
+        model_filter="gemma",
     )
     for r in recs:
         assert "gemma" in r.model.lower()

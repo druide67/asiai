@@ -127,12 +127,8 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                 entry["tcp_connections"] = count_tcp_connections(port)
                 scraped = engine.scrape_metrics()
                 entry["requests_processing"] = scraped.get("requests_processing", 0)
-                entry["tokens_predicted_total"] = scraped.get(
-                    "tokens_predicted_total", 0
-                )
-                entry["kv_cache_usage_ratio"] = scraped.get(
-                    "kv_cache_usage_ratio", -1.0
-                )
+                entry["tokens_predicted_total"] = scraped.get("tokens_predicted_total", 0)
+                entry["kv_cache_usage_ratio"] = scraped.get("kv_cache_usage_ratio", -1.0)
         except Exception as e:
             logger.warning("Engine %s status error: %s", engine.name, e)
         statuses.append(entry)
@@ -147,5 +143,3 @@ def collect_full_snapshot(engines: list[InferenceEngine]) -> dict:
     base = collect_snapshot(engines)
     base["engines_status"] = collect_engines_status(engines)
     return base
-
-

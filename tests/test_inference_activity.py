@@ -110,10 +110,7 @@ vllm_generation_tokens_total 9876
 
     def test_first_match_wins(self):
         """When same output key appears twice, first value wins."""
-        text = (
-            "llamacpp_requests_processing 3\n"
-            "vllm_num_requests_running 7\n"
-        )
+        text = "llamacpp_requests_processing 3\nvllm_num_requests_running 7\n"
         result = parse_prometheus_text(text)
         # llamacpp_requests_processing maps to requests_processing first
         assert result["requests_processing"] == 3
@@ -137,6 +134,7 @@ class TestScrapePrometheusMetrics:
     @patch("urllib.request.urlopen")
     def test_scrape_unreachable(self, mock_urlopen):
         from urllib.error import URLError
+
         mock_urlopen.side_effect = URLError("Connection refused")
         result = scrape_prometheus_metrics("http://localhost:8080/metrics")
         assert result == {}

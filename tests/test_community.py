@@ -133,9 +133,7 @@ class TestBuildSubmission:
             report = _sample_report()
 
         with (
-            patch(
-                "asiai.collectors.system.collect_memory"
-            ) as mock_mem,
+            patch("asiai.collectors.system.collect_memory") as mock_mem,
             patch("asiai.__version__", "0.7.0"),
         ):
             mock_mem.return_value = MagicMock(total=68_719_476_736)  # 64 GB
@@ -178,9 +176,7 @@ class TestBuildSubmission:
         # Verify the hash was computed on the payload *before* _hash was added.
         payload_copy = dict(payload)
         del payload_copy["_hash"]
-        expected = hashlib.sha256(
-            json.dumps(payload_copy, sort_keys=True).encode()
-        ).hexdigest()
+        expected = hashlib.sha256(json.dumps(payload_copy, sort_keys=True).encode()).hexdigest()
         assert payload["_hash"] == expected
 
     def test_build_submission_empty_results(self):
@@ -286,9 +282,7 @@ class TestSubmitBenchmark:
 
         with (
             patch("asiai.community.urlopen", return_value=mock_resp),
-            patch(
-                "asiai.storage.db.store_community_submission"
-            ) as mock_store,
+            patch("asiai.storage.db.store_community_submission") as mock_store,
         ):
             result = submit_benchmark(
                 self._payload(),

@@ -73,7 +73,11 @@ def recommend(
     # 2. Community data
     if community_url:
         community_recs = _from_community(
-            chip, ram_gb, use_case, model_filter, community_url,
+            chip,
+            ram_gb,
+            use_case,
+            model_filter,
+            community_url,
         )
         # Merge: don't duplicate engine+model combos already in local
         local_keys = {(r.engine, r.model) for r in recommendations}
@@ -223,9 +227,7 @@ def _from_community(
     results: list[Recommendation] = []
     for idx, entry in enumerate(entries):
         submissions = entry.get("submissions", 0)
-        confidence = (
-            "high" if submissions >= 10 else ("medium" if submissions >= 3 else "low")
-        )
+        confidence = "high" if submissions >= 10 else ("medium" if submissions >= 3 else "low")
         med_tok = entry.get("median_tok_s", 0.0)
         med_ttft = entry.get("median_ttft_ms", 0.0)
 
@@ -241,10 +243,7 @@ def _from_community(
                 median_ttft_ms=round(med_ttft, 2),
                 source="community",
                 confidence=confidence,
-                reason=(
-                    f"Community data: {med_tok:.1f} tok/s median "
-                    f"({submissions} submissions)"
-                ),
+                reason=(f"Community data: {med_tok:.1f} tok/s median ({submissions} submissions)"),
             ),
         )
     return results
@@ -288,11 +287,7 @@ def _from_heuristics(
     else:
         max_b, base_score = 7, 40
 
-    candidates = [
-        (name, params)
-        for name, params in _HEURISTIC_MODELS
-        if params <= max_b
-    ]
+    candidates = [(name, params) for name, params in _HEURISTIC_MODELS if params <= max_b]
 
     if model_filter:
         filtered = [(n, p) for n, p in candidates if model_filter.lower() in n.lower()]

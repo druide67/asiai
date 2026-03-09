@@ -122,17 +122,13 @@ class TestCSRF:
         assert response.status_code == 403
 
     def test_post_with_wrong_origin_returns_403(self, client):
-        response = client.post(
-            "/doctor/refresh", headers={"Origin": "http://evil.com"}
-        )
+        response = client.post("/doctor/refresh", headers={"Origin": "http://evil.com"})
         assert response.status_code == 403
 
     def test_post_with_correct_origin_passes(self, client):
         with patch("asiai.web.routes.doctor._run_checks") as mock_checks:
             mock_checks.return_value = []
-            response = client.post(
-                "/doctor/refresh", headers={"Origin": "http://testserver"}
-            )
+            response = client.post("/doctor/refresh", headers={"Origin": "http://testserver"})
             assert response.status_code == 200
 
 
@@ -231,9 +227,7 @@ class TestDoctor:
                 "fix": "",
             },
         ]
-        response = client.post(
-            "/doctor/refresh", headers={"Origin": "http://testserver"}
-        )
+        response = client.post("/doctor/refresh", headers={"Origin": "http://testserver"})
         assert response.status_code == 200
         assert "RAM" in response.text
 

@@ -46,7 +46,6 @@ def red(text: str) -> str:
     return _wrap("31", text)
 
 
-
 # --- Value formatters ---
 
 
