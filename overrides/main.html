@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  <!-- OpenGraph -->
+  <meta property="og:title" content="{{ page.title }} — asiai">
+  <meta property="og:description" content="Multi-engine LLM benchmark & monitoring CLI for Apple Silicon. 6 engines, GPU observability, community leaderboard.">
+  <meta property="og:url" content="{{ page.canonical_url }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="asiai">
+  <meta property="og:image" content="https://asiai.dev/assets/og-image.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page.title }} — asiai">
+  <meta name="twitter:description" content="Benchmark, monitor, and manage 6 LLM engines on Apple Silicon. Zero dependencies.">
+  <meta name="twitter:image" content="https://asiai.dev/assets/og-image.png">
+  <meta name="twitter:creator" content="@jmn67">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "asiai",
+    "description": "Multi-engine LLM benchmark & monitoring CLI for Apple Silicon",
+    "url": "https://asiai.dev",
+    "operatingSystem": "macOS",
+    "applicationCategory": "DeveloperApplication",
+    "license": "https://opensource.org/licenses/Apache-2.0",
+    "author": {
+      "@type": "Person",
+      "name": "druide67",
+      "url": "https://github.com/druide67"
+    },
+    "codeRepository": "https://github.com/druide67/asiai",
+    "softwareVersion": "1.0.0"
+  }
+  </script>
+{% endblock %}
