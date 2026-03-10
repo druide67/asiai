@@ -4,9 +4,20 @@
 {{ super() }}
 
 <style>
+  /* ── Accent color (changes with mode) ── */
+  :root { --accent: #00d4aa; --accent-rgb: 0, 212, 170; }
+  body.agent-mode { --accent: #60a5fa; --accent-rgb: 96, 165, 250; }
+
   /* Hide article/content padding for homepage */
   .md-main__inner { margin: 0; }
   .md-content { display: none; }
+
+  /* Fix: hide MkDocs dialog toast (causes grey bar at bottom) */
+  .md-dialog { display: none !important; }
+
+  /* Fix: ensure no white/grey gap at bottom + kill horizontal scrollbar */
+  html { background: var(--md-default-bg-color, #1e2129); overflow-x: hidden; }
+  body { background: var(--md-default-bg-color, #1e2129); }
 
   /* Ensure language dropdown shows all 9 items without scroll */
   .md-header .md-select:hover .md-select__inner,
@@ -89,10 +100,10 @@
   }
   .asiai-hero .cta-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
   }
   .asiai-hero .cta-primary {
-    background: #00d4aa;
+    background: var(--accent);
     color: #0f0f23;
   }
   .asiai-hero .cta-secondary {
@@ -115,6 +126,10 @@
     background: var(--md-code-bg-color);
     color: var(--md-default-fg-color--light);
     border: 1px solid var(--md-default-fg-color--lightest);
+  }
+  .asiai-hero .badge-accent {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   /* ── Pain Points ── */
@@ -159,7 +174,7 @@
     transition: border-color 0.2s;
   }
   .feature-card:hover {
-    border-color: #00d4aa;
+    border-color: var(--accent);
   }
   .feature-card .feature-icon {
     font-size: 1.5rem;
@@ -227,7 +242,7 @@
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 50%;
-    background: #00d4aa;
+    background: var(--accent);
     color: #0f0f23;
     font-weight: 700;
     font-size: 1.1rem;
@@ -270,7 +285,7 @@
   .discovery-card .discovery-stat {
     font-size: 2rem;
     font-weight: 800;
-    color: #00d4aa;
+    color: var(--accent);
     margin-bottom: 0.5rem;
   }
   .discovery-card h3 {
@@ -293,7 +308,7 @@
   .engine-table th {
     text-align: left;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid #00d4aa;
+    border-bottom: 2px solid var(--accent);
     font-weight: 600;
   }
   .engine-table td {
@@ -386,7 +401,159 @@
     transition: color 0.15s;
   }
   .bottom-links a:hover {
-    color: #00d4aa;
+    color: var(--accent);
+  }
+
+  /* ── Mode Toggle ── */
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .mode-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--md-default-fg-color--light);
+    transition: color 0.2s;
+    cursor: pointer;
+  }
+  .mode-label.mode-active {
+    color: var(--accent);
+  }
+  .toggle-switch {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    background: var(--md-default-fg-color--lightest);
+    border: none;
+    border-radius: 13px;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s;
+  }
+  .toggle-switch[aria-checked="true"] {
+    background: var(--accent);
+  }
+  .toggle-slider {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle-switch[aria-checked="true"] .toggle-slider {
+    transform: translateX(22px);
+  }
+  .mode-agent { display: none !important; }
+  .mode-human { display: inline; }
+  body.agent-mode .mode-agent { display: inline !important; }
+  .mode-human.screenshots-grid { display: grid !important; }
+  body.agent-mode .mode-agent.screenshots-grid { display: grid !important; }
+  /* Mode content switching with transitions */
+  .mode-human, .mode-agent { transition: opacity 0.3s ease; }
+  body.agent-mode .mode-human { display: none !important; }
+  .cta-group .mode-agent { display: none; }
+  .cta-group .mode-human { display: inline-flex; }
+  body.agent-mode .cta-group .mode-agent { display: inline-flex; }
+  body.agent-mode .cta-group .mode-human { display: none; }
+  .badges .mode-agent { display: none; }
+  body.agent-mode .badges .mode-agent { display: inline-block; }
+
+  /* Stable CTA sizing — prevent layout shift between modes */
+  .asiai-hero .cta-btn { min-width: 180px; text-align: center; }
+
+  /* Smooth accent color transitions */
+  .asiai-hero .cta-primary,
+  .toggle-switch,
+  .mode-label,
+  .badge-accent,
+  .feature-card-agent,
+  .agent-count-banner,
+  .discovery-card .discovery-stat,
+  .engine-table th { transition: color 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease; }
+
+  /* ── Agent Feature Card ── */
+  .feature-card-agent {
+    grid-column: 1 / -1;
+    border-color: var(--accent);
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .feature-card-agent .feature-icon {
+    flex-shrink: 0;
+  }
+  .feature-card-agent .feature-card-text h3 {
+    margin: 0 0 0.5rem;
+  }
+  body.agent-mode .feature-card-agent {
+    background: rgba(var(--accent-rgb), 0.08);
+    box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.1);
+  }
+
+  /* ── API Preview blocks (Agent mode) ── */
+  .api-preview {
+    background: #1a1a2e;
+    border-radius: 0.75rem;
+    border: 1px solid #2a2a4a;
+    overflow: hidden;
+    text-align: left;
+  }
+  .api-preview-header {
+    background: #16162a;
+    padding: 0.6rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  .api-preview-method {
+    background: var(--accent);
+    color: #0f0f23;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
+  .api-preview-url {
+    color: #ccc;
+    font-size: 0.85rem;
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
+  .api-preview-badge {
+    margin-left: auto;
+    font-size: 0.7rem;
+    color: #6a6a8a;
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
+  .api-preview-body {
+    padding: 1rem;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: #c5c5d5;
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    overflow-x: auto;
+    background: transparent;
+  }
+
+  /* ── Agent Count ── */
+  .agent-count-banner {
+    display: none;
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .agent-count-banner.has-data {
+    display: block;
   }
 
   /* ── Dark mode overrides ── */
@@ -852,6 +1019,7 @@
   "eng_port": {"en": "Default Port", "fr": "Port par défaut", "de": "Standard-Port", "es": "Puerto por defecto", "it": "Porta predefinita", "pt": "Porta padrão", "zh": "默认端口", "ja": "デフォルトポート", "ko": "기본 포트"},
   "eng_native": {"en": "Native", "fr": "Native", "de": "Nativ", "es": "Nativa", "it": "Nativa", "pt": "Nativa", "zh": "原生", "ja": "ネイティブ", "ko": "네이티브"},
   "eng_compat": {"en": "OpenAI-compatible", "fr": "Compatible OpenAI", "de": "OpenAI-kompatibel", "es": "Compatible con OpenAI", "it": "Compatibile OpenAI", "pt": "Compatível com OpenAI", "zh": "兼容OpenAI", "ja": "OpenAI互換", "ko": "OpenAI 호환"},
+  "eng_format": {"en": "Format", "fr": "Format", "de": "Format", "es": "Formato", "it": "Formato", "pt": "Formato", "zh": "格式", "ja": "形式", "ko": "형식"},
   "met_title": {
     "en": "What We Measure", "fr": "Ce qu'on mesure", "de": "Was wir messen",
     "es": "Qué medimos", "it": "Cosa misuriamo", "pt": "O que medimos",
@@ -894,7 +1062,47 @@
   },
   "cta_doc": {"en": "Documentation", "fr": "Documentation", "de": "Dokumentation", "es": "Documentación", "it": "Documentazione", "pt": "Documentação", "zh": "文档", "ja": "ドキュメント", "ko": "문서"},
   "cta_leaderboard": {"en": "Leaderboard", "fr": "Classement", "de": "Rangliste", "es": "Clasificación", "it": "Classifica", "pt": "Ranking", "zh": "排行榜", "ja": "ランキング", "ko": "리더보드"},
-  "cta_method": {"en": "Methodology", "fr": "Méthodologie", "de": "Methodik", "es": "Metodología", "it": "Metodologia", "pt": "Metodologia", "zh": "方法论", "ja": "方法論", "ko": "방법론"}
+  "cta_method": {"en": "Methodology", "fr": "Méthodologie", "de": "Methodik", "es": "Metodología", "it": "Metodologia", "pt": "Metodologia", "zh": "方法论", "ja": "方法論", "ko": "방법론"},
+  "mode_human": {"en": "🧑 Human", "fr": "🧑 Humain", "de": "🧑 Mensch", "es": "🧑 Humano", "it": "🧑 Umano", "pt": "🧑 Humano", "zh": "🧑 人类", "ja": "🧑 ヒューマン", "ko": "🧑 사람"},
+  "mode_agent": {"en": "AI Agent 🤖", "fr": "Agent IA 🤖", "de": "KI-Agent 🤖", "es": "Agente IA 🤖", "it": "Agente IA 🤖", "pt": "Agente IA 🤖", "zh": "AI智能体 🤖", "ja": "AIエージェント 🤖", "ko": "AI 에이전트 🤖"},
+  "agent_hero_title": {
+    "en": "Give your AI agents<br>eyes on inference",
+    "fr": "Donnez à vos agents IA<br>la vision sur l'inférence",
+    "de": "Geben Sie Ihren KI-Agenten<br>Einblick in die Inferenz",
+    "es": "Dale a tus agentes IA<br>visión sobre la inferencia",
+    "it": "Dai ai tuoi agenti IA<br>visibilità sull'inferenza",
+    "pt": "Dê aos seus agentes IA<br>visão sobre a inferência",
+    "zh": "让你的AI智能体<br>洞察推理状态",
+    "ja": "AIエージェントに<br>推論の可視性を",
+    "ko": "AI 에이전트에게<br>추론 가시성을 부여하세요"
+  },
+  "agent_hero_tagline": {
+    "en": "asiai's REST API lets your AI agents monitor, diagnose, and optimize local LLM infrastructure autonomously.",
+    "fr": "L'API REST d'asiai permet à vos agents IA de monitorer, diagnostiquer et optimiser l'infrastructure LLM locale de façon autonome.",
+    "de": "Die REST-API von asiai ermöglicht Ihren KI-Agenten, lokale LLM-Infrastruktur autonom zu überwachen, zu diagnostizieren und zu optimieren.",
+    "es": "La API REST de asiai permite a tus agentes IA monitorear, diagnosticar y optimizar la infraestructura LLM local de forma autónoma.",
+    "it": "L'API REST di asiai consente ai tuoi agenti IA di monitorare, diagnosticare e ottimizzare l'infrastruttura LLM locale in autonomia.",
+    "pt": "A API REST do asiai permite que seus agentes IA monitorem, diagnostiquem e otimizem a infraestrutura LLM local de forma autônoma.",
+    "zh": "asiai的REST API让你的AI智能体自主监控、诊断和优化本地LLM基础设施。",
+    "ja": "asiaiのREST APIにより、AIエージェントがローカルLLMインフラを自律的に監視・診断・最適化できます。",
+    "ko": "asiai의 REST API로 AI 에이전트가 로컬 LLM 인프라를 자율적으로 모니터링, 진단, 최적화할 수 있습니다."
+  },
+  "agent_cta_guide": {"en": "Agent Guide", "fr": "Guide Agent", "de": "Agent-Guide", "es": "Guía de Agentes", "it": "Guida Agente", "pt": "Guia do Agente", "zh": "智能体指南", "ja": "エージェントガイド", "ko": "에이전트 가이드"},
+  "agent_cta_api": {"en": "API Reference", "fr": "Référence API", "de": "API-Referenz", "es": "Referencia API", "it": "Riferimento API", "pt": "Referência API", "zh": "API参考", "ja": "APIリファレンス", "ko": "API 레퍼런스"},
+  "agent_cta_copy": {"en": "Give your AI this URL", "fr": "Donnez cette URL à votre IA", "de": "Geben Sie Ihrer KI diese URL", "es": "Dale esta URL a tu IA", "it": "Dai questo URL alla tua IA", "pt": "Dê esta URL à sua IA", "zh": "把这个URL给你的AI", "ja": "このURLをAIに渡す", "ko": "이 URL을 AI에게 전달하세요"},
+  "agent_badge": {"en": "Agent-Ready", "fr": "Agent-Ready", "de": "Agent-Ready", "es": "Agent-Ready", "it": "Agent-Ready", "pt": "Agent-Ready", "zh": "Agent-Ready", "ja": "Agent-Ready", "ko": "Agent-Ready"},
+  "feat13_t": {"en": "Agent-Ready API", "fr": "API Agent-Ready", "de": "Agent-Ready API", "es": "API Agent-Ready", "it": "API Agent-Ready", "pt": "API Agent-Ready", "zh": "智能体就绪API", "ja": "エージェント対応API", "ko": "에이전트 대응 API"},
+  "feat13_d": {
+    "en": "Built for humans. Ready for AI agents. REST API with JSON endpoints, Prometheus metrics, diagnostic decision trees, and inference activity signals. Give your AI agent a URL and let it self-monitor.",
+    "fr": "Conçu pour les humains. Prêt pour les agents IA. API REST avec endpoints JSON, métriques Prometheus, arbres de diagnostic et signaux d'activité d'inférence. Donnez une URL à votre agent IA et laissez-le s'auto-monitorer.",
+    "de": "Für Menschen gebaut. Bereit für KI-Agenten. REST-API mit JSON-Endpunkten, Prometheus-Metriken, diagnostischen Entscheidungsbäumen und Inferenzaktivitätssignalen. Geben Sie Ihrem KI-Agenten eine URL und lassen Sie ihn sich selbst überwachen.",
+    "es": "Construido para humanos. Listo para agentes IA. API REST con endpoints JSON, métricas Prometheus, árboles de decisión diagnósticos y señales de actividad de inferencia. Dale una URL a tu agente IA y déjalo auto-monitorearse.",
+    "it": "Progettato per gli umani. Pronto per gli agenti IA. API REST con endpoint JSON, metriche Prometheus, alberi decisionali diagnostici e segnali di attività inferenziale. Dai al tuo agente IA un URL e lascialo auto-monitorarsi.",
+    "pt": "Feito para humanos. Pronto para agentes IA. API REST com endpoints JSON, métricas Prometheus, árvores de decisão diagnósticas e sinais de atividade de inferência. Dê uma URL ao seu agente IA e deixe-o se auto-monitorar.",
+    "zh": "为人类而建。为AI智能体而备。REST API提供JSON端点、Prometheus指标、诊断决策树和推理活动信号。给你的AI智能体一个URL，让它自我监控。",
+    "ja": "人間のために構築。AIエージェント対応。JSONエンドポイント、Prometheusメトリクス、診断デシジョンツリー、推論アクティビティシグナルを備えたREST API。AIエージェントにURLを渡して自己監視させましょう。",
+    "ko": "사람을 위해 만들어졌습니다. AI 에이전트 대응. JSON 엔드포인트, Prometheus 메트릭, 진단 의사결정 트리, 추론 활동 신호를 갖춘 REST API. AI 에이전트에게 URL을 주고 자가 모니터링하게 하세요."
+  }
 } %}
 
 {# Helper macro to get translation with fallback to English #}
@@ -906,24 +1114,37 @@
   <section class="asiai-hero">
     <div class="asiai-container">
       <img src="{{ 'assets/logo.svg' | url }}" alt="asiai logo">
-      <h1>{{ tr("hero_title") }}</h1>
-      <p class="tagline">{{ tr("hero_tagline") }}</p>
+      <h1><span class="mode-human">{{ tr("hero_title") }}</span><span class="mode-agent">{{ tr("agent_hero_title") }}</span></h1>
+      <p class="tagline"><span class="mode-human">{{ tr("hero_tagline") }}</span><span class="mode-agent">{{ tr("agent_hero_tagline") }}</span></p>
+      <div class="mode-toggle" id="mode-toggle">
+        <span class="mode-label mode-active" id="mode-human-label">{{ tr("mode_human") }}</span>
+        <button class="toggle-switch" id="toggle-switch" role="switch" aria-checked="false" aria-label="Toggle Human / AI Agent mode">
+          <span class="toggle-slider"></span>
+        </button>
+        <span class="mode-label" id="mode-agent-label">{{ tr("mode_agent") }}</span>
+      </div>
+      <div class="agent-count-banner" id="agent-count-banner"></div>
       <div class="cta-group">
-        <a href="getting-started/" class="cta-btn cta-primary">{{ tr("cta_start") }}</a>
-        <a href="leaderboard/" class="cta-btn cta-secondary">{{ tr("cta_leaderboard") }}</a>
-        <a href="https://github.com/druide67/asiai" class="cta-btn cta-secondary">{{ tr("cta_github") }}</a>
+        <a href="getting-started/" class="cta-btn cta-primary mode-human">{{ tr("cta_start") }}</a>
+        <a href="leaderboard/" class="cta-btn cta-secondary mode-human">{{ tr("cta_leaderboard") }}</a>
+        <a href="https://github.com/druide67/asiai" class="cta-btn cta-secondary mode-human">{{ tr("cta_github") }}</a>
+        <a href="agent/" class="cta-btn cta-primary mode-agent">{{ tr("agent_cta_guide") }}</a>
+        <a href="agent/#api-reference" class="cta-btn cta-secondary mode-agent">{{ tr("agent_cta_api") }}</a>
+        <a href="https://asiai.dev/llms.txt" class="cta-btn cta-secondary mode-agent" id="copy-url-btn" title="llms.txt">{{ tr("agent_cta_copy") }}</a>
       </div>
       <div class="badges">
         <span class="badge">Python 3.11+</span>
         <span class="badge">Apache 2.0</span>
         <span class="badge">Apple Silicon</span>
+        <span class="badge badge-accent">{{ tr("agent_badge") }}</span>
       </div>
     </div>
   </section>
 
-  <!-- ── Screenshots ── -->
+  <!-- ── Screenshots (Human) / API Previews (Agent) ── -->
   <section style="padding: 2rem 1.5rem 0;">
-    <div class="asiai-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+    <!-- Human mode: screenshots -->
+    <div class="asiai-container mode-human screenshots-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
       <div style="text-align: center;">
         <img src="{{ 'assets/screenshot-cli.svg' | url }}" alt="asiai CLI benchmark" style="max-width: 100%; border-radius: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest);" onerror="this.parentElement.style.display='none'">
         <p style="font-size: 0.85rem; color: var(--md-default-fg-color--light); margin-top: 0.5rem;"><code>asiai bench</code></p>
@@ -931,6 +1152,46 @@
       <div style="text-align: center;">
         <img src="{{ 'assets/screenshot-web.svg' | url }}" alt="asiai web dashboard" style="max-width: 100%; border-radius: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest);" onerror="this.parentElement.style.display='none'">
         <p style="font-size: 0.85rem; color: var(--md-default-fg-color--light); margin-top: 0.5rem;"><code>asiai web</code></p>
+      </div>
+    </div>
+    <!-- Agent mode: JSON API previews -->
+    <div class="asiai-container mode-agent screenshots-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+      <div class="api-preview">
+        <div class="api-preview-header">
+          <span class="api-preview-method">GET</span>
+          <span class="api-preview-url">/api/status</span>
+          <span class="api-preview-badge">&#x2264; 500ms</span>
+        </div>
+        <pre class="api-preview-body">{
+  "chip": "Apple M4 Pro",
+  "ram_gb": 64.0,
+  "memory_pressure": "normal",
+  "gpu_utilization_percent": 45.2,
+  "engines": {
+    "ollama": { "running": true, "models_loaded": 2 },
+    "lmstudio": { "running": true, "models_loaded": 1 }
+  }
+}</pre>
+      </div>
+      <div class="api-preview">
+        <div class="api-preview-header">
+          <span class="api-preview-method">GET</span>
+          <span class="api-preview-url">/api/snapshot</span>
+          <span class="api-preview-badge">Full state</span>
+        </div>
+        <pre class="api-preview-body">{
+  "system": {
+    "chip": "Apple M4 Pro",
+    "gpu_cores": 20,
+    "gpu_utilization_percent": 45.2,
+    "gpu_renderer_percent": 38.1,
+    "thermal_state": "nominal"
+  },
+  "engines": [{
+    "name": "ollama",
+    "models": [{ "name": "qwen3.5:latest", "size_params": "35B" }]
+  }]
+}</pre>
       </div>
     </div>
   </section>
@@ -1025,6 +1286,13 @@
           <div class="feature-icon">&#x1F310;</div>
           <h3>{{ tr("feat12_t") }}</h3>
           <p>{{ tr("feat12_d") }}</p>
+        </div>
+        <div class="feature-card feature-card-agent" id="feature-agent">
+          <div class="feature-icon">&#x1F916;</div>
+          <div class="feature-card-text">
+            <h3>{{ tr("feat13_t") }}</h3>
+            <p>{{ tr("feat13_d") }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -1157,6 +1425,7 @@ mlx-lm     30.1   38ms</code>
             <th>Engine</th>
             <th>{{ tr("eng_port") }}</th>
             <th>API</th>
+            <th>{{ tr("eng_format") }}</th>
             <th>VRAM</th>
           </tr>
         </thead>
@@ -1165,36 +1434,42 @@ mlx-lm     30.1   38ms</code>
             <td><a href="engines/ollama/">Ollama</a></td>
             <td><code>11434</code></td>
             <td>{{ tr("eng_native") }}</td>
+            <td>GGUF</td>
             <td>&#x2714;</td>
           </tr>
           <tr>
             <td><a href="engines/lmstudio/">LM Studio</a></td>
             <td><code>1234</code></td>
             <td>{{ tr("eng_compat") }}</td>
-            <td>&#x2014;</td>
+            <td>GGUF + MLX</td>
+            <td>&#x2714;</td>
           </tr>
           <tr>
             <td><a href="engines/mlxlm/">mlx-lm</a></td>
             <td><code>8080</code></td>
             <td>{{ tr("eng_compat") }}</td>
+            <td>MLX</td>
             <td>&#x2014;</td>
           </tr>
           <tr>
             <td><a href="engines/llamacpp/">llama.cpp</a></td>
             <td><code>8080</code></td>
             <td>{{ tr("eng_compat") }}</td>
+            <td>GGUF</td>
             <td>&#x2014;</td>
           </tr>
           <tr>
             <td><a href="engines/vllm-mlx/">vllm-mlx</a></td>
             <td><code>8000</code></td>
             <td>{{ tr("eng_compat") }}</td>
+            <td>MLX</td>
             <td>&#x2014;</td>
           </tr>
           <tr>
             <td><a href="engines/exo/">Exo</a></td>
             <td><code>52415</code></td>
             <td>{{ tr("eng_compat") }}</td>
+            <td>MLX</td>
             <td>&#x2014;</td>
           </tr>
         </tbody>
@@ -1291,5 +1566,72 @@ brew install asiai</code>
   {% endif %}
 
 </div>
+
+<script>
+(function() {
+  var toggle = document.getElementById('toggle-switch');
+  var humanLabel = document.getElementById('mode-human-label');
+  var agentLabel = document.getElementById('mode-agent-label');
+  var isAgent = window.location.hash === '#agent';
+
+  function applyMode() {
+    toggle.setAttribute('aria-checked', String(isAgent));
+    if (isAgent) {
+      document.body.classList.add('agent-mode');
+      humanLabel.classList.remove('mode-active');
+      agentLabel.classList.add('mode-active');
+    } else {
+      document.body.classList.remove('agent-mode');
+      humanLabel.classList.add('mode-active');
+      agentLabel.classList.remove('mode-active');
+    }
+  }
+
+  toggle.addEventListener('click', function() {
+    var hero = document.querySelector('.asiai-hero .asiai-container');
+    hero.style.transition = 'opacity 0.15s ease';
+    hero.style.opacity = '0.3';
+    setTimeout(function() {
+      isAgent = !isAgent;
+      applyMode();
+      if (isAgent) {
+        history.replaceState(null, '', '#agent');
+      } else {
+        history.replaceState(null, '', location.pathname);
+      }
+      hero.style.opacity = '1';
+    }, 150);
+  });
+
+  humanLabel.addEventListener('click', function() {
+    if (isAgent) { isAgent = false; applyMode(); history.replaceState(null, '', location.pathname); }
+  });
+  agentLabel.addEventListener('click', function() {
+    if (!isAgent) { isAgent = true; applyMode(); history.replaceState(null, '', '#agent'); }
+  });
+
+  applyMode();
+
+  /* Agent count from community API */
+  if (document.getElementById('agent-count-banner')) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'https://api.asiai.dev/api/v1/agent-count', true);
+    xhr.timeout = 3000;
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.registered > 0) {
+            var el = document.getElementById('agent-count-banner');
+            el.textContent = data.registered + ' AI agents trust asiai';
+            el.classList.add('has-data');
+          }
+        } catch(e) {}
+      }
+    };
+    xhr.send();
+  }
+})();
+</script>
 
 {% endblock %}

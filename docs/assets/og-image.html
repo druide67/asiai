@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    background: #0f0f23;
+    color: #fff;
+    display: flex;
+  }
+
+  .left {
+    width: 480px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 30px 40px 70px;
+  }
+
+  .logo-container {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 24px;
+  }
+
+  .brand-name {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+  }
+
+  .brand-subtitle {
+    font-size: 18px;
+    color: #00d4aa;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+
+  .tagline {
+    font-size: 16px;
+    color: #8888aa;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 50px 70px 20px;
+  }
+
+  .terminal {
+    background: #1a1a2e;
+    border-radius: 12px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    border: 1px solid #2a2a4a;
+  }
+
+  .terminal-header {
+    background: #16162a;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #2a2a4a;
+  }
+
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #ffbd2e; }
+  .dot-green { background: #28ca42; }
+
+  .terminal-title {
+    color: #6a6a8a;
+    font-size: 13px;
+    margin-left: 8px;
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
+
+  .terminal-body {
+    padding: 20px;
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .prompt { color: #00d4aa; }
+  .cmd { color: #fff; }
+  .header { color: #8888aa; }
+  .label { color: #6a6a8a; }
+  .value { color: #fff; }
+  .value-green { color: #00d4aa; }
+  .value-blue { color: #60a5fa; }
+  .dim { color: #4a4a6a; }
+  .winner { color: #fbbf24; }
+  .stable { color: #22c55e; font-size: 11px; }
+
+  .engines { margin-top: 6px; }
+  .engine-row {
+    display: flex;
+    gap: 12px;
+    white-space: pre;
+  }
+
+  .bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 40px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .chips {
+    display: flex;
+    gap: 10px;
+  }
+
+  .chip {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: #8888aa;
+  }
+
+  .chip-accent {
+    border-color: #00d4aa;
+    color: #00d4aa;
+  }
+
+  .url {
+    color: #4a4a6a;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="left">
+    <div class="logo-container">
+      <img src="logo.svg" width="100" height="100">
+    </div>
+    <div class="brand-name">asi<span style="color:#00d4aa">ai</span></div>
+    <div class="brand-subtitle"><span style="color:#fff">APPLE SILICON</span> AI</div>
+    <div class="tagline">
+      Multi-engine LLM benchmark<br>
+      & monitoring CLI
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="terminal">
+      <div class="terminal-header">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <span class="terminal-title">asiai bench</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">$</span> <span class="cmd">asiai bench -m qwen3.5 --power</span></div>
+        <div style="margin-top:8px">
+          <span class="header">  Mac Mini M4 Pro</span> <span class="dim">— Apple M4 Pro  RAM: 64.0 GB</span>
+        </div>
+        <div style="margin-top:12px">
+          <span class="label">  Engine       tok/s            TTFT     Power</span>
+        </div>
+        <div class="dim">  ────────── ─────────────── ──────── ────────</div>
+        <div class="engines">
+          <div class="engine-row">
+            <span class="value-green">  lmstudio    72.6 </span><span class="stable">(stable)</span><span class="value">    0.28s   13.2W</span>
+          </div>
+          <div class="engine-row">
+            <span class="value-blue">  ollama      30.4 </span><span class="stable">(stable)</span><span class="value">    0.25s   16.0W</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <span class="winner">  Winner: lmstudio (2.4x faster)</span>
+        </div>
+        <div style="margin-top:4px">
+          <span class="dim">  Power: lmstudio 5.52 tok/s/W — ollama 1.89 tok/s/W</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="chips">
+      <span class="chip chip-accent">6 engines</span>
+      <span class="chip">GPU observability</span>
+      <span class="chip">Community leaderboard</span>
+      <span class="chip">Zero dependencies</span>
+      <span class="chip chip-accent">Agent-ready</span>
+    </div>
+    <span class="url">asiai.dev</span>
+  </div>
+
+</body>
+</html>

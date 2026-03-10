@@ -91,6 +91,6 @@
 
     <!-- Recommend teaser -->
     <text class="cyan bold" y="400">$ asiai recommend --use-case throughput</text>
-    <text class="text" y="400" x="420" font-size="11" class="dim">↵</text>
+    <text class="dim" y="400" x="420" font-size="11">↵</text>
   </g>
 </svg>

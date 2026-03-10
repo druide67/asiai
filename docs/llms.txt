@@ -1,0 +1,37 @@
+# asiai
+
+> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs. It auto-detects 6 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU observability via IOReport, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
+
+asiai is designed for both human operators and AI agents managing local LLM infrastructure. If you are an AI agent, start with the Agent Integration Guide and use `GET /api/status` for a quick health check.
+
+## Docs
+
+- [Getting Started](https://asiai.dev/getting-started/): Installation, first benchmark, basic usage
+- [Agent Integration Guide](https://asiai.dev/agent/): API reference, metric thresholds, decision trees, and example code for AI agents
+- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, bench, models, monitor, doctor, daemon, web, leaderboard, compare, recommend)
+- [Metrics Specification](https://asiai.dev/metrics-spec/): Detailed definitions of all 8 benchmark metrics (tok/s, TTFT, power, efficiency, stability, VRAM, thermal, context)
+- [Methodology](https://asiai.dev/methodology/): MLPerf/SPEC-inspired methodology (warmup, median, greedy decoding, cooldown, CI 95%)
+- [Benchmark Best Practices](https://asiai.dev/benchmark-best-practices/): How to get reproducible results
+
+## API
+
+- `GET /api/status`: Quick health check with engine availability and system summary (cached 10s, < 500ms)
+- `GET /api/snapshot`: Full system state — CPU, RAM, swap, thermal, GPU utilization, all engines with loaded models and VRAM
+- `GET /api/metrics`: Prometheus-compatible metrics endpoint (20+ gauges, zero-dependency formatter)
+- `GET /api/history?hours=N`: Historical system metrics (CPU, RAM, GPU, thermal) from SQLite
+- `GET /api/engine-history?engine=X&hours=N`: Engine-specific history (TCP connections, requests processing, KV cache usage)
+
+## Engines
+
+- [Ollama](https://asiai.dev/engines/ollama/): Port 11434, native API + OpenAI-compatible, VRAM reporting
+- [LM Studio](https://asiai.dev/engines/lmstudio/): Port 1234, OpenAI-compatible, VRAM via `lms ps --json`
+- [mlx-lm](https://asiai.dev/engines/mlxlm/): Port 8080, OpenAI-compatible, optimized for Apple Silicon MoE models
+- [llama.cpp](https://asiai.dev/engines/llamacpp/): Port 8080, OpenAI-compatible, /metrics endpoint for KV cache
+- [vllm-mlx](https://asiai.dev/engines/vllm-mlx/): Port 8000, OpenAI-compatible, /metrics endpoint
+- [Exo](https://asiai.dev/engines/exo/): Port 52415, OpenAI-compatible, distributed inference across multiple Macs
+
+## Optional
+
+- [Community Leaderboard](https://asiai.dev/leaderboard/): Anonymous benchmark sharing and comparison across Apple Silicon chips
+- [Web Dashboard](https://asiai.dev/commands/web/): Real-time monitoring dashboard with live charts (htmx + ApexCharts)
+- [Installation](https://asiai.dev/installation/): Homebrew tap, pip, pipx options

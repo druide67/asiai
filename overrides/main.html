@@ -37,6 +37,51 @@
   }
   </script>
 
+  <!-- Brand header styling -->
+  <style>
+    /* Brand name: bolder, slightly larger */
+    .md-header__topic:first-child .md-ellipsis {
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.3px;
+    }
+    .md-header__topic:first-child .md-ellipsis .brand-ai {
+      color: #00d4aa;
+    }
+    /* Inline tagline after brand name */
+    .md-header__topic:first-child .md-ellipsis .brand-tagline {
+      display: inline;
+      font-size: 0.7rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.9);
+      margin-left: 0.5rem;
+      letter-spacing: 0;
+    }
+    /* Hide star/fork counters (0 is not flattering) */
+    .md-source__facts { display: none; }
+    /* Fix Chrome horizontal scrollbar (grey bar at bottom) */
+    html { overflow-x: hidden !important; }
+  </style>
+
+  <!-- Brand: color "ai" green + tagline (safe DOM manipulation) -->
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var el = document.querySelector('.md-header__topic:first-child .md-ellipsis');
+    if (el && el.textContent.trim() === 'asiai') {
+      while (el.firstChild) el.removeChild(el.firstChild);
+      el.appendChild(document.createTextNode('asi'));
+      var ai = document.createElement('span');
+      ai.className = 'brand-ai';
+      ai.textContent = 'ai';
+      el.appendChild(ai);
+      var tag = document.createElement('span');
+      tag.className = 'brand-tagline';
+      tag.textContent = '— Multi-engine LLM benchmark & monitoring CLI';
+      el.appendChild(tag);
+    }
+  });
+  </script>
+
   <!-- GoatCounter analytics (privacy-friendly, no cookies) -->
   <script data-goatcounter="https://asiai.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
