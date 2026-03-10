@@ -1,18 +1,35 @@
 # Agent Integration Guide
 
-> **If you are an AI agent**, skip to [API Reference](#api-reference). For setup, see [Quick Start](#quick-start).
+> **If you are an AI agent**: use [MCP](#mcp-model-context-protocol) if your framework supports it, otherwise use the [REST API](#rest-api-reference). For setup, see [Quick Start](#quick-start).
 
 ## Overview
 
-asiai exposes your Mac's LLM inference infrastructure through a REST API. An AI agent can:
+asiai exposes your Mac's LLM inference infrastructure to AI agents through two mechanisms:
+
+- **MCP Server** — Native tool integration via the [Model Context Protocol](https://modelcontextprotocol.io). Best for AI agents that support MCP (Claude Code, Cursor, Cline, and other MCP-compatible clients).
+- **REST API** — Standard HTTP/JSON endpoints. Best for agent frameworks, swarm orchestrators, and any HTTP-capable system (CrewAI, AutoGen, LangGraph, custom agents).
+
+Both give access to the same capabilities:
 
 - **Monitor** system health (CPU, RAM, GPU, thermal, swap)
 - **Detect** which inference engines are running and what models are loaded
 - **Diagnose** performance issues using GPU observability and inference activity signals
 - **Benchmark** models programmatically and track regressions
-- **Alert** on memory pressure, thermal throttling, or engine failures
+- **Get recommendations** for the best model/engine based on your hardware
 
-All endpoints return JSON. No authentication required for local access. The API binds to `127.0.0.1` by default.
+No authentication required for local access. All interfaces bind to `127.0.0.1` by default.
+
+### Which integration should I use?
+
+| Criteria | MCP | REST API |
+|----------|-----|----------|
+| Your agent supports MCP | **Use MCP** | — |
+| Swarm / multi-agent orchestrator | — | **Use REST API** |
+| Polling / scheduled monitoring | — | **Use REST API** |
+| Prometheus / Grafana integration | — | **Use REST API** |
+| Interactive AI assistant (Claude Code, Cursor) | **Use MCP** | — |
+| Agent inside Docker container | — | **Use REST API** |
+| Custom scripts or automation | — | **Use REST API** |
 
 ## Quick Start
 
@@ -22,11 +39,23 @@ All endpoints return JSON. No authentication required for local access. The API 
 # Homebrew (recommended)
 brew tap druide67/tap && brew install asiai
 
-# pip
+# pip (with MCP support)
+pip install "asiai[mcp]"
+
+# pip (REST API only)
 pip install asiai
 ```
 
-### Start the API server
+### Option A: MCP Server (for MCP-compatible agents)
+
+```bash
+# Start MCP server (stdio transport — used by Claude Code, Cursor, etc.)
+asiai mcp
+```
+
+No manual server start needed — the MCP client launches `asiai mcp` automatically. See [MCP setup](#mcp-model-context-protocol) below.
+
+### Option B: REST API (for HTTP-based agents)
 
 ```bash
 # Foreground (development)
@@ -36,21 +65,145 @@ asiai web --no-open
 asiai daemon start web
 ```
 
-The API is available at `http://127.0.0.1:7654`.
+The API is available at `http://127.0.0.1:7654`. The port is configurable with `--port`:
 
-For remote access (e.g., AI agent on a different machine):
+```bash
+asiai daemon start web --port 8642
+```
+
+For remote access (e.g., AI agent on a different machine or from a Docker container):
 
 ```bash
 asiai daemon start web --host 0.0.0.0
 ```
 
+> **Note:** If your agent runs inside Docker, `127.0.0.1` is unreachable. Use the host's network IP (e.g., `192.168.0.16`) or `host.docker.internal` on Docker Desktop for Mac.
+
 ### Verify
 
 ```bash
+# REST API
 curl http://127.0.0.1:7654/api/status
+
+# MCP (list available tools)
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | asiai mcp
 ```
 
-## API Reference
+---
+
+## MCP (Model Context Protocol)
+
+asiai implements an [MCP server](https://modelcontextprotocol.io) that exposes inference monitoring as native tools. Any MCP-compatible client can connect and use these tools directly — no HTTP setup, no URL management.
+
+### Setup
+
+#### Local (same machine)
+
+Add to your MCP client configuration (e.g., `~/.claude/settings.json` for Claude Code):
+
+```json
+{
+  "mcpServers": {
+    "asiai": {
+      "command": "asiai",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+If asiai is installed in a virtualenv:
+
+```json
+{
+  "mcpServers": {
+    "asiai": {
+      "command": "/path/to/.venv/bin/asiai",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+#### Remote (different machine via SSH)
+
+```json
+{
+  "mcpServers": {
+    "asiai": {
+      "command": "ssh",
+      "args": [
+        "-o", "ServerAliveInterval=30",
+        "-o", "ServerAliveCountMax=3",
+        "your-mac-host",
+        "cd /path/to/asiai && .venv/bin/asiai mcp"
+      ]
+    }
+  }
+}
+```
+
+#### SSE transport (network)
+
+For environments that prefer HTTP-based MCP transport:
+
+```bash
+asiai mcp --transport sse --host 127.0.0.1 --port 8900
+```
+
+### MCP Tools Reference
+
+All tools return JSON. Read-only tools respond in < 2 seconds. `run_benchmark` is the only active operation.
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `check_inference_health` | Quick health check — engines up/down, memory pressure, thermal, GPU utilization | — |
+| `get_inference_snapshot` | Full system state snapshot (stored in SQLite for history) | — |
+| `list_models` | All models loaded across all engines with VRAM, quantization, context length | — |
+| `detect_engines` | Re-scan all 6 engine ports and return what's running | — |
+| `run_benchmark` | Run benchmark on a model. Rate limited: 1 per 60 seconds | `model` (optional), `runs` (1–10, default 3) |
+| `get_recommendations` | Hardware-aware model/engine recommendations for your chip and RAM | — |
+| `diagnose` | Run diagnostic checks (system, engines, daemon health) | — |
+| `get_metrics_history` | Historical system metrics from SQLite | `hours` (1–168, default 24) |
+| `get_benchmark_history` | Historical benchmark results | `hours` (1–720, default 24), `model` (optional), `engine` (optional) |
+
+### MCP Resources
+
+Static data endpoints, available without calling a tool:
+
+| URI | Description |
+|-----|-------------|
+| `asiai://status` | Current health status (memory, thermal, GPU) |
+| `asiai://models` | All loaded models across engines |
+| `asiai://system` | Hardware info (chip, RAM, cores, OS, uptime) |
+
+### MCP Security
+
+- **No sudo**: Power metrics are disabled in MCP mode (`power=False` forced)
+- **Rate limiting**: Benchmarks are limited to 1 per 60 seconds
+- **Input clamping**: `hours` clamped to 1–168, `runs` clamped to 1–10
+- **Local by default**: stdio transport has no network exposure; SSE binds to `127.0.0.1`
+
+### MCP Limitations
+
+- **No reconnection**: If the SSH connection drops (network issue, Mac sleep), the MCP server dies and the client must reconnect manually. For unattended monitoring, the REST API with polling is more resilient.
+- **Single client**: stdio transport serves one client at a time. Use SSE transport if multiple clients need concurrent access.
+
+---
+
+## REST API Reference
+
+asiai's API is **read-only** — it monitors and reports, but does not control engines. To load/unload models, use engine-native commands (`ollama pull`, `lms load`, etc.).
+
+All endpoints return JSON with HTTP 200. If an engine is unreachable, the response still returns 200 with `"running": false` for that engine — the API itself does not fail.
+
+| Endpoint | Typical response time | Recommended timeout |
+|----------|----------------------|---------------------|
+| `GET /api/status` | < 500ms (cached 10s) | 2s |
+| `GET /api/snapshot` | 1–3s (live collection) | 10s |
+| `GET /api/metrics` | < 500ms | 2s |
+| `GET /api/history` | < 500ms | 5s |
+| `GET /api/engine-history` | < 500ms | 5s |
 
 ### `GET /api/status`
 
@@ -232,9 +385,11 @@ Engine-specific activity history. Useful for detecting inference patterns.
 
 | Metric | Idle | Active Inference | Overloaded |
 |--------|------|------------------|------------|
-| `gpu_utilization_percent` | < 5% | 20–80% | > 90% sustained |
-| `gpu_renderer_percent` | < 5% | 15–70% | > 85% sustained |
+| `gpu_utilization_percent` | 0–5% | 20–80% | > 90% sustained |
+| `gpu_renderer_percent` | 0–5% | 15–70% | > 85% sustained |
 | `gpu_memory_allocated_bytes` | < 1 GB | 2–48 GB | > 90% of RAM |
+
+> **Important:** `gpu_utilization_percent = 0` means the GPU is idle, not broken. A value of `-1.0` means the metric is unavailable (e.g., unsupported hardware or collection failure) — do not treat it as "GPU dead".
 
 ### Inference Performance
 
@@ -279,20 +434,23 @@ engine.running == false?
 └── Try: asiai doctor (comprehensive diagnostics)
 ```
 
-### High Memory Pressure
+### High Memory Pressure / VRAM Overflow
 
 ```
 memory_pressure == "warn" or "critical"?
+├── Check swap_used_gb
+│   ├── > 2 GB → VRAM overflow. Models don't fit in unified memory.
+│   │   ├── Latency will be 5–50× worse (disk swap).
+│   │   ├── Unload models: ollama rm <model>, lms unload
+│   │   └── Or use smaller quantization (Q4_K_M → Q3_K_S).
+│   └── < 2 GB → Manageable but monitor closely.
 ├── Check models loaded across all engines
 │   ├── Multiple large models → Unload unused models
 │   │   ├── Ollama: ollama rm <model> or wait for auto-unload
 │   │   └── LM Studio: unload via UI or lms unload
 │   └── Single model > 80% RAM → Use smaller quantization
-├── Check swap_used_gb
-│   ├── > 2 GB → Critical. Performance severely degraded.
-│   └── < 2 GB → Manageable but monitor closely.
 └── Check gpu_memory_allocated_bytes
-    └── Compare to ram_total_gb. If > 80%, model barely fits.
+    └── Compare to ram_total_gb. If > 80%, next model load will trigger swap.
 ```
 
 ## Inference Activity Signals
@@ -346,7 +504,7 @@ inference_running = gpu_active and engine_busy
 import json
 import urllib.request
 
-ASIAI_URL = "http://127.0.0.1:7654"
+ASIAI_URL = "http://127.0.0.1:7654"  # Docker: use host IP or host.docker.internal
 
 def check_health():
     """Quick health check. Returns dict with status."""
@@ -400,23 +558,51 @@ if len(points) >= 2:
         print("GPU utilization trending up significantly")
 ```
 
-## User-Agent Convention
+## Webhook Alerts (Push Notifications)
 
-When making requests to asiai's API, set a descriptive User-Agent header:
+Instead of polling, configure asiai to push notifications when state changes occur:
+
+```bash
+# Add a webhook (Slack, Discord, or any URL)
+asiai alert add https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# Alerts trigger on:
+# - Engine goes down / comes back up
+# - Memory pressure transitions (normal → warn → critical)
+# - Thermal throttling detected
+```
+
+Alerts fire on **transitions only** (not on every check) with a 5-minute cooldown to prevent flooding. This is ideal for swarm orchestrators that need to react to infrastructure changes without continuous polling.
+
+To list or remove alerts: `asiai alert list`, `asiai alert remove <id>`.
+
+## Identify Your Agent
+
+All REST API requests **must** include a `User-Agent` header identifying your agent:
 
 ```
-User-Agent: asiai-agent/my-framework-name
+User-Agent: asiai-agent/<framework>/<version>
 ```
 
-This helps with debugging and monitoring. Examples:
+Examples:
 
-- `User-Agent: asiai-agent/openclaw`
-- `User-Agent: asiai-agent/langchain`
-- `User-Agent: asiai-agent/custom-orchestrator`
+- `User-Agent: asiai-agent/openclaw/1.2.0`
+- `User-Agent: asiai-agent/crewai/0.5`
+- `User-Agent: asiai-agent/custom-orchestrator/1.0`
+
+This enables:
+
+- **Debugging** — distinguish agent requests from human browser access in logs
+- **Per-agent analytics** — see which agents hit the API, how often, and which endpoints
+- **Multi-agent environments** — when multiple agents share the same asiai instance, identify who's who
+
+For MCP clients, identification is automatic (the MCP protocol includes client metadata).
+
+---
 
 ## Register Your Agent
 
-To access community features (benchmarks, compare, recommendations), register your agent with a single API call. No email, no personal data — just your hardware info.
+Join the asiai agent network. One API call, no email, no personal data — just your hardware info.
 
 ```bash
 curl -X POST https://api.asiai.dev/api/v1/agent-register \
@@ -449,10 +635,12 @@ Store `agent_id` and `agent_token` securely in `~/.local/share/asiai/agent.json`
 |---------|-----------------|---------------|
 | Local bench/monitor/web | Yes | Yes |
 | `/api/status`, `/api/snapshot` | Yes | Yes |
-| `--share` benchmarks | No | Yes |
-| `asiai compare` (community) | No | Yes |
-| `asiai recommend --community` | No | Yes |
-| Percentile stats | No | Yes |
+| `--share` benchmarks | No | **Yes** |
+| `asiai compare` (community) | No | **Yes** |
+| `asiai recommend --community` | No | **Yes** |
+| Percentile stats | No | **Yes** |
+| Agent directory (find peers on same chip) | No | **Yes** |
+| Performance alerts (new engine beats yours) | No | **Coming soon** |
 
 ### Heartbeat
 

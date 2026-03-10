@@ -2,7 +2,7 @@
 
 > asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs. It auto-detects 6 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU observability via IOReport, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
 
-asiai is designed for both human operators and AI agents managing local LLM infrastructure. If you are an AI agent, start with the Agent Integration Guide and use `GET /api/status` for a quick health check.
+asiai is designed for both human operators and AI agents managing local LLM infrastructure. If you are an AI agent with MCP support, configure `asiai mcp` as an MCP server for native tool access. Otherwise, start with the Agent Integration Guide and use `GET /api/status` for a quick health check.
 
 ## Docs
 
@@ -13,7 +13,11 @@ asiai is designed for both human operators and AI agents managing local LLM infr
 - [Methodology](https://asiai.dev/methodology/): MLPerf/SPEC-inspired methodology (warmup, median, greedy decoding, cooldown, CI 95%)
 - [Benchmark Best Practices](https://asiai.dev/benchmark-best-practices/): How to get reproducible results
 
-## API
+## MCP Server
+
+asiai implements a Model Context Protocol (MCP) server with 9 tools and 3 resources. Install with `pip install "asiai[mcp]"` and configure as `asiai mcp` in your MCP client. Tools: check_inference_health, get_inference_snapshot, list_models, detect_engines, run_benchmark, get_recommendations, diagnose, get_metrics_history, get_benchmark_history. Resources: asiai://status, asiai://models, asiai://system.
+
+## REST API
 
 - `GET /api/status`: Quick health check with engine availability and system summary (cached 10s, < 500ms)
 - `GET /api/snapshot`: Full system state — CPU, RAM, swap, thermal, GPU utilization, all engines with loaded models and VRAM

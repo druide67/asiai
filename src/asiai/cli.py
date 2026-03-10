@@ -636,6 +636,25 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Handle 'mcp' command — start MCP server."""
+    try:
+        from asiai.mcp.server import serve
+    except ImportError:
+        from asiai.display.formatters import dim, red
+
+        print(red("MCP SDK is required for the MCP server."), file=sys.stderr)
+        print(dim("Install with: pip install asiai[mcp]"), file=sys.stderr)
+        return 1
+
+    serve(
+        transport=getattr(args, "transport", "stdio"),
+        host=getattr(args, "host", "127.0.0.1"),
+        port=getattr(args, "port", 8900),
+    )
+    return 0
+
+
 def cmd_recommend(args: argparse.Namespace) -> int:
     """Handle 'recommend' command."""
     from asiai.advisor.recommender import recommend
@@ -919,6 +938,21 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--model", "-m", help="Model to compare")
     compare_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
 
+    # mcp
+    mcp_parser = subparsers.add_parser(
+        "mcp", help="Start MCP server for Claude Code / Cursor / Windsurf"
+    )
+    mcp_parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="Transport protocol (default: stdio for Claude Code)",
+    )
+    mcp_parser.add_argument(
+        "--port", type=int, default=8900, help="Port for SSE/HTTP transport (default: 8900)"
+    )
+    mcp_parser.add_argument("--host", default="127.0.0.1", help="Host for SSE/HTTP transport")
+
     # recommend
     recommend_parser = subparsers.add_parser(
         "recommend", help="Get engine recommendations for your hardware"
@@ -952,6 +986,7 @@ def main(argv: list[str] | None = None) -> int:
         "daemon": cmd_daemon,
         "tui": cmd_tui,
         "web": cmd_web,
+        "mcp": cmd_mcp,
         "leaderboard": cmd_leaderboard,
         "compare": cmd_compare,
         "recommend": cmd_recommend,
