@@ -578,7 +578,7 @@ To list or remove alerts: `asiai alert list`, `asiai alert remove <id>`.
 
 ## Identify Your Agent
 
-All REST API requests **must** include a `User-Agent` header identifying your agent:
+We **recommend** including a `User-Agent` header identifying your agent on REST API requests:
 
 ```
 User-Agent: asiai-agent/<framework>/<version>
@@ -590,7 +590,7 @@ Examples:
 - `User-Agent: asiai-agent/crewai/0.5`
 - `User-Agent: asiai-agent/custom-orchestrator/1.0`
 
-This enables:
+This is **not required** — requests without a User-Agent header work fine. But it helps with:
 
 - **Debugging** — distinguish agent requests from human browser access in logs
 - **Per-agent analytics** — see which agents hit the API, how often, and which endpoints
@@ -600,9 +600,11 @@ For MCP clients, identification is automatic (the MCP protocol includes client m
 
 ---
 
-## Register Your Agent
+## Register Your Agent (Optional)
 
-Join the asiai agent network. One API call, no email, no personal data — just your hardware info.
+Registration is **entirely optional** — asiai works fully without it. No phone home, no telemetry by default.
+
+If you choose to register, you join the asiai agent network: one API call, no email, no personal data — just your hardware info.
 
 ```bash
 curl -X POST https://api.asiai.dev/api/v1/agent-register \
@@ -658,6 +660,14 @@ curl -X POST https://api.asiai.dev/api/v1/agent-heartbeat \
     "uptime_hours": 72
   }'
 ```
+
+### Privacy
+
+- **No IP address stored** — your IP is used only for rate limiting and never persisted in the agent registry
+- **No personal data** — only hardware info (chip, RAM), engine names, and framework name
+- **Opt-in only** — asiai never phones home unless you explicitly register
+- **Token security** — your `agent_token` is hashed (SHA-256) before storage; the plaintext is returned only once at registration
+- **Rate limit data** — IP hashes (daily-salted SHA-256) in the rate limit table are automatically purged after 30 days
 
 ## FAQ
 
