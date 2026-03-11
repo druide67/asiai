@@ -16,6 +16,8 @@
   <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python"></a>
   <a href="https://support.apple.com/en-us/116943"><img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black.svg" alt="macOS"></a>
   <a href="https://github.com/sponsors/druide67"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg" alt="Sponsor"></a>
+  <a href="https://api.asiai.dev/api/v1/badge/benchmarks"><img src="https://api.asiai.dev/api/v1/badge/benchmarks" alt="Benchmarks"></a>
+  <a href="https://api.asiai.dev/api/v1/badge/top-speed"><img src="https://api.asiai.dev/api/v1/badge/top-speed" alt="Top Speed"></a>
 </p>
 
 **asiai** compares inference engines side-by-side on your Mac. Load the same model on Ollama and LM Studio, run `asiai bench`, get the numbers. No guessing, no vibes — just tok/s, TTFT, power efficiency, and stability per engine.
@@ -27,16 +29,21 @@ Born from the OpenClaw project, where we needed hard data to pick the fastest en
 ## Quick start
 
 ```bash
+pipx install asiai        # Recommended: isolated install
+```
+
+Or via Homebrew:
+
+```bash
 brew tap druide67/tap
 brew install asiai
 ```
 
-Or from source:
+Other options:
 
 ```bash
-git clone https://github.com/druide67/asiai.git
-cd asiai
-pip install -e .
+uvx asiai detect           # Run without installing (requires uv)
+pip install asiai           # Standard pip install
 ```
 
 ## Commands
@@ -89,6 +96,8 @@ Options:
     --power                Measure GPU power via powermetrics (sudo required)
     --context-size SIZE    Context fill prompt: 4k, 16k, 32k, 64k
     --share                Share results with the community (anonymous, opt-in)
+-Q, --quick                Quick benchmark: 1 prompt, 1 run (~15 seconds)
+    --card                 Generate shareable benchmark card (SVG + PNG with --share)
 -H, --history PERIOD       Show past benchmarks (e.g. 7d, 24h)
 ```
 
@@ -284,7 +293,7 @@ Use `--context-size 4k|16k|32k|64k` to test with large context fill prompts inst
 
 ## API & Prometheus
 
-When running `asiai web`, three REST API endpoints are available for programmatic access:
+When running `asiai web`, three REST API endpoints are available for programmatic access. Interactive API documentation (Swagger UI) is available at `http://localhost:8899/docs`.
 
 | Endpoint | Description |
 |----------|-------------|

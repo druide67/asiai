@@ -24,7 +24,7 @@ keywords = [
     "cli",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
@@ -65,11 +65,11 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.coverage.run]
 source = ["asiai"]
-omit = ["src/asiai/display/tui.py", "src/asiai/web/*"]
+omit = ["src/asiai/display/tui.py"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 60
+fail_under = 75
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

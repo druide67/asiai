@@ -32,6 +32,7 @@ nav:
   - Leaderboard: leaderboard.md
   - Getting Started: getting-started.md
   - Agent Integration: agent.md
+  - Architecture: architecture.md
   - Installation: installation.md
   - Commands:
       - detect: commands/detect.md

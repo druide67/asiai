@@ -20,6 +20,9 @@ asiai bench [options]
 | `--context-size SIZE` | Context fill prompt: `4k`, `16k`, `32k`, `64k` |
 | `--export FILE` | Export results to JSON file |
 | `-H, --history PERIOD` | Show past benchmarks (e.g., `7d`, `24h`) |
+| `-Q, --quick` | Quick benchmark: 1 prompt (code), 1 run (~15 seconds) |
+| `--card` | Generate a shareable benchmark card (SVG locally, PNG with `--share`) |
+| `--share` | Share results to community benchmark database |
 
 ## Example
 
@@ -71,6 +74,45 @@ The JSON includes machine metadata, per-engine statistics (median, CI 95%, P50/P
 ## Regression detection
 
 After each benchmark, asiai compares results against the last 7 days of history and warns about performance regressions (e.g., after an engine update or macOS upgrade).
+
+## Quick benchmark
+
+Run a fast benchmark with a single prompt and one run (~15 seconds):
+
+```bash
+asiai bench --quick
+asiai bench -Q -m qwen3.5
+```
+
+This is ideal for demos, GIFs, and quick checks. The `code` prompt is used by default. You can override with `--prompts` if needed.
+
+## Benchmark card
+
+Generate a shareable benchmark card:
+
+```bash
+asiai bench --card                    # SVG saved locally
+asiai bench --card --share            # SVG + PNG (via community API)
+asiai bench --quick --card --share    # Quick bench + card + share
+```
+
+The card is a 1200x630 dark-themed image with:
+- Model and chip info
+- Terminal-style bar chart of tok/s per engine
+- Winner highlight and metric chips
+- asiai branding
+
+The SVG is saved to `~/.local/share/asiai/cards/`. With `--share`, a PNG is also downloaded from the API.
+
+## Community sharing
+
+Share your results anonymously:
+
+```bash
+asiai bench --share
+```
+
+View the community leaderboard with `asiai leaderboard`.
 
 ## Thermal drift detection
 

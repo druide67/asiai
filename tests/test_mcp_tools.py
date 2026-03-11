@@ -398,6 +398,54 @@ class TestGetBenchmarkHistory:
         assert result["total_results"] == 1
 
 
+class TestCompareEngines:
+    @pytest.mark.asyncio
+    @patch("asiai.storage.db.query_benchmarks", return_value=[])
+    async def test_no_data(self, mock_query, mock_ctx):
+        from asiai.mcp.tools import compare_engines
+
+        result = await compare_engines(mock_ctx, model="test")
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    @patch(
+        "asiai.storage.db.query_benchmarks",
+        return_value=[
+            {"engine": "ollama", "model": "test:7b", "tok_per_sec": 40.0,
+             "ttft_ms": 100, "vram_bytes": 4_000_000_000, "thermal_level": "nominal",
+             "thermal_speed_limit": 100, "prompt_type": "code", "run_index": 0},
+            {"engine": "lmstudio", "model": "test:7b", "tok_per_sec": 55.0,
+             "ttft_ms": 80, "vram_bytes": 4_000_000_000, "thermal_level": "nominal",
+             "thermal_speed_limit": 100, "prompt_type": "code", "run_index": 0},
+        ],
+    )
+    async def test_comparison(self, mock_query, mock_ctx):
+        from asiai.mcp.tools import compare_engines
+
+        result = await compare_engines(mock_ctx, model="test:7b")
+        assert "comparison" in result
+        assert len(result["comparison"]) == 2
+        assert result["comparison"][0]["engine"] == "lmstudio"  # faster
+        assert "verdict" in result
+        assert "lmstudio" in result["verdict"]
+
+    @pytest.mark.asyncio
+    @patch(
+        "asiai.storage.db.query_benchmarks",
+        return_value=[
+            {"engine": "ollama", "model": "test:7b", "tok_per_sec": 40.0,
+             "ttft_ms": 100, "vram_bytes": 4_000_000_000, "thermal_level": "nominal",
+             "thermal_speed_limit": 100, "prompt_type": "code", "run_index": 0},
+        ],
+    )
+    async def test_single_engine(self, mock_query, mock_ctx):
+        from asiai.mcp.tools import compare_engines
+
+        result = await compare_engines(mock_ctx, model="test:7b")
+        assert "error" in result
+        assert "2 engines" in result["error"]
+
+
 # ---------------------------------------------------------------------------
 # CLI integration
 # ---------------------------------------------------------------------------

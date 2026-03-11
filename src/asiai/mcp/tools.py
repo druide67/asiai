@@ -1,4 +1,4 @@
-"""MCP tools for asiai -- 9 tools exposing inference monitoring capabilities."""
+"""MCP tools for asiai -- 11 tools exposing inference monitoring capabilities."""
 
 from __future__ import annotations
 
@@ -548,4 +548,133 @@ async def get_benchmark_history(
         "total_results": len(rows),
         "filters": {"hours": hours or "all", "model": model or "all"},
         "results": rows,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 10: refresh_engines (side-effect: re-detects engines, <2s)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "openWorldHint": False,
+        "title": "Refresh Engine Detection",
+    }
+)
+async def refresh_engines(ctx: Context) -> dict:
+    """Re-detect inference engines without restarting the MCP server.
+
+    Use this after starting or stopping an engine (Ollama, LM Studio, etc.)
+    so that subsequent tool calls see the updated engine list.
+
+    Returns:
+        Updated list of detected engines with names and URLs.
+    """
+    from asiai.cli import _discover_engines
+
+    app_ctx = _get_ctx(ctx)
+    engines = await asyncio.to_thread(_discover_engines)
+    app_ctx.engines = engines
+
+    return {
+        "engines_detected": len(engines),
+        "engines": [
+            {"name": e.name, "url": e.url}
+            for e in engines
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 11: compare_engines (read-only, <1s)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": False,
+        "title": "Compare Engines for a Model",
+    }
+)
+async def compare_engines(
+    ctx: Context,
+    model: str = "",
+    hours: int = 0,
+) -> dict:
+    """Compare inference engines side-by-side for a given model.
+
+    Analyzes local benchmark history and returns a ranked comparison
+    with tok/s, TTFT, VRAM, stability, and a verdict indicating
+    the winner and by how much.
+
+    Args:
+        model: Model name to compare across engines (e.g. "qwen3.5:35b").
+               If empty, uses the most recently benchmarked model.
+        hours: Limit analysis to last N hours. 0 = all history (default).
+
+    Returns:
+        Ranked engine comparison with winner verdict.
+    """
+    from asiai.benchmark.reporter import aggregate_results
+    from asiai.storage.db import query_benchmarks
+
+    app_ctx = _get_ctx(ctx)
+    rows = query_benchmarks(app_ctx.db_path, hours=hours, model=model)
+
+    if not rows:
+        return {
+            "error": "No benchmark data found.",
+            "suggestion": "Run a benchmark first: run_benchmark tool.",
+        }
+
+    report = aggregate_results(rows)
+    engines_data = report.get("engines", {})
+
+    if len(engines_data) < 2:
+        return {
+            "error": "Need benchmarks from at least 2 engines to compare.",
+            "engines_found": list(engines_data.keys()),
+            "suggestion": "Load the same model on multiple engines and benchmark.",
+        }
+
+    # Build ranked comparison
+    ranked = sorted(
+        engines_data.items(),
+        key=lambda x: x[1].get("avg_tok_s", 0),
+        reverse=True,
+    )
+
+    comparison = []
+    for rank, (name, data) in enumerate(ranked, 1):
+        comparison.append({
+            "rank": rank,
+            "engine": name,
+            "avg_tok_s": round(data.get("avg_tok_s", 0), 1),
+            "avg_ttft_ms": round(data.get("avg_ttft_ms", 0), 1),
+            "vram_bytes": data.get("vram_bytes", 0),
+            "stability": data.get("stability", "unknown"),
+            "runs_count": data.get("runs_count", 0),
+        })
+
+    # Verdict
+    best = ranked[0]
+    second = ranked[1]
+    best_tok = best[1].get("avg_tok_s", 0)
+    second_tok = second[1].get("avg_tok_s", 0)
+    speedup = round(best_tok / second_tok, 1) if second_tok > 0 else 0
+
+    verdict = (
+        f"{best[0]} is {speedup}x faster than {second[0]} "
+        f"({best_tok:.1f} vs {second_tok:.1f} tok/s)"
+    )
+
+    return {
+        "model": report.get("model", model),
+        "comparison": comparison,
+        "verdict": verdict,
+        "winner": report.get("winner"),
     }

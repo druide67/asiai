@@ -27,14 +27,16 @@ async def history_page(request: Request) -> HTMLResponse:
 @router.get("/api/history")
 async def api_history(
     request: Request,
-    hours: int = Query(default=168, ge=1, le=2160),
+    hours: int = Query(default=168, ge=1, le=8760),
+    since: int = Query(default=0, ge=0),
+    until: int = Query(default=0, ge=0),
 ) -> JSONResponse:
     """JSON API: monitoring history for charts."""
     state = request.app.state.app_state
 
     from asiai.storage.db import query_history
 
-    rows = await asyncio.to_thread(query_history, state.db_path, hours)
+    rows = await asyncio.to_thread(query_history, state.db_path, hours, since, until)
 
     return JSONResponse(
         [
@@ -59,16 +61,20 @@ async def api_history(
 @router.get("/api/benchmarks")
 async def api_benchmarks(
     request: Request,
-    hours: int = Query(default=168, ge=0, le=2160),
+    hours: int = Query(default=168, ge=0, le=8760),
     model: str = Query(default=""),
     engine: str = Query(default=""),
+    since: int = Query(default=0, ge=0),
+    until: int = Query(default=0, ge=0),
 ) -> JSONResponse:
     """JSON API: benchmark results for charts."""
     state = request.app.state.app_state
 
     from asiai.storage.db import query_benchmarks
 
-    rows = await asyncio.to_thread(query_benchmarks, state.db_path, hours, model)
+    rows = await asyncio.to_thread(
+        query_benchmarks, state.db_path, hours, model, since, until
+    )
 
     if engine:
         rows = [r for r in rows if r.get("engine") == engine]

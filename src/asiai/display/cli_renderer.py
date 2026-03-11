@@ -80,6 +80,7 @@ def render_detect(engines: list[dict]) -> None:
     if not engines:
         print(dim("No inference engines detected."))
         print(dim("Checked: localhost:11434 (Ollama), :1234 (LM Studio), :8080 (mlx-lm)"))
+        print(dim("Try: brew install ollama && ollama serve"))
         return
 
     print(bold("Detected engines:"))

@@ -34,8 +34,8 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
                     try:
                         conn.execute(sql)
                         logger.info("Migration: %s", sql)
-                    except sqlite3.OperationalError:
-                        pass  # Column already exists or table missing
+                    except sqlite3.OperationalError as exc:
+                        logger.warning("Migration failed: %s — %s", sql, exc)
 
         conn.commit()
     finally:
@@ -109,24 +109,53 @@ def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
         conn.close()
 
 
-def query_history(db_path: str, hours: int = 24) -> list[dict]:
-    """Return metrics entries for the last `hours` hours."""
-    since = int(time.time()) - (hours * 3600)
+def query_history(
+    db_path: str, hours: int = 24, since: int = 0, until: int = 0
+) -> list[dict]:
+    """Return metrics entries for a time range.
+
+    If since/until are provided (unix timestamps), they take precedence over hours.
+    """
+    if since > 0:
+        ts_start = since
+        ts_end = until if until > 0 else int(time.time())
+    else:
+        ts_start = int(time.time()) - (hours * 3600)
+        ts_end = int(time.time())
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute("SELECT * FROM metrics WHERE ts >= ? ORDER BY ts", (since,)).fetchall()
-        result = []
+        # Single query with LEFT JOIN to avoid N+1 (was 1+N queries before)
+        rows = conn.execute(
+            "SELECT m.*, "
+            "mo.engine AS mo_engine, mo.name AS mo_name, "
+            "mo.size_vram AS mo_size_vram, mo.size_total AS mo_size_total, "
+            "mo.model_format AS mo_model_format, mo.quantization AS mo_quantization "
+            "FROM metrics m "
+            "LEFT JOIN models mo ON mo.ts = m.ts "
+            "WHERE m.ts >= ? AND m.ts <= ? "
+            "ORDER BY m.ts",
+            (ts_start, ts_end),
+        ).fetchall()
+
+        # Group models by timestamp
+        result: dict[int, dict] = {}
         for row in rows:
-            entry = dict(row)
-            models = conn.execute(
-                "SELECT engine, name, size_vram, size_total, model_format, quantization "
-                "FROM models WHERE ts = ?",
-                (row["ts"],),
-            ).fetchall()
-            entry["models"] = [dict(m) for m in models]
-            result.append(entry)
-        return result
+            ts = row["ts"]
+            if ts not in result:
+                entry = {k: row[k] for k in row.keys() if not k.startswith("mo_")}
+                entry["models"] = []
+                result[ts] = entry
+            if row["mo_name"] is not None:
+                result[ts]["models"].append({
+                    "engine": row["mo_engine"],
+                    "name": row["mo_name"],
+                    "size_vram": row["mo_size_vram"],
+                    "size_total": row["mo_size_total"],
+                    "model_format": row["mo_model_format"],
+                    "quantization": row["mo_quantization"],
+                })
+        return list(result.values())
     finally:
         conn.close()
 
@@ -178,12 +207,16 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
         conn.close()
 
 
-def query_benchmarks(db_path: str, hours: int = 0, model: str = "") -> list[dict]:
+def query_benchmarks(
+    db_path: str, hours: int = 0, model: str = "", since: int = 0, until: int = 0
+) -> list[dict]:
     """Query past benchmark results.
 
     Args:
         hours: If > 0, limit to last N hours. If 0, return all.
         model: If non-empty, filter by model name.
+        since: Unix timestamp start (overrides hours if > 0).
+        until: Unix timestamp end (defaults to now).
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -191,10 +224,16 @@ def query_benchmarks(db_path: str, hours: int = 0, model: str = "") -> list[dict
         query = "SELECT * FROM benchmarks WHERE 1=1"
         params: list = []
 
-        if hours > 0:
-            since = int(time.time()) - (hours * 3600)
+        if since > 0:
             query += " AND ts >= ?"
             params.append(since)
+            ts_end = until if until > 0 else int(time.time())
+            query += " AND ts <= ?"
+            params.append(ts_end)
+        elif hours > 0:
+            ts_since = int(time.time()) - (hours * 3600)
+            query += " AND ts >= ?"
+            params.append(ts_since)
 
         if model:
             query += " AND model = ?"
@@ -384,16 +423,17 @@ def query_compare(db_path: str, before_ts: int, after_ts: int) -> dict:
             row = conn.execute(
                 "SELECT * FROM metrics ORDER BY ABS(ts - ?) LIMIT 1", (ts,)
             ).fetchone()
-            if row:
-                entry = dict(row)
-                models = conn.execute(
-                    "SELECT engine, name, size_vram, size_total, model_format, quantization "
-                    "FROM models WHERE ts = ?",
-                    (row["ts"],),
-                ).fetchall()
-                entry["models"] = [dict(m) for m in models]
-                return entry
-            return None
+            if not row:
+                return None
+            entry = dict(row)
+            # Single extra query per point (only 2 points total in compare)
+            models = conn.execute(
+                "SELECT engine, name, size_vram, size_total, model_format, quantization "
+                "FROM models WHERE ts = ?",
+                (row["ts"],),
+            ).fetchall()
+            entry["models"] = [dict(m) for m in models]
+            return entry
 
         return {"before": nearest(before_ts), "after": nearest(after_ts)}
     finally:

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `asiai bench --quick` / `-Q` — single prompt, single run (~15 seconds)
+- `asiai bench --card` — shareable benchmark card (SVG locally, PNG with `--share`)
+- `asiai version` subcommand (alias for `--version`)
+- Dynamic SVG badges on community API (`/badge/benchmarks`, `/badge/top-speed`)
+- Enriched JSON-LD structured data on asiai.dev
+- `pip-audit` in CI pipeline
+- Dependabot for pip and GitHub Actions dependencies
+- HSTS header on community API
+- SQL injection test suite for community API (`tests/test_sql_injection.sh`)
+
+### Changed
+
+- PyPI classifier: `Development Status :: 5 - Production/Stable`
+- CORS restricted to `https://asiai.dev` (was `*`)
+- Install instructions: `pipx install asiai` recommended first in README
+- Better error messages when no engines detected ("Try: brew install ollama && ollama serve")
+- Silent migration failures now logged via `logging.warning()`
+- Swagger API docs mentioned in README (`/docs` endpoint)
+
 ## [1.0.0](https://github.com/druide67/asiai/compare/v0.7.0...v1.0.0) — 2026-03-08
 
 ### Added

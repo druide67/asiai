@@ -9,9 +9,22 @@ if TYPE_CHECKING:
     from asiai.web.state import AppState
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
-router = APIRouter(prefix="/api", tags=["api"])
+router = APIRouter(prefix="/api/v1", tags=["api"])
+
+# Backward-compatible redirects: /api/* → /api/v1/*
+compat_router = APIRouter(tags=["compat"])
+
+
+@compat_router.get("/api/{path:path}")
+async def api_compat_redirect(path: str, request: Request) -> RedirectResponse:
+    """Redirect old /api/* routes to /api/v1/*."""
+    query = str(request.query_params)
+    url = f"/api/v1/{path}"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url=url, status_code=302)
 
 
 def _get_or_refresh_snapshot(state: AppState) -> dict:

@@ -89,6 +89,7 @@ def cmd_models(args: argparse.Namespace) -> int:
             print(json.dumps({"engines": []}, indent=2))
         else:
             print(dim("No inference engines detected."))
+            print(dim("Try: brew install ollama && ollama serve"))
         return 1
 
     if getattr(args, "json_output", False):
@@ -428,7 +429,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     from asiai.benchmark.reporter import aggregate_results, export_benchmark
     from asiai.benchmark.runner import find_common_model, run_benchmark
     from asiai.display.cli_renderer import render_bench, render_bench_history, render_regressions
-    from asiai.display.formatters import red, yellow
+    from asiai.display.formatters import dim, red, yellow
     from asiai.storage.db import (
         DEFAULT_DB_PATH,
         init_db,
@@ -456,6 +457,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     if not engines:
         print(red("✗ No inference engines detected."), file=sys.stderr)
+        print(dim("  Try: brew install ollama && ollama serve"), file=sys.stderr)
         return 1
 
     # Filter engines if --engines specified
@@ -472,8 +474,14 @@ def cmd_bench(args: argparse.Namespace) -> int:
         print(yellow("⚠ No model to benchmark. Load a model or use --model."), file=sys.stderr)
         return 1
 
-    # Parse prompt types
-    prompt_names = None
+    # Quick mode: 1 prompt (code), 1 run
+    if getattr(args, "quick", False):
+        prompt_names = ["code"]
+        args.runs = 1
+    else:
+        prompt_names = None
+
+    # Parse prompt types (explicit --prompts overrides --quick)
     if args.prompts:
         prompt_names = [p.strip() for p in args.prompts.split(",")]
 
@@ -527,6 +535,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             render_regressions(regressions)
 
     # Community share (opt-in)
+    submission_id = ""
     if getattr(args, "share", False) and bench_run.results:
         from asiai.community import build_submission, submit_benchmark
         from asiai.display.formatters import dim, green
@@ -534,9 +543,32 @@ def cmd_bench(args: argparse.Namespace) -> int:
         payload = build_submission(bench_run.results, report)
         result = submit_benchmark(payload, db_path=db_path)
         if result.success:
+            submission_id = result.submission_id
             print(f"  {green('✓')} Shared to community ({result.submission_id[:8]}...)")
         else:
             print(f"  {dim('⚠ Share failed: ' + result.error)}")
+
+    # Benchmark card generation
+    if getattr(args, "card", False) and bench_run.results:
+        from asiai.benchmark.card import generate_card_svg, save_card
+        from asiai.display.formatters import dim, green
+
+        first_result = bench_run.results[0]
+        hw_chip = first_result.get("hw_chip", "")
+        svg = generate_card_svg(report, hw_chip=hw_chip)
+        svg_path = save_card(svg, fmt="svg")
+        print(f"  {green('✓')} Card saved: {svg_path}")
+
+        # If shared, download PNG from API
+        if submission_id:
+            from asiai.benchmark.card import download_card_png
+
+            png_path = download_card_png(submission_id)
+            if png_path:
+                print(f"  {green('✓')} PNG card: {png_path}")
+                print(f"  {dim('Share URL: https://asiai.dev/card/' + submission_id)}")
+            else:
+                print(f"  {dim('⚠ PNG download failed (SVG available locally)')}")
 
     return 0
 
@@ -710,6 +742,74 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         print(f"      {dim(rec.reason)} {conf_str} {src_str}")
         for caveat in rec.caveats:
             print(f"      {yellow('⚠')} {caveat}")
+
+    return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Interactive first-launch setup wizard."""
+    from asiai.collectors.system import collect_hw_chip, collect_memory
+    from asiai.display.formatters import bold, dim, green, yellow
+
+    print(bold("asiai setup wizard"))
+    print()
+
+    # Step 1: Hardware detection
+    chip = collect_hw_chip()
+    mem = collect_memory()
+    ram_gb = round(mem.total / (1024**3))
+    print(f"  {green('✓')} Hardware: {chip}, {ram_gb} GB RAM")
+
+    # Step 2: Engine detection
+    print()
+    print(bold("Detecting inference engines..."))
+    engines = _discover_engines()
+
+    if engines:
+        for e in engines:
+            ver = e.version() or ""
+            ver_str = f" v{ver}" if ver else ""
+            models = e.list_running()
+            model_str = f", {len(models)} model(s) loaded" if models else ""
+            print(f"  {green('✓')} {e.name}{ver_str} at {e.base_url}{model_str}")
+    else:
+        print(f"  {yellow('⚠')} No inference engines detected.")
+        print()
+        print(bold("Install an engine to get started:"))
+        print()
+        print("  Ollama (recommended):")
+        print("    brew install ollama && ollama serve")
+        print("    ollama pull qwen3:8b")
+        print()
+        print("  LM Studio:")
+        print("    Download from https://lmstudio.ai")
+        print("    Load a model and start the server")
+        print()
+        print(dim("After installing, run 'asiai setup' again."))
+        return 0
+
+    # Step 3: Suggest first actions
+    print()
+    print(bold("You're all set! Try these commands:"))
+    print()
+    print(f"  {dim('Quick benchmark:')}    asiai bench --quick")
+    print(f"  {dim('Full benchmark:')}     asiai bench")
+    print(f"  {dim('Monitor live:')}       asiai monitor --watch 5")
+    print(f"  {dim('Start dashboard:')}    asiai web")
+    print(f"  {dim('Health check:')}       asiai doctor")
+    print()
+
+    # Step 4: Recommend starting the daemon
+    from asiai.daemon import daemon_status_all
+
+    statuses = daemon_status_all()
+    monitor_running = statuses.get("monitor", {}).get("running", False)
+
+    if not monitor_running:
+        print(bold("Enable background monitoring?"))
+        print(dim("  This collects metrics every 60s for historical analysis."))
+        print(f"  Run: {green('asiai daemon start')}")
+        print()
 
     return 0
 
@@ -922,6 +1022,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Share results to community benchmark database",
     )
+    bench_parser.add_argument(
+        "--quick",
+        "-Q",
+        action="store_true",
+        help="Quick benchmark: 1 prompt (code), 1 run (~15 seconds)",
+    )
+    bench_parser.add_argument(
+        "--card",
+        action="store_true",
+        help="Generate a shareable benchmark card (SVG locally, PNG with --share)",
+    )
 
     # leaderboard
     leaderboard_parser = subparsers.add_parser(
@@ -953,6 +1064,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     mcp_parser.add_argument("--host", default="127.0.0.1", help="Host for SSE/HTTP transport")
 
+    # version (alias for --version)
+    subparsers.add_parser("version", help="Show version")
+
+    # setup
+    subparsers.add_parser("setup", help="Interactive first-launch setup wizard")
+
     # recommend
     recommend_parser = subparsers.add_parser(
         "recommend", help="Get engine recommendations for your hardware"
@@ -977,6 +1094,30 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
+    if args.command == "version":
+        from asiai.collectors.system import collect_hw_chip, collect_memory
+        from asiai.daemon import daemon_status_all
+        from asiai.display.formatters import dim
+
+        chip = collect_hw_chip()
+        mem = collect_memory()
+        ram_gb = round(mem.total / (1024**3))
+
+        # Detect engines (fast, ~1s)
+        engines = _discover_engines()
+        engine_names = ", ".join(e.name for e in engines) if engines else "none"
+
+        # Daemon status
+        statuses = daemon_status_all()
+        running_svcs = [name for name, s in statuses.items() if s.get("running")]
+        daemon_str = ", ".join(running_svcs) if running_svcs else "stopped"
+
+        print(f"asiai {__version__}")
+        print(dim(f"  {chip}, {ram_gb} GB RAM"))
+        print(dim(f"  Engines: {engine_names}"))
+        print(dim(f"  Daemon: {daemon_str}"))
+        return 0
+
     commands = {
         "detect": cmd_detect,
         "models": cmd_models,
@@ -990,6 +1131,7 @@ def main(argv: list[str] | None = None) -> int:
         "leaderboard": cmd_leaderboard,
         "compare": cmd_compare,
         "recommend": cmd_recommend,
+        "setup": cmd_setup,
     }
 
     handler = commands.get(args.command)

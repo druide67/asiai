@@ -10,10 +10,16 @@
 <!-- Filters -->
 <div class="filter-bar fade-in">
     <span class="text-xs text-neutral-500" style="margin-right: 0.5rem;">Time range:</span>
+    <button class="filter-chip" data-hours="1" onclick="setTimeRange(1, this)">1h</button>
     <button class="filter-chip" data-hours="24" onclick="setTimeRange(24, this)">24h</button>
     <button class="filter-chip active" data-hours="168" onclick="setTimeRange(168, this)">7d</button>
     <button class="filter-chip" data-hours="720" onclick="setTimeRange(720, this)">30d</button>
     <button class="filter-chip" data-hours="2160" onclick="setTimeRange(2160, this)">90d</button>
+    <span class="text-xs text-neutral-500" style="margin-left: 1rem; margin-right: 0.5rem;">Custom:</span>
+    <input type="datetime-local" id="range-from" class="range-input" title="From">
+    <span class="text-xs text-neutral-500">—</span>
+    <input type="datetime-local" id="range-to" class="range-input" title="To">
+    <button class="filter-chip" id="range-apply-btn" onclick="applyCustomRange()" style="font-weight: 600;">Apply</button>
 </div>
 
 <!-- System Metrics -->
@@ -83,6 +89,8 @@
 {% block scripts %}
 <script>
     var currentHours = 168;
+    var customSince = 0;
+    var customUntil = 0;
     var tokChart = null;
     var ttftChart = null;
     var sysCpuChart = null;
@@ -91,6 +99,10 @@
 
     function setTimeRange(hours, btn) {
         currentHours = hours;
+        customSince = 0;
+        customUntil = 0;
+        document.getElementById('range-from').value = '';
+        document.getElementById('range-to').value = '';
         document.querySelectorAll('.filter-chip').forEach(function(c) {
             c.classList.remove('active');
         });
@@ -98,8 +110,31 @@
         loadData();
     }
 
+    function applyCustomRange() {
+        var fromEl = document.getElementById('range-from');
+        var toEl = document.getElementById('range-to');
+        if (!fromEl.value) return;
+        customSince = Math.floor(new Date(fromEl.value).getTime() / 1000);
+        customUntil = toEl.value ? Math.floor(new Date(toEl.value).getTime() / 1000) : 0;
+        document.querySelectorAll('.filter-chip[data-hours]').forEach(function(c) {
+            c.classList.remove('active');
+        });
+        document.getElementById('range-apply-btn').classList.add('active');
+        loadData();
+    }
+
+    function buildQuery() {
+        if (customSince > 0) {
+            var q = 'since=' + customSince;
+            if (customUntil > 0) q += '&until=' + customUntil;
+            return q;
+        }
+        return 'hours=' + currentHours;
+    }
+
     function loadData() {
-        fetch('/api/benchmarks?hours=' + currentHours)
+        var qs = buildQuery();
+        fetch('/api/benchmarks?' + qs)
             .then(function(res) { return res.json(); })
             .then(function(rows) {
                 renderCharts(rows);
@@ -109,7 +144,7 @@
                 console.error('Failed to load benchmarks:', err);
             });
 
-        fetch('/api/history?hours=' + currentHours)
+        fetch('/api/history?' + qs)
             .then(function(res) { return res.json(); })
             .then(function(rows) {
                 renderSystemCharts(rows);
