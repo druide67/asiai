@@ -65,7 +65,7 @@ asiai web --no-open
 asiai daemon start web
 ```
 
-The API is available at `http://127.0.0.1:7654`. The port is configurable with `--port`:
+The API is available at `http://127.0.0.1:8899`. The port is configurable with `--port`:
 
 ```bash
 asiai daemon start web --port 8642
@@ -83,7 +83,7 @@ asiai daemon start web --host 0.0.0.0
 
 ```bash
 # REST API
-curl http://127.0.0.1:7654/api/status
+curl http://127.0.0.1:8899/api/status
 
 # MCP (list available tools)
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | asiai mcp
@@ -166,6 +166,8 @@ All tools return JSON. Read-only tools respond in < 2 seconds. `run_benchmark` i
 | `diagnose` | Run diagnostic checks (system, engines, daemon health) | — |
 | `get_metrics_history` | Historical system metrics from SQLite | `hours` (1–168, default 24) |
 | `get_benchmark_history` | Historical benchmark results | `hours` (1–720, default 24), `model` (optional), `engine` (optional) |
+| `compare_engines` | Ranked engine comparison with verdict for a given model | `model` (required) |
+| `refresh_engines` | Re-detect engines without restarting the MCP server | — |
 
 ### MCP Resources
 
@@ -504,7 +506,7 @@ inference_running = gpu_active and engine_busy
 import json
 import urllib.request
 
-ASIAI_URL = "http://127.0.0.1:7654"  # Docker: use host IP or host.docker.internal
+ASIAI_URL = "http://127.0.0.1:8899"  # Docker: use host IP or host.docker.internal
 
 def check_health():
     """Quick health check. Returns dict with status."""
@@ -557,6 +559,30 @@ if len(points) >= 2:
     if recent_gpu > earlier_gpu * 1.5:
         print("GPU utilization trending up significantly")
 ```
+
+## Benchmark Cards (Shareable Images)
+
+Generate a shareable benchmark card image with CLI:
+
+```bash
+asiai bench --card                    # SVG saved locally (zero dependencies)
+asiai bench --card --share            # SVG + PNG via community API
+asiai bench --quick --card --share    # Quick bench + card + share (~15s)
+```
+
+A **1200x630 dark-themed card** with model, chip, engine comparison bar chart, winner highlight, and metric chips. Optimized for Reddit, X, Discord, and GitHub READMEs.
+
+Cards are saved to `~/.local/share/asiai/cards/` as SVG. Add `--share` to get a PNG download and a shareable URL — PNG is required for posting on Reddit, X, and Discord.
+
+### Via MCP
+
+The `run_benchmark` MCP tool supports card generation with the `card` parameter:
+
+```json
+{"tool": "run_benchmark", "arguments": {"model": "qwen3.5", "card": true}}
+```
+
+The response includes `card_path` — the absolute path to the SVG file on the MCP server filesystem.
 
 ## Webhook Alerts (Push Notifications)
 

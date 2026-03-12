@@ -11,9 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - `asiai bench --quick` / `-Q` — single prompt, single run (~15 seconds)
 - `asiai bench --card` — shareable benchmark card (SVG locally, PNG with `--share`)
-- `asiai version` subcommand (alias for `--version`)
+- `asiai setup` — interactive first-launch wizard (hardware, engines, models, next steps)
+- `asiai version` subcommand — enriched output with chip, RAM, engines, daemon status
+- MCP tool `compare_engines` — ranked engine comparison with verdict for a given model
+- MCP tool `refresh_engines` — re-detect engines without restarting the server
+- Architecture documentation page with data flow diagrams
+- API versioned `/api/v1/` with backward-compatible 302 redirect from `/api/`
 - Dynamic SVG badges on community API (`/badge/benchmarks`, `/badge/top-speed`)
 - Enriched JSON-LD structured data on asiai.dev
+- GitHub Actions `release.yml` — auto-publish to PyPI on git tag
 - `pip-audit` in CI pipeline
 - Dependabot for pip and GitHub Actions dependencies
 - HSTS header on community API
@@ -27,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Better error messages when no engines detected ("Try: brew install ollama && ollama serve")
 - Silent migration failures now logged via `logging.warning()`
 - Swagger API docs mentioned in README (`/docs` endpoint)
+- CDN libs vendored locally (htmx, ApexCharts) — web dashboard works fully offline
+- CSP tightened — no external `script-src`
+
+### Fixed
+
+- N+1 query in `query_history()` — single LEFT JOIN instead of 10K+ individual queries
 
 ## [1.0.0](https://github.com/druide67/asiai/compare/v0.7.0...v1.0.0) — 2026-03-08
 

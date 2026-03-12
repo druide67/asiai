@@ -7,23 +7,31 @@ asiai compares inference engines side-by-side on your Mac. Load the same model o
 ## Quick start
 
 ```bash
+pipx install asiai        # Recommended: isolated install
+```
+
+Or via Homebrew:
+
+```bash
 brew tap druide67/tap
 brew install asiai
 ```
 
-Or with pip:
+Other options:
 
 ```bash
-pip install asiai
+uvx asiai detect           # Run without installing (requires uv)
+pip install asiai           # Standard pip install
 ```
 
-Then detect your engines:
+### First launch
 
 ```bash
-asiai detect
+asiai setup                # Interactive wizard — detects hardware, engines, models
+asiai detect               # Or jump straight to engine detection
 ```
 
-And benchmark:
+Then benchmark:
 
 ```bash
 asiai bench -m qwen3.5 --runs 3 --power
@@ -50,6 +58,7 @@ asiai bench -m qwen3.5 --runs 3 --power
 | [mlx-lm](https://github.com/ml-explore/mlx-examples) | 8080 | OpenAI-compatible |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | 8080 | OpenAI-compatible |
 | [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | OpenAI-compatible |
+| [Exo](https://github.com/exo-explore/exo) | 52415 | OpenAI-compatible |
 
 ## Requirements
 
@@ -63,5 +72,8 @@ The core uses only the Python standard library — `urllib`, `sqlite3`, `subproc
 
 Optional extras:
 
+- `asiai[web]` — FastAPI web dashboard with charts
 - `asiai[tui]` — Textual terminal dashboard
+- `asiai[mcp]` — MCP server for AI agent integration
+- `asiai[all]` — Web + TUI + MCP
 - `asiai[dev]` — pytest, ruff, pytest-cov

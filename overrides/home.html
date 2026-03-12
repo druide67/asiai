@@ -1107,6 +1107,18 @@
   "agent_badge": {"en": "Agent-Ready", "fr": "Agent-Ready", "de": "Agent-Ready", "es": "Agent-Ready", "it": "Agent-Ready", "pt": "Agent-Ready", "zh": "Agent-Ready", "ja": "Agent-Ready", "ko": "Agent-Ready"},
   "agent_count_join": {"en": "Join {count} agents monitoring with asiai", "fr": "{count} agents surveillent avec asiai", "de": "{count} Agents überwachen mit asiai", "es": "{count} agentes monitoreando con asiai", "it": "{count} agenti monitorano con asiai", "pt": "{count} agentes monitorando com asiai", "zh": "{count} 个智能体正在使用 asiai 监控", "ja": "{count} エージェントが asiai で監視中", "ko": "{count}개 에이전트가 asiai로 모니터링 중"},
   "agent_count_trust": {"en": "{count} AI agents trust asiai", "fr": "{count} agents IA font confiance à asiai", "de": "{count} KI-Agents vertrauen asiai", "es": "{count} agentes IA confían en asiai", "it": "{count} agenti IA si fidano di asiai", "pt": "{count} agentes IA confiam no asiai", "zh": "{count} 个 AI 智能体信赖 asiai", "ja": "{count} の AI エージェントが asiai を信頼", "ko": "{count}개 AI 에이전트가 asiai를 신뢰"},
+  "feat14_t": {"en": "Benchmark Card", "fr": "Carte benchmark", "de": "Benchmark-Karte", "es": "Tarjeta benchmark", "it": "Scheda benchmark", "pt": "Cartão benchmark", "zh": "跑分卡片", "ja": "ベンチマークカード", "ko": "벤치마크 카드"},
+  "feat14_d": {
+    "en": "One command, one shareable image. Run <code>asiai bench --card</code> and get a 1200x630 dark-themed card with your model, chip, engine comparison, and winner. Post it on Reddit, X, or Discord. The Speedtest for local LLMs.",
+    "fr": "Une commande, une image partageable. Lancez <code>asiai bench --card</code> et obtenez une carte 1200x630 thème sombre avec modèle, puce, comparaison moteurs et gagnant. Postez-la sur Reddit, X ou Discord. Le Speedtest des LLMs locaux.",
+    "de": "Ein Befehl, ein teilbares Bild. Führe <code>asiai bench --card</code> aus und erhalte eine 1200x630 Dark-Theme-Karte mit Modell, Chip, Engine-Vergleich und Gewinner. Teile sie auf Reddit, X oder Discord. Der Speedtest für lokale LLMs.",
+    "es": "Un comando, una imagen compartible. Ejecuta <code>asiai bench --card</code> y obtén una tarjeta 1200x630 tema oscuro con modelo, chip, comparación de motores y ganador. Publícala en Reddit, X o Discord. El Speedtest de los LLMs locales.",
+    "it": "Un comando, un'immagine condivisibile. Esegui <code>asiai bench --card</code> e ottieni una scheda 1200x630 tema scuro con modello, chip, confronto motori e vincitore. Pubblicala su Reddit, X o Discord. Lo Speedtest dei LLM locali.",
+    "pt": "Um comando, uma imagem compartilhável. Execute <code>asiai bench --card</code> e obtenha um cartão 1200x630 tema escuro com modelo, chip, comparação de motores e vencedor. Publique no Reddit, X ou Discord. O Speedtest dos LLMs locais.",
+    "zh": "一条命令，一张可分享图片。运行<code>asiai bench --card</code>，获得1200x630深色主题卡片，含模型、芯片、引擎对比和赢家。发到Reddit、X或Discord。本地LLM的Speedtest。",
+    "ja": "コマンド1つで共有可能な画像。<code>asiai bench --card</code>を実行すると、モデル、チップ、エンジン比較、勝者が入った1200x630ダークテーマカードが生成。Reddit、X、Discordで共有。ローカルLLMのSpeedtest。",
+    "ko": "명령어 하나, 공유 가능한 이미지. <code>asiai bench --card</code>를 실행하면 모델, 칩, 엔진 비교, 우승자가 담긴 1200x630 다크 테마 카드 생성. Reddit, X, Discord에 게시. 로컬 LLM의 Speedtest."
+  },
   "feat13_t": {"en": "Agent-Ready API", "fr": "API Agent-Ready", "de": "Agent-Ready API", "es": "API Agent-Ready", "it": "API Agent-Ready", "pt": "API Agent-Ready", "zh": "智能体就绪API", "ja": "エージェント対応API", "ko": "에이전트 대응 API"},
   "feat13_d": {
     "en": "Built for humans. Ready for AI agents. REST API with JSON endpoints, Prometheus metrics, diagnostic decision trees, and inference activity signals. Give your AI agent a URL and let it self-monitor.",
@@ -1304,6 +1316,11 @@
           <div class="feature-icon">&#x1F310;</div>
           <h3>{{ tr("feat12_t") }}</h3>
           <p>{{ tr("feat12_d") }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F3B4;</div>
+          <h3>{{ tr("feat14_t") }}</h3>
+          <p>{{ tr("feat14_d") }}</p>
         </div>
         <div class="feature-card feature-card-agent" id="feature-agent">
           <div class="feature-icon">&#x1F916;</div>

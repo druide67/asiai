@@ -46,6 +46,12 @@ uvx asiai detect           # Run without installing (requires uv)
 pip install asiai           # Standard pip install
 ```
 
+Then benchmark and share:
+
+```bash
+asiai bench --quick --card --share    # Bench + shareable card in ~15 seconds
+```
+
 ## Commands
 
 ### `asiai detect`
@@ -232,6 +238,23 @@ asiai recommend --use-case latency             # Optimize for TTFT
 asiai recommend --model qwen2.5 --community    # Include community data
 ```
 
+### `asiai setup`
+
+Interactive setup wizard — detects hardware, engines, models, and suggests next steps.
+
+```bash
+asiai setup
+```
+
+### `asiai mcp`
+
+Start the MCP server for AI agent integration. 11 tools, 3 resources.
+
+```bash
+asiai mcp                          # stdio (Claude Code, Cursor)
+asiai mcp --transport sse          # SSE (network agents)
+```
+
 ### `asiai tui`
 
 Interactive terminal dashboard with auto-refresh. Requires `pip install asiai[tui]`.
@@ -239,6 +262,20 @@ Interactive terminal dashboard with auto-refresh. Requires `pip install asiai[tu
 ```bash
 asiai tui
 ```
+
+## Benchmark Card — share your results
+
+Generate a shareable benchmark card image with one flag:
+
+```bash
+asiai bench --card                    # SVG saved locally (zero dependencies)
+asiai bench --card --share            # SVG + PNG via community API
+asiai bench --quick --card --share    # Quick bench + card + share
+```
+
+A **1200x630 dark-themed card** with your model, chip, engine comparison bar chart, winner highlight, and metric chips. Optimized for Reddit, X, Discord, and GitHub READMEs.
+
+Every shared card includes asiai branding — the [Speedtest.net model](https://www.speedtest.net) for local LLM inference.
 
 ## Supported engines
 
@@ -348,7 +385,8 @@ Optional extras:
 | **v0.6** | Multi-service LaunchAgent (`daemon start web`), daemon status/logs/stop --all | **Done** |
 | **v0.7** | Alert webhooks, LM Studio VRAM, Ollama config in doctor | **Done** |
 | **v1.0** | Community Benchmark DB, smart recommendations, Exo engine, leaderboard | **Done** |
-| v1.1 | HuggingFace model discovery (`--discover`), leaderboard web page | Planned |
+| **v1.0.1** | MCP server (11 tools), benchmark card, `--quick` mode, setup wizard, agent integration | **Done** |
+| v1.1 | Fleet mode (multi-Mac), notifications macOS, MCP prompts, VRAM predictor | Planned |
 
 ## License
 

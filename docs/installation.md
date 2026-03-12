@@ -1,22 +1,37 @@
 # Installation
 
-## Homebrew (recommended)
+## pipx (recommended)
+
+```bash
+pipx install asiai
+```
+
+## Homebrew
 
 ```bash
 brew tap druide67/tap
 brew install asiai
 ```
 
-## pip / pipx
+## pip
 
 ```bash
 pip install asiai
 ```
 
-Or with pipx for isolated install:
+## Try without installing
 
 ```bash
-pipx install asiai
+uvx asiai detect           # Requires uv
+```
+
+## Optional extras
+
+```bash
+pip install "asiai[web]"   # Web dashboard (FastAPI + charts)
+pip install "asiai[tui]"   # Terminal dashboard (Textual)
+pip install "asiai[mcp]"   # MCP server for AI agents
+pip install "asiai[all]"   # Web + TUI + MCP
 ```
 
 ## From source
@@ -24,24 +39,13 @@ pipx install asiai
 ```bash
 git clone https://github.com/druide67/asiai.git
 cd asiai
-pip install -e .
-```
-
-### Development install
-
-```bash
 pip install -e ".[dev]"
-```
-
-### With TUI dashboard
-
-```bash
-pip install -e ".[tui]"
 ```
 
 ## Verify installation
 
 ```bash
 asiai --version
-asiai detect
+asiai setup                # Interactive wizard
+asiai detect               # Or detect engines directly
 ```

@@ -550,7 +550,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     # Benchmark card generation
     if getattr(args, "card", False) and bench_run.results:
-        from asiai.benchmark.card import generate_card_svg, save_card
+        from asiai.benchmark.card import (
+            generate_card_svg,
+            get_share_url,
+            save_card,
+        )
         from asiai.display.formatters import dim, green
 
         first_result = bench_run.results[0]
@@ -566,9 +570,23 @@ def cmd_bench(args: argparse.Namespace) -> int:
             png_path = download_card_png(submission_id)
             if png_path:
                 print(f"  {green('✓')} PNG card: {png_path}")
-                print(f"  {dim('Share URL: https://asiai.dev/card/' + submission_id)}")
+                share_url = get_share_url(submission_id)
+                print(f"  {dim('Share URL: ' + share_url)}")
             else:
                 print(f"  {dim('⚠ PNG download failed (SVG available locally)')}")
+        else:
+            print(f"  {dim('Tip: add --share to get a PNG + shareable URL')}")
+
+        # S2: open card on macOS
+        try:
+            card_to_open = png_path if submission_id and "png_path" in dir() and png_path else svg_path
+            subprocess.Popen(
+                ["open", card_to_open],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            pass
 
     return 0
 

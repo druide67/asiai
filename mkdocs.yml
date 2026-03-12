@@ -41,8 +41,11 @@ nav:
       - monitor: commands/monitor.md
       - doctor: commands/doctor.md
       - daemon: commands/daemon.md
+      - setup: commands/setup.md
+      - version: commands/version.md
       - tui: commands/tui.md
       - web: commands/web.md
+      - mcp: commands/mcp.md
       - leaderboard: commands/leaderboard.md
       - compare: commands/compare.md
       - recommend: commands/recommend.md
@@ -53,6 +56,7 @@ nav:
       - llama.cpp: engines/llamacpp.md
       - vllm-mlx: engines/vllm-mlx.md
       - Exo: engines/exo.md
+  - Benchmark Card: benchmark-card.md
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md
   - Benchmark Best Practices: benchmark-best-practices.md

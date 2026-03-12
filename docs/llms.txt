@@ -8,14 +8,14 @@ asiai is designed for both human operators and AI agents managing local LLM infr
 
 - [Getting Started](https://asiai.dev/getting-started/): Installation, first benchmark, basic usage
 - [Agent Integration Guide](https://asiai.dev/agent/): API reference, metric thresholds, decision trees, and example code for AI agents
-- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, bench, models, monitor, doctor, daemon, web, leaderboard, compare, recommend)
+- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, bench, models, monitor, doctor, daemon, setup, version, web, tui, mcp, leaderboard, compare, recommend)
 - [Metrics Specification](https://asiai.dev/metrics-spec/): Detailed definitions of all 8 benchmark metrics (tok/s, TTFT, power, efficiency, stability, VRAM, thermal, context)
 - [Methodology](https://asiai.dev/methodology/): MLPerf/SPEC-inspired methodology (warmup, median, greedy decoding, cooldown, CI 95%)
 - [Benchmark Best Practices](https://asiai.dev/benchmark-best-practices/): How to get reproducible results
 
 ## MCP Server
 
-asiai implements a Model Context Protocol (MCP) server with 9 tools and 3 resources. Install with `pip install "asiai[mcp]"` and configure as `asiai mcp` in your MCP client. Tools: check_inference_health, get_inference_snapshot, list_models, detect_engines, run_benchmark, get_recommendations, diagnose, get_metrics_history, get_benchmark_history. Resources: asiai://status, asiai://models, asiai://system.
+asiai implements a Model Context Protocol (MCP) server with 11 tools and 3 resources. Install with `pip install "asiai[mcp]"` and configure as `asiai mcp` in your MCP client. Tools: check_inference_health, get_inference_snapshot, list_models, detect_engines, run_benchmark, get_recommendations, diagnose, get_metrics_history, get_benchmark_history, refresh_engines, compare_engines. Resources: asiai://status, asiai://models, asiai://system.
 
 ## REST API
 
@@ -38,4 +38,5 @@ asiai implements a Model Context Protocol (MCP) server with 9 tools and 3 resour
 
 - [Community Leaderboard](https://asiai.dev/leaderboard/): Anonymous benchmark sharing and comparison across Apple Silicon chips
 - [Web Dashboard](https://asiai.dev/commands/web/): Real-time monitoring dashboard with live charts (htmx + ApexCharts)
-- [Installation](https://asiai.dev/installation/): Homebrew tap, pip, pipx options
+- [Benchmark Card](https://asiai.dev/benchmark-card/): Shareable 1200x630 benchmark card (`asiai bench --card`) for Reddit, X, Discord
+- [Installation](https://asiai.dev/installation/): Homebrew tap, pip, pipx, uvx options

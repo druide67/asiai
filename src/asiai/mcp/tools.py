@@ -248,6 +248,7 @@ async def run_benchmark(
     prompts: str = "",
     runs: int = 3,
     context_size: str = "",
+    card: bool = False,
 ) -> dict:
     """Run a performance benchmark on local LLM inference engines.
 
@@ -262,10 +263,13 @@ async def run_benchmark(
                  Empty = all standard prompts.
         runs: Number of runs per prompt for variance measurement (1-10, default 3).
         context_size: Context fill size for stress testing (e.g. "64k", "128k"). Empty = standard.
+        card: Generate a shareable benchmark card (SVG image saved on the MCP server
+              filesystem). The returned card_path is local to the server machine.
 
     Returns:
         Aggregated benchmark report with per-engine tok/s, TTFT, CI 95%,
-        stability rating, and winner determination.
+        stability rating, and winner determination. If card=True, includes card_path
+        (absolute path on the server, e.g. ~/.local/share/asiai/cards/...).
     """
     from asiai.benchmark.reporter import aggregate_results
     from asiai.benchmark.runner import find_common_model
@@ -338,6 +342,16 @@ async def run_benchmark(
     report["model"] = resolved_model
     report["errors"] = bench_run.errors
     report["total_runs"] = len(bench_run.results)
+
+    # Generate benchmark card if requested
+    if card and bench_run.results:
+        from asiai.benchmark.card import generate_card_svg, save_card
+
+        first_result = bench_run.results[0]
+        hw_chip = first_result.get("hw_chip", "")
+        svg = generate_card_svg(report, hw_chip=hw_chip)
+        svg_path = save_card(svg, fmt="svg")
+        report["card_path"] = str(svg_path)
 
     return report
 
