@@ -20,6 +20,10 @@
   <a href="https://api.asiai.dev/api/v1/badge/top-speed"><img src="https://api.asiai.dev/api/v1/badge/top-speed" alt="Top Speed"></a>
 </p>
 
+<p align="center">
+  <img src="assets/asiai-demo.gif" alt="asiai bench demo" width="720">
+</p>
+
 **asiai** compares inference engines side-by-side on your Mac. Load the same model on Ollama and LM Studio, run `asiai bench`, get the numbers. No guessing, no vibes — just tok/s, TTFT, power efficiency, and stability per engine.
 
 Share your results with the community (`--share`), compare against other Apple Silicon users (`asiai compare`), and get smart engine recommendations (`asiai recommend`).
