@@ -12,49 +12,63 @@
   <rect x="0" y="0" width="1200" height="4" fill="#00d4aa"/>
 
   <!-- Logo + tagline -->
-  <rect x="50" y="42" width="30" height="30" rx="7" fill="#00d4aa" opacity="0.2"/>
-  <text x="65" y="64" text-anchor="middle" fill="#00d4aa" font-size="16" font-family="Inter,system-ui,sans-serif" font-weight="800">ai</text>
-  <text x="90" y="70" fill="#e2e8f0" font-size="28" font-family="Inter,system-ui,sans-serif" font-weight="700">asi<tspan fill="#00d4aa">ai</tspan></text>
-  <text x="200" y="70" fill="#718096" font-size="14" font-family="Inter,system-ui,sans-serif">The Speedtest for local LLMs</text>
+  <g transform="translate(38, 32) scale(0.22)">
+    <circle cx="100" cy="100" r="90" fill="#0f0f23"/>
+    <circle cx="100" cy="100" r="86" fill="none" stroke="#00d4aa" stroke-width="0.5" opacity="0.15"/>
+    <line x1="30.4" y1="148.8" x2="43.5" y2="139.6" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.3"/>
+    <line x1="15.5" y1="109.1" x2="31.4" y2="107.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.37"/>
+    <line x1="21.6" y1="67.2" x2="36.3" y2="73.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.44"/>
+    <line x1="47.1" y1="33.4" x2="57.1" y2="46.0" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.51"/>
+    <line x1="85.8" y1="16.2" x2="88.5" y2="32.0" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.58"/>
+    <line x1="128.0" y1="19.7" x2="122.7" y2="34.9" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.65"/>
+    <line x1="163.2" y1="43.2" x2="151.3" y2="53.9" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.72"/>
+    <line x1="182.8" y1="80.8" x2="167.2" y2="84.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.78"/>
+    <line x1="181.8" y1="123.1" x2="166.4" y2="118.8" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M136.8,63.2 L101.98,101.98 L98.02,98.02 Z" fill="#00d4aa"/>
+    <circle cx="100" cy="100" r="3.5" fill="#00d4aa"/>
+  </g>
+  <text x="86" y="70" fill="#e2e8f0" font-size="28" font-family="Inter,system-ui,sans-serif" font-weight="700">asi<tspan fill="#00d4aa">ai</tspan></text>
+  <text x="194" y="70" fill="#718096" font-size="14" font-family="Inter,system-ui,sans-serif">The Speedtest for local LLMs</text>
 
   <!-- Hardware badge -->
-  <rect x="1026" y="48" width="114" height="30" rx="15" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>
-  <text x="1083" y="68" text-anchor="middle" fill="#e2e8f0" font-size="13" font-family="Inter,system-ui,sans-serif" font-weight="500">Apple M4 Pro</text>
+  <rect x="1064" y="46" width="76" height="32" rx="16" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>
+  <text x="1102" y="67" text-anchor="middle" fill="#e2e8f0" font-size="14" font-family="Inter,system-ui,sans-serif" font-weight="500">M4 Pro</text>
 
   <!-- Model name -->
-  <text x="60" y="140" fill="#e2e8f0" font-size="24" font-family="Inter,system-ui,sans-serif" font-weight="600">qwen3.5:35b-a3b</text>
+  <text x="60" y="140" fill="#e2e8f0" font-size="26" font-family="Inter,system-ui,sans-serif" font-weight="700">Qwen 3.5</text>
 
-  <!-- Terminal frame -->
-  <rect x="40" y="170" width="1120" height="380" rx="8" fill="#1a202c" stroke="#2d3748" stroke-width="1"/>
+  <!-- Terminal frame (dynamic height: 350px) -->
+  <rect x="40" y="170" width="1120" height="350" rx="8" fill="#1a202c" stroke="#2d3748" stroke-width="1"/>
   <circle cx="65" cy="190" r="5" fill="#fc5c65"/>
   <circle cx="85" cy="190" r="5" fill="#fed330"/>
   <circle cx="105" cy="190" r="5" fill="#26de81"/>
   <text x="130" y="195" fill="#718096" font-size="12" font-family="Menlo,Monaco,monospace">asiai bench</text>
 
-  <!-- Column headers -->
-  <text x="510" y="230" text-anchor="end" fill="#a0aec0" font-size="12" font-family="Menlo,Monaco,monospace">Engine</text>
-  <text x="520" y="230" fill="#a0aec0" font-size="12" font-family="Menlo,Monaco,monospace">tok/s</text>
-
   <!-- Bars -->
-  <text x="510" y="269" text-anchor="end" fill="#e2e8f0" font-size="15" font-family="Menlo,Monaco,monospace">lmstudio</text>
-  <rect x="520" y="245" width="580" height="36" rx="4" fill="#00d4aa" opacity="0.9"/>
-  <text x="1108" y="269" fill="#e2e8f0" font-size="14" font-family="Menlo,Monaco,monospace">72.6 tok/s</text>
-  <text x="510" y="319" text-anchor="end" fill="#e2e8f0" font-size="15" font-family="Menlo,Monaco,monospace">ollama</text>
-  <rect x="520" y="295" width="242" height="36" rx="4" fill="#4a5568" opacity="0.9"/>
-  <text x="770" y="319" fill="#e2e8f0" font-size="14" font-family="Menlo,Monaco,monospace">30.4 tok/s</text>
+  <text x="466" y="251" text-anchor="end" fill="#e2e8f0" font-size="15" font-family="Menlo,Monaco,monospace">lmstudio</text>
+  <rect x="480" y="225" width="520" height="38" rx="4" fill="#00d4aa" opacity="0.9"/>
+  <text x="1010" y="251" fill="#e2e8f0" font-size="14" font-family="Menlo,Monaco,monospace">72.6 tok/s</text>
+  <text x="466" y="303" text-anchor="end" fill="#e2e8f0" font-size="15" font-family="Menlo,Monaco,monospace">ollama</text>
+  <rect x="480" y="277" width="217" height="38" rx="4" fill="#4a5568" opacity="0.9"/>
+  <text x="707" y="303" fill="#e2e8f0" font-size="14" font-family="Menlo,Monaco,monospace">30.4 tok/s</text>
 
-  <!-- Winner -->
-  <text x="60" y="500" fill="#00d4aa" font-size="16" font-family="Inter,system-ui,sans-serif" font-weight="600">Winner: lmstudio (2.4x faster)</text>
+  <!-- Hero number -->
+  <text x="330" y="379" text-anchor="middle" fill="#00d4aa" font-size="52" font-family="Inter,system-ui,sans-serif" font-weight="800">2.4×</text>
+  <text x="330" y="407" text-anchor="middle" fill="#718096" font-size="15" font-family="Inter,system-ui,sans-serif">lmstudio wins</text>
 
   <!-- Metric chips -->
-  <rect x="60" y="540" width="85" height="28" rx="14" fill="#2d3748"/>
-  <text x="102" y="559" text-anchor="middle" fill="#a0aec0" font-size="12" font-family="Inter,system-ui,sans-serif">72.6 tok/s</text>
-  <rect x="155" y="540" width="85" height="28" rx="14" fill="#2d3748"/>
-  <text x="197" y="559" text-anchor="middle" fill="#a0aec0" font-size="12" font-family="Inter,system-ui,sans-serif">280ms TTFT</text>
-  <rect x="250" y="540" width="59" height="28" rx="14" fill="#2d3748"/>
-  <text x="279" y="559" text-anchor="middle" fill="#a0aec0" font-size="12" font-family="Inter,system-ui,sans-serif">stable</text>
+  <rect x="60" y="439" width="94" height="30" rx="15" fill="#2d3748"/>
+  <text x="107" y="459" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="Inter,system-ui,sans-serif">72.6 tok/s</text>
+  <rect x="164" y="439" width="94" height="30" rx="15" fill="#2d3748"/>
+  <text x="211" y="459" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="Inter,system-ui,sans-serif">180ms TTFT</text>
+  <rect x="268" y="439" width="65" height="30" rx="15" fill="#2d3748"/>
+  <text x="300" y="459" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="Inter,system-ui,sans-serif">stable</text>
+  <rect x="343" y="439" width="101" height="30" rx="15" fill="#2d3748"/>
+  <text x="393" y="459" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="Inter,system-ui,sans-serif">4.1 GB VRAM</text>
+  <rect x="454" y="439" width="130" height="30" rx="15" fill="#2d3748"/>
+  <text x="519" y="459" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="Inter,system-ui,sans-serif">3 runs · median</text>
 
   <!-- Footer -->
-  <rect x="1040" y="585" width="100" height="28" rx="14" fill="#1a202c" stroke="#00d4aa" stroke-width="1" opacity="0.8"/>
-  <text x="1090" y="604" text-anchor="middle" fill="#00d4aa" font-size="13" font-family="Inter,system-ui,sans-serif" font-weight="500">asiai.dev</text>
+  <rect x="1040" y="530" width="100" height="28" rx="14" fill="#1a202c" stroke="#00d4aa" stroke-width="1" opacity="0.8"/>
+  <text x="1090" y="549" text-anchor="middle" fill="#00d4aa" font-size="13" font-family="Inter,system-ui,sans-serif" font-weight="500">asiai.dev</text>
 </svg>
