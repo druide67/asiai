@@ -259,7 +259,9 @@ def generate_card_svg(
             metric_winners["ttft"] = b0["name"] if b0["ttft_ms"] <= b1["ttft_ms"] else b1["name"]
         # VRAM: lower is better
         if b0["vram_bytes"] > 0 and b1["vram_bytes"] > 0:
-            metric_winners["vram"] = b0["name"] if b0["vram_bytes"] <= b1["vram_bytes"] else b1["name"]
+            metric_winners["vram"] = (
+                b0["name"] if b0["vram_bytes"] <= b1["vram_bytes"] else b1["name"]
+            )
         # Power efficiency: higher is better
         if power_data:
             eff0 = power_data.get(b0["name"], {}).get("avg_eff", 0)

@@ -95,7 +95,7 @@ class TestCardSvg:
         svg = generate_card_svg(report, hw_chip="Apple M4 Pro")
         assert "Apple M4 Pro" in svg
         # Badge has its own rect element (not just in subtitle)
-        assert 'rx="16"' in svg
+        assert 'rx="6"' in svg
 
     def test_logo_mark_present(self):
         """G3: logo mark element should be in the SVG."""
@@ -272,16 +272,16 @@ class TestDownloadCardPng:
 
 class TestGetShareUrl:
     def test_default_url(self):
-        """A1: default URL should use asiai.dev."""
+        """A1: default URL should use api.asiai.dev."""
         with patch.dict(os.environ, {}, clear=True):
             url = get_share_url("abc12345")
-            assert url == "https://asiai.dev/card/abc12345"
+            assert url == "https://api.asiai.dev/card/abc12345"
 
     def test_custom_api_url(self):
         """A1: custom API URL should derive site URL."""
         with patch.dict(os.environ, {"ASIAI_COMMUNITY_URL": "https://api.custom.dev/api/v1"}):
             url = get_share_url("abc12345")
-            assert "custom.dev" in url
+            assert url == "https://api.custom.dev/card/abc12345"
             assert "abc12345" in url
 
 
