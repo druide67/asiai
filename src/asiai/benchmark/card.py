@@ -192,13 +192,13 @@ def generate_card_svg(
             hero_y = bars_end_y + 32
             hero_svg = (
                 f'  <text x="80" y="{hero_y}" '
-                f'fill="#00d4aa" font-size="60" '
+                f'fill="#00d4aa" font-size="72" '
                 f'font-family="{_SANS}" font-weight="800">{_escape(delta_display)}</text>\n'
-                f'  <text x="80" y="{hero_y + 26}" '
+                f'  <text x="80" y="{hero_y + 28}" '
                 f'fill="#718096" font-size="15" '
                 f'font-family="{_SANS}">{_escape(winner["name"])} wins</text>'
             )
-            hero_end_y = hero_y + 30
+            hero_end_y = hero_y + 32
     elif bars:
         hero_y = bars_end_y + 32
         hero_svg = (
