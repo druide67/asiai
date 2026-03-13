@@ -28,10 +28,18 @@ _FRAME_RIGHT = 1140  # 40 + 1100
 def generate_card_svg(
     report: dict[str, Any],
     hw_chip: str = "",
+    model_quantization: str = "",
+    ram_gb: int = 0,
+    gpu_cores: int = 0,
+    context_size: int = 0,
+    engine_versions: dict[str, str] | None = None,
+    power_data: dict[str, dict] | None = None,
+    engine_quants: dict[str, str] | None = None,
 ) -> str:
     """Generate an SVG benchmark card (1200x630) from aggregated results.
 
     Design: dark theme, terminal-inspired, asiai branding.
+    v2: per-engine chips, insight line, left-aligned hero, bigger logo.
     """
     model = _format_model_name(report.get("model", "Unknown"))
     engines = report.get("engines", {})
@@ -46,6 +54,9 @@ def generate_card_svg(
         stability = data.get("stability", "")
         vram = data.get("vram_bytes", 0)
         runs = data.get("runs_count", 0)
+        quant = ""
+        if engine_quants and eng_name in engine_quants:
+            quant = engine_quants[eng_name]
         bars.append({
             "name": eng_name,
             "tok_s": tok_s,
@@ -53,6 +64,7 @@ def generate_card_svg(
             "stability": stability,
             "vram_bytes": vram,
             "runs_count": runs,
+            "quant": quant,
         })
         if tok_s > max_tok:
             max_tok = tok_s
@@ -60,12 +72,71 @@ def generate_card_svg(
     # Sort by tok/s descending
     bars.sort(key=lambda b: b["tok_s"], reverse=True)
 
+    # --- Hardware badges (top-right, 3 separate pills) --- [Change #1]
+    hw_badge = ""
+    if hw_chip:
+        hw_pills: list[str] = [_escape(hw_chip)]
+        if gpu_cores > 0:
+            hw_pills.append(f"{gpu_cores}c GPU")
+        if ram_gb > 0:
+            hw_pills.append(f"{ram_gb} GB")
+        badge_elements = []
+        bx = 1140
+        for pill_text in reversed(hw_pills):
+            pw = int(len(pill_text) * 7.5) + 24
+            bx -= pw
+            badge_elements.append(
+                f'  <rect x="{bx}" y="40" width="{pw}" height="30" '
+                f'rx="6" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>\n'
+                f'  <text x="{bx + pw // 2}" y="60" text-anchor="middle" '
+                f'fill="#e2e8f0" font-size="13" '
+                f'font-family="{_SANS}" font-weight="500">{pill_text}</text>'
+            )
+            bx -= 8
+        hw_badge = "\n".join(reversed(badge_elements))
+
+    # --- Specs banner (context size only — quant moved per-engine) ---
+    specs_parts: list[str] = []
+    if model_quantization and not engine_quants:
+        # Fallback: global quant only if no per-engine quants
+        specs_parts.append(model_quantization)
+    if context_size > 0:
+        if context_size >= 1024:
+            specs_parts.append(f"{context_size // 1024}K ctx")
+        else:
+            specs_parts.append(f"{context_size} ctx")
+
+    # Specs chips inline with model name (right of it) — no separate banner line
+    specs_svg = ""
+    if specs_parts:
+        # Estimate model name width (26px bold Inter ≈ 15px per char)
+        model_text_w = int(len(model) * 15) + 60  # x=60 start + text width
+        spec_elements = []
+        spec_x = model_text_w + 16
+        for spec_text in specs_parts:
+            text_w = int(len(spec_text) * 7) + 18
+            spec_elements.append(
+                f'  <rect x="{spec_x}" y="120" '
+                f'width="{text_w}" height="22" '
+                f'rx="6" fill="#2d3748"/>'
+            )
+            spec_elements.append(
+                f'  <text x="{spec_x + text_w // 2}" '
+                f'y="135" text-anchor="middle" '
+                f'fill="#a0aec0" font-size="12" '
+                f'font-family="{_SANS}">'
+                f'{_escape(spec_text)}</text>'
+            )
+            spec_x += text_w + 8
+        specs_svg = "\n".join(spec_elements)
+    frame_top = 170  # No more vertical shift for specs
+
     # --- Layout constants ---
     bar_x = 480
     bar_max_width = 520
     bar_height = 38
     bar_gap = 14
-    bar_start_y = 225
+    bar_start_y = frame_top + 55
     num_bars = min(len(bars), 4)
 
     # --- Bar chart ---
@@ -93,14 +164,12 @@ def generate_card_svg(
         label_width = len(label_text) * 8.5
         label_outside_x = bar_x + width + 10
         if label_outside_x + label_width > _FRAME_RIGHT:
-            # Inside bar (right-aligned, dark text)
             bar_elements.append(
                 f'  <text x="{bar_x + width - 10}" y="{y + 26}" '
                 f'text-anchor="end" fill="#0f1117" font-size="14" '
                 f'font-weight="600" font-family="{_MONO}">{label_text}</text>'
             )
         else:
-            # Outside bar
             bar_elements.append(
                 f'  <text x="{label_outside_x}" y="{y + 26}" '
                 f'fill="#e2e8f0" font-size="14" '
@@ -112,87 +181,170 @@ def generate_card_svg(
     # --- Dynamic positions based on bar count ---
     bars_end_y = bar_start_y + num_bars * (bar_height + bar_gap)
 
-    # --- Hero number (the "2.4x" wow factor) ---
+    # --- Hero number (left-aligned, tight to bars) --- [Change #5 v3: 60px, +32]
     hero_svg = ""
+    hero_end_y = bars_end_y
     if winner:
         delta_raw = winner.get("tok_s_delta", "")
-        # Extract multiplier: "2.4x faster" → "2.4×"
         delta_num = delta_raw.split()[0] if delta_raw else ""
         if delta_num:
-            delta_display = delta_num.replace("x", "×")
-            hero_y = bars_end_y + 50
+            delta_display = delta_num.replace("x", "\u00d7")
+            hero_y = bars_end_y + 32
             hero_svg = (
-                f'  <text x="330" y="{hero_y}" text-anchor="middle" '
-                f'fill="#00d4aa" font-size="52" '
+                f'  <text x="80" y="{hero_y}" '
+                f'fill="#00d4aa" font-size="60" '
                 f'font-family="{_SANS}" font-weight="800">{_escape(delta_display)}</text>\n'
-                f'  <text x="330" y="{hero_y + 28}" text-anchor="middle" '
+                f'  <text x="80" y="{hero_y + 26}" '
                 f'fill="#718096" font-size="15" '
                 f'font-family="{_SANS}">{_escape(winner["name"])} wins</text>'
             )
+            hero_end_y = hero_y + 30
     elif bars:
-        # Single engine, no comparison
-        hero_y = bars_end_y + 50
+        hero_y = bars_end_y + 32
         hero_svg = (
-            f'  <text x="330" y="{hero_y}" text-anchor="middle" '
-            f'fill="#00d4aa" font-size="42" '
+            f'  <text x="80" y="{hero_y}" '
+            f'fill="#00d4aa" font-size="60" '
             f'font-family="{_SANS}" font-weight="800">'
             f'{bars[0]["tok_s"]:.1f} tok/s</text>'
         )
+        hero_end_y = hero_y + 10
 
-    # --- Metric chips (bigger, with runs info) ---
-    chips = []
-    if bars:
-        best = bars[0]
-        chips.append(f'{best["tok_s"]:.1f} tok/s')
-        if best["ttft_ms"] > 0:
-            chips.append(f'{best["ttft_ms"]:.0f}ms TTFT')
-        if best["stability"]:
-            chips.append(best["stability"])
-        if best["vram_bytes"] > 0:
-            chips.append(_format_vram(best["vram_bytes"]))
-        if best.get("runs_count", 0) > 1:
-            chips.append(f'{best["runs_count"]} runs \u00b7 median')
+    # --- Insight line (auto-generated) --- [Change #4]
+    insight_svg = ""
+    if len(bars) >= 2:
+        insights = []
+        best, second = bars[0], bars[1]
+        # TTFT comparison
+        if best["ttft_ms"] > 0 and second["ttft_ms"] > 0:
+            if second["ttft_ms"] < best["ttft_ms"]:
+                pct = int((best["ttft_ms"] - second["ttft_ms"]) / best["ttft_ms"] * 100)
+                if pct >= 10:
+                    insights.append(f'{second["name"]} {pct}% faster TTFT')
+            elif best["ttft_ms"] < second["ttft_ms"]:
+                pct = int((second["ttft_ms"] - best["ttft_ms"]) / second["ttft_ms"] * 100)
+                if pct >= 10:
+                    insights.append(f'{best["name"]} {pct}% faster TTFT')
+        # VRAM comparison
+        if best["vram_bytes"] > 0 and second["vram_bytes"] > 0:
+            if best["vram_bytes"] < second["vram_bytes"]:
+                pct = int((second["vram_bytes"] - best["vram_bytes"]) / second["vram_bytes"] * 100)
+                if pct >= 10:
+                    insights.append(f'{best["name"]} {pct}% less VRAM')
+            elif second["vram_bytes"] < best["vram_bytes"]:
+                pct = int((best["vram_bytes"] - second["vram_bytes"]) / best["vram_bytes"] * 100)
+                if pct >= 10:
+                    insights.append(f'{second["name"]} {pct}% less VRAM')
+        # Stability warning
+        for b in bars[:2]:
+            if b["stability"] and b["stability"] != "stable":
+                insights.append(f'{b["name"]}: {b["stability"]}')
 
-    chip_y = (bars_end_y + 110) if winner else (bars_end_y + 80)
-    chip_elements = []
-    chip_x = 60
-    for chip_text in chips[:5]:
-        text_width = int(len(chip_text) * 7.2) + 22
-        chip_elements.append(
-            f'  <rect x="{chip_x}" y="{chip_y}" width="{text_width}" '
-            f'height="30" rx="15" fill="#2d3748"/>'
+        if insights:
+            insight_text = _escape(" \u00b7 ".join(insights[:3]))
+            insight_y = hero_end_y + 12 if winner else bars_end_y + 30
+            insight_x = 80
+            insight_svg = (
+                f'  <text x="{insight_x}" y="{insight_y}" '
+                f'fill="#a0aec0" font-size="13" font-style="italic" '
+                f'font-family="{_SANS}">{insight_text}</text>'
+            )
+
+    # --- Per-engine metric chips (top 2 engines) --- [Changes #2, #5, #8]
+    # Pre-compute per-metric winners for green highlight
+    metric_winners: dict[str, str] = {}  # metric_key → engine_name
+    if len(bars) >= 2:
+        b0, b1 = bars[0], bars[1]
+        # TTFT: lower is better
+        if b0["ttft_ms"] > 0 and b1["ttft_ms"] > 0:
+            metric_winners["ttft"] = b0["name"] if b0["ttft_ms"] <= b1["ttft_ms"] else b1["name"]
+        # VRAM: lower is better
+        if b0["vram_bytes"] > 0 and b1["vram_bytes"] > 0:
+            metric_winners["vram"] = b0["name"] if b0["vram_bytes"] <= b1["vram_bytes"] else b1["name"]
+        # Power efficiency: higher is better
+        if power_data:
+            eff0 = power_data.get(b0["name"], {}).get("avg_eff", 0)
+            eff1 = power_data.get(b1["name"], {}).get("avg_eff", 0)
+            if eff0 > 0 and eff1 > 0:
+                metric_winners["power"] = b0["name"] if eff0 >= eff1 else b1["name"]
+
+    # Tighter spacing: hero→insight 12px (done above), insight→chips 16px [Change #4]
+    chip_y_start = (hero_end_y + 16) if winner else (bars_end_y + 24)
+    if insight_svg:
+        chip_y_start += 20
+    all_chip_elements = []
+
+    for eng_idx, bar in enumerate(bars[:2]):
+        chip_y = chip_y_start + eng_idx * 36
+        # Build chips as (text, metric_key) tuples for highlight logic
+        chips: list[tuple[str, str]] = []
+        # Per-engine quant [Change #2]
+        if bar["quant"]:
+            chips.append((bar["quant"], ""))
+        if bar["ttft_ms"] > 0:
+            chips.append((f'{bar["ttft_ms"]:.0f}ms TTFT', "ttft"))
+        if bar["stability"]:
+            chips.append((bar["stability"], ""))
+        if bar["vram_bytes"] > 0:
+            chips.append((_format_vram(bar["vram_bytes"]), "vram"))
+        # Power per engine [Change #8]
+        if power_data and bar["name"] in power_data:
+            pw = power_data[bar["name"]]
+            watts = pw.get("avg_watts", 0)
+            eff = pw.get("avg_eff", 0)
+            if watts > 0 and eff > 0:
+                chips.append((f'{watts:.0f}W \u00b7 {eff:.1f} tok/s/W', "power"))
+            elif watts > 0:
+                chips.append((f'{watts:.0f}W', ""))
+        # Engine version now in label, not as chip [Change #3]
+        if bar.get("runs_count", 0) > 1:
+            chips.append((f'{bar["runs_count"]} runs', ""))
+
+        # Engine name label with version (colored for winner) [Change #3]
+        name_color = "#00d4aa" if eng_idx == 0 else "#718096"
+        chip_x = 60
+        name_raw = bar["name"]
+        if engine_versions and name_raw in engine_versions and engine_versions[name_raw]:
+            name_raw = f'{name_raw} v{engine_versions[name_raw]}'
+        name_text = _escape(name_raw)
+        name_w = int(len(name_text) * 7.5) + 16
+        all_chip_elements.append(
+            f'  <text x="{chip_x}" y="{chip_y + 19}" '
+            f'fill="{name_color}" font-size="13" font-weight="600" '
+            f'font-family="{_MONO}">{name_text}</text>'
         )
-        chip_elements.append(
-            f'  <text x="{chip_x + text_width // 2}" y="{chip_y + 20}" '
-            f'text-anchor="middle" fill="#a0aec0" font-size="13" '
-            f'font-family="{_SANS}">{_escape(chip_text)}</text>'
-        )
-        chip_x += text_width + 10
+        chip_x += name_w + 4
 
-    chips_svg = "\n".join(chip_elements)
+        for chip_text, metric_key in chips[:6]:
+            text_width = int(len(chip_text) * 7.2) + 22
+            # Green stroke if this engine wins this metric
+            is_winner = (
+                metric_key
+                and metric_key in metric_winners
+                and metric_winners[metric_key] == bar["name"]
+            )
+            stroke = ' stroke="#00d4aa" stroke-width="1"' if is_winner else ""
+            text_color = "#e2e8f0" if is_winner else "#a0aec0"
+            all_chip_elements.append(
+                f'  <rect x="{chip_x}" y="{chip_y}" width="{text_width}" '
+                f'height="28" rx="6" fill="#2d3748"{stroke}/>'
+            )
+            all_chip_elements.append(
+                f'  <text x="{chip_x + text_width // 2}" y="{chip_y + 19}" '
+                f'text-anchor="middle" fill="{text_color}" font-size="12" '
+                f'font-family="{_SANS}">{_escape(chip_text)}</text>'
+            )
+            chip_x += text_width + 6
 
-    # --- Terminal frame height (dynamic) ---
-    frame_bottom = max(chip_y + 50, 520)
-    frame_height = frame_bottom - 170
+    chips_svg = "\n".join(all_chip_elements)
 
-    # --- Hardware chip badge (top-right, prominent) ---
-    hw_badge = ""
-    if hw_chip:
-        badge_text = _escape(hw_chip)
-        badge_w = int(len(hw_chip) * 8) + 28
-        badge_x = 1140 - badge_w
-        hw_badge = (
-            f'  <rect x="{badge_x}" y="46" width="{badge_w}" height="32" '
-            f'rx="16" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>\n'
-            f'  <text x="{badge_x + badge_w // 2}" y="67" text-anchor="middle" '
-            f'fill="#e2e8f0" font-size="14" '
-            f'font-family="{_SANS}" font-weight="500">{badge_text}</text>'
-        )
+    # --- Terminal frame height (dynamic, 20px padding bottom) --- [Change #1]
+    last_chip_y = chip_y_start + min(len(bars), 2) * 36
+    frame_bottom = max(last_chip_y + 20, 520)
+    frame_height = frame_bottom - frame_top
 
-    # --- Logo + tagline ---
-    # Real speedometer logo (from assets/logo.svg, scaled to 40px)
+    # --- Logo + tagline (bigger) --- [Change #7]
     logo = (
-        '  <g transform="translate(38, 32) scale(0.22)">\n'
+        '  <g transform="translate(32, 24) scale(0.30)">\n'
         '    <circle cx="100" cy="100" r="90" fill="#0f0f23"/>\n'
         '    <circle cx="100" cy="100" r="86" fill="none" stroke="#00d4aa" stroke-width="0.5" opacity="0.15"/>\n'
         '    <line x1="30.4" y1="148.8" x2="43.5" y2="139.6" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.3"/>\n'
@@ -207,10 +359,10 @@ def generate_card_svg(
         '    <path d="M136.8,63.2 L101.98,101.98 L98.02,98.02 Z" fill="#00d4aa"/>\n'
         '    <circle cx="100" cy="100" r="3.5" fill="#00d4aa"/>\n'
         '  </g>\n'
-        f'  <text x="86" y="70" fill="#e2e8f0" font-size="28" '
+        f'  <text x="100" y="72" fill="#e2e8f0" font-size="36" '
         f'font-family="{_SANS}" font-weight="700">'
         f'asi<tspan fill="#00d4aa">ai</tspan></text>\n'
-        f'  <text x="194" y="70" fill="#718096" font-size="14" '
+        f'  <text x="230" y="72" fill="#718096" font-size="16" '
         f'font-family="{_SANS}">The Speedtest for local LLMs</text>'
     )
 
@@ -239,8 +391,12 @@ def generate_card_svg(
         '      <stop offset="0%" stop-color="#0f1117"/>',
         '      <stop offset="100%" stop-color="#1a1d2e"/>',
         "    </linearGradient>",
+        '    <clipPath id="card-clip">',
+        '      <rect width="1200" height="630" rx="12"/>',
+        "    </clipPath>",
         "  </defs>",
-        '  <rect width="1200" height="630" fill="url(#bg)"/>',
+        '  <g clip-path="url(#card-clip)">',
+        '  <rect width="1200" height="630" rx="12" fill="url(#bg)"/>',
         "",
         "  <!-- Top accent bar -->",
         '  <rect x="0" y="0" width="1200" height="4" fill="#00d4aa"/>',
@@ -251,18 +407,20 @@ def generate_card_svg(
         "  <!-- Hardware badge -->",
         hw_badge,
         "",
-        "  <!-- Model name -->",
+        "  <!-- Model name + specs -->",
         f'  <text x="60" y="140" fill="#e2e8f0" font-size="26"'
         f' font-family="{_SANS}" font-weight="700">'
         f"{esc_model}</text>",
+        specs_svg,
         "",
         f"  <!-- Terminal frame (dynamic height: {frame_height}px) -->",
-        f'  <rect x="{_FRAME_LEFT}" y="170" width="1120" height="{frame_height}"'
+        f'  <rect x="{_FRAME_LEFT}" y="{frame_top}" '
+        f'width="1120" height="{frame_height}"'
         ' rx="8" fill="#1a202c" stroke="#2d3748" stroke-width="1"/>',
-        '  <circle cx="65" cy="190" r="5" fill="#fc5c65"/>',
-        '  <circle cx="85" cy="190" r="5" fill="#fed330"/>',
-        '  <circle cx="105" cy="190" r="5" fill="#26de81"/>',
-        f'  <text x="130" y="195" fill="#718096" font-size="12"'
+        f'  <circle cx="65" cy="{frame_top + 20}" r="5" fill="#fc5c65"/>',
+        f'  <circle cx="85" cy="{frame_top + 20}" r="5" fill="#fed330"/>',
+        f'  <circle cx="105" cy="{frame_top + 20}" r="5" fill="#26de81"/>',
+        f'  <text x="130" y="{frame_top + 25}" fill="#718096" font-size="12"'
         f' font-family="{_MONO}">asiai bench</text>',
         "",
         "  <!-- Bars -->",
@@ -271,11 +429,15 @@ def generate_card_svg(
         "  <!-- Hero number -->",
         hero_svg,
         "",
-        "  <!-- Metric chips -->",
+        "  <!-- Insight -->",
+        insight_svg,
+        "",
+        "  <!-- Per-engine metric chips -->",
         chips_svg,
         "",
         "  <!-- Footer -->",
         footer,
+        "  </g>",
         "</svg>",
     ]
     return "\n".join(svg_lines)
@@ -374,10 +536,48 @@ def get_share_url(submission_id: str) -> str:
     """Get shareable card URL, respecting ASIAI_COMMUNITY_URL env var."""
     base = os.environ.get("ASIAI_COMMUNITY_URL", "").rstrip("/")
     if base:
-        site = base.replace("api.", "", 1).split("/api")[0]
+        # Strip path suffix (/api/v1) keeping scheme + host
+        site = re.sub(r"/api(/v\d+)?$", "", base)
     else:
-        site = "https://asiai.dev"
+        site = "https://api.asiai.dev"
     return f"{site}/card/{submission_id}"
+
+
+def extract_card_metadata(
+    raw_results: list[dict],
+) -> tuple[dict[str, str], dict[str, dict]]:
+    """Extract engine versions and power data from raw benchmark results.
+
+    Returns:
+        (engine_versions, power_data) dicts keyed by engine name.
+    """
+    engine_versions: dict[str, str] = {}
+    power_by_engine: dict[str, list[dict]] = {}
+
+    for r in raw_results:
+        eng = r.get("engine", "")
+        if not eng:
+            continue
+        if eng not in engine_versions:
+            engine_versions[eng] = r.get("engine_version", "")
+        watts = r.get("power_watts", 0)
+        eff = r.get("tok_per_sec_per_watt", 0)
+        if watts > 0:
+            power_by_engine.setdefault(eng, []).append(
+                {"watts": watts, "eff": eff}
+            )
+
+    power_data: dict[str, dict] = {}
+    for eng, vals in power_by_engine.items():
+        avg_w = sum(v["watts"] for v in vals) / len(vals)
+        eff_vals = [v["eff"] for v in vals if v["eff"] > 0]
+        avg_eff = sum(eff_vals) / len(eff_vals) if eff_vals else 0.0
+        power_data[eng] = {
+            "avg_watts": round(avg_w, 1),
+            "avg_eff": round(avg_eff, 2),
+        }
+
+    return engine_versions, power_data
 
 
 def _escape(text: str) -> str:
