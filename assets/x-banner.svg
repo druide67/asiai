@@ -5,157 +5,143 @@
       <stop offset="50%" stop-color="#0f1117"/>
       <stop offset="100%" stop-color="#1a1d2e"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.7" cy="0.4" r="0.45">
-      <stop offset="0%" stop-color="#00d4aa" stop-opacity="0.07"/>
+    <radialGradient id="cardGlow" cx="0.65" cy="0.45" r="0.35">
+      <stop offset="0%" stop-color="#00d4aa" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#00d4aa" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="termBg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1a202c"/>
-      <stop offset="100%" stop-color="#171b26"/>
-    </linearGradient>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e2235" stroke-width="0.5" opacity="0.4"/>
-    </pattern>
-    <filter id="noise">
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/>
-      <feColorMatrix type="saturate" values="0"/>
-      <feBlend in="SourceGraphic" mode="overlay" result="blend"/>
-      <feComposite in="blend" in2="SourceGraphic" operator="in"/>
+    <filter id="cardShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000" flood-opacity="0.55"/>
     </filter>
+    <clipPath id="cardClip">
+      <rect width="1200" height="630" rx="12"/>
+    </clipPath>
   </defs>
 
-  <!-- Background -->
+  <!-- Background: pure gradient + glow, no grid, no diagonals -->
   <rect width="1500" height="500" fill="url(#bg)"/>
-  <rect width="1500" height="500" fill="url(#grid)" opacity="0.3"/>
-  <rect width="1500" height="500" fill="url(#glow)"/>
+  <rect width="1500" height="500" fill="url(#cardGlow)"/>
 
   <!-- Top accent bar -->
   <rect x="0" y="0" width="1500" height="3" fill="#00d4aa"/>
 
-  <!-- Decorative diagonal lines -->
-  <line x1="680" y1="0" x2="730" y2="500" stroke="#00d4aa" stroke-width="0.3" opacity="0.12"/>
-  <line x1="700" y1="0" x2="750" y2="500" stroke="#00d4aa" stroke-width="0.3" opacity="0.06"/>
+  <!-- ═══════════ LEFT SIDE (vertically centered: ~90 to ~390) ═══════════ -->
 
-  <!-- ═══════════ LEFT SIDE — Repositioned high for profile photo safety ═══════════ -->
-
-  <!-- Real speedometer logo (scaled from assets/logo.svg) -->
-  <g transform="translate(40, 60) scale(0.35)">
+  <!-- Speedometer logo -->
+  <g transform="translate(50, 90) scale(0.50)">
     <circle cx="100" cy="100" r="90" fill="#0f0f23"/>
     <circle cx="100" cy="100" r="86" fill="none" stroke="#00d4aa" stroke-width="0.5" opacity="0.15"/>
     <line x1="30.4" y1="148.8" x2="43.5" y2="139.6" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.3"/>
-    <line x1="23.2" y1="136.4" x2="30.4" y2="133.0" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.19"/>
-    <line x1="18.2" y1="123.1" x2="25.9" y2="120.9" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
     <line x1="15.5" y1="109.1" x2="31.4" y2="107.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.37"/>
-    <line x1="15.2" y1="94.9" x2="23.1" y2="95.4" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.23"/>
-    <line x1="17.2" y1="80.8" x2="25.0" y2="82.6" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.25"/>
     <line x1="21.6" y1="67.2" x2="36.3" y2="73.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.44"/>
-    <line x1="28.2" y1="54.6" x2="34.9" y2="58.8" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.28"/>
-    <line x1="36.8" y1="43.2" x2="42.7" y2="48.6" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
     <line x1="47.1" y1="33.4" x2="57.1" y2="46.0" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.51"/>
-    <line x1="59.0" y1="25.5" x2="62.9" y2="32.6" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.33"/>
-    <line x1="72.0" y1="19.7" x2="74.6" y2="27.3" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.34"/>
     <line x1="85.8" y1="16.2" x2="88.5" y2="32.0" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.58"/>
-    <line x1="100.0" y1="15.0" x2="100.0" y2="23.0" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.38"/>
-    <line x1="114.2" y1="16.2" x2="112.9" y2="24.1" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.39"/>
     <line x1="128.0" y1="19.7" x2="122.7" y2="34.9" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.65"/>
-    <line x1="141.0" y1="25.5" x2="137.1" y2="32.6" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.42"/>
-    <line x1="152.9" y1="33.4" x2="147.9" y2="39.7" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.44"/>
     <line x1="163.2" y1="43.2" x2="151.3" y2="53.9" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.72"/>
-    <line x1="171.8" y1="54.6" x2="165.1" y2="58.8" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.47"/>
-    <line x1="178.4" y1="67.2" x2="171.0" y2="70.3" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.49"/>
     <line x1="182.8" y1="80.8" x2="167.2" y2="84.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.78"/>
-    <line x1="184.8" y1="94.9" x2="176.9" y2="95.4" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.52"/>
-    <line x1="184.5" y1="109.1" x2="176.6" y2="108.3" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.53"/>
     <line x1="181.8" y1="123.1" x2="166.4" y2="118.8" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>
-    <line x1="176.8" y1="136.4" x2="169.6" y2="133.0" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.56"/>
-    <line x1="169.6" y1="148.8" x2="163.1" y2="144.2" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round" opacity="0.58"/>
     <path d="M136.8,63.2 L101.98,101.98 L98.02,98.02 Z" fill="#00d4aa"/>
     <circle cx="100" cy="100" r="3.5" fill="#00d4aa"/>
   </g>
 
-  <!-- Logo text — next to speedometer -->
-  <text x="118" y="108" fill="#e2e8f0" font-size="56" font-family="'SF Pro Display',Inter,system-ui,sans-serif" font-weight="700" letter-spacing="-1.5">asi<tspan fill="#00d4aa">ai</tspan></text>
+  <!-- Logo text -->
+  <text x="160" y="150" fill="#e2e8f0" font-size="64" font-family="'SF Pro Display',Inter,system-ui,sans-serif" font-weight="700" letter-spacing="-1.5">asi<tspan fill="#00d4aa">ai</tspan></text>
 
-  <!-- Tagline — bigger -->
-  <text x="62" y="168" fill="#718096" font-size="20" font-family="'SF Pro Text',Inter,system-ui,sans-serif" font-weight="400" letter-spacing="0.5">The Speedtest for local LLMs</text>
+  <!-- Tagline -->
+  <text x="68" y="215" fill="#718096" font-size="22" font-family="'SF Pro Text',Inter,system-ui,sans-serif" font-weight="400" letter-spacing="0.5">The Speedtest for local LLMs</text>
 
-  <!-- Feature pills row — bigger text -->
-  <g transform="translate(62, 200)">
-    <rect width="100" height="30" rx="15" fill="#1a202c" stroke="#2d3748" stroke-width="0.8"/>
-    <text x="50" y="20" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="'SF Pro Text',Inter,system-ui,sans-serif">6 engines</text>
-    <rect x="110" width="148" height="30" rx="15" fill="#1a202c" stroke="#2d3748" stroke-width="0.8"/>
-    <text x="184" y="20" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="'SF Pro Text',Inter,system-ui,sans-serif">Zero dependencies</text>
-    <rect x="268" width="168" height="30" rx="15" fill="#1a202c" stroke="#2d3748" stroke-width="0.8"/>
-    <text x="352" y="20" text-anchor="middle" fill="#a0aec0" font-size="13" font-family="'SF Pro Text',Inter,system-ui,sans-serif">Apple Silicon native</text>
+  <!-- Pills row -->
+  <g transform="translate(68, 248)">
+    <rect width="180" height="32" rx="16" fill="#1a202c" stroke="#2d3748" stroke-width="0.8"/>
+    <text x="90" y="21" text-anchor="middle" fill="#a0aec0" font-size="14" font-family="'SF Pro Text',Inter,system-ui,sans-serif">Apple Silicon native</text>
+  </g>
+  <g transform="translate(260, 248)">
+    <rect width="130" height="32" rx="16" fill="#1a202c" stroke="#00d4aa" stroke-width="0.8" opacity="0.6"/>
+    <text x="65" y="21" text-anchor="middle" fill="#00d4aa" font-size="14" font-family="'SF Pro Text',Inter,system-ui,sans-serif" opacity="0.8">Open Source</text>
   </g>
 
-  <!-- CTA pill -->
-  <g transform="translate(62, 260)">
-    <rect width="220" height="34" rx="17" fill="#00d4aa" opacity="0.12" stroke="#00d4aa" stroke-width="1"/>
-    <text x="110" y="22" text-anchor="middle" fill="#00d4aa" font-size="14" font-family="'SF Mono',Menlo,Monaco,monospace" font-weight="600">pip install asiai</text>
+  <!-- CTA: pip install -->
+  <g transform="translate(68, 310)">
+    <rect width="240" height="38" rx="19" fill="#00d4aa" opacity="0.12" stroke="#00d4aa" stroke-width="1"/>
+    <text x="120" y="25" text-anchor="middle" fill="#00d4aa" font-size="15" font-family="'SF Mono',Menlo,Monaco,monospace" font-weight="600">pip install asiai</text>
+  </g>
+  <text x="320" y="335" fill="#4a5568" font-size="13" font-family="'SF Mono',Menlo,Monaco,monospace">v1.0</text>
+
+  <!-- asiai.dev pill (bottom-left) -->
+  <g transform="translate(68, 400)">
+    <rect width="104" height="28" rx="14" fill="#0f1117" stroke="#00d4aa" stroke-width="1" opacity="0.6"/>
+    <text x="52" y="19" text-anchor="middle" fill="#00d4aa" font-size="13" font-family="'SF Pro Text',Inter,system-ui,sans-serif" font-weight="500" opacity="0.7">asiai.dev</text>
   </g>
 
-  <!-- ═══════════ RIGHT SIDE — TERMINAL MOCKUP (compact 580px) ═══════════ -->
+  <!-- ═══════════ RIGHT SIDE — FLOATING CARD ═══════════ -->
 
-  <g transform="translate(840, 40)">
-    <!-- Terminal window -->
-    <rect width="600" height="420" rx="10" fill="url(#termBg)" stroke="#2d3748" stroke-width="1"/>
+  <g transform="translate(760, 55) rotate(1.5, 318, 167)" filter="url(#cardShadow)">
+    <g transform="scale(0.53)" clip-path="url(#cardClip)">
+      <!-- Card background -->
+      <rect width="1200" height="630" rx="12" fill="#0f1117"/>
 
-    <!-- Title bar -->
-    <rect width="600" height="36" rx="10" fill="#1e2233"/>
-    <rect y="26" width="600" height="10" fill="#1e2233"/>
-    <circle cx="22" cy="18" r="5.5" fill="#fc5c65" opacity="0.9"/>
-    <circle cx="42" cy="18" r="5.5" fill="#fed330" opacity="0.9"/>
-    <circle cx="62" cy="18" r="5.5" fill="#26de81" opacity="0.9"/>
-    <text x="300" y="22" text-anchor="middle" fill="#4a5568" font-size="12" font-family="'SF Mono',Menlo,Monaco,monospace">asiai bench --quick --card</text>
+      <!-- Card top accent -->
+      <rect x="0" y="0" width="1200" height="4" fill="#00d4aa"/>
 
-    <!-- Prompt line -->
-    <text x="24" y="68" fill="#00d4aa" font-size="13" font-family="'SF Mono',Menlo,Monaco,monospace">$</text>
-    <text x="42" y="68" fill="#a0aec0" font-size="13" font-family="'SF Mono',Menlo,Monaco,monospace">asiai bench --quick --card --share</text>
+      <!-- Card logo -->
+      <text x="60" y="55" fill="#e2e8f0" font-size="28" font-family="Inter,system-ui,sans-serif" font-weight="700">asi<tspan fill="#00d4aa">ai</tspan></text>
+      <text x="182" y="55" fill="#718096" font-size="13" font-family="Inter,system-ui,sans-serif">The Speedtest for local LLMs</text>
 
-    <!-- System info line -->
-    <text x="24" y="96" fill="#4a5568" font-size="11" font-family="'SF Mono',Menlo,Monaco,monospace">Mac Mini M4 Pro — 64 GB — Pressure: normal</text>
+      <!-- HW badges -->
+      <rect x="873" y="30" width="114" height="28" rx="6" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>
+      <text x="930" y="49" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="Inter,system-ui,sans-serif">Apple M4 Pro</text>
+      <rect x="995" y="30" width="76" height="28" rx="6" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>
+      <text x="1033" y="49" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="Inter,system-ui,sans-serif">20c GPU</text>
+      <rect x="1079" y="30" width="61" height="28" rx="6" fill="#2d3748" stroke="#4a5568" stroke-width="1"/>
+      <text x="1109" y="49" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="Inter,system-ui,sans-serif">64 GB</text>
 
-    <!-- Separator -->
-    <line x1="24" y1="112" x2="576" y2="112" stroke="#2d3748" stroke-width="0.5"/>
+      <!-- Model name -->
+      <text x="60" y="110" fill="#e2e8f0" font-size="26" font-family="Inter,system-ui,sans-serif" font-weight="700">Qwen 3-coder 30B-A3B</text>
 
-    <!-- Model header -->
-    <text x="24" y="138" fill="#e2e8f0" font-size="14" font-family="'SF Mono',Menlo,Monaco,monospace" font-weight="600">Benchmark: Qwen 3.5</text>
+      <!-- Terminal frame -->
+      <rect x="40" y="135" width="1120" height="350" rx="8" fill="#1a202c"/>
+      <circle cx="65" cy="155" r="5" fill="#fc5c65"/>
+      <circle cx="85" cy="155" r="5" fill="#fed330"/>
+      <circle cx="105" cy="155" r="5" fill="#26de81"/>
+      <text x="130" y="160" fill="#718096" font-size="12" font-family="Menlo,Monaco,monospace">asiai bench</text>
 
-    <!-- Bar 1: lmstudio (winner) -->
-    <text x="30" y="174" fill="#e2e8f0" font-size="14" font-family="'SF Mono',Menlo,Monaco,monospace">lmstudio</text>
-    <rect x="140" y="158" width="370" height="26" rx="4" fill="#00d4aa" opacity="0.85"/>
-    <text x="518" y="176" fill="#e2e8f0" font-size="13" font-family="'SF Mono',Menlo,Monaco,monospace" font-weight="600">72.6 tok/s</text>
+      <!-- Bar 1: lmstudio -->
+      <text x="466" y="218" text-anchor="end" fill="#e2e8f0" font-size="15" font-family="Menlo,Monaco,monospace">lmstudio</text>
+      <rect x="480" y="195" width="520" height="36" rx="4" fill="#00d4aa" opacity="0.9"/>
+      <text x="1010" y="218" fill="#e2e8f0" font-size="14" font-family="Menlo,Monaco,monospace">102.8 tok/s</text>
 
-    <!-- Bar 2: ollama -->
-    <text x="30" y="214" fill="#e2e8f0" font-size="14" font-family="'SF Mono',Menlo,Monaco,monospace">ollama</text>
-    <rect x="140" y="198" width="155" height="26" rx="4" fill="#4a5568" opacity="0.85"/>
-    <text x="303" y="216" fill="#a0aec0" font-size="13" font-family="'SF Mono',Menlo,Monaco,monospace">30.4 tok/s</text>
+      <!-- Bar 2: ollama -->
+      <text x="466" y="268" text-anchor="end" fill="#e2e8f0" font-size="15" font-family="Menlo,Monaco,monospace">ollama</text>
+      <rect x="480" y="245" width="345" height="36" rx="4" fill="#4a5568" opacity="0.9"/>
+      <text x="835" y="268" fill="#e2e8f0" font-size="14" font-family="Menlo,Monaco,monospace">68.4 tok/s</text>
 
-    <!-- ══ HERO NUMBER ══ -->
-    <text x="300" y="280" text-anchor="middle" fill="#00d4aa" font-size="52" font-family="'SF Pro Display',Inter,system-ui,sans-serif" font-weight="800" letter-spacing="-2" opacity="0.95">2.4×</text>
-    <text x="300" y="306" text-anchor="middle" fill="#00d4aa" font-size="16" font-family="'SF Pro Text',Inter,system-ui,sans-serif" font-weight="500" opacity="0.7">faster</text>
+      <!-- Hero number -->
+      <text x="80" y="348" fill="#00d4aa" font-size="72" font-family="Inter,system-ui,sans-serif" font-weight="800">1.5x</text>
+      <text x="80" y="374" fill="#718096" font-size="15" font-family="Inter,system-ui,sans-serif">lmstudio wins</text>
 
-    <!-- Separator -->
-    <line x1="24" y1="324" x2="576" y2="324" stroke="#2d3748" stroke-width="0.5"/>
+      <!-- Insight -->
+      <text x="80" y="396" fill="#a0aec0" font-size="13" font-style="italic" font-family="Inter,system-ui,sans-serif">ollama 32% faster TTFT . lmstudio 31% less VRAM</text>
 
-    <!-- Card output -->
-    <text x="30" y="350" fill="#26de81" font-size="12" font-family="'SF Mono',Menlo,Monaco,monospace">&#x2713; Card saved: ~/.local/share/asiai/cards/bench-card.svg</text>
-    <text x="30" y="372" fill="#26de81" font-size="12" font-family="'SF Mono',Menlo,Monaco,monospace">&#x2713; Shared: asiai.dev/card/a1b2c3d4</text>
-    <text x="30" y="396" fill="#4a5568" font-size="11" font-family="'SF Mono',Menlo,Monaco,monospace">Tip: share your card on Reddit, X, or Discord!</text>
+      <!-- Chips row 1 -->
+      <text x="60" y="440" fill="#00d4aa" font-size="13" font-weight="600" font-family="Menlo,Monaco,monospace">lmstudio v0.4.5</text>
+      <rect x="192" y="422" width="65" height="26" rx="6" fill="#2d3748"/>
+      <text x="224" y="440" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="Inter,system-ui,sans-serif">MLX Q4</text>
+      <rect x="263" y="422" width="90" height="26" rx="6" fill="#2d3748"/>
+      <text x="308" y="440" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="Inter,system-ui,sans-serif">253ms TTFT</text>
+      <rect x="359" y="422" width="90" height="26" rx="6" fill="#2d3748" stroke="#00d4aa" stroke-width="1"/>
+      <text x="404" y="440" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="Inter,system-ui,sans-serif">16 GB VRAM</text>
+
+      <!-- Chips row 2 -->
+      <text x="60" y="474" fill="#718096" font-size="13" font-weight="600" font-family="Menlo,Monaco,monospace">ollama v0.9.2</text>
+      <rect x="177" y="456" width="100" height="26" rx="6" fill="#2d3748"/>
+      <text x="227" y="474" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="Inter,system-ui,sans-serif">GGUF Q4_K_M</text>
+      <rect x="283" y="456" width="90" height="26" rx="6" fill="#2d3748" stroke="#00d4aa" stroke-width="1"/>
+      <text x="328" y="474" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="Inter,system-ui,sans-serif">170ms TTFT</text>
+      <rect x="379" y="456" width="106" height="26" rx="6" fill="#2d3748"/>
+      <text x="432" y="474" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="Inter,system-ui,sans-serif">23.5 GB VRAM</text>
+
+      <!-- Footer -->
+      <rect x="1040" y="560" width="100" height="28" rx="14" fill="#1a202c" stroke="#00d4aa" stroke-width="1" opacity="0.8"/>
+      <text x="1090" y="579" text-anchor="middle" fill="#00d4aa" font-size="13" font-family="Inter,system-ui,sans-serif" font-weight="500">asiai.dev</text>
+    </g>
   </g>
-
-  <!-- ═══════════ BOTTOM ELEMENTS — Safe zone only ═══════════ -->
-
-  <!-- asiai.dev pill (bottom-right, safe zone) -->
-  <g transform="translate(1340, 458)">
-    <rect width="104" height="30" rx="15" fill="#0f1117" stroke="#00d4aa" stroke-width="1" opacity="0.8"/>
-    <text x="52" y="20" text-anchor="middle" fill="#00d4aa" font-size="14" font-family="'SF Pro Text',Inter,system-ui,sans-serif" font-weight="500">asiai.dev</text>
-  </g>
-
-  <!-- Bottom accent line -->
-  <rect x="0" y="497" width="1500" height="3" fill="#00d4aa" opacity="0.3"/>
-
-  <!-- Noise overlay -->
-  <rect width="1500" height="500" fill="transparent" filter="url(#noise)" opacity="0.02"/>
 </svg>
