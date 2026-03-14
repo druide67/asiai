@@ -46,6 +46,7 @@ docs = ["mkdocs-material"]
 
 [project.urls]
 Homepage = "https://github.com/druide67/asiai"
+Documentation = "https://asiai.dev"
 Repository = "https://github.com/druide67/asiai"
 Issues = "https://github.com/druide67/asiai/issues"
 Changelog = "https://github.com/druide67/asiai/blob/main/CHANGELOG.md"
