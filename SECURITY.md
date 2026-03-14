@@ -2,7 +2,14 @@
 
 ## Scope
 
-asiai is a local-only CLI tool. It makes **no network calls** except to inference engines running on localhost. It stores no secrets, tokens, or credentials.
+asiai is a local-first CLI tool. All core operations communicate only with inference engines running on localhost. It stores no secrets, tokens, or credentials.
+
+**Optional external calls** (require explicit user action):
+- `asiai bench --share` submits anonymous benchmark data to `api.asiai.dev`
+- `asiai mcp --register` registers an anonymous agent to `api.asiai.dev`
+- `asiai leaderboard` / `asiai compare` read public data from `api.asiai.dev`
+
+No data is sent without explicit user action. All other operations are strictly local.
 
 ## Supported Versions
 
@@ -30,5 +37,5 @@ If you discover a security issue, please report it responsibly:
 - All subprocess calls use list arguments (no `shell=True`)
 - All SQL queries use parameterized placeholders (no f-string interpolation)
 - HTTP response bodies are bounded (10 MB max)
-- No telemetry, no external network calls
+- No telemetry. External calls to `api.asiai.dev` only with explicit opt-in (`--share`, `--register`, `leaderboard`, `compare`)
 

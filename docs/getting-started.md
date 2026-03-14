@@ -37,6 +37,22 @@ Then benchmark:
 asiai bench -m qwen3.5 --runs 3 --power
 ```
 
+Example output:
+
+```
+  Mac Mini M4 Pro — Apple M4 Pro  RAM: 64.0 GB (42% used)  Pressure: normal
+
+Benchmark: qwen3.5
+
+  Engine       tok/s (±stddev)    Tokens   Duration     TTFT       VRAM    Thermal
+  ────────── ───────────────── ───────── ────────── ──────── ────────── ──────────
+  lmstudio    72.6 ± 0.0 (stable)   435    6.20s    0.28s        —    nominal
+  ollama      30.4 ± 0.1 (stable)   448   15.28s    0.25s   26.0 GB   nominal
+
+  Winner: lmstudio (2.4x faster)
+  Power: lmstudio 13.2W (5.52 tok/s/W) — ollama 16.0W (1.89 tok/s/W)
+```
+
 ## What it measures
 
 | Metric | Description |

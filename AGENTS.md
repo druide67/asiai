@@ -101,7 +101,7 @@ ruff format src/ tests/
 
 ### Security
 
-- **Never add telemetry**: no network calls except to local engines
+- **Never add telemetry**: no network calls except to local engines and opt-in community features (`--share`, `--register`, `leaderboard`, `compare`) which communicate with `api.asiai.dev`
 - **No secrets**: the tool does not manage tokens/keys
 - **subprocess**: always use list of args (no `shell=True`)
 - **SQLite**: use bound parameters (no f-strings in queries)

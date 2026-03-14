@@ -704,7 +704,7 @@ A: No. GPU observability uses `ioreg` (no privileges). Power metrics (`--power` 
 A: `/api/status` responds in < 500ms (cached 10s). `/api/snapshot` takes 1–3s (collects live data from all engines).
 
 **Q: Can I run asiai on Linux?**
-A: No. asiai is macOS Apple Silicon only. It uses `sysctl`, `vm_stat`, `ioreg`, and `IOReport` — all macOS-specific APIs.
+A: No. asiai is macOS Apple Silicon only. It uses `sysctl`, `vm_stat`, `ioreg`, and `launchd` — all macOS-specific APIs.
 
 **Q: How do I monitor multiple Macs?**
 A: Run `asiai daemon start web --host 0.0.0.0` on each Mac. Scrape `/api/metrics` with Prometheus. Visualize in Grafana.

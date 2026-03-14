@@ -29,6 +29,11 @@ jobs:
           ruff check src/ tests/
           ruff format --check src/ tests/
 
+      - name: Security lint
+        run: |
+          pip install bandit
+          bandit -r src/asiai/ -ll -q
+
       - name: Test
         run: pytest -v --cov=asiai --cov-report=xml
 
