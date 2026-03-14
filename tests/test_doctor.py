@@ -534,6 +534,7 @@ class TestBinaryOrPort:
 
     def test_lmstudio_no_app_but_port_reachable(self):
         """LM Studio app not found but server responding = OK."""
+
         def mock_get(url, timeout=5):
             if "/v1/models" in url:
                 return {"data": [{"id": "model-1"}]}, {"x-lm-studio-version": "0.5.0"}

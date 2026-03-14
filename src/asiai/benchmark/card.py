@@ -57,15 +57,17 @@ def generate_card_svg(
         quant = ""
         if engine_quants and eng_name in engine_quants:
             quant = engine_quants[eng_name]
-        bars.append({
-            "name": eng_name,
-            "tok_s": tok_s,
-            "ttft_ms": ttft,
-            "stability": stability,
-            "vram_bytes": vram,
-            "runs_count": runs,
-            "quant": quant,
-        })
+        bars.append(
+            {
+                "name": eng_name,
+                "tok_s": tok_s,
+                "ttft_ms": ttft,
+                "stability": stability,
+                "vram_bytes": vram,
+                "runs_count": runs,
+                "quant": quant,
+            }
+        )
         if tok_s > max_tok:
             max_tok = tok_s
 
@@ -126,16 +128,14 @@ def generate_card_svg(
         for spec_text in specs_parts:
             text_w = int(len(spec_text) * 7) + 18
             spec_elements.append(
-                f'  <rect x="{spec_x}" y="120" '
-                f'width="{text_w}" height="22" '
-                f'rx="6" fill="#2d3748"/>'
+                f'  <rect x="{spec_x}" y="120" width="{text_w}" height="22" rx="6" fill="#2d3748"/>'
             )
             spec_elements.append(
                 f'  <text x="{spec_x + text_w // 2}" '
                 f'y="135" text-anchor="middle" '
                 f'fill="#a0aec0" font-size="12" '
                 f'font-family="{_SANS}">'
-                f'{_escape(spec_text)}</text>'
+                f"{_escape(spec_text)}</text>"
             )
             spec_x += text_w + 8
         specs_svg = "\n".join(spec_elements)
@@ -170,7 +170,7 @@ def generate_card_svg(
             f'rx="4" fill="{fill}" opacity="0.9"/>'
         )
         # tok/s label — inside bar if it would overflow, outside otherwise
-        label_text = f'{bar["tok_s"]:.1f} tok/s'
+        label_text = f"{bar['tok_s']:.1f} tok/s"
         label_width = len(label_text) * 8.5
         label_outside_x = bar_x + width + 10
         if label_outside_x + label_width > _FRAME_RIGHT:
@@ -215,7 +215,7 @@ def generate_card_svg(
             f'  <text x="80" y="{hero_y}" '
             f'fill="#00d4aa" font-size="60" '
             f'font-family="{_SANS}" font-weight="800">'
-            f'{bars[0]["tok_s"]:.1f} tok/s</text>'
+            f"{bars[0]['tok_s']:.1f} tok/s</text>"
         )
         hero_end_y = hero_y + 10
 
@@ -229,25 +229,25 @@ def generate_card_svg(
             if second["ttft_ms"] < best["ttft_ms"]:
                 pct = int((best["ttft_ms"] - second["ttft_ms"]) / best["ttft_ms"] * 100)
                 if pct >= 10:
-                    insights.append(f'{second["name"]} {pct}% faster TTFT')
+                    insights.append(f"{second['name']} {pct}% faster TTFT")
             elif best["ttft_ms"] < second["ttft_ms"]:
                 pct = int((second["ttft_ms"] - best["ttft_ms"]) / second["ttft_ms"] * 100)
                 if pct >= 10:
-                    insights.append(f'{best["name"]} {pct}% faster TTFT')
+                    insights.append(f"{best['name']} {pct}% faster TTFT")
         # VRAM comparison
         if best["vram_bytes"] > 0 and second["vram_bytes"] > 0:
             if best["vram_bytes"] < second["vram_bytes"]:
                 pct = int((second["vram_bytes"] - best["vram_bytes"]) / second["vram_bytes"] * 100)
                 if pct >= 10:
-                    insights.append(f'{best["name"]} {pct}% less VRAM')
+                    insights.append(f"{best['name']} {pct}% less VRAM")
             elif second["vram_bytes"] < best["vram_bytes"]:
                 pct = int((best["vram_bytes"] - second["vram_bytes"]) / best["vram_bytes"] * 100)
                 if pct >= 10:
-                    insights.append(f'{second["name"]} {pct}% less VRAM')
+                    insights.append(f"{second['name']} {pct}% less VRAM")
         # Stability warning
         for b in bars[:2]:
             if b["stability"] and b["stability"] != "stable":
-                insights.append(f'{b["name"]}: {b["stability"]}')
+                insights.append(f"{b['name']}: {b['stability']}")
 
         if insights:
             insight_text = _escape(" \u00b7 ".join(insights[:3]))
@@ -293,7 +293,7 @@ def generate_card_svg(
         if bar["quant"]:
             chips.append((bar["quant"], ""))
         if bar["ttft_ms"] > 0:
-            chips.append((f'{bar["ttft_ms"]:.0f}ms TTFT', "ttft"))
+            chips.append((f"{bar['ttft_ms']:.0f}ms TTFT", "ttft"))
         if bar["stability"]:
             chips.append((bar["stability"], "stability"))
         if bar["vram_bytes"] > 0:
@@ -304,19 +304,19 @@ def generate_card_svg(
             watts = pw.get("avg_watts", 0)
             eff = pw.get("avg_eff", 0)
             if watts > 0 and eff > 0:
-                chips.append((f'{watts:.0f}W \u00b7 {eff:.1f} tok/s/W', "power"))
+                chips.append((f"{watts:.0f}W \u00b7 {eff:.1f} tok/s/W", "power"))
             elif watts > 0:
-                chips.append((f'{watts:.0f}W', ""))
+                chips.append((f"{watts:.0f}W", ""))
         # Engine version now in label, not as chip [Change #3]
         if bar.get("runs_count", 0) > 1:
-            chips.append((f'{bar["runs_count"]} runs', ""))
+            chips.append((f"{bar['runs_count']} runs", ""))
 
         # Engine name label with version (colored for winner) [Change #3]
         name_color = "#00d4aa" if eng_idx == 0 else "#718096"
         chip_x = 60
         name_raw = bar["name"]
         if engine_versions and name_raw in engine_versions and engine_versions[name_raw]:
-            name_raw = f'{name_raw} v{engine_versions[name_raw]}'
+            name_raw = f"{name_raw} v{engine_versions[name_raw]}"
         name_text = _escape(name_raw)
         name_w = int(len(name_text) * 7.5) + 16
         all_chip_elements.append(
@@ -329,10 +329,7 @@ def generate_card_svg(
         for chip_text, metric_key in chips[:6]:
             text_width = int(len(chip_text) * 7.2) + 22
             # Style: red for unstable, green stroke for winner, default gray
-            is_unstable = (
-                metric_key == "stability"
-                and chip_text.lower() != "stable"
-            )
+            is_unstable = metric_key == "stability" and chip_text.lower() != "stable"
             is_winner = (
                 metric_key
                 and metric_key in metric_winners
@@ -384,7 +381,7 @@ def generate_card_svg(
         '    <line x1="181.8" y1="123.1" x2="166.4" y2="118.8" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>\n'
         '    <path d="M136.8,63.2 L101.98,101.98 L98.02,98.02 Z" fill="#00d4aa"/>\n'
         '    <circle cx="100" cy="100" r="3.5" fill="#00d4aa"/>\n'
-        '  </g>\n'
+        "  </g>\n"
         f'  <text x="100" y="72" fill="#e2e8f0" font-size="36" '
         f'font-family="{_SANS}" font-weight="700">'
         f'asi<tspan fill="#00d4aa">ai</tspan></text>\n'
@@ -408,9 +405,7 @@ def generate_card_svg(
     esc_model = _escape(model)
 
     svg_lines = [
-        '<svg xmlns="http://www.w3.org/2000/svg"'
-        ' width="1200" height="630"'
-        ' viewBox="0 0 1200 630">',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">',
         "  <!-- Background -->",
         "  <defs>",
         '    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">',
@@ -475,9 +470,7 @@ def save_card(svg: str, fmt: str = "svg", output_dir: str = "") -> str:
         fmt = "svg"
 
     if not output_dir:
-        output_dir = os.path.join(
-            os.path.expanduser("~"), ".local", "share", "asiai", "cards"
-        )
+        output_dir = os.path.join(os.path.expanduser("~"), ".local", "share", "asiai", "cards")
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -520,16 +513,12 @@ def download_card_png(
         return ""
 
     if not api_url:
-        api_url = os.environ.get(
-            "ASIAI_COMMUNITY_URL", "https://api.asiai.dev/api/v1"
-        ).rstrip("/")
+        api_url = os.environ.get("ASIAI_COMMUNITY_URL", "https://api.asiai.dev/api/v1").rstrip("/")
 
     url = f"{api_url}/bench/card/{submission_id}.png"
 
     if not output_dir:
-        output_dir = os.path.join(
-            os.path.expanduser("~"), ".local", "share", "asiai", "cards"
-        )
+        output_dir = os.path.join(os.path.expanduser("~"), ".local", "share", "asiai", "cards")
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = os.path.join(output_dir, f"bench-card-{submission_id[:8]}.png")
@@ -539,9 +528,7 @@ def download_card_png(
         with urlopen(req, timeout=10) as resp:
             content_length = resp.headers.get("Content-Length")
             if content_length and int(content_length) > _MAX_DOWNLOAD_BYTES:
-                logger.warning(
-                    "PNG too large (%s bytes), skipping download", content_length
-                )
+                logger.warning("PNG too large (%s bytes), skipping download", content_length)
                 return ""
 
             data = resp.read(_MAX_DOWNLOAD_BYTES)
@@ -594,9 +581,7 @@ def extract_card_metadata(
         watts = r.get("power_watts", 0)
         eff = r.get("tok_per_sec_per_watt", 0)
         if watts > 0:
-            power_by_engine.setdefault(eng, []).append(
-                {"watts": watts, "eff": eff}
-            )
+            power_by_engine.setdefault(eng, []).append({"watts": watts, "eff": eff})
 
     power_data: dict[str, dict] = {}
     for eng, vals in power_by_engine.items():

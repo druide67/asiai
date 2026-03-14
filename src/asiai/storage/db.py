@@ -104,9 +104,7 @@ def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
     try:
         conn.execute("DELETE FROM benchmarks WHERE ts < ?", (cutoff,))
         conn.execute("DELETE FROM models WHERE ts < ?", (cutoff,))
-        conn.execute(
-            "DELETE FROM benchmark_process WHERE ts < ?", (proc_cutoff,)
-        )
+        conn.execute("DELETE FROM benchmark_process WHERE ts < ?", (proc_cutoff,))
         cursor = conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
         conn.commit()
         return cursor.rowcount
@@ -114,9 +112,7 @@ def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
         conn.close()
 
 
-def query_history(
-    db_path: str, hours: int = 24, since: int = 0, until: int = 0
-) -> list[dict]:
+def query_history(db_path: str, hours: int = 24, since: int = 0, until: int = 0) -> list[dict]:
     """Return metrics entries for a time range.
 
     If since/until are provided (unix timestamps), they take precedence over hours.
@@ -152,14 +148,16 @@ def query_history(
                 entry["models"] = []
                 result[ts] = entry
             if row["mo_name"] is not None:
-                result[ts]["models"].append({
-                    "engine": row["mo_engine"],
-                    "name": row["mo_name"],
-                    "size_vram": row["mo_size_vram"],
-                    "size_total": row["mo_size_total"],
-                    "model_format": row["mo_model_format"],
-                    "quantization": row["mo_quantization"],
-                })
+                result[ts]["models"].append(
+                    {
+                        "engine": row["mo_engine"],
+                        "name": row["mo_name"],
+                        "size_vram": row["mo_size_vram"],
+                        "size_total": row["mo_size_total"],
+                        "model_format": row["mo_model_format"],
+                        "quantization": row["mo_quantization"],
+                    }
+                )
         return list(result.values())
     finally:
         conn.close()
@@ -244,9 +242,7 @@ def store_benchmark_process(db_path: str, results: list[dict]) -> None:
         conn.close()
 
 
-def query_benchmark_process(
-    db_path: str, hours: int = 168, engine: str = ""
-) -> list[dict]:
+def query_benchmark_process(db_path: str, hours: int = 168, engine: str = "") -> list[dict]:
     """Query benchmark process metrics for a time range."""
     since = int(time.time()) - (hours * 3600)
     conn = sqlite3.connect(db_path)

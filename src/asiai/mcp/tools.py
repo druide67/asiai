@@ -359,9 +359,7 @@ async def run_benchmark(
         )
 
         first_result = bench_run.results[0]
-        eng_vers, pw_data, eng_quants = extract_card_metadata(
-            bench_run.results
-        )
+        eng_vers, pw_data, eng_quants = extract_card_metadata(bench_run.results)
         svg = generate_card_svg(
             report,
             hw_chip=first_result.get("hw_chip", ""),
@@ -622,10 +620,7 @@ async def refresh_engines(ctx: Context) -> dict:
 
     return {
         "engines_detected": len(engines),
-        "engines": [
-            {"name": e.name, "url": e.base_url}
-            for e in engines
-        ],
+        "engines": [{"name": e.name, "url": e.base_url} for e in engines],
     }
 
 
@@ -691,15 +686,17 @@ async def compare_engines(
 
     comparison = []
     for rank, (name, data) in enumerate(ranked, 1):
-        comparison.append({
-            "rank": rank,
-            "engine": name,
-            "avg_tok_s": round(data.get("avg_tok_s", 0), 1),
-            "avg_ttft_ms": round(data.get("avg_ttft_ms", 0), 1),
-            "vram_bytes": data.get("vram_bytes", 0),
-            "stability": data.get("stability", "unknown"),
-            "runs_count": data.get("runs_count", 0),
-        })
+        comparison.append(
+            {
+                "rank": rank,
+                "engine": name,
+                "avg_tok_s": round(data.get("avg_tok_s", 0), 1),
+                "avg_ttft_ms": round(data.get("avg_ttft_ms", 0), 1),
+                "vram_bytes": data.get("vram_bytes", 0),
+                "stability": data.get("stability", "unknown"),
+                "runs_count": data.get("runs_count", 0),
+            }
+        )
 
     # Verdict
     best = ranked[0]

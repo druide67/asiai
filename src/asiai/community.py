@@ -108,9 +108,7 @@ def build_submission(
         er: dict = engine_results[0] if engine_results else {}
         # Power data from raw results
         power_vals = [
-            r.get("power_watts", 0)
-            for r in engine_results
-            if r.get("power_watts", 0) > 0
+            r.get("power_watts", 0) for r in engine_results if r.get("power_watts", 0) > 0
         ]
         eff_vals = [
             r.get("tok_per_sec_per_watt", 0)
@@ -118,9 +116,7 @@ def build_submission(
             if r.get("tok_per_sec_per_watt", 0) > 0
         ]
         load_vals = [
-            r.get("load_time_ms", 0)
-            for r in engine_results
-            if r.get("load_time_ms", 0) > 0
+            r.get("load_time_ms", 0) for r in engine_results if r.get("load_time_ms", 0) > 0
         ]
 
         engine_entry: dict[str, Any] = {
@@ -139,17 +135,11 @@ def build_submission(
             "p90_ttft_ms": data.get("p90_ttft_ms", 0.0),
         }
         if power_vals:
-            engine_entry["avg_power_watts"] = round(
-                sum(power_vals) / len(power_vals), 1
-            )
+            engine_entry["avg_power_watts"] = round(sum(power_vals) / len(power_vals), 1)
         if eff_vals:
-            engine_entry["avg_tok_per_sec_per_watt"] = round(
-                sum(eff_vals) / len(eff_vals), 2
-            )
+            engine_entry["avg_tok_per_sec_per_watt"] = round(sum(eff_vals) / len(eff_vals), 2)
         if load_vals:
-            engine_entry["load_time_ms"] = round(
-                sum(load_vals) / len(load_vals), 1
-            )
+            engine_entry["load_time_ms"] = round(sum(load_vals) / len(load_vals), 1)
 
         engines_data[engine_name] = engine_entry
 
@@ -359,7 +349,9 @@ def register_agent(
         engine_str = ", ".join(engines or []) or "none"
         logger.info(
             "Registering with asiai network: chip=%s, ram=%dGB, engines=%s",
-            chip or "unknown", ram_gb, engine_str,
+            chip or "unknown",
+            ram_gb,
+            engine_str,
         )
 
     try:
@@ -377,12 +369,14 @@ def register_agent(
             result.agent_token = body.get("agent_token", "")
             result.total_agents = body.get("total_agents", 0)
 
-            _save_agent_json({
-                "agent_id": result.agent_id,
-                "agent_token": result.agent_token,
-                "registered_at": int(time.time()),
-                "total_agents": result.total_agents,
-            })
+            _save_agent_json(
+                {
+                    "agent_id": result.agent_id,
+                    "agent_token": result.agent_token,
+                    "registered_at": int(time.time()),
+                    "total_agents": result.total_agents,
+                }
+            )
 
     except HTTPError as exc:
         result.error = f"HTTP {exc.code}"

@@ -860,6 +860,7 @@ class TestDetectEnginesCascade:
 
     def test_explicit_urls_bypass_config(self):
         """When urls are provided, config is not consulted."""
+
         def mock_detect(url):
             if url == "http://localhost:9999":
                 return "ollama", "0.17"
@@ -888,14 +889,16 @@ class TestDetectEnginesCascade:
         os.makedirs(config_dir, exist_ok=True)
         config = {
             "version": 1,
-            "engines": [{
-                "url": "http://localhost:8800",
-                "engine": "omlx",
-                "version": "0.9",
-                "last_seen": int(time.time()),
-                "source": "auto",
-                "label": "",
-            }],
+            "engines": [
+                {
+                    "url": "http://localhost:8800",
+                    "engine": "omlx",
+                    "version": "0.9",
+                    "last_seen": int(time.time()),
+                    "source": "auto",
+                    "label": "",
+                }
+            ],
         }
         with open(config_path, "w") as f:
             json.dump(config, f)
@@ -928,14 +931,16 @@ class TestDetectEnginesCascade:
         os.makedirs(config_dir, exist_ok=True)
         config = {
             "version": 1,
-            "engines": [{
-                "url": "http://localhost:11434",
-                "engine": "ollama",
-                "version": "0.17",
-                "last_seen": int(time.time()),
-                "source": "auto",
-                "label": "",
-            }],
+            "engines": [
+                {
+                    "url": "http://localhost:11434",
+                    "engine": "ollama",
+                    "version": "0.17",
+                    "last_seen": int(time.time()),
+                    "source": "auto",
+                    "label": "",
+                }
+            ],
         }
         with open(config_path, "w") as f:
             json.dump(config, f)
@@ -992,6 +997,7 @@ class TestDetectEnginesCascade:
             detect_engines(urls=["http://localhost:11434"])
 
         from asiai.engines.config import load_config
+
         config = load_config()
         assert len(config["engines"]) == 0
 

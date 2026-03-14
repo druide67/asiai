@@ -38,9 +38,7 @@ async def dashboard(request: Request) -> HTMLResponse:
     )
 
 
-def _merge_engine_metrics(
-    engines_data: list[dict], snapshot: dict
-) -> None:
+def _merge_engine_metrics(engines_data: list[dict], snapshot: dict) -> None:
     """Merge inference activity metrics from snapshot into engine dicts."""
     status_by_name: dict[str, dict] = {}
     for es in snapshot.get("engines_status", []):

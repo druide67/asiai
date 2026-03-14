@@ -72,9 +72,7 @@ async def api_benchmarks(
 
     from asiai.storage.db import query_benchmarks
 
-    rows = await asyncio.to_thread(
-        query_benchmarks, state.db_path, hours, model, since, until
-    )
+    rows = await asyncio.to_thread(query_benchmarks, state.db_path, hours, model, since, until)
 
     if engine:
         rows = [r for r in rows if r.get("engine") == engine]
@@ -113,9 +111,7 @@ async def api_benchmark_process(
 
     from asiai.storage.db import query_benchmark_process
 
-    rows = await asyncio.to_thread(
-        query_benchmark_process, state.db_path, hours, engine
-    )
+    rows = await asyncio.to_thread(query_benchmark_process, state.db_path, hours, engine)
     return JSONResponse(rows)
 
 

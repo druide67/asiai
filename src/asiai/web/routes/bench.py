@@ -81,8 +81,15 @@ async def bench_run(request: Request) -> JSONResponse:
     thread = threading.Thread(
         target=_run_benchmark_thread,
         args=(
-            state, model, engine_names, prompt_names or None,
-            runs, power, context_size, generate_card, share,
+            state,
+            model,
+            engine_names,
+            prompt_names or None,
+            runs,
+            power,
+            context_size,
+            generate_card,
+            share,
         ),
         daemon=True,
     )
@@ -228,9 +235,7 @@ def _run_benchmark_thread(
             )
 
             first = bench_run.results[0] if bench_run.results else {}
-            eng_vers, pw_data, eng_quants = extract_card_metadata(
-                bench_run.results
-            )
+            eng_vers, pw_data, eng_quants = extract_card_metadata(bench_run.results)
             svg = generate_card_svg(
                 report,
                 hw_chip=first.get("hw_chip", ""),
@@ -261,9 +266,9 @@ def _run_benchmark_thread(
                     if local_png:
                         try:
                             with open(local_png, "rb") as pf:
-                                payload["card_png_b64"] = base64.b64encode(
-                                    pf.read()
-                                ).decode("ascii")
+                                payload["card_png_b64"] = base64.b64encode(pf.read()).decode(
+                                    "ascii"
+                                )
                         except OSError:
                             pass
                     result = submit_benchmark(payload, db_path=state.db_path)

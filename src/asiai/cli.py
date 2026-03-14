@@ -552,9 +552,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.display.formatters import dim, green
 
         first_result = bench_run.results[0]
-        eng_vers, pw_data, eng_quants = extract_card_metadata(
-            bench_run.results
-        )
+        eng_vers, pw_data, eng_quants = extract_card_metadata(bench_run.results)
         card_svg = generate_card_svg(
             report,
             hw_chip=first_result.get("hw_chip", ""),
@@ -1213,14 +1211,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     mcp_parser.add_argument("--host", default="127.0.0.1", help="Host for SSE/HTTP transport")
     mcp_parser.add_argument(
-        "--register", action="store_true",
+        "--register",
+        action="store_true",
         help="Register with asiai agent network (opt-in, anonymous)",
     )
 
     # config
-    config_parser = subparsers.add_parser(
-        "config", help="Manage persistent engine configuration"
-    )
+    config_parser = subparsers.add_parser("config", help="Manage persistent engine configuration")
     config_sub = config_parser.add_subparsers(dest="config_action")
     config_sub.add_parser("show", help="Show known engines")
     config_add_p = config_sub.add_parser("add", help="Add an engine manually")

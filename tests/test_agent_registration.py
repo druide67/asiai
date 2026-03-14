@@ -48,12 +48,14 @@ class TestRegisterAgent:
     def test_first_registration(self, mock_urlopen, tmp_path):
         agent_json = str(tmp_path / "agent.json")
         resp = MagicMock()
-        resp.read.return_value = json.dumps({
-            "status": "registered",
-            "agent_id": "a1b2c3d4e5f6",
-            "agent_token": "secret_token_123",
-            "total_agents": 42,
-        }).encode()
+        resp.read.return_value = json.dumps(
+            {
+                "status": "registered",
+                "agent_id": "a1b2c3d4e5f6",
+                "agent_token": "secret_token_123",
+                "total_agents": 42,
+            }
+        ).encode()
         resp.__enter__ = lambda s: s
         resp.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = resp
@@ -79,11 +81,14 @@ class TestRegisterAgent:
         """If agent.json exists, send heartbeat instead of re-registering."""
         agent_json = str(tmp_path / "agent.json")
         with open(agent_json, "w") as f:
-            json.dump({
-                "agent_id": "existing_id",
-                "agent_token": "existing_token",
-                "total_agents": 10,
-            }, f)
+            json.dump(
+                {
+                    "agent_id": "existing_id",
+                    "agent_token": "existing_token",
+                    "total_agents": 10,
+                },
+                f,
+            )
 
         resp = MagicMock()
         resp.read.return_value = json.dumps({"status": "ok"}).encode()
@@ -121,9 +126,7 @@ class TestRegisterAgent:
         with open(agent_json, "w") as f:
             json.dump({"agent_id": "old_id", "agent_token": "bad_token"}, f)
 
-        mock_urlopen.side_effect = HTTPError(
-            url="", code=403, msg="Forbidden", hdrs=None, fp=None
-        )
+        mock_urlopen.side_effect = HTTPError(url="", code=403, msg="Forbidden", hdrs=None, fp=None)
 
         with patch("asiai.community._AGENT_JSON", agent_json):
             result = register_agent(chip="Apple M4 Pro", ram_gb=64)
@@ -137,9 +140,14 @@ class TestRegisterAgent:
 
         agent_json = str(tmp_path / "agent.json")
         with open(agent_json, "w") as f:
-            json.dump({
-                "agent_id": "my_id", "agent_token": "my_token", "total_agents": 55,
-            }, f)
+            json.dump(
+                {
+                    "agent_id": "my_id",
+                    "agent_token": "my_token",
+                    "total_agents": 55,
+                },
+                f,
+            )
 
         mock_urlopen.side_effect = HTTPError(
             url="", code=429, msg="Too Many Requests", hdrs=None, fp=None

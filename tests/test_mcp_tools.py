@@ -411,12 +411,28 @@ class TestCompareEngines:
     @patch(
         "asiai.storage.db.query_benchmarks",
         return_value=[
-            {"engine": "ollama", "model": "test:7b", "tok_per_sec": 40.0,
-             "ttft_ms": 100, "vram_bytes": 4_000_000_000, "thermal_level": "nominal",
-             "thermal_speed_limit": 100, "prompt_type": "code", "run_index": 0},
-            {"engine": "lmstudio", "model": "test:7b", "tok_per_sec": 55.0,
-             "ttft_ms": 80, "vram_bytes": 4_000_000_000, "thermal_level": "nominal",
-             "thermal_speed_limit": 100, "prompt_type": "code", "run_index": 0},
+            {
+                "engine": "ollama",
+                "model": "test:7b",
+                "tok_per_sec": 40.0,
+                "ttft_ms": 100,
+                "vram_bytes": 4_000_000_000,
+                "thermal_level": "nominal",
+                "thermal_speed_limit": 100,
+                "prompt_type": "code",
+                "run_index": 0,
+            },
+            {
+                "engine": "lmstudio",
+                "model": "test:7b",
+                "tok_per_sec": 55.0,
+                "ttft_ms": 80,
+                "vram_bytes": 4_000_000_000,
+                "thermal_level": "nominal",
+                "thermal_speed_limit": 100,
+                "prompt_type": "code",
+                "run_index": 0,
+            },
         ],
     )
     async def test_comparison(self, mock_query, mock_ctx):
@@ -433,9 +449,17 @@ class TestCompareEngines:
     @patch(
         "asiai.storage.db.query_benchmarks",
         return_value=[
-            {"engine": "ollama", "model": "test:7b", "tok_per_sec": 40.0,
-             "ttft_ms": 100, "vram_bytes": 4_000_000_000, "thermal_level": "nominal",
-             "thermal_speed_limit": 100, "prompt_type": "code", "run_index": 0},
+            {
+                "engine": "ollama",
+                "model": "test:7b",
+                "tok_per_sec": 40.0,
+                "ttft_ms": 100,
+                "vram_bytes": 4_000_000_000,
+                "thermal_level": "nominal",
+                "thermal_speed_limit": 100,
+                "prompt_type": "code",
+                "run_index": 0,
+            },
         ],
     )
     async def test_single_engine(self, mock_query, mock_ctx):
@@ -466,7 +490,10 @@ class TestMCPCli:
 
         main(["mcp"])
         mock_serve.assert_called_once_with(
-            transport="stdio", host="127.0.0.1", port=8900, register=False,
+            transport="stdio",
+            host="127.0.0.1",
+            port=8900,
+            register=False,
         )
 
     @patch("asiai.mcp.server.serve")
@@ -475,7 +502,10 @@ class TestMCPCli:
 
         main(["mcp", "--transport", "sse", "--port", "9000"])
         mock_serve.assert_called_once_with(
-            transport="sse", host="127.0.0.1", port=9000, register=False,
+            transport="sse",
+            host="127.0.0.1",
+            port=9000,
+            register=False,
         )
 
     @patch("asiai.mcp.server.serve")
@@ -484,5 +514,8 @@ class TestMCPCli:
 
         main(["mcp", "--register"])
         mock_serve.assert_called_once_with(
-            transport="stdio", host="127.0.0.1", port=8900, register=True,
+            transport="stdio",
+            host="127.0.0.1",
+            port=8900,
+            register=True,
         )

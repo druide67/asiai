@@ -117,8 +117,9 @@ class TestCardSvg:
         """Bars should show engine name and tok/s value."""
         report = {
             "model": "test",
-            "engines": {"eng": {"median_tok_s": 50, "median_ttft_ms": 0,
-                                "stability": "", "vram_bytes": 0}},
+            "engines": {
+                "eng": {"median_tok_s": 50, "median_ttft_ms": 0, "stability": "", "vram_bytes": 0}
+            },
             "winner": None,
         }
         svg = generate_card_svg(report)
@@ -129,8 +130,9 @@ class TestCardSvg:
         """Winner with missing tok_s_delta should not crash."""
         report = {
             "model": "test",
-            "engines": {"eng": {"median_tok_s": 50, "median_ttft_ms": 0,
-                                "stability": "", "vram_bytes": 0}},
+            "engines": {
+                "eng": {"median_tok_s": 50, "median_ttft_ms": 0, "stability": "", "vram_bytes": 0}
+            },
             "winner": {"name": "eng"},
         }
         svg = generate_card_svg(report)
