@@ -44,7 +44,7 @@ Doctor
 ## Checks
 
 - **System**: Apple Silicon detection, RAM, memory pressure, thermal state
-- **Engine**: Reachability and version for all 5 supported engines; Ollama runtime parameters (host, num_parallel, max_loaded_models, keep_alive, flash_attention)
+- **Engine**: Reachability and version for all 7 supported engines; Ollama runtime parameters (host, num_parallel, max_loaded_models, keep_alive, flash_attention)
 - **Database**: SQLite schema version, size, last entry timestamp
 - **Daemon**: LaunchAgent status for monitor and web services
 - **Alerting**: Webhook URL configuration and connectivity

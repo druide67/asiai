@@ -95,11 +95,21 @@ def generate_card_svg(
             bx -= 8
         hw_badge = "\n".join(reversed(badge_elements))
 
-    # --- Specs banner (context size only — quant moved per-engine) ---
+    # --- Specs banner ---
+    # Quant: global only if ALL engines report the same value.
+    # If only some report it, show per-engine (only on those that have it).
     specs_parts: list[str] = []
-    if model_quantization and not engine_quants:
-        # Fallback: global quant only if no per-engine quants
+    quant_values = set(v for v in (engine_quants or {}).values() if v)
+    num_engines = len(engines)
+    num_with_quant = len([v for v in (engine_quants or {}).values() if v])
+    if len(quant_values) == 1 and num_with_quant == num_engines and num_engines > 0:
+        # All engines report same quant → global
+        specs_parts.append(quant_values.pop())
+        engine_quants = None
+    elif not engine_quants and model_quantization:
+        # No per-engine data at all → fallback to global
         specs_parts.append(model_quantization)
+    # else: per-engine in chips (engine_quants stays as-is)
     if context_size > 0:
         if context_size >= 1024:
             specs_parts.append(f"{context_size // 1024}K ctx")
@@ -285,7 +295,7 @@ def generate_card_svg(
         if bar["ttft_ms"] > 0:
             chips.append((f'{bar["ttft_ms"]:.0f}ms TTFT', "ttft"))
         if bar["stability"]:
-            chips.append((bar["stability"], ""))
+            chips.append((bar["stability"], "stability"))
         if bar["vram_bytes"] > 0:
             chips.append((_format_vram(bar["vram_bytes"]), "vram"))
         # Power per engine [Change #8]
@@ -318,17 +328,31 @@ def generate_card_svg(
 
         for chip_text, metric_key in chips[:6]:
             text_width = int(len(chip_text) * 7.2) + 22
-            # Green stroke if this engine wins this metric
+            # Style: red for unstable, green stroke for winner, default gray
+            is_unstable = (
+                metric_key == "stability"
+                and chip_text.lower() != "stable"
+            )
             is_winner = (
                 metric_key
                 and metric_key in metric_winners
                 and metric_winners[metric_key] == bar["name"]
             )
-            stroke = ' stroke="#00d4aa" stroke-width="1"' if is_winner else ""
-            text_color = "#e2e8f0" if is_winner else "#a0aec0"
+            if is_unstable:
+                chip_fill = "#2d1b1b"
+                stroke = ' stroke="#ef4444" stroke-width="1"'
+                text_color = "#fca5a5"
+            elif is_winner:
+                chip_fill = "#2d3748"
+                stroke = ' stroke="#00d4aa" stroke-width="1"'
+                text_color = "#e2e8f0"
+            else:
+                chip_fill = "#2d3748"
+                stroke = ""
+                text_color = "#a0aec0"
             all_chip_elements.append(
                 f'  <rect x="{chip_x}" y="{chip_y}" width="{text_width}" '
-                f'height="28" rx="6" fill="#2d3748"{stroke}/>'
+                f'height="28" rx="6" fill="{chip_fill}"{stroke}/>'
             )
             all_chip_elements.append(
                 f'  <text x="{chip_x + text_width // 2}" y="{chip_y + 19}" '
@@ -547,13 +571,14 @@ def get_share_url(submission_id: str) -> str:
 
 def extract_card_metadata(
     raw_results: list[dict],
-) -> tuple[dict[str, str], dict[str, dict]]:
-    """Extract engine versions and power data from raw benchmark results.
+) -> tuple[dict[str, str], dict[str, dict], dict[str, str]]:
+    """Extract engine versions, power data, and per-engine quants.
 
     Returns:
-        (engine_versions, power_data) dicts keyed by engine name.
+        (engine_versions, power_data, engine_quants) dicts keyed by engine name.
     """
     engine_versions: dict[str, str] = {}
+    engine_quants: dict[str, str] = {}
     power_by_engine: dict[str, list[dict]] = {}
 
     for r in raw_results:
@@ -562,6 +587,10 @@ def extract_card_metadata(
             continue
         if eng not in engine_versions:
             engine_versions[eng] = r.get("engine_version", "")
+        if eng not in engine_quants:
+            quant = r.get("model_quantization", "")
+            if quant:
+                engine_quants[eng] = quant
         watts = r.get("power_watts", 0)
         eff = r.get("tok_per_sec_per_watt", 0)
         if watts > 0:
@@ -579,7 +608,7 @@ def extract_card_metadata(
             "avg_eff": round(avg_eff, 2),
         }
 
-    return engine_versions, power_data
+    return engine_versions, power_data, engine_quants
 
 
 def _escape(text: str) -> str:

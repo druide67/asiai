@@ -323,17 +323,20 @@ def export_benchmark(
         engines_export[engine_name] = engine_data
 
     export = {
-        "schema_version": 1,
+        "schema_version": 2,
         "asiai_version": __version__,
         "timestamp": first.get("ts", 0),
         "machine": {
             "chip": hw_chip,
             "os_version": os_version,
+            "ram_gb": first.get("ram_gb", 0),
+            "gpu_cores": first.get("gpu_cores", 0),
         },
         "benchmark": {
             "model": report.get("model", ""),
             "runs_per_prompt": runs_per_prompt,
             "prompts": prompts,
+            "context_size": first.get("context_size", 0),
             "engines": engines_export,
             "winner": report.get("winner"),
         },

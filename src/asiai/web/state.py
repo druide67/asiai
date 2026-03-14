@@ -19,6 +19,10 @@ class BenchStatus:
     total_runs: int = 0
     error: str = ""
     done: bool = False
+    card_svg_url: str = ""
+    card_png_url: str = ""
+    share_url: str = ""
+    card_error: str = ""
 
     def snapshot(self) -> dict:
         """Return a dict snapshot of all fields (thread-safe read helper)."""
@@ -31,6 +35,10 @@ class BenchStatus:
             "total_runs": self.total_runs,
             "done": self.done,
             "error": self.error,
+            "card_svg_url": self.card_svg_url,
+            "card_png_url": self.card_png_url,
+            "share_url": self.share_url,
+            "card_error": self.card_error,
         }
 
 

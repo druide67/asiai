@@ -738,3 +738,90 @@ body {
 .text-xs { font-size: 0.75rem; }
 .text-lg { font-size: 1.125rem; }
 .overflow-x-auto { overflow-x: auto; }
+
+/* Quick bench button — compact, recognizable */
+.btn-quick {
+    display: inline-flex !important;
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.5rem;
+    letter-spacing: 0.01em;
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.15);
+    transition: all 0.2s;
+}
+.btn-quick:hover {
+    background: #16a34a;
+    border-color: #16a34a;
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.25);
+    transform: translateY(-1px);
+}
+.btn-quick:active { transform: translateY(0); }
+.btn-quick:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* Advanced options toggle */
+.advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.advanced-toggle::-webkit-details-marker { display: none; }
+.advanced-toggle .chevron {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
+.advanced-toggle:hover { color: var(--text-primary); }
+.advanced-toggle:hover .chevron { color: var(--text-primary); }
+
+/* Help hint — subtle inline link */
+.help-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.help-hint a {
+    color: var(--accent-cyan);
+    text-decoration: none;
+}
+.help-hint a:hover { text-decoration: underline; }
+
+/* Muted button */
+.btn-muted {
+    color: var(--text-muted);
+    border-color: var(--border);
+    font-size: 0.8125rem;
+}
+
+/* Bench card preview */
+.bench-card-preview {
+    max-width: 600px;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+}
+
+/* Share URL row */
+.share-url-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+.share-url-input { flex: 1; font-family: var(--font-mono); font-size: 0.8125rem; }
+
+/* Share actions */
+.share-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}

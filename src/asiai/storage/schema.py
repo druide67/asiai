@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS engine_status (
 CREATE INDEX IF NOT EXISTS idx_engine_status_ts ON engine_status(ts);
 CREATE INDEX IF NOT EXISTS idx_engine_status_engine ON engine_status(engine);
 
+CREATE TABLE IF NOT EXISTS benchmark_process (
+    ts INTEGER NOT NULL,
+    engine TEXT NOT NULL,
+    run_index INTEGER DEFAULT 0,
+    proc_cpu_pct REAL DEFAULT 0,
+    proc_mem_pct REAL DEFAULT 0,
+    proc_rss_bytes INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_bench_proc_ts ON benchmark_process(ts);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts INTEGER NOT NULL,
@@ -220,5 +231,21 @@ MIGRATIONS = [
             "ALTER TABLE engine_status ADD COLUMN tokens_predicted_total INTEGER DEFAULT 0",
             "ALTER TABLE engine_status ADD COLUMN kv_cache_usage_ratio REAL DEFAULT -1",
         ],
+    },
+    # v1.1: benchmark context & hardware identity
+    {
+        "table": "benchmarks",
+        "columns": ["context_size", "gpu_cores", "ram_gb"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN context_size INTEGER DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN gpu_cores INTEGER DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN ram_gb INTEGER DEFAULT 0",
+        ],
+    },
+    # v1.2: benchmark process metrics (separate table, 7d retention)
+    {
+        "table": "benchmark_process",
+        "columns": ["ts"],
+        "sql": [],
     },
 ]

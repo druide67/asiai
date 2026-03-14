@@ -302,7 +302,7 @@ class ProcessInfo:
 
 
 # Process name patterns for inference engines
-_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio", "mlx_lm", "llama-server", "vllm"]
+_ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio", "mlx_lm", "llama-server", "omlx", "vllm"]
 
 
 def collect_engine_processes() -> list[ProcessInfo]:

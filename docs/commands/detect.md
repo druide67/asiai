@@ -1,6 +1,6 @@
 # asiai detect
 
-Auto-detect running inference engines across 5 ports.
+Auto-detect running inference engines across 7 ports.
 
 ## Usage
 
@@ -31,6 +31,7 @@ asiai scans localhost on standard ports:
 | 11434 | Ollama |
 | 1234 | LM Studio |
 | 8080 | mlx-lm or llama.cpp |
-| 8000 | vllm-mlx |
+| 8000 | oMLX or vllm-mlx |
+| 52415 | Exo |
 
-When multiple engines share a port (e.g., mlx-lm and llama.cpp on 8080), asiai uses API endpoint probing and `lsof -i :PORT` process detection to identify the correct engine.
+When multiple engines share a port (e.g., mlx-lm and llama.cpp on 8080, oMLX and vllm-mlx on 8000), asiai uses API endpoint probing and `lsof -i :PORT` process detection to identify the correct engine.

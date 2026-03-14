@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass, field
 
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
+from asiai.collectors.gpu import collect_gpu
 from asiai.collectors.system import (
     collect_engine_processes,
     collect_hw_chip,
@@ -104,6 +105,10 @@ def run_benchmark(
     # Collect machine info once per run (stable during session)
     hw_chip = collect_hw_chip()
     os_version = collect_os_version()
+    mem = collect_memory()
+    ram_gb = round(mem.total / (1024**3)) if mem.total > 0 else 0
+    gpu_info = collect_gpu()
+    gpu_cores = gpu_info.cores
 
     # Track whether power monitoring was requested but unavailable
     power_unavailable = False
@@ -201,6 +206,9 @@ def run_benchmark(
                     model_quantization=model_quantization,
                     hw_chip=hw_chip,
                     os_version=os_version,
+                    context_size=context_size,
+                    gpu_cores=gpu_cores,
+                    ram_gb=ram_gb,
                 )
 
         # Stop per-engine power monitoring and annotate this engine's results
@@ -259,6 +267,9 @@ def _run_single(
     model_quantization: str = "",
     hw_chip: str = "",
     os_version: str = "",
+    context_size: int = 0,
+    gpu_cores: int = 0,
+    ram_gb: int = 0,
 ) -> None:
     """Run a single engine+prompt benchmark and append to run."""
     mem = collect_memory()
@@ -299,6 +310,9 @@ def _run_single(
             "model_quantization": model_quantization,
             "hw_chip": hw_chip,
             "os_version": os_version,
+            "context_size": context_size,
+            "gpu_cores": gpu_cores,
+            "ram_gb": ram_gb,
         }
     )
 

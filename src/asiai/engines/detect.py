@@ -21,6 +21,7 @@ _PORT_PROCESS_MAP: dict[str, str] = {
     "mlx_lm": "mlxlm",
     "llama-server": "llamacpp",
     "llama_server": "llamacpp",
+    "omlx": "omlx",
     "vllm": "vllm_mlx",
     "exo": "exo",
 }
@@ -30,7 +31,7 @@ DEFAULT_URLS = [
     "http://localhost:11434",  # Ollama default
     "http://localhost:1234",  # LM Studio default
     "http://localhost:8080",  # mlx-lm / llama.cpp default
-    "http://localhost:8000",  # vllm-mlx default
+    "http://localhost:8000",  # oMLX / vllm-mlx default
     "http://localhost:52415",  # Exo default
 ]
 
@@ -155,9 +156,10 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
       2. GET /v1/models responds?
          2a. x-lm-studio-version header or /lms/version -> LM Studio
          2b. GET /health {"status":"ok"} + /props       -> llama.cpp
-         2c. GET /version or owned_by:"vllm-mlx"       -> vllm-mlx
-         2d. detect_port_process(port)                  -> lsof result
-         2e. fallback                                   -> mlx-lm
+         2c. GET /admin/info or /admin page              -> oMLX
+         2d. GET /version or owned_by:"vllm-mlx"       -> vllm-mlx
+         2e. detect_port_process(port)                  -> lsof result
+         2f. fallback                                   -> mlx-lm
       3. Otherwise -> "unknown"
     """
     base_url = base_url.rstrip("/")
@@ -196,7 +198,23 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                         ver = build_info.get("version", "")
                     return "llamacpp", ver
 
-        # 2c. vllm-mlx: /version endpoint OR "owned_by":"vllm-mlx" in /v1/models
+        # 2c. oMLX: /admin endpoint (unique to oMLX)
+        admin_data, _ = http_get_json(f"{base_url}/admin/info")
+        if admin_data and isinstance(admin_data, dict):
+            ver = admin_data.get("version", "")
+            return "omlx", ver
+        # Also detect via oMLX admin HTML page (returns non-JSON)
+        try:
+            from urllib.request import urlopen as _urlopen
+
+            with _urlopen(f"{base_url}/admin", timeout=3) as resp:
+                body = resp.read(1024).decode(errors="ignore")
+                if "omlx" in body.lower() or "oMLX" in body:
+                    return "omlx", ""
+        except Exception:
+            pass
+
+        # 2d. vllm-mlx: /version endpoint OR "owned_by":"vllm-mlx" in /v1/models
         ver_resp, _ = http_get_json(f"{base_url}/version")
         if ver_resp and isinstance(ver_resp, dict) and "version" in ver_resp:
             return "vllm_mlx", ver_resp["version"]

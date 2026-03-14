@@ -131,6 +131,10 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             "# HELP asiai_engine_kv_cache_usage_ratio KV cache usage ratio",
             "# TYPE asiai_engine_kv_cache_usage_ratio gauge",
         ]
+        tok_lines: list[str] = [
+            "# HELP asiai_engine_tokens_predicted_total Cumulative tokens predicted",
+            "# TYPE asiai_engine_tokens_predicted_total counter",
+        ]
 
         for es in engines_status:
             name = _escape_label(es["name"])
@@ -153,6 +157,11 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             kv = es.get("kv_cache_usage_ratio", -1)
             if kv >= 0:
                 kv_lines.append(f'asiai_engine_kv_cache_usage_ratio{{engine="{name}"}} {kv}')
+            tok_total = es.get("tokens_predicted_total", 0)
+            if tok_total > 0:
+                tok_lines.append(
+                    f'asiai_engine_tokens_predicted_total{{engine="{name}"}} {tok_total}'
+                )
 
         sections.append("\n".join(engine_lines))
         sections.append("\n".join(models_loaded_lines))
@@ -162,6 +171,8 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
         sections.append("\n".join(req_lines))
         if len(kv_lines) > 2:
             sections.append("\n".join(kv_lines))
+        if len(tok_lines) > 2:
+            sections.append("\n".join(tok_lines))
 
         # Per-model metrics
         model_vram: list[str] = [

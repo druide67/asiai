@@ -98,10 +98,15 @@ def store_snapshot(db_path: str, snap: dict) -> None:
 def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
     """Delete entries older than `days` days. Returns number of deleted rows."""
     cutoff = int(time.time()) - (days * 86400)
+    # Process metrics have shorter retention (7 days)
+    proc_cutoff = int(time.time()) - (7 * 86400)
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("DELETE FROM benchmarks WHERE ts < ?", (cutoff,))
         conn.execute("DELETE FROM models WHERE ts < ?", (cutoff,))
+        conn.execute(
+            "DELETE FROM benchmark_process WHERE ts < ?", (proc_cutoff,)
+        )
         cursor = conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
         conn.commit()
         return cursor.rowcount
@@ -173,9 +178,10 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     run_index, power_watts, tok_per_sec_per_watt, load_time_ms,
                     metrics_version,
                     engine_version, model_format, model_quantization,
-                    generation_duration_ms, hw_chip, os_version)
+                    generation_duration_ms, hw_chip, os_version,
+                    context_size, gpu_cores, ram_gb)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
                     r["engine"],
@@ -200,9 +206,62 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("generation_duration_ms", 0.0),
                     r.get("hw_chip", ""),
                     r.get("os_version", ""),
+                    r.get("context_size", 0),
+                    r.get("gpu_cores", 0),
+                    r.get("ram_gb", 0),
                 ),
             )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def store_benchmark_process(db_path: str, results: list[dict]) -> None:
+    """Persist per-run process metrics to the benchmark_process table."""
+    conn = sqlite3.connect(db_path)
+    try:
+        for r in results:
+            cpu = r.get("proc_cpu_pct", 0.0)
+            rss = r.get("proc_rss_bytes", 0)
+            if cpu <= 0 and rss <= 0:
+                continue
+            conn.execute(
+                """INSERT INTO benchmark_process
+                   (ts, engine, run_index, proc_cpu_pct, proc_mem_pct,
+                    proc_rss_bytes)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    r["ts"],
+                    r["engine"],
+                    r.get("run_index", 0),
+                    cpu,
+                    r.get("proc_mem_pct", 0.0),
+                    rss,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def query_benchmark_process(
+    db_path: str, hours: int = 168, engine: str = ""
+) -> list[dict]:
+    """Query benchmark process metrics for a time range."""
+    since = int(time.time()) - (hours * 3600)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        query = (
+            "SELECT ts, engine, run_index, proc_cpu_pct, proc_mem_pct, "
+            "proc_rss_bytes FROM benchmark_process WHERE ts >= ?"
+        )
+        params: list = [since]
+        if engine:
+            query += " AND engine = ?"
+            params.append(engine)
+        query += " ORDER BY ts"
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
     finally:
         conn.close()
 

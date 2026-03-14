@@ -97,6 +97,41 @@ class TestAppState:
         assert not status.running
         assert not status.done
         assert status.error == ""
+        assert status.card_svg_url == ""
+        assert status.card_png_url == ""
+        assert status.share_url == ""
+        assert status.card_error == ""
+
+    def test_bench_status_snapshot_includes_card_fields(self):
+        status = BenchStatus(
+            card_svg_url="/cards/test.svg",
+            card_png_url="/cards/test.png",
+            share_url="https://asiai.dev/card/abc",
+            card_error="",
+        )
+        snap = status.snapshot()
+        assert snap["card_svg_url"] == "/cards/test.svg"
+        assert snap["card_png_url"] == "/cards/test.png"
+        assert snap["share_url"] == "https://asiai.dev/card/abc"
+        assert snap["card_error"] == ""
+
+    def test_update_bench_card_fields(self, app_state):
+        app_state.update_bench(
+            card_svg_url="/cards/bench.svg",
+            card_png_url="/cards/bench.png",
+            share_url="https://asiai.dev/card/123",
+        )
+        snap = app_state.get_bench_snapshot()
+        assert snap["card_svg_url"] == "/cards/bench.svg"
+        assert snap["card_png_url"] == "/cards/bench.png"
+        assert snap["share_url"] == "https://asiai.dev/card/123"
+
+    def test_reset_bench_clears_card_fields(self, app_state):
+        app_state.update_bench(card_svg_url="/cards/old.svg", share_url="https://old")
+        app_state.reset_bench(running=True)
+        snap = app_state.get_bench_snapshot()
+        assert snap["card_svg_url"] == ""
+        assert snap["share_url"] == ""
 
     def test_refresh_engines_if_stale(self, app_state):
         # First call should populate cache
@@ -252,6 +287,35 @@ class TestBench:
         assert "Benchmark" in response.text
         assert "ollama" in response.text
 
+    @patch("asiai.web.routes.bench._get_prompts")
+    @patch("asiai.web.routes.bench._get_engines_for_form")
+    def test_bench_page_has_quick_bench_button(self, mock_engines, mock_prompts, client):
+        mock_engines.return_value = []
+        mock_prompts.return_value = []
+        response = client.get("/bench")
+        assert response.status_code == 200
+        assert "quick-bench-btn" in response.text
+        assert "Quick Bench" in response.text
+
+    @patch("asiai.web.routes.bench._get_prompts")
+    @patch("asiai.web.routes.bench._get_engines_for_form")
+    def test_bench_page_has_advanced_details(self, mock_engines, mock_prompts, client):
+        mock_engines.return_value = []
+        mock_prompts.return_value = []
+        response = client.get("/bench")
+        assert response.status_code == 200
+        assert "advanced-options" in response.text
+        assert "context_size" in response.text
+
+    @patch("asiai.web.routes.bench._get_prompts")
+    @patch("asiai.web.routes.bench._get_engines_for_form")
+    def test_bench_page_has_share_section_placeholder(self, mock_engines, mock_prompts, client):
+        mock_engines.return_value = []
+        mock_prompts.return_value = []
+        response = client.get("/bench")
+        assert response.status_code == 200
+        assert "bench-share-section" in response.text
+
     def test_bench_run_conflict_when_running(self, client, app_state):
         app_state.bench_status.running = True
         response = client.post(
@@ -260,6 +324,128 @@ class TestBench:
             headers={"Origin": "http://testserver"},
         )
         assert response.status_code == 409
+
+    @patch("asiai.web.routes.bench._run_benchmark_thread")
+    def test_bench_run_quick_mode(self, mock_thread, client, app_state):
+        """Quick mode should start benchmark with quick=on."""
+        response = client.post(
+            "/bench/run",
+            data={"quick": "on"},
+            headers={"Origin": "http://testserver"},
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "started"
+        mock_thread.assert_called_once()
+        # Quick mode: prompts=["code"], runs=1
+        args = mock_thread.call_args
+        assert args[0][3] == ["code"]  # prompt_names
+        assert args[0][4] == 1  # runs
+
+    @patch("asiai.web.routes.bench._run_benchmark_thread")
+    def test_bench_run_context_size_parsed(self, mock_thread, client, app_state):
+        """Context size should be parsed from form value."""
+        response = client.post(
+            "/bench/run",
+            data={"context_size": "16k"},
+            headers={"Origin": "http://testserver"},
+        )
+        assert response.status_code == 200
+        args = mock_thread.call_args
+        assert args[0][6] == 16384  # context_size
+
+    @patch("asiai.web.routes.bench._run_benchmark_thread")
+    def test_bench_run_context_size_empty(self, mock_thread, client, app_state):
+        """Empty context_size should default to 0."""
+        response = client.post(
+            "/bench/run",
+            data={"context_size": ""},
+            headers={"Origin": "http://testserver"},
+        )
+        assert response.status_code == 200
+        args = mock_thread.call_args
+        assert args[0][6] == 0  # context_size
+
+    @patch("asiai.web.routes.bench._run_benchmark_thread")
+    def test_bench_run_context_size_invalid(self, mock_thread, client, app_state):
+        """Invalid context_size should default to 0."""
+        response = client.post(
+            "/bench/run",
+            data={"context_size": "999k"},
+            headers={"Origin": "http://testserver"},
+        )
+        assert response.status_code == 200
+        args = mock_thread.call_args
+        assert args[0][6] == 0  # context_size
+
+
+# ---------------------------------------------------------------------------
+# Bench thread — card generation
+# ---------------------------------------------------------------------------
+
+
+class TestBenchThread:
+    @patch("asiai.web.routes.bench.run_benchmark", create=True)
+    @patch("asiai.web.routes.bench.find_common_model", create=True)
+    def test_thread_card_generation_success(self, mock_find, mock_run, app_state):
+        """Card gen should populate card_svg_url and card_png_url on success."""
+        from asiai.web.routes.bench import _run_benchmark_thread
+
+        mock_find.return_value = "qwen2.5:7b"
+        mock_bench_run = MagicMock()
+        mock_bench_run.results = [{"hw_chip": "Apple M4 Pro", "tok_per_sec": 50.0}]
+        mock_run.return_value = mock_bench_run
+
+        svg_p = patch("asiai.benchmark.card.generate_card_svg", return_value="<svg></svg>")
+        save_p = patch("asiai.benchmark.card.save_card", return_value="/tmp/cards/bench.svg")
+        png_p = patch(
+            "asiai.benchmark.card.convert_svg_to_png",
+            return_value="/tmp/cards/bench.png",
+        )
+        store_p = patch("asiai.storage.db.store_benchmark")
+        agg_p = patch("asiai.benchmark.reporter.aggregate_results", return_value={})
+        with svg_p, save_p, png_p, store_p, agg_p:
+            _run_benchmark_thread(app_state, "qwen2.5:7b", [], None, 1, False, 0)
+
+        snap = app_state.get_bench_snapshot()
+        assert snap["done"] is True
+        assert snap["card_svg_url"] == "/cards/bench.svg"
+        assert snap["card_png_url"] == "/cards/bench.png"
+        assert snap["error"] == ""
+
+    @patch("asiai.web.routes.bench.run_benchmark", create=True)
+    @patch("asiai.web.routes.bench.find_common_model", create=True)
+    def test_thread_card_generation_failure_non_blocking(self, mock_find, mock_run, app_state):
+        """Card gen failure should not block benchmark completion."""
+        from asiai.web.routes.bench import _run_benchmark_thread
+
+        mock_find.return_value = "qwen2.5:7b"
+        mock_bench_run = MagicMock()
+        mock_bench_run.results = [{"hw_chip": "Apple M4 Pro"}]
+        mock_run.return_value = mock_bench_run
+
+        svg_p = patch(
+            "asiai.benchmark.card.generate_card_svg",
+            side_effect=RuntimeError("svg fail"),
+        )
+        store_p = patch("asiai.storage.db.store_benchmark")
+        agg_p = patch("asiai.benchmark.reporter.aggregate_results", return_value={})
+        with svg_p, store_p, agg_p:
+            _run_benchmark_thread(app_state, "qwen2.5:7b", [], None, 1, False, 0)
+
+        snap = app_state.get_bench_snapshot()
+        assert snap["done"] is True
+        assert snap["error"] == ""
+        assert "svg fail" in snap["card_error"]
+
+    def test_thread_no_engines(self, app_state):
+        """Thread should report error when no engines available."""
+        from asiai.web.routes.bench import _run_benchmark_thread
+
+        app_state.engines = []
+        _run_benchmark_thread(app_state, "test", [], None, 1, False, 0)
+        snap = app_state.get_bench_snapshot()
+        assert snap["done"] is True
+        assert "No engines" in snap["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +506,22 @@ class TestAppCreation:
         response = client.get("/static/charts.js")
         assert response.status_code == 200
         assert "createBarChart" in response.text
+
+    def test_cards_route_mounted(self, app_state):
+        """Verify /cards/ is mounted as a static files directory."""
+        app = create_app(app_state)
+        route_names = [r.name for r in app.routes]
+        assert "cards" in route_names
+
+    def test_css_has_new_bench_classes(self, client):
+        """Verify new CSS classes for bench v2 are present."""
+        response = client.get("/static/style.css")
+        assert response.status_code == 200
+        assert ".btn-quick" in response.text
+        assert ".bench-card-preview" in response.text
+        assert ".share-url-row" in response.text
+        assert ".share-actions" in response.text
+        assert ".btn-muted" in response.text
 
 
 # ---------------------------------------------------------------------------

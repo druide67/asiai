@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.1](https://github.com/druide67/asiai/compare/v1.0.0...v1.0.1) — 2026-03-13
 
 ### Added
 
@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dependabot for pip and GitHub Actions dependencies
 - HSTS header on community API
 - SQL injection test suite for community API (`tests/test_sql_injection.sh`)
+- `asiai mcp --register` — opt-in anonymous agent network registration (ADR-001)
+- `asiai unregister` — remove local agent credentials
+- Agent network status in `asiai version` output ("Agent network: registered (#N)")
+- Agent badge SVG in README (`/api/v1/agent-badge`)
+- Benchmark card design v2c — hero number 72px, engine version labels, dynamic frame height
+- Quick Bench on web dashboard (`/bench`) — 1-click benchmark with SSE progress + card + share
+- Web dashboard share section — copy link, download PNG, share on X
+- GPU observability: gpu_cores, context_size, ram_gb in benchmark data pipeline
+- Web dashboard history page with engine activity charts and benchmark results
+- Web dashboard process metrics (CPU/memory per engine)
 
 ### Changed
 

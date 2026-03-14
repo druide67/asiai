@@ -117,6 +117,11 @@ def create_app(state: AppState) -> FastAPI:
     # Static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    # Card images (generated benchmarks cards)
+    cards_dir = Path.home() / ".local" / "share" / "asiai" / "cards"
+    cards_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/cards", StaticFiles(directory=str(cards_dir)), name="cards")
+
     # Templates
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     templates.env.filters["format_bytes"] = format_bytes_filter

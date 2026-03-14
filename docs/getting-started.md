@@ -57,6 +57,7 @@ asiai bench -m qwen3.5 --runs 3 --power
 | [LM Studio](https://lmstudio.ai) | 1234 | OpenAI-compatible |
 | [mlx-lm](https://github.com/ml-explore/mlx-examples) | 8080 | OpenAI-compatible |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | 8080 | OpenAI-compatible |
+| [oMLX](https://github.com/jundot/omlx) | 8000 | OpenAI-compatible |
 | [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | OpenAI-compatible |
 | [Exo](https://github.com/exo-explore/exo) | 52415 | OpenAI-compatible |
 

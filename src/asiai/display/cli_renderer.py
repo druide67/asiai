@@ -176,11 +176,45 @@ def render_snapshot(snap: dict) -> None:
             if "/" in v:
                 ename, ever = v.split("/", 1)
                 versions[ename] = ever
+        # Inference activity keyed by engine name
+        activity: dict[str, dict] = {}
+        for es in snap.get("engines_status", []):
+            activity[es.get("name", "")] = es
+
         for ename in engine_str.split(","):
             ename = ename.strip()
             ver = versions.get(ename, "")
             ver_display = dim(f"v{ver}") if ver else ""
             print(f"  {green('●')} {ename} {ver_display}")
+
+            # Show inference activity metrics if available
+            act = activity.get(ename, {})
+            parts: list[str] = []
+            tcp = act.get("tcp_connections", 0)
+            req = act.get("requests_processing", 0)
+            kv = act.get("kv_cache_usage_ratio", -1)
+            tok_total = act.get("tokens_predicted_total", 0)
+            if tcp > 0:
+                parts.append(f"{tcp} conn")
+            if req > 0:
+                parts.append(yellow(f"{req} processing"))
+            if kv >= 0:
+                kv_pct = round(kv * 100)
+                kv_str = f"{kv_pct}% KV"
+                if kv_pct > 95:
+                    kv_str = red(kv_str)
+                elif kv_pct > 80:
+                    kv_str = yellow(kv_str)
+                parts.append(kv_str)
+            if tok_total > 0:
+                if tok_total >= 1_000_000:
+                    parts.append(f"{tok_total / 1_000_000:.1f}M tokens")
+                elif tok_total >= 1_000:
+                    parts.append(f"{tok_total / 1_000:.1f}K tokens")
+                else:
+                    parts.append(f"{tok_total} tokens")
+            if parts:
+                print(f"    {dim(' · '.join(parts))}")
 
     # Models
     models = snap.get("models", [])
@@ -302,7 +336,7 @@ def render_compare(data: dict) -> None:
     print()
 
 
-def render_bench(report: dict) -> None:
+def render_bench(report: dict, context_size: int = 0) -> None:
     """Render benchmark comparison table with machine context."""
     from asiai.collectors.system import collect_machine_info, collect_memory
 
@@ -322,7 +356,13 @@ def render_bench(report: dict) -> None:
     mem_pct = f"{mem.used / mem.total * 100:.0f}%" if mem.total > 0 else "N/A"
     print(dim(f"  {machine}  RAM: {ram_str} ({mem_pct} used)  Pressure: {mem.pressure}"))
     print()
-    print(bold(f"Benchmark: {model}"))
+    ctx_str = ""
+    if context_size > 0:
+        if context_size >= 1024:
+            ctx_str = f" [{context_size // 1024}K context fill]"
+        else:
+            ctx_str = f" [{context_size} context fill]"
+    print(bold(f"Benchmark: {model}{ctx_str}"))
     print()
 
     # Table header
@@ -463,6 +503,25 @@ def render_bench(report: dict) -> None:
                     f"    {engine_name:<12} {tok_s:.1f} tok/s @ {avg_w:.1f}W"
                     f" = {avg_eff:.2f} tok/s/W (tok/J)"
                 )
+
+    # Process metrics (if available)
+    has_proc = any(
+        data.get("avg_proc_cpu", 0) > 0 or data.get("proc_rss_bytes", 0) > 0
+        for data in engines.values()
+    )
+    if has_proc:
+        print()
+        print(bold("  Process"))
+        for engine_name, data in sorted(engines.items()):
+            cpu = data.get("avg_proc_cpu", 0)
+            rss = data.get("proc_rss_bytes", 0)
+            if cpu > 0 or rss > 0:
+                parts_proc = []
+                if cpu > 0:
+                    parts_proc.append(f"{cpu:.0f}% CPU")
+                if rss > 0:
+                    parts_proc.append(f"{format_bytes(rss)} RSS (peak)")
+                print(f"    {engine_name:<12} {' · '.join(parts_proc)}")
     print()
 
 

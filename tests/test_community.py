@@ -161,10 +161,12 @@ class TestBuildSubmission:
         assert "prompts" in bench
         assert "engines" in bench
 
-        assert payload["schema_version"] == 1
+        assert payload["schema_version"] == 2
         assert payload["hw_ram_gb"] == 64
+        assert payload["hw_gpu_cores"] == 0
         assert payload["asiai_version"] == "0.7.0"
         assert payload["hw_chip"] == "Apple M1 Max"
+        assert payload["benchmark"]["context_size"] == 0
 
     def test_build_submission_hash(self):
         payload = self._build()

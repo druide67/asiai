@@ -60,10 +60,35 @@ mcp = FastMCP(
 )
 
 
+def _do_registration(engines: list[InferenceEngine]) -> None:
+    """Non-blocking agent registration at startup."""
+    try:
+        from asiai.collectors.system import collect_hw_chip, collect_memory
+        from asiai.community import register_agent
+
+        chip = collect_hw_chip()
+        mem = collect_memory()
+        ram_gb = round(mem.total / (1024**3)) if mem.total > 0 else 0
+        engine_names = [e.name for e in engines]
+
+        result = register_agent(
+            chip=chip,
+            ram_gb=ram_gb,
+            engines=engine_names,
+        )
+        if result.success:
+            logger.info("Agent registered (#%d) — api.asiai.dev", result.total_agents)
+        elif result.error:
+            logger.warning("Agent registration failed: %s", result.error)
+    except Exception as exc:
+        logger.warning("Agent registration error: %s", exc)
+
+
 def serve(
     transport: str = "stdio",
     host: str = "127.0.0.1",
     port: int = 8900,
+    register: bool = False,
 ) -> None:
     """Start the MCP server with the specified transport.
 
@@ -71,10 +96,17 @@ def serve(
         transport: "stdio" (Claude Code), "sse", or "streamable-http".
         host: Bind address for SSE/HTTP.
         port: Port for SSE/HTTP.
+        register: Opt-in registration with asiai agent network.
     """
     # Import tools and resources to register them on the mcp instance
     import asiai.mcp.resources  # noqa: F401
     import asiai.mcp.tools  # noqa: F401
+
+    # Agent registration (non-blocking, best-effort)
+    if register:
+        from asiai.cli import _discover_engines
+
+        _do_registration(_discover_engines())
 
     if transport == "stdio":
         mcp.run(transport="stdio")

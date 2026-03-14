@@ -760,17 +760,17 @@
     "ja": "推論中のGPU消費電力を測定。tok/sあたりのワット数を把握 &mdash; 他にはない機能。",
     "ko": "추론 중 GPU 소비전력 측정. 와트당 tok/s를 파악 &mdash; 다른 도구에는 없는 기능."
   },
-  "feat3_t": {"en": "6 Engines, One CLI", "fr": "6 moteurs, un seul CLI", "de": "6 Engines, ein CLI", "es": "6 motores, un CLI", "it": "6 motori, un CLI", "pt": "6 motores, um CLI", "zh": "6个引擎，一个CLI", "ja": "6エンジン、1つのCLI", "ko": "6개 엔진, 하나의 CLI"},
+  "feat3_t": {"en": "7 Engines, One CLI", "fr": "7 moteurs, un seul CLI", "de": "7 Engines, ein CLI", "es": "7 motores, un CLI", "it": "7 motori, un CLI", "pt": "7 motores, um CLI", "zh": "7个引擎，一个CLI", "ja": "7エンジン、1つのCLI", "ko": "7개 엔진, 하나의 CLI"},
   "feat3_d": {
-    "en": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. Auto-detected, auto-configured.",
-    "fr": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. Détection et configuration automatiques.",
-    "de": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. Automatisch erkannt und konfiguriert.",
-    "es": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. Detección y configuración automática.",
-    "it": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. Rilevamento e configurazione automatici.",
-    "pt": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. Detecção e configuração automáticas.",
-    "zh": "Ollama、LM Studio、mlx-lm、llama.cpp、vllm-mlx、Exo。自动检测，自动配置。",
-    "ja": "Ollama、LM Studio、mlx-lm、llama.cpp、vllm-mlx、Exo。自動検出、自動設定。",
-    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo. 자동 감지, 자동 설정."
+    "en": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Auto-detected, auto-configured.",
+    "fr": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Détection et configuration automatiques.",
+    "de": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Automatisch erkannt und konfiguriert.",
+    "es": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Detección y configuración automática.",
+    "it": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Rilevamento e configurazione automatici.",
+    "pt": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Detecção e configuração automáticas.",
+    "zh": "Ollama、LM Studio、mlx-lm、llama.cpp、oMLX、vllm-mlx、Exo。自动检测，自动配置。",
+    "ja": "Ollama、LM Studio、mlx-lm、llama.cpp、oMLX、vllm-mlx、Exo。自動検出、自動設定。",
+    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. 자동 감지, 자동 설정."
   },
   "feat4_t": {"en": "Zero Dependencies", "fr": "Zéro dépendance", "de": "Keine Abhängigkeiten", "es": "Sin dependencias", "it": "Zero dipendenze", "pt": "Zero dependências", "zh": "零依赖", "ja": "依存関係ゼロ", "ko": "의존성 제로"},
   "feat4_d": {
@@ -1491,6 +1491,13 @@ mlx-lm     30.1   38ms</code>
             <td><code>8080</code></td>
             <td>{{ tr("eng_compat") }}</td>
             <td>GGUF</td>
+            <td>&#x2014;</td>
+          </tr>
+          <tr>
+            <td><a href="engines/omlx/">oMLX</a></td>
+            <td><code>8000</code></td>
+            <td>{{ tr("eng_compat") }}</td>
+            <td>MLX</td>
             <td>&#x2014;</td>
           </tr>
           <tr>

@@ -11,7 +11,7 @@ asiai setup
 ## What it does
 
 1. **Hardware detection** — identifies your Apple Silicon chip and RAM
-2. **Engine scan** — checks for installed inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo)
+2. **Engine scan** — checks for installed inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo)
 3. **Model check** — lists loaded models across all detected engines
 4. **Daemon status** — shows whether the monitoring daemon is running
 5. **Next steps** — suggests commands based on your setup state

@@ -40,20 +40,24 @@ System overview with engine status, loaded models, memory usage, and last benchm
 
 Run cross-engine benchmarks directly from the browser:
 
-- Select engines and prompts
-- Configure number of runs (1-10)
-- Optional power measurement (requires `sudo NOPASSWD` for `powermetrics`)
+- **Quick Bench** button — 1 prompt, 1 run, ~15 seconds
+- Advanced options: engines, prompts, runs, context-size (4K/16K/32K/64K), power
 - Live progress via SSE
 - Results table with winner highlighting
 - Throughput and TTFT charts
+- **Shareable card** — auto-generated after benchmark (PNG via API, SVG fallback)
+- **Share section** — copy link, download PNG/SVG, share on X/Reddit, export JSON
 
 ### History (`/history`)
 
-Visualize benchmark results over time:
+Visualize benchmark and system metrics over time:
 
-- Throughput (tok/s) and TTFT line charts
-- Filter by time range (24h / 7d / 30d / 90d)
-- Sortable data table
+- System charts: CPU load, Memory %, GPU utilization (with renderer/tiler breakdown)
+- Engine activity: TCP connections, requests processing, KV cache usage %
+- Benchmark charts: throughput (tok/s) and TTFT per engine
+- Process metrics: engine CPU % and RSS memory during benchmark runs
+- Filter by time range (1h / 24h / 7d / 30d / 90d) or custom date range
+- Data table with context-size indication (e.g., "code (64K ctx)")
 
 ### Monitor (`/monitor`)
 
@@ -93,9 +97,38 @@ Status values: `ok` (all engines reachable), `degraded` (some down), `error` (al
 
 Full system + engine snapshot. Cached 5s. Includes CPU load, memory, thermal state, and per-engine status with loaded models.
 
+### `GET /api/benchmarks`
+
+Benchmark results with filters. Returns per-run data including tok/s, TTFT, power, context_size, engine_version.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hours` | `168` | Time range in hours (0 = all) |
+| `model` | | Filter by model name |
+| `engine` | | Filter by engine name |
+| `since` / `until` | | Unix timestamp range (overrides hours) |
+
+### `GET /api/engine-history`
+
+Engine status history (reachability, TCP connections, KV cache, tokens predicted).
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hours` | `168` | Time range in hours |
+| `engine` | | Filter by engine name |
+
+### `GET /api/benchmark-process`
+
+Process-level CPU and memory metrics from benchmark runs (7-day retention).
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hours` | `168` | Time range in hours |
+| `engine` | | Filter by engine name |
+
 ### `GET /api/metrics`
 
-Prometheus exposition format. 15 gauges covering system, engine, model, and benchmark metrics.
+Prometheus exposition format. Gauges covering system, engine, model, and benchmark metrics.
 
 ```yaml
 # prometheus.yml
@@ -116,6 +149,10 @@ Metrics include:
 | `asiai_thermal_speed_limit_pct` | gauge | CPU speed limit % |
 | `asiai_engine_reachable{engine}` | gauge | Engine reachability (0/1) |
 | `asiai_engine_models_loaded{engine}` | gauge | Models loaded count |
+| `asiai_engine_tcp_connections{engine}` | gauge | Established TCP connections |
+| `asiai_engine_requests_processing{engine}` | gauge | Requests currently processing |
+| `asiai_engine_kv_cache_usage_ratio{engine}` | gauge | KV cache fill ratio (0-1) |
+| `asiai_engine_tokens_predicted_total{engine}` | counter | Cumulative tokens predicted |
 | `asiai_model_vram_bytes{engine,model}` | gauge | VRAM per model |
 | `asiai_bench_tok_per_sec{engine,model}` | gauge | Last benchmark tok/s |
 

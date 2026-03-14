@@ -93,10 +93,30 @@ async def api_benchmarks(
                 "power_watts": r.get("power_watts", 0),
                 "tok_per_sec_per_watt": r.get("tok_per_sec_per_watt", 0),
                 "run_index": r.get("run_index", 0),
+                "context_size": r.get("context_size", 0),
+                "engine_version": r.get("engine_version", ""),
+                "load_time_ms": r.get("load_time_ms", 0),
             }
             for r in rows
         ]
     )
+
+
+@router.get("/api/benchmark-process")
+async def api_benchmark_process(
+    request: Request,
+    hours: int = Query(default=168, ge=1, le=2160),
+    engine: str = Query(default=""),
+) -> JSONResponse:
+    """JSON API: benchmark process metrics (CPU/RSS per run)."""
+    state = request.app.state.app_state
+
+    from asiai.storage.db import query_benchmark_process
+
+    rows = await asyncio.to_thread(
+        query_benchmark_process, state.db_path, hours, engine
+    )
+    return JSONResponse(rows)
 
 
 @router.get("/api/engine-history")

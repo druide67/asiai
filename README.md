@@ -18,6 +18,7 @@
   <a href="https://github.com/sponsors/druide67"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg" alt="Sponsor"></a>
   <a href="https://api.asiai.dev/api/v1/badge/benchmarks"><img src="https://api.asiai.dev/api/v1/badge/benchmarks" alt="Benchmarks"></a>
   <a href="https://api.asiai.dev/api/v1/badge/top-speed"><img src="https://api.asiai.dev/api/v1/badge/top-speed" alt="Top Speed"></a>
+  <a href="https://www.asiai.dev/agent/"><img src="https://api.asiai.dev/api/v1/agent-badge" alt="AI Agents"></a>
 </p>
 
 <p align="center">
@@ -60,7 +61,7 @@ asiai bench --quick --card --share    # Bench + shareable card in ~15 seconds
 
 ### `asiai detect`
 
-Auto-detect running inference engines across 6 ports.
+Auto-detect running inference engines across 7 ports.
 
 ```
 $ asiai detect
@@ -277,7 +278,9 @@ asiai bench --card --share            # SVG + PNG via community API
 asiai bench --quick --card --share    # Quick bench + card + share
 ```
 
-A **1200x630 dark-themed card** with your model, chip, engine comparison bar chart, winner highlight, and metric chips. Optimized for Reddit, X, Discord, and GitHub READMEs.
+![Benchmark card example](docs/assets/benchmark-card-example.png)
+
+A **1200x630 dark-themed card** with your model, chip, specs banner (quantization, RAM, GPU cores, context size), engine comparison bar chart, winner highlight, and metric chips (tok/s, TTFT, power, engine version). Optimized for Reddit, X, Discord, and GitHub READMEs.
 
 Every shared card includes asiai branding — the [Speedtest.net model](https://www.speedtest.net) for local LLM inference.
 
@@ -289,6 +292,7 @@ Every shared card includes asiai branding — the [Speedtest.net model](https://
 | [LM Studio](https://lmstudio.ai) | 1234 | `brew install --cask lm-studio` | OpenAI-compatible |
 | [mlx-lm](https://github.com/ml-explore/mlx-examples) | 8080 | `brew install mlx-lm` | OpenAI-compatible |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | 8080 | `brew install llama.cpp` | OpenAI-compatible |
+| [oMLX](https://github.com/jundot/omlx) | 8000 | `brew tap jundot/omlx && brew install omlx` | OpenAI-compatible |
 | [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | `pip install vllm-mlx` | OpenAI-compatible |
 | [Exo](https://github.com/exo-explore/exo) | 52415 | `pip install exo` | OpenAI-compatible |
 
@@ -340,7 +344,10 @@ When running `asiai web`, three REST API endpoints are available for programmati
 |----------|-------------|
 | `GET /api/status` | Lightweight health check (< 500ms) — engine reachability, memory pressure, thermal |
 | `GET /api/snapshot` | Full system + engine snapshot with loaded models, VRAM, versions |
-| `GET /api/metrics` | Prometheus exposition format — 15 gauges for system, engines, models, benchmarks |
+| `GET /api/benchmarks` | Benchmark results with tok/s, TTFT, power, context_size, engine_version |
+| `GET /api/engine-history` | Engine status history (TCP, KV cache, tokens predicted) |
+| `GET /api/benchmark-process` | Process CPU/RSS metrics from benchmark runs (7d retention) |
+| `GET /api/metrics` | Prometheus exposition format — system, engine, model, benchmark gauges |
 
 ### Prometheus integration
 

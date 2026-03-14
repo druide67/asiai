@@ -465,11 +465,24 @@ class TestMCPCli:
         from asiai.cli import main
 
         main(["mcp"])
-        mock_serve.assert_called_once_with(transport="stdio", host="127.0.0.1", port=8900)
+        mock_serve.assert_called_once_with(
+            transport="stdio", host="127.0.0.1", port=8900, register=False,
+        )
 
     @patch("asiai.mcp.server.serve")
     def test_mcp_sse_transport(self, mock_serve):
         from asiai.cli import main
 
         main(["mcp", "--transport", "sse", "--port", "9000"])
-        mock_serve.assert_called_once_with(transport="sse", host="127.0.0.1", port=9000)
+        mock_serve.assert_called_once_with(
+            transport="sse", host="127.0.0.1", port=9000, register=False,
+        )
+
+    @patch("asiai.mcp.server.serve")
+    def test_mcp_register_flag(self, mock_serve):
+        from asiai.cli import main
+
+        main(["mcp", "--register"])
+        mock_serve.assert_called_once_with(
+            transport="stdio", host="127.0.0.1", port=8900, register=True,
+        )

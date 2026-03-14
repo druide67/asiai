@@ -44,6 +44,21 @@
     </div>
 </div>
 
+<!-- Engine Activity -->
+<div id="engine-activity-section" class="fade-in-delay-2" style="display: none;">
+    <h3 style="margin-bottom: 0.75rem; color: var(--text-secondary);">Engine Activity</h3>
+    <div class="card-grid">
+        <div class="card">
+            <h3 class="card-title">Connections &amp; Requests</h3>
+            <div id="engine-conn-chart" style="min-height: 200px;"></div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">KV Cache Usage %</h3>
+            <div id="engine-kv-chart" style="min-height: 200px;"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Charts -->
 <div class="card-grid-2 fade-in-delay-2">
     <div class="card">
@@ -55,6 +70,21 @@
         <h3 class="card-title">Time to First Token (ms)</h3>
         <div id="history-ttft-chart" style="min-height: 300px;"></div>
         <div id="ttft-chart-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 4rem 0;">No benchmark data — run a benchmark first</div>
+    </div>
+</div>
+
+<!-- Process Metrics -->
+<div id="process-metrics-section" class="fade-in-delay-2" style="display: none;">
+    <h3 style="margin-bottom: 0.75rem; color: var(--text-secondary);">Process Metrics (Benchmark Runs)</h3>
+    <div class="card-grid">
+        <div class="card">
+            <h3 class="card-title">Engine CPU %</h3>
+            <div id="proc-cpu-chart" style="min-height: 200px;"></div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">Engine RSS (Memory)</h3>
+            <div id="proc-rss-chart" style="min-height: 200px;"></div>
+        </div>
     </div>
 </div>
 
@@ -96,6 +126,10 @@
     var sysCpuChart = null;
     var sysMemChart = null;
     var sysGpuChart = null;
+    var engineConnChart = null;
+    var engineKvChart = null;
+    var procCpuChart = null;
+    var procRssChart = null;
 
     function setTimeRange(hours, btn) {
         currentHours = hours;
@@ -152,6 +186,24 @@
             .catch(function(err) {
                 console.error('Failed to load system history:', err);
             });
+
+        fetch('/api/engine-history?' + qs)
+            .then(function(res) { return res.json(); })
+            .then(function(rows) {
+                renderEngineActivity(rows);
+            })
+            .catch(function(err) {
+                console.error('Failed to load engine history:', err);
+            });
+
+        fetch('/api/benchmark-process?' + qs)
+            .then(function(res) { return res.json(); })
+            .then(function(rows) {
+                renderProcessMetrics(rows);
+            })
+            .catch(function(err) {
+                console.error('Failed to load process metrics:', err);
+            });
     }
 
     function renderSystemCharts(rows) {
@@ -163,6 +215,8 @@
         var cpuData = [];
         var memData = [];
         var gpuData = [];
+        var gpuRendererData = [];
+        var gpuTilerData = [];
 
         rows.forEach(function(r) {
             var tsMs = r.ts * 1000;
@@ -172,6 +226,12 @@
             }
             if (r.gpu_utilization_pct >= 0) {
                 gpuData.push([tsMs, r.gpu_utilization_pct]);
+            }
+            if (r.gpu_renderer_pct >= 0) {
+                gpuRendererData.push([tsMs, r.gpu_renderer_pct]);
+            }
+            if (r.gpu_tiler_pct >= 0) {
+                gpuTilerData.push([tsMs, r.gpu_tiler_pct]);
             }
         });
 
@@ -208,8 +268,15 @@
             gpuCard.style.display = '';
             gpuEl.style.display = '';
             gpuEmpty.style.display = 'none';
+            var gpuSeries = [{ name: 'GPU %', data: gpuData }];
+            if (gpuRendererData.length > 0) {
+                gpuSeries.push({ name: 'Renderer', data: gpuRendererData });
+            }
+            if (gpuTilerData.length > 0) {
+                gpuSeries.push({ name: 'Tiler', data: gpuTilerData });
+            }
             sysGpuChart = createTimeChart('sys-gpu-chart',
-                [{ name: 'GPU %', data: gpuData }],
+                gpuSeries,
                 { height: 200, yTitle: '%', yFormatter: function(v) { return v.toFixed(0) + '%'; } });
         } else {
             gpuCard.style.display = 'none';
@@ -298,7 +365,14 @@
 
             var tdPrompt = document.createElement('td');
             tdPrompt.style.fontFamily = 'var(--font-sans)';
-            tdPrompt.textContent = r.prompt_type;
+            var promptText = r.prompt_type;
+            if (r.context_size > 0) {
+                var ctxLabel = r.context_size >= 1024
+                    ? Math.floor(r.context_size / 1024) + 'K'
+                    : r.context_size.toString();
+                promptText += ' (' + ctxLabel + ' ctx)';
+            }
+            tdPrompt.textContent = promptText;
             tr.appendChild(tdPrompt);
 
             var tdTok = document.createElement('td');
@@ -318,6 +392,108 @@
 
             tbody.appendChild(tr);
         });
+    }
+
+    function renderEngineActivity(rows) {
+        if (engineConnChart) { engineConnChart.destroy(); engineConnChart = null; }
+        if (engineKvChart) { engineKvChart.destroy(); engineKvChart = null; }
+
+        var section = document.getElementById('engine-activity-section');
+        if (!rows || rows.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = '';
+
+        // Group by engine
+        var byEngine = {};
+        rows.forEach(function(r) {
+            if (!byEngine[r.engine]) {
+                byEngine[r.engine] = { conn: [], req: [], kv: [] };
+            }
+            var tsMs = r.ts * 1000;
+            var totalConn = (r.tcp_connections || 0) + (r.requests_processing || 0);
+            byEngine[r.engine].conn.push([tsMs, r.tcp_connections || 0]);
+            byEngine[r.engine].req.push([tsMs, r.requests_processing || 0]);
+            if (r.kv_cache_usage_ratio >= 0) {
+                byEngine[r.engine].kv.push([tsMs, Math.round(r.kv_cache_usage_ratio * 100)]);
+            }
+        });
+
+        var connSeries = [];
+        var kvSeries = [];
+        Object.keys(byEngine).forEach(function(eng) {
+            connSeries.push({ name: eng + ' TCP', data: byEngine[eng].conn });
+            if (byEngine[eng].req.some(function(p) { return p[1] > 0; })) {
+                connSeries.push({ name: eng + ' processing', data: byEngine[eng].req });
+            }
+            if (byEngine[eng].kv.length > 0) {
+                kvSeries.push({ name: eng, data: byEngine[eng].kv });
+            }
+        });
+
+        if (connSeries.length > 0) {
+            engineConnChart = createTimeChart('engine-conn-chart', connSeries, {
+                height: 200, yTitle: 'Count',
+                yFormatter: function(v) { return v.toFixed(0); },
+            });
+        }
+        if (kvSeries.length > 0) {
+            engineKvChart = createTimeChart('engine-kv-chart', kvSeries, {
+                height: 200, yTitle: '%',
+                yFormatter: function(v) { return v.toFixed(0) + '%'; },
+            });
+        }
+    }
+
+    function renderProcessMetrics(rows) {
+        if (procCpuChart) { procCpuChart.destroy(); procCpuChart = null; }
+        if (procRssChart) { procRssChart.destroy(); procRssChart = null; }
+
+        var section = document.getElementById('process-metrics-section');
+        if (!rows || rows.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = '';
+
+        var byEngine = {};
+        rows.forEach(function(r) {
+            if (!byEngine[r.engine]) {
+                byEngine[r.engine] = { cpu: [], rss: [] };
+            }
+            var tsMs = r.ts * 1000;
+            if (r.proc_cpu_pct > 0) {
+                byEngine[r.engine].cpu.push([tsMs, r.proc_cpu_pct]);
+            }
+            if (r.proc_rss_bytes > 0) {
+                byEngine[r.engine].rss.push([tsMs, Math.round(r.proc_rss_bytes / (1024 * 1024))]);
+            }
+        });
+
+        var cpuSeries = [];
+        var rssSeries = [];
+        Object.keys(byEngine).forEach(function(eng) {
+            if (byEngine[eng].cpu.length > 0) {
+                cpuSeries.push({ name: eng, data: byEngine[eng].cpu });
+            }
+            if (byEngine[eng].rss.length > 0) {
+                rssSeries.push({ name: eng, data: byEngine[eng].rss });
+            }
+        });
+
+        if (cpuSeries.length > 0) {
+            procCpuChart = createTimeChart('proc-cpu-chart', cpuSeries, {
+                height: 200, yTitle: '%',
+                yFormatter: function(v) { return v.toFixed(0) + '%'; },
+            });
+        }
+        if (rssSeries.length > 0) {
+            procRssChart = createTimeChart('proc-rss-chart', rssSeries, {
+                height: 200, yTitle: 'MB',
+                yFormatter: function(v) { return v.toFixed(0) + ' MB'; },
+            });
+        }
     }
 
     // Initial load

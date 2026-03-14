@@ -19,6 +19,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
     from asiai.engines.ollama import OllamaEngine
+    from asiai.engines.omlx import OmlxEngine
     from asiai.engines.vllm_mlx import VllmMlxEngine
 
     engine_map = {
@@ -26,6 +27,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "lmstudio": LMStudioEngine,
         "mlxlm": MlxLmEngine,
         "llamacpp": LlamaCppEngine,
+        "omlx": OmlxEngine,
         "vllm_mlx": VllmMlxEngine,
         "exo": ExoEngine,
     }
@@ -510,6 +512,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Store results
     if bench_run.results:
         store_benchmark(db_path, bench_run.results)
+        from asiai.storage.db import store_benchmark_process
+
+        store_benchmark_process(db_path, bench_run.results)
 
     # Display errors
     for err in bench_run.errors:
@@ -518,7 +523,8 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Aggregate and render
     report = aggregate_results(bench_run.results)
     report["model"] = model  # Use user-requested name, not engine-resolved
-    render_bench(report)
+    bench_ctx_size = bench_run.results[0].get("context_size", 0) if bench_run.results else 0
+    render_bench(report, context_size=bench_ctx_size)
 
     # Export to JSON if requested
     export_path = getattr(args, "export", None)
@@ -534,23 +540,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
         if regressions:
             render_regressions(regressions)
 
-    # Community share (opt-in)
-    submission_id = ""
-    if getattr(args, "share", False) and bench_run.results:
-        from asiai.community import build_submission, submit_benchmark
-        from asiai.display.formatters import dim, green
-
-        payload = build_submission(bench_run.results, report)
-        result = submit_benchmark(payload, db_path=db_path)
-        if result.success:
-            submission_id = result.submission_id
-            print(f"  {green('✓')} Shared to community ({result.submission_id[:8]}...)")
-        else:
-            print(f"  {dim('⚠ Share failed: ' + result.error)}")
-
-    # Benchmark card generation
+    # Benchmark card generation (before share so SVG can be included in payload)
+    card_svg = ""
     if getattr(args, "card", False) and bench_run.results:
         from asiai.benchmark.card import (
+            extract_card_metadata,
             generate_card_svg,
             get_share_url,
             save_card,
@@ -558,14 +552,56 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.display.formatters import dim, green
 
         first_result = bench_run.results[0]
-        hw_chip = first_result.get("hw_chip", "")
-        svg = generate_card_svg(report, hw_chip=hw_chip)
-        svg_path = save_card(svg, fmt="svg")
+        eng_vers, pw_data, eng_quants = extract_card_metadata(
+            bench_run.results
+        )
+        card_svg = generate_card_svg(
+            report,
+            hw_chip=first_result.get("hw_chip", ""),
+            model_quantization=first_result.get("model_quantization", ""),
+            ram_gb=first_result.get("ram_gb", 0),
+            gpu_cores=first_result.get("gpu_cores", 0),
+            context_size=first_result.get("context_size", 0),
+            engine_versions=eng_vers,
+            power_data=pw_data,
+            engine_quants=eng_quants,
+        )
+        svg_path = save_card(card_svg, fmt="svg")
         print(f"  {green('✓')} Card saved: {svg_path}")
 
-        # If shared, download PNG from API
+    # Community share (opt-in)
+    submission_id = ""
+    if getattr(args, "share", False) and bench_run.results:
+        import base64
+
+        from asiai.community import build_submission, submit_benchmark
+        from asiai.display.formatters import dim, green
+
+        payload = build_submission(bench_run.results, report)
+        # Include locally-rendered PNG for server-side card (macOS sips rendering)
+        if card_svg and "svg_path" in dir() and svg_path:
+            from asiai.benchmark.card import convert_svg_to_png
+
+            local_png = convert_svg_to_png(svg_path)
+            if local_png:
+                try:
+                    with open(local_png, "rb") as f:
+                        payload["card_png_b64"] = base64.b64encode(f.read()).decode("ascii")
+                except OSError:
+                    pass
+        result = submit_benchmark(payload, db_path=db_path)
+        if result.success:
+            submission_id = result.submission_id
+            print(f"  {green('✓')} Shared to community ({result.submission_id[:8]}...)")
+        else:
+            print(f"  {dim('⚠ Share failed: ' + result.error)}")
+
+    # Card share URL + PNG download
+    if card_svg and getattr(args, "card", False):
+        from asiai.display.formatters import dim, green
+
         if submission_id:
-            from asiai.benchmark.card import download_card_png
+            from asiai.benchmark.card import download_card_png, get_share_url
 
             png_path = download_card_png(submission_id)
             if png_path:
@@ -579,7 +615,8 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
         # S2: open card on macOS
         try:
-            card_to_open = png_path if submission_id and "png_path" in dir() and png_path else svg_path
+            has_png = submission_id and "png_path" in dir() and png_path
+            card_to_open = png_path if has_png else svg_path
             subprocess.Popen(
                 ["open", card_to_open],
                 stdout=subprocess.DEVNULL,
@@ -701,7 +738,28 @@ def cmd_mcp(args: argparse.Namespace) -> int:
         transport=getattr(args, "transport", "stdio"),
         host=getattr(args, "host", "127.0.0.1"),
         port=getattr(args, "port", 8900),
+        register=getattr(args, "register", False),
     )
+    return 0
+
+
+def cmd_unregister(args: argparse.Namespace) -> int:
+    """Handle 'unregister' command — remove agent credentials."""
+    from asiai.community import get_agent_info, unregister_agent
+    from asiai.display.formatters import dim, green, yellow
+
+    info = get_agent_info()
+    if not info:
+        print(yellow("Not registered — no agent.json found."))
+        return 0
+
+    agent_id = info.get("agent_id", "unknown")
+    removed = unregister_agent()
+    if removed:
+        print(green(f"Agent {agent_id} unregistered — credentials removed."))
+        print(dim("You can re-register anytime with: asiai mcp --register"))
+    else:
+        print(yellow("Failed to remove agent.json"))
     return 0
 
 
@@ -1081,6 +1139,13 @@ def main(argv: list[str] | None = None) -> int:
         "--port", type=int, default=8900, help="Port for SSE/HTTP transport (default: 8900)"
     )
     mcp_parser.add_argument("--host", default="127.0.0.1", help="Host for SSE/HTTP transport")
+    mcp_parser.add_argument(
+        "--register", action="store_true",
+        help="Register with asiai agent network (opt-in, anonymous)",
+    )
+
+    # unregister
+    subparsers.add_parser("unregister", help="Remove agent registration (delete local credentials)")
 
     # version (alias for --version)
     subparsers.add_parser("version", help="Show version")
@@ -1134,6 +1199,15 @@ def main(argv: list[str] | None = None) -> int:
         print(dim(f"  {chip}, {ram_gb} GB RAM"))
         print(dim(f"  Engines: {engine_names}"))
         print(dim(f"  Daemon: {daemon_str}"))
+
+        # Agent network status
+        from asiai.community import get_agent_info
+
+        agent_info = get_agent_info()
+        if agent_info.get("agent_id"):
+            total = agent_info.get("total_agents", "?")
+            print(dim(f"  Agent network: registered (#{total})"))
+
         return 0
 
     commands = {
@@ -1149,6 +1223,7 @@ def main(argv: list[str] | None = None) -> int:
         "leaderboard": cmd_leaderboard,
         "compare": cmd_compare,
         "recommend": cmd_recommend,
+        "unregister": cmd_unregister,
         "setup": cmd_setup,
     }
 

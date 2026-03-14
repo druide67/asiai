@@ -12,7 +12,7 @@ asiai bench --card                    # SVG + PNG saved locally
 
 ## Example
 
-![Benchmark card example](assets/benchmark-card-example.svg)
+![Benchmark card example](assets/benchmark-card-example.png)
 
 ## What you get
 

@@ -7,74 +7,125 @@
     <p>Run cross-engine benchmarks with live progress</p>
 </div>
 
+<!-- Quick Bench CTA -->
+<div class="card fade-in" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <button type="button" id="quick-bench-btn" class="btn btn-quick"
+                {% if bench_running %}disabled{% endif %}>
+            &#9654; Quick Bench
+        </button>
+        <span class="text-neutral-500 text-xs">
+            1 prompt &middot; 1 run &middot; ~15s &middot; shareable card
+        </span>
+    </div>
+    <p class="help-hint" style="margin-top: 0.75rem;">
+        <a href="https://asiai.dev/commands/bench/" target="_blank" rel="noopener">Documentation</a>
+        &middot; Compare your Apple Silicon inference speed across engines
+    </p>
+</div>
+
 <div class="card-grid-2 fade-in">
     <!-- Benchmark form -->
     <div class="card">
-        <h3 class="card-title">Configuration</h3>
-        <form id="bench-form">
-            <!-- Model -->
-            <div class="form-group">
-                <label class="form-label">Model (auto-detect if empty)</label>
-                <input type="text" name="model" class="form-input" placeholder="e.g. qwen2.5:7b">
-            </div>
+        <details id="advanced-options">
+            <summary class="card-title advanced-toggle">
+                <span class="chevron">&#9654;</span> Advanced options
+            </summary>
+            <form id="bench-form" style="margin-top: 1rem;">
+                <!-- Model -->
+                <div class="form-group">
+                    <label class="form-label">Model (auto-detect if empty)</label>
+                    <input type="text" name="model" class="form-input" placeholder="e.g. qwen2.5:7b">
+                </div>
 
-            <!-- Engines -->
-            <div class="form-group">
-                <label class="form-label">Engines</label>
-                {% for engine in engines %}
-                <label class="form-checkbox">
-                    <input type="checkbox" name="engines" value="{{ engine.name }}"
-                           {% if engine.reachable %}checked{% else %}disabled{% endif %}>
-                    <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
-                    {{ engine.name }}
-                    {% if not engine.reachable %}<span class="text-neutral-500">(offline)</span>{% endif %}
-                </label>
-                {% endfor %}
-                {% if not engines %}
-                <p class="text-neutral-400 text-sm">No engines detected</p>
-                {% endif %}
-            </div>
-
-            <!-- Prompts -->
-            <div class="form-group">
-                <label class="form-label">Prompts</label>
-                {% for prompt in prompts %}
-                <label class="form-checkbox">
-                    <input type="checkbox" name="prompts" value="{{ prompt.name }}" checked>
-                    {{ prompt.label }} <span class="text-neutral-500 text-xs">({{ prompt.max_tokens }} tokens)</span>
-                </label>
-                {% endfor %}
-            </div>
-
-            <!-- Runs -->
-            <div class="form-group">
-                <label class="form-label">Runs: <span id="runs-value">3</span></label>
-                <input type="range" name="runs" class="form-range" min="1" max="10" value="3"
-                       oninput="document.getElementById('runs-value').textContent = this.value">
-            </div>
-
-            <!-- Power -->
-            <div class="form-group">
-                <label class="form-checkbox">
-                    <input type="checkbox" name="power" {% if not power_available %}disabled{% endif %}>
-                    Measure power
-                    {% if power_available %}
-                    <span class="text-neutral-500 text-xs">(via powermetrics)</span>
-                    {% else %}
-                    <span class="text-neutral-500 text-xs">(requires sudo NOPASSWD for powermetrics)</span>
+                <!-- Engines -->
+                <div class="form-group">
+                    <label class="form-label">Engines</label>
+                    {% for engine in engines %}
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="engines" value="{{ engine.name }}"
+                               {% if engine.reachable %}checked{% else %}disabled{% endif %}>
+                        <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
+                        {{ engine.name }}
+                        {% if not engine.reachable %}<span class="text-neutral-500">(offline)</span>{% endif %}
+                    </label>
+                    {% endfor %}
+                    {% if not engines %}
+                    <p class="text-neutral-400 text-sm">No engines detected</p>
                     {% endif %}
-                </label>
-            </div>
+                </div>
 
-            <button type="submit" id="bench-submit" class="btn btn-primary"
-                    {% if bench_running %}disabled{% endif %}>
-                {% if bench_running %}
-                <span class="spinner"></span> Running...
-                {% else %}
-                Run Benchmark
-                {% endif %}
-            </button>
-        </form>
+                <!-- Prompts -->
+                <div class="form-group">
+                    <label class="form-label">Prompts</label>
+                    {% for prompt in prompts %}
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="prompts" value="{{ prompt.name }}" checked>
+                        {{ prompt.label }} <span class="text-neutral-500 text-xs">({{ prompt.max_tokens }} tokens)</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <!-- Runs -->
+                <div class="form-group">
+                    <label class="form-label">Runs: <span id="runs-value">3</span></label>
+                    <input type="range" name="runs" class="form-range" min="1" max="10" value="3"
+                           oninput="document.getElementById('runs-value').textContent = this.value">
+                </div>
+
+                <!-- Context fill -->
+                <div class="form-group">
+                    <label class="form-label">Context fill</label>
+                    <select name="context_size" class="form-select">
+                        <option value="">None (default prompts)</option>
+                        <option value="4k">4K tokens</option>
+                        <option value="16k">16K tokens</option>
+                        <option value="32k">32K tokens</option>
+                        <option value="64k">64K tokens</option>
+                    </select>
+                </div>
+
+                <!-- Power -->
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="power" {% if not power_available %}disabled{% endif %}>
+                        Measure power (tok/s per watt)
+                        {% if power_available %}
+                        <span class="text-neutral-500 text-xs">(via powermetrics)</span>
+                        {% else %}
+                        <span class="text-neutral-500 text-xs">(unavailable)</span>
+                        {% endif %}
+                    </label>
+                    {% if not power_available %}
+                    <p class="help-hint" style="margin-top: 0.25rem; margin-left: 1.5rem;">
+                        Enable with: <code style="font-size: 0.7rem; background: var(--bg-elevated); padding: 0.1rem 0.4rem; border-radius: 0.25rem;">echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/powermetrics" | sudo tee /etc/sudoers.d/powermetrics</code>
+                    </p>
+                    {% endif %}
+                </div>
+
+                <!-- Card & Share -->
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="card" checked>
+                        Generate shareable card
+                    </label>
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="share" checked>
+                        Share to community
+                        <span class="text-neutral-500 text-xs">(api.asiai.dev)</span>
+                    </label>
+                </div>
+
+                <button type="submit" id="bench-submit" class="btn btn-primary"
+                        {% if bench_running %}disabled{% endif %}>
+                    {% if bench_running %}
+                    <span class="spinner"></span> Running...
+                    {% else %}
+                    Run Benchmark
+                    {% endif %}
+                </button>
+            </form>
+        </details>
     </div>
 
     <!-- Progress & Status -->
@@ -87,7 +138,7 @@
                 <span class="text-sm animate-pulse">Benchmark in progress...</span>
             </div>
             {% else %}
-            <p class="text-neutral-400 text-sm">Ready to run. Configure and click "Run Benchmark".</p>
+            <p class="text-neutral-400 text-sm">Ready. Click Quick Bench or configure advanced options.</p>
             {% endif %}
         </div>
     </div>
@@ -107,27 +158,20 @@
         <div id="bench-ttft-chart" class="chart-container"></div>
     </div>
 </div>
+
+<!-- Share section (populated by JS after bench completes) -->
+<div id="bench-share-section" class="mt-6" style="display: none;"></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
     const form = document.getElementById('bench-form');
     const submitBtn = document.getElementById('bench-submit');
+    const quickBtn = document.getElementById('quick-bench-btn');
     const statusDiv = document.getElementById('bench-status');
     const resultsDiv = document.getElementById('bench-results');
 
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        // Disable button
-        submitBtn.disabled = true;
-        submitBtn.textContent = '';
-        var spinner = document.createElement('span');
-        spinner.className = 'spinner';
-        submitBtn.appendChild(spinner);
-        submitBtn.appendChild(document.createTextNode(' Running...'));
-
-        // Show progress
+    function showBenchProgress() {
         statusDiv.textContent = '';
         var progressRow = document.createElement('div');
         progressRow.style.display = 'flex';
@@ -142,8 +186,52 @@
         progressText.textContent = 'Starting benchmark...';
         progressRow.appendChild(progressText);
         statusDiv.appendChild(progressRow);
+    }
 
-        // POST form data
+    function disableAllBenchButtons() {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '';
+        var spinner = document.createElement('span');
+        spinner.className = 'spinner';
+        submitBtn.appendChild(spinner);
+        submitBtn.appendChild(document.createTextNode(' Running...'));
+        quickBtn.disabled = true;
+    }
+
+    function enableAllBenchButtons() {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Run Benchmark';
+        quickBtn.disabled = false;
+    }
+
+    // Quick Bench button
+    quickBtn.addEventListener('click', function() {
+        disableAllBenchButtons();
+        showBenchProgress();
+
+        var formData = new FormData();
+        formData.append('quick', 'on');
+
+        fetch('/bench/run', { method: 'POST', body: formData })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                startBenchSSE();
+            })
+            .catch(function(err) {
+                showError(err.message);
+            });
+    });
+
+    // Advanced form submit
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        disableAllBenchButtons();
+        showBenchProgress();
+
         var formData = new FormData(form);
 
         fetch('/bench/run', { method: 'POST', body: formData })
@@ -186,8 +274,10 @@
                 doneP.textContent = 'Benchmark complete!';
                 statusDiv.appendChild(doneP);
 
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Run Benchmark';
+                enableAllBenchButtons();
+
+                // Render share section from SSE data
+                renderShareSection(data);
 
                 // Fetch results via JSON API and render with safe DOM methods
                 fetchAndRenderResults();
@@ -328,8 +418,124 @@
         errP.className = 'text-red-400 text-sm';
         errP.textContent = 'Error: ' + msg;
         statusDiv.appendChild(errP);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Run Benchmark';
+        enableAllBenchButtons();
+    }
+
+    function renderShareSection(data) {
+        var section = document.getElementById('bench-share-section');
+        section.textContent = '';
+
+        var cardImgUrl = data.card_png_url || data.card_svg_url;
+        if (!cardImgUrl && !data.share_url) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = '';
+        var card = document.createElement('div');
+        card.className = 'card fade-in';
+
+        var title = document.createElement('h3');
+        title.className = 'card-title';
+        title.textContent = 'Share';
+        card.appendChild(title);
+
+        // Card image preview
+        if (cardImgUrl) {
+            var img = document.createElement('img');
+            img.src = cardImgUrl;
+            img.alt = 'Benchmark card';
+            img.className = 'bench-card-preview';
+            card.appendChild(img);
+        }
+
+        // Share URL pill (only if online share succeeded)
+        if (data.share_url) {
+            var urlRow = document.createElement('div');
+            urlRow.className = 'share-url-row';
+
+            var urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.readOnly = true;
+            urlInput.value = data.share_url;
+            urlInput.className = 'form-input share-url-input';
+            urlRow.appendChild(urlInput);
+
+            var copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'btn btn-primary';
+            copyBtn.textContent = 'Copy link';
+            copyBtn.addEventListener('click', function() {
+                // Clipboard API requires HTTPS; fallback for HTTP
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(data.share_url).then(function() {
+                        copyBtn.textContent = 'Copied!';
+                        setTimeout(function() { copyBtn.textContent = 'Copy link'; }, 2000);
+                    });
+                } else {
+                    urlInput.select();
+                    document.execCommand('copy');
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(function() { copyBtn.textContent = 'Copy link'; }, 2000);
+                }
+            });
+            urlRow.appendChild(copyBtn);
+
+            card.appendChild(urlRow);
+        }
+
+        // Action buttons
+        var actions = document.createElement('div');
+        actions.className = 'share-actions';
+
+        // Download PNG (or SVG fallback)
+        var downloadUrl = data.card_png_url || data.card_svg_url;
+        if (downloadUrl) {
+            var dlBtn = document.createElement('a');
+            dlBtn.href = downloadUrl;
+            dlBtn.download = '';
+            dlBtn.className = 'btn btn-primary';
+            dlBtn.textContent = data.card_png_url ? 'Download PNG' : 'Download SVG';
+            actions.appendChild(dlBtn);
+        }
+
+        // Share on X (only if share_url exists)
+        if (data.share_url) {
+            var xBtn = document.createElement('a');
+            xBtn.href = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(data.share_url) + '&text=' + encodeURIComponent('My local LLM benchmark results via asiai');
+            xBtn.target = '_blank';
+            xBtn.rel = 'noopener noreferrer';
+            xBtn.className = 'btn';
+            xBtn.textContent = 'Share on X';
+            actions.appendChild(xBtn);
+
+            var redditBtn = document.createElement('a');
+            redditBtn.href = 'https://reddit.com/submit?url=' + encodeURIComponent(data.share_url) + '&title=' + encodeURIComponent('asiai benchmark results');
+            redditBtn.target = '_blank';
+            redditBtn.rel = 'noopener noreferrer';
+            redditBtn.className = 'btn';
+            redditBtn.textContent = 'Share on Reddit';
+            actions.appendChild(redditBtn);
+        }
+
+        // Export JSON
+        var exportBtn = document.createElement('a');
+        exportBtn.href = '/bench/export';
+        exportBtn.className = 'btn btn-muted';
+        exportBtn.textContent = 'Export JSON';
+        actions.appendChild(exportBtn);
+
+        card.appendChild(actions);
+
+        // Card error message (if any)
+        if (data.card_error) {
+            var errP = document.createElement('p');
+            errP.className = 'text-neutral-500 text-xs';
+            errP.textContent = 'Card generation note: ' + data.card_error;
+            card.appendChild(errP);
+        }
+
+        section.appendChild(card);
     }
 </script>
 {% endblock %}

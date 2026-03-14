@@ -23,6 +23,7 @@ class GpuInfo:
     tiler_pct: float = -1.0
     mem_in_use: int = 0
     mem_allocated: int = 0
+    cores: int = 0
 
 
 def collect_gpu() -> GpuInfo:
@@ -56,6 +57,7 @@ def collect_gpu() -> GpuInfo:
             tiler_pct=_pct(perf.get("Tiler Utilization %")),
             mem_in_use=_int(perf.get("In use system memory", 0)),
             mem_allocated=_int(perf.get("Allocated system memory", 0)),
+            cores=_int(entry.get("gpu-core-count", 0)),
         )
     except Exception as e:
         logger.debug("GPU collection failed: %s", e)

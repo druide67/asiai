@@ -23,6 +23,9 @@ async def dashboard(request: Request) -> HTMLResponse:
         asyncio.to_thread(_get_last_bench, state),
     )
 
+    # Merge inference activity metrics from snapshot into engines data
+    _merge_engine_metrics(engines_data, snapshot)
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -33,6 +36,22 @@ async def dashboard(request: Request) -> HTMLResponse:
             "last_bench": last_bench,
         },
     )
+
+
+def _merge_engine_metrics(
+    engines_data: list[dict], snapshot: dict
+) -> None:
+    """Merge inference activity metrics from snapshot into engine dicts."""
+    status_by_name: dict[str, dict] = {}
+    for es in snapshot.get("engines_status", []):
+        status_by_name[es.get("name", "")] = es
+
+    for eng in engines_data:
+        es = status_by_name.get(eng["name"], {})
+        eng["tcp_connections"] = es.get("tcp_connections", 0)
+        eng["requests_processing"] = es.get("requests_processing", 0)
+        eng["tokens_predicted_total"] = es.get("tokens_predicted_total", 0)
+        eng["kv_cache_usage_ratio"] = es.get("kv_cache_usage_ratio", -1)
 
 
 def _get_engines_data(state) -> list[dict]:

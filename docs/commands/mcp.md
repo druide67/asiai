@@ -17,6 +17,7 @@ asiai mcp --transport sse --port 9000
 | `--transport` | Transport protocol: `stdio` (default), `sse`, `streamable-http` |
 | `--host` | Bind address (default: `127.0.0.1`) |
 | `--port` | Port for SSE/HTTP transport (default: `8900`) |
+| `--register` | Opt-in registration with asiai agent network (anonymous) |
 
 ## Tools (11)
 
@@ -74,6 +75,21 @@ asiai bench --quick --card --share    # Quick bench + card + share (~15s)
 ```
 
 See the [Benchmark Card](../benchmark-card.md) page for details.
+
+## Agent registration
+
+Join the asiai agent network to get community features (leaderboard, comparison, percentile stats):
+
+```bash
+asiai mcp --register                  # Register on first run, heartbeat on subsequent runs
+asiai unregister                      # Remove local credentials
+```
+
+Registration is **opt-in and anonymous** — only hardware info (chip, RAM) and engine names are sent. No IP, hostname, or personal data is stored. Credentials are saved in `~/.local/share/asiai/agent.json` (chmod 600).
+
+On subsequent `asiai mcp --register` calls, a heartbeat is sent instead of re-registering. If the API is unreachable, the MCP server starts normally without registration.
+
+Check your registration status with `asiai version`.
 
 ## Network agents
 

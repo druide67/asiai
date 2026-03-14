@@ -97,9 +97,11 @@ asiai bench --quick --card --share    # Quick bench + card + share
 ```
 
 The card is a 1200x630 dark-themed image with:
-- Model and chip info
+- Model name and hardware chip badge
+- Specs banner: quantization, RAM, GPU cores, context size
 - Terminal-style bar chart of tok/s per engine
-- Winner highlight and metric chips
+- Winner highlight with delta (e.g., "2.4x")
+- Metric chips: tok/s, TTFT, stability, VRAM, power (W + tok/s/W), engine version
 - asiai branding
 
 The SVG is saved to `~/.local/share/asiai/cards/`. With `--share`, a PNG is also downloaded from the API.

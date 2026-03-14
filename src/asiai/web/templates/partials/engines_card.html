@@ -21,6 +21,34 @@
         <div class="text-xs text-neutral-500" style="margin-top: -0.5rem; padding-left: 1.25rem;">
             {{ engine.url }} &middot; {{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}
         </div>
+        {% if engine.tcp_connections > 0 or engine.requests_processing > 0 or engine.kv_cache_usage_ratio >= 0 or engine.tokens_predicted_total > 0 %}
+        <div class="text-xs text-neutral-500" style="margin-top: 0.25rem; padding-left: 1.25rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            {% if engine.tcp_connections > 0 %}
+            <span>{{ engine.tcp_connections }} conn</span>
+            {% endif %}
+            {% if engine.requests_processing > 0 %}
+            <span class="text-yellow-400">{{ engine.requests_processing }} processing</span>
+            {% endif %}
+            {% if engine.kv_cache_usage_ratio >= 0 %}
+            {% set kv_pct = (engine.kv_cache_usage_ratio * 100) | round(0) | int %}
+            <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                <span class="{% if kv_pct > 95 %}text-red-400{% elif kv_pct > 80 %}text-yellow-400{% endif %}">{{ kv_pct }}% KV</span>
+                <span style="display: inline-block; width: 40px; height: 4px; background: var(--bg-elevated); border-radius: 2px; overflow: hidden;">
+                    <span style="display: block; height: 100%; width: {{ kv_pct }}%; border-radius: 2px; background: {% if kv_pct > 95 %}var(--red){% elif kv_pct > 80 %}var(--yellow){% else %}var(--green){% endif %};"></span>
+                </span>
+            </span>
+            {% endif %}
+            {% if engine.tokens_predicted_total > 0 %}
+            {% if engine.tokens_predicted_total >= 1000000 %}
+            <span>{{ (engine.tokens_predicted_total / 1000000) | round(1) }}M tokens</span>
+            {% elif engine.tokens_predicted_total >= 1000 %}
+            <span>{{ (engine.tokens_predicted_total / 1000) | round(1) }}K tokens</span>
+            {% else %}
+            <span>{{ engine.tokens_predicted_total }} tokens</span>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
         {% endif %}
         {% endfor %}
     </div>

@@ -1189,8 +1189,11 @@ class TestExportBenchmark:
             export_benchmark(raw_results, report, path)
             with open(path) as f:
                 data = json.load(f)
-            assert data["schema_version"] == 1
+            assert data["schema_version"] == 2
             assert data["machine"]["chip"] == "Apple M1 Max"
+            assert data["machine"]["ram_gb"] == 0
+            assert data["machine"]["gpu_cores"] == 0
+            assert data["benchmark"]["context_size"] == 0
             assert "ollama" in data["benchmark"]["engines"]
             engine_data = data["benchmark"]["engines"]["ollama"]
             assert engine_data["median_tok_s"] == 45.0

@@ -106,7 +106,24 @@ def build_submission(
         # Pick the first raw result for this engine (for metadata fields).
         engine_results = [r for r in raw_results if r.get("engine") == engine_name]
         er: dict = engine_results[0] if engine_results else {}
-        engines_data[engine_name] = {
+        # Power data from raw results
+        power_vals = [
+            r.get("power_watts", 0)
+            for r in engine_results
+            if r.get("power_watts", 0) > 0
+        ]
+        eff_vals = [
+            r.get("tok_per_sec_per_watt", 0)
+            for r in engine_results
+            if r.get("tok_per_sec_per_watt", 0) > 0
+        ]
+        load_vals = [
+            r.get("load_time_ms", 0)
+            for r in engine_results
+            if r.get("load_time_ms", 0) > 0
+        ]
+
+        engine_entry: dict[str, Any] = {
             "median_tok_s": data.get("median_tok_s", 0.0),
             "avg_tok_s": data.get("avg_tok_s", 0.0),
             "ci95": [data.get("ci95_lower", 0.0), data.get("ci95_upper", 0.0)],
@@ -117,23 +134,44 @@ def build_submission(
             "model_quantization": er.get("model_quantization", ""),
             "stability": data.get("stability", ""),
             "runs_count": data.get("runs_count", 1),
+            "p90_tok_s": data.get("p90_tok_s", 0.0),
+            "p99_tok_s": data.get("p99_tok_s", 0.0),
+            "p90_ttft_ms": data.get("p90_ttft_ms", 0.0),
         }
+        if power_vals:
+            engine_entry["avg_power_watts"] = round(
+                sum(power_vals) / len(power_vals), 1
+            )
+        if eff_vals:
+            engine_entry["avg_tok_per_sec_per_watt"] = round(
+                sum(eff_vals) / len(eff_vals), 2
+            )
+        if load_vals:
+            engine_entry["load_time_ms"] = round(
+                sum(load_vals) / len(load_vals), 1
+            )
+
+        engines_data[engine_name] = engine_entry
 
     prompts = sorted({r.get("prompt_type", "") for r in raw_results if r.get("prompt_type")})
     run_indices = {r.get("run_index", 0) for r in raw_results}
+    context_size = first.get("context_size", 0)
+    gpu_cores = first.get("gpu_cores", 0)
 
     payload: dict[str, Any] = {
         "id": submission_id,
-        "schema_version": 1,
+        "schema_version": 2,
         "ts": first.get("ts", int(time.time())),
         "hw_chip": first.get("hw_chip", ""),
         "hw_ram_gb": hw_ram_gb,
+        "hw_gpu_cores": gpu_cores,
         "os_version": first.get("os_version", ""),
         "asiai_version": __version__,
         "benchmark": {
             "model": report.get("model", ""),
             "runs_per_prompt": len(run_indices),
             "prompts": prompts,
+            "context_size": context_size,
             "engines": engines_data,
         },
     }
@@ -229,6 +267,230 @@ def submit_benchmark(
 # ---------------------------------------------------------------------------
 # Leaderboard
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Agent registration (opt-in, ADR-001)
+# ---------------------------------------------------------------------------
+
+_AGENT_JSON = os.path.join(
+    os.environ.get("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")),
+    "asiai",
+    "agent.json",
+)
+_REGISTER_TIMEOUT = 5  # seconds
+
+
+@dataclass
+class AgentRegistration:
+    """Result of an agent registration attempt."""
+
+    success: bool
+    agent_id: str = ""
+    agent_token: str = ""
+    total_agents: int = 0
+    error: str = ""
+
+
+def _load_agent_json() -> dict:
+    """Load agent credentials from disk, or return empty dict."""
+    try:
+        with open(_AGENT_JSON) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_agent_json(data: dict) -> None:
+    """Save agent credentials to disk with restrictive permissions."""
+    os.makedirs(os.path.dirname(_AGENT_JSON), exist_ok=True)
+    with open(_AGENT_JSON, "w") as f:
+        json.dump(data, f, indent=2)
+    os.chmod(_AGENT_JSON, 0o600)
+
+
+def register_agent(
+    chip: str = "",
+    ram_gb: int = 0,
+    engines: list[str] | None = None,
+    api_url: str = "",
+    verbose: bool = True,
+) -> AgentRegistration:
+    """Register with the asiai agent network (opt-in).
+
+    If an agent.json already exists, sends a heartbeat instead of re-registering.
+
+    Args:
+        chip: Hardware chip (e.g. "Apple M4 Pro").
+        ram_gb: Total RAM in GB.
+        engines: List of detected engine names.
+        api_url: API base URL (default from env/config).
+        verbose: Print payload and result to stdout.
+
+    Returns:
+        :class:`AgentRegistration` with success status.
+    """
+    from asiai import __version__
+
+    base = api_url or get_api_url()
+    result = AgentRegistration(success=False)
+
+    # Check for existing registration → heartbeat
+    existing = _load_agent_json()
+    if existing.get("agent_id") and existing.get("agent_token"):
+        return _agent_heartbeat(
+            existing["agent_id"],
+            existing["agent_token"],
+            engines=engines or [],
+            api_url=base,
+            verbose=verbose,
+        )
+
+    # First-time registration
+    payload = {
+        "chip": chip,
+        "ram_gb": ram_gb,
+        "engines": engines or [],
+        "framework": "asiai-mcp",
+        "asiai_version": __version__,
+    }
+
+    if verbose:
+        engine_str = ", ".join(engines or []) or "none"
+        logger.info(
+            "Registering with asiai network: chip=%s, ram=%dGB, engines=%s",
+            chip or "unknown", ram_gb, engine_str,
+        )
+
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = Request(
+            f"{base}/agent-register",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=_REGISTER_TIMEOUT) as resp:
+            body = json.loads(resp.read(_MAX_RESPONSE_BYTES).decode("utf-8"))
+            result.success = True
+            result.agent_id = body.get("agent_id", "")
+            result.agent_token = body.get("agent_token", "")
+            result.total_agents = body.get("total_agents", 0)
+
+            _save_agent_json({
+                "agent_id": result.agent_id,
+                "agent_token": result.agent_token,
+                "registered_at": int(time.time()),
+                "total_agents": result.total_agents,
+            })
+
+    except HTTPError as exc:
+        result.error = f"HTTP {exc.code}"
+        logger.warning("Agent registration HTTP error %d", exc.code)
+    except (URLError, OSError) as exc:
+        result.error = str(exc)
+        logger.warning("Agent registration failed: %s", exc)
+    except (json.JSONDecodeError, ValueError) as exc:
+        result.error = str(exc)
+        logger.warning("Agent registration bad response: %s", exc)
+
+    return result
+
+
+def _agent_heartbeat(
+    agent_id: str,
+    agent_token: str,
+    engines: list[str] | None = None,
+    api_url: str = "",
+    verbose: bool = True,
+) -> AgentRegistration:
+    """Send a heartbeat for an already-registered agent."""
+    from asiai import __version__
+
+    base = api_url or get_api_url()
+    result = AgentRegistration(success=False, agent_id=agent_id)
+
+    payload = {
+        "engines": engines or [],
+        "version": __version__,
+        "models_loaded": 0,
+    }
+
+    if verbose:
+        logger.info("Sending heartbeat for agent %s", agent_id)
+
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = Request(
+            f"{base}/agent-heartbeat",
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "X-Agent-Id": agent_id,
+                "X-Agent-Token": agent_token,
+            },
+            method="POST",
+        )
+        with urlopen(req, timeout=_REGISTER_TIMEOUT) as resp:
+            resp.read(_MAX_RESPONSE_BYTES)
+            result.success = True
+
+            # Reload total from agent.json
+            existing = _load_agent_json()
+            result.total_agents = existing.get("total_agents", 0)
+
+    except HTTPError as exc:
+        if exc.code == 403:
+            # Token invalid — re-register next time
+            logger.warning("Agent token invalid, removing agent.json for re-registration")
+            try:
+                os.remove(_AGENT_JSON)
+            except OSError:
+                pass
+            result.error = "Token expired, will re-register next time"
+        elif exc.code == 429:
+            # Rate limited — still counts as OK
+            result.success = True
+            existing = _load_agent_json()
+            result.total_agents = existing.get("total_agents", 0)
+            logger.debug("Heartbeat rate-limited (OK)")
+        else:
+            result.error = f"HTTP {exc.code}"
+            logger.warning("Agent heartbeat HTTP error %d", exc.code)
+    except (URLError, OSError) as exc:
+        result.error = str(exc)
+        logger.warning("Agent heartbeat failed: %s", exc)
+
+    return result
+
+
+def unregister_agent() -> bool:
+    """Remove local agent credentials. Returns True if file was removed."""
+    try:
+        os.remove(_AGENT_JSON)
+        logger.info("Agent credentials removed")
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        logger.warning("Failed to remove agent.json: %s", exc)
+        return False
+
+
+def get_agent_info() -> dict:
+    """Return current agent registration info, or empty dict if not registered."""
+    return _load_agent_json()
+
+
+def fetch_agent_count(api_url: str = "") -> dict:
+    """Fetch agent count from community API.
+
+    Returns:
+        Dict with ``registered``, ``active_24h``, ``active_7d`` keys, or empty dict.
+    """
+    url = f"{api_url or get_api_url()}/agent-count"
+    data = _safe_get(url)
+    return data if isinstance(data, dict) else {}
 
 
 def fetch_leaderboard(

@@ -52,6 +52,7 @@ async def bench_run(request: Request) -> JSONResponse:
     model = form.get("model", "")
     engine_names = form.getlist("engines")
     prompt_names = form.getlist("prompts")
+    quick = bool(form.get("quick"))
     try:
         runs = int(form.get("runs", 3))
     except (TypeError, ValueError):
@@ -59,6 +60,19 @@ async def bench_run(request: Request) -> JSONResponse:
     if runs < 1 or runs > 100:
         return JSONResponse({"error": "runs must be between 1 and 100"}, status_code=422)
     power = form.get("power") == "on"
+    # Card & share: quick mode always enables both; advanced form uses checkboxes
+    generate_card = bool(form.get("card")) or quick
+    share = bool(form.get("share")) or quick
+
+    # Quick mode overrides
+    if quick:
+        prompt_names = ["code"]
+        runs = 1
+
+    # Parse context_size
+    context_size_map = {"4k": 4096, "16k": 16384, "32k": 32768, "64k": 65536}
+    context_size_raw = form.get("context_size", "")
+    context_size = context_size_map.get(context_size_raw, 0)
 
     # Reset status
     state.reset_bench(running=True, progress="Starting benchmark...")
@@ -66,7 +80,10 @@ async def bench_run(request: Request) -> JSONResponse:
     # Run in background thread
     thread = threading.Thread(
         target=_run_benchmark_thread,
-        args=(state, model, engine_names, prompt_names or None, runs, power),
+        args=(
+            state, model, engine_names, prompt_names or None,
+            runs, power, context_size, generate_card, share,
+        ),
         daemon=True,
     )
     thread.start()
@@ -146,9 +163,14 @@ def _run_benchmark_thread(
     prompt_names: list[str] | None,
     runs: int,
     power: bool,
+    context_size: int = 0,
+    generate_card: bool = True,
+    share: bool = True,
 ) -> None:
     """Run benchmark in background thread, updating state.bench_status."""
     try:
+        import os
+
         from asiai.benchmark.reporter import aggregate_results
         from asiai.benchmark.runner import find_common_model, run_benchmark
         from asiai.storage.db import store_benchmark
@@ -177,15 +199,96 @@ def _run_benchmark_thread(
             prompt_names,
             runs=runs,
             power=power,
+            context_size=context_size,
         )
 
         # Store results
         if bench_run.results:
             store_benchmark(state.db_path, bench_run.results)
+            from asiai.storage.db import store_benchmark_process
+
+            store_benchmark_process(state.db_path, bench_run.results)
 
         # Aggregate
         report = aggregate_results(bench_run.results)
         report["model"] = actual_model
+
+        # --- Card generation (never blocks benchmark completion) ---
+        if not generate_card:
+            state.update_bench(progress="Benchmark complete", running=False, done=True)
+            return
+        try:
+            from asiai.benchmark.card import (
+                convert_svg_to_png,
+                download_card_png,
+                extract_card_metadata,
+                generate_card_svg,
+                get_share_url,
+                save_card,
+            )
+
+            first = bench_run.results[0] if bench_run.results else {}
+            eng_vers, pw_data, eng_quants = extract_card_metadata(
+                bench_run.results
+            )
+            svg = generate_card_svg(
+                report,
+                hw_chip=first.get("hw_chip", ""),
+                model_quantization=first.get("model_quantization", ""),
+                ram_gb=first.get("ram_gb", 0),
+                gpu_cores=first.get("gpu_cores", 0),
+                context_size=first.get("context_size", 0),
+                engine_versions=eng_vers,
+                power_data=pw_data,
+                engine_quants=eng_quants,
+            )
+            svg_path = save_card(svg, fmt="svg")
+            svg_filename = os.path.basename(svg_path)
+
+            png_filename = ""
+            share_url = ""
+
+            # Try share → API PNG (network)
+            if share:
+                try:
+                    import base64
+
+                    from asiai.community import build_submission, submit_benchmark
+
+                    payload = build_submission(bench_run.results, report)
+                    # Include locally-rendered PNG (macOS sips)
+                    local_png = convert_svg_to_png(svg_path)
+                    if local_png:
+                        try:
+                            with open(local_png, "rb") as pf:
+                                payload["card_png_b64"] = base64.b64encode(
+                                    pf.read()
+                                ).decode("ascii")
+                        except OSError:
+                            pass
+                    result = submit_benchmark(payload, db_path=state.db_path)
+                    if result.success:
+                        share_url = get_share_url(result.submission_id)
+                        png_path = download_card_png(result.submission_id)
+                        if png_path:
+                            png_filename = os.path.basename(png_path)
+                except Exception:
+                    pass  # network unavailable
+
+            # Fallback: sips local (macOS native)
+            if not png_filename:
+                png_path = convert_svg_to_png(svg_path)
+                if png_path:
+                    png_filename = os.path.basename(png_path)
+
+            state.update_bench(
+                card_svg_url=f"/cards/{svg_filename}",
+                card_png_url=f"/cards/{png_filename}" if png_filename else "",
+                share_url=share_url,
+            )
+        except Exception as exc:
+            logger.warning("Card generation failed: %s", exc)
+            state.update_bench(card_error=str(exc))
 
         state.update_bench(progress="Benchmark complete", running=False, done=True)
 

@@ -186,7 +186,7 @@ async def detect_engines(
     """Auto-detect running LLM inference engines on this Mac.
 
     Scans default ports (Ollama:11434, LM Studio:1234, mlx-lm:8080,
-    llama.cpp:8080, vllm-mlx:8000, Exo:52415) or custom URLs.
+    llama.cpp:8080, oMLX/vllm-mlx:8000, Exo:52415) or custom URLs.
     Also refreshes the server's internal engine list.
 
     Args:
@@ -336,6 +336,9 @@ async def run_benchmark(
     # Store results
     if bench_run.results:
         store_benchmark(app_ctx.db_path, bench_run.results)
+        from asiai.storage.db import store_benchmark_process
+
+        store_benchmark_process(app_ctx.db_path, bench_run.results)
 
     # Aggregate
     report = aggregate_results(bench_run.results)
@@ -345,11 +348,27 @@ async def run_benchmark(
 
     # Generate benchmark card if requested
     if card and bench_run.results:
-        from asiai.benchmark.card import generate_card_svg, save_card
+        from asiai.benchmark.card import (
+            extract_card_metadata,
+            generate_card_svg,
+            save_card,
+        )
 
         first_result = bench_run.results[0]
-        hw_chip = first_result.get("hw_chip", "")
-        svg = generate_card_svg(report, hw_chip=hw_chip)
+        eng_vers, pw_data, eng_quants = extract_card_metadata(
+            bench_run.results
+        )
+        svg = generate_card_svg(
+            report,
+            hw_chip=first_result.get("hw_chip", ""),
+            model_quantization=first_result.get("model_quantization", ""),
+            ram_gb=first_result.get("ram_gb", 0),
+            gpu_cores=first_result.get("gpu_cores", 0),
+            context_size=first_result.get("context_size", 0),
+            engine_versions=eng_vers,
+            power_data=pw_data,
+            engine_quants=eng_quants,
+        )
         svg_path = save_card(svg, fmt="svg")
         report["card_path"] = str(svg_path)
 

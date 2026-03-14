@@ -160,7 +160,7 @@ All tools return JSON. Read-only tools respond in < 2 seconds. `run_benchmark` i
 | `check_inference_health` | Quick health check — engines up/down, memory pressure, thermal, GPU utilization | — |
 | `get_inference_snapshot` | Full system state snapshot (stored in SQLite for history) | — |
 | `list_models` | All models loaded across all engines with VRAM, quantization, context length | — |
-| `detect_engines` | Re-scan all 6 engine ports and return what's running | — |
+| `detect_engines` | Re-scan all engine ports and return what's running | — |
 | `run_benchmark` | Run benchmark on a model. Rate limited: 1 per 60 seconds | `model` (optional), `runs` (1–10, default 3) |
 | `get_recommendations` | Hardware-aware model/engine recommendations for your chip and RAM | — |
 | `diagnose` | Run diagnostic checks (system, engines, daemon health) | — |
@@ -233,7 +233,7 @@ Quick health check. Cached 10 seconds. Response time < 500ms.
       "port": 1234
     }
   },
-  "asiai_version": "1.0.0",
+  "asiai_version": "1.0.1",
   "uptime_seconds": 86400
 }
 ```
@@ -640,7 +640,7 @@ curl -X POST https://api.asiai.dev/api/v1/agent-register \
     "ram_gb": 64,
     "engines": ["ollama", "lmstudio"],
     "framework": "my-agent",
-    "asiai_version": "1.0.0"
+    "asiai_version": "1.0.1"
   }'
 ```
 
@@ -681,7 +681,7 @@ curl -X POST https://api.asiai.dev/api/v1/agent-heartbeat \
   -H "X-Agent-Token: secret_..." \
   -d '{
     "engines": ["ollama", "lmstudio"],
-    "version": "1.0.0",
+    "version": "1.0.1",
     "models_loaded": 3,
     "uptime_hours": 72
   }'
