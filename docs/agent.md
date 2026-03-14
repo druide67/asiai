@@ -160,7 +160,7 @@ All tools return JSON. Read-only tools respond in < 2 seconds. `run_benchmark` i
 | `check_inference_health` | Quick health check — engines up/down, memory pressure, thermal, GPU utilization | — |
 | `get_inference_snapshot` | Full system state snapshot (stored in SQLite for history) | — |
 | `list_models` | All models loaded across all engines with VRAM, quantization, context length | — |
-| `detect_engines` | Re-scan all engine ports and return what's running | — |
+| `detect_engines` | 3-layer detection: config, port scan, process detection. Finds engines on non-standard ports automatically. | — |
 | `run_benchmark` | Run benchmark on a model. Rate limited: 1 per 60 seconds | `model` (optional), `runs` (1–10, default 3) |
 | `get_recommendations` | Hardware-aware model/engine recommendations for your chip and RAM | — |
 | `diagnose` | Run diagnostic checks (system, engines, daemon health) | — |

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from asiai.doctor import (
     CheckResult,
     _check_apple_silicon,
@@ -14,11 +16,22 @@ from asiai.doctor import (
     _check_mlxlm,
     _check_ollama,
     _check_ollama_config,
+    _check_omlx,
     _check_ram,
     _check_thermal,
     _check_vllm_mlx,
     run_checks,
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_engine_config():
+    """Ensure doctor tests don't read real engine config from disk."""
+    with patch(
+        "asiai.doctor.load_config",
+        return_value={"version": 1, "engines": []},
+    ):
+        yield
 
 
 class TestCheckAppleSilicon:
@@ -112,7 +125,10 @@ class TestCheckOllama:
     def test_not_installed(self):
         mock_result = MagicMock()
         mock_result.returncode = 1
-        with patch("asiai.doctor.subprocess") as mock_sub:
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             mock_sub.run.return_value = mock_result
             result = _check_ollama()
         assert result.status == "fail"
@@ -159,7 +175,10 @@ class TestCheckOllama:
 
 class TestCheckLMStudio:
     def test_not_installed(self):
-        with patch("asiai.doctor.os.path.exists", return_value=False):
+        with (
+            patch("asiai.doctor.os.path.exists", return_value=False),
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             result = _check_lmstudio()
         assert result.status == "fail"
         assert "not installed" in result.message
@@ -192,7 +211,10 @@ class TestCheckMlxLm:
     def test_not_installed(self):
         mock_result = MagicMock()
         mock_result.stdout = ""
-        with patch("asiai.doctor.subprocess") as mock_sub:
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             mock_sub.run.return_value = mock_result
             result = _check_mlxlm()
         assert result.status == "fail"
@@ -233,7 +255,10 @@ class TestCheckLlamaCpp:
     def test_not_installed(self):
         mock_result = MagicMock()
         mock_result.stdout = ""
-        with patch("asiai.doctor.subprocess") as mock_sub:
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             mock_sub.run.return_value = mock_result
             result = _check_llamacpp()
         assert result.status == "fail"
@@ -439,3 +464,85 @@ class TestRunChecks:
             m11.return_value = [CheckResult("alerting", "test", "ok", "ok")]
             checks = run_checks()
         assert len(checks) == 15
+
+
+class TestBinaryOrPort:
+    """Tests for the binary-OR-port detection logic."""
+
+    def test_ollama_no_binary_but_port_reachable(self):
+        """Ollama as LaunchDaemon (not in PATH) but reachable = OK."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1  # which fails
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return {"version": "0.17.7"}, {}
+            if "/api/ps" in url:
+                return {"models": []}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            mock_sub.run.return_value = mock_result
+            result = _check_ollama()
+        assert result.status == "ok"
+        assert "0.17.7" in result.message
+
+    def test_omlx_reachable_on_config_port(self):
+        """oMLX reachable on non-standard port from config = OK."""
+        with (
+            patch("asiai.doctor.os.path.exists", return_value=False),
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch(
+                "asiai.doctor.load_config",
+                return_value={
+                    "version": 1,
+                    "engines": [
+                        {"url": "http://localhost:8800", "engine": "omlx"},
+                    ],
+                },
+            ),
+        ):
+            mock_sub.run.return_value = MagicMock(returncode=1)
+
+            def mock_get(url, timeout=5):
+                if "8800" in url and "/v1/models" in url:
+                    return {"data": [{"id": "qwen3"}]}, {}
+                return None, {}
+
+            with patch("asiai.doctor.http_get_json", side_effect=mock_get):
+                result = _check_omlx()
+
+        assert result.status == "ok"
+        assert "qwen3" in result.message
+        assert "8800" in result.message
+
+    def test_engine_neither_binary_nor_port(self):
+        """Neither binary found nor port responds = fail."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        with (
+            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
+            mock_sub.run.return_value = mock_result
+            result = _check_ollama()
+        assert result.status == "fail"
+        assert "not installed" in result.message
+
+    def test_lmstudio_no_app_but_port_reachable(self):
+        """LM Studio app not found but server responding = OK."""
+        def mock_get(url, timeout=5):
+            if "/v1/models" in url:
+                return {"data": [{"id": "model-1"}]}, {"x-lm-studio-version": "0.5.0"}
+            return None, {}
+
+        with (
+            patch("asiai.doctor.os.path.exists", return_value=False),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            result = _check_lmstudio()
+        assert result.status == "ok"
+        assert "model-1" in result.message

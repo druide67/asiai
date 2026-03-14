@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass
 
 from asiai.collectors.system import collect_machine_info, collect_memory, collect_thermal
+from asiai.engines.config import load_config
 from asiai.engines.detect import _lmstudio_version_from_app, http_get_json
 from asiai.storage.db import DEFAULT_DB_PATH
 
@@ -114,9 +115,21 @@ def _check_thermal() -> CheckResult:
     )
 
 
+def _get_engine_urls(engine_name: str, default_url: str) -> list[str]:
+    """Get URLs for an engine: config URLs first, then the default."""
+    config = load_config()
+    urls = []
+    for entry in config.get("engines", []):
+        if entry.get("engine") == engine_name:
+            urls.append(entry["url"])
+    if default_url not in urls:
+        urls.append(default_url)
+    return urls
+
+
 def _check_ollama() -> CheckResult:
     """Check Ollama installation and reachability."""
-    # Check if installed
+    # Check if installed (binary in PATH)
     try:
         result = subprocess.run(
             ["which", "ollama"],
@@ -129,7 +142,18 @@ def _check_ollama() -> CheckResult:
         logger.debug("Ollama 'which' check failed: %s", e)
         installed = False
 
-    if not installed:
+    # Check if reachable on any known port
+    urls = _get_engine_urls("ollama", "http://localhost:11434")
+    data = None
+    reachable_url = ""
+    for url in urls:
+        data, _ = http_get_json(f"{url}/api/version")
+        if data is not None:
+            reachable_url = url
+            break
+
+    # Binary OR port: either one means it's available
+    if not installed and data is None:
         return CheckResult(
             "engine",
             "Ollama",
@@ -138,8 +162,6 @@ def _check_ollama() -> CheckResult:
             fix="brew install ollama",
         )
 
-    # Check if reachable
-    data, _ = http_get_json("http://localhost:11434/api/version")
     if data is None:
         return CheckResult(
             "engine",
@@ -152,7 +174,7 @@ def _check_ollama() -> CheckResult:
     version = data.get("version", "unknown")
 
     # Check if models loaded
-    ps_data, _ = http_get_json("http://localhost:11434/api/ps")
+    ps_data, _ = http_get_json(f"{reachable_url}/api/ps")
     models = ps_data.get("models", []) if ps_data else []
     if models:
         names = ", ".join(m.get("name", "?") for m in models)
@@ -166,18 +188,26 @@ def _check_lmstudio() -> CheckResult:
     app_path = "/Applications/LM Studio.app"
     installed = os.path.exists(app_path)
 
-    if not installed:
-        return CheckResult(
-            "engine",
-            "LM Studio",
-            "fail",
-            "not installed",
-            fix="brew install --cask lm-studio",
-        )
+    # Check if server is running on any known port
+    urls = _get_engine_urls("lmstudio", "http://localhost:1234")
+    data = None
+    headers = {}
+    reachable_url = ""
+    for url in urls:
+        data, headers = http_get_json(f"{url}/v1/models")
+        if data is not None:
+            reachable_url = url
+            break
 
-    # Check if server is running
-    data, headers = http_get_json("http://localhost:1234/v1/models")
     if data is None:
+        if not installed:
+            return CheckResult(
+                "engine",
+                "LM Studio",
+                "fail",
+                "not installed",
+                fix="brew install --cask lm-studio",
+            )
         return CheckResult(
             "engine",
             "LM Studio",
@@ -188,7 +218,7 @@ def _check_lmstudio() -> CheckResult:
 
     version = headers.get("x-lm-studio-version", "")
     if not version:
-        ver_data, _ = http_get_json("http://localhost:1234/lms/version")
+        ver_data, _ = http_get_json(f"{reachable_url}/lms/version")
         if ver_data and isinstance(ver_data, dict) and "version" in ver_data:
             version = ver_data["version"]
     if not version:
@@ -226,7 +256,20 @@ def _check_mlxlm() -> CheckResult:
         logger.debug("mlx-lm brew check failed: %s", e)
         brew_out = ""
 
-    if not brew_out:
+    # Parse version
+    parts = brew_out.split() if brew_out else []
+    version = parts[-1] if len(parts) >= 2 else ""
+    installed = bool(brew_out)
+
+    # Check if server is running on any known port
+    urls = _get_engine_urls("mlxlm", "http://localhost:8080")
+    data = None
+    for url in urls:
+        data, _ = http_get_json(f"{url}/v1/models")
+        if data is not None:
+            break
+
+    if not installed and data is None:
         return CheckResult(
             "engine",
             "mlx-lm",
@@ -235,18 +278,12 @@ def _check_mlxlm() -> CheckResult:
             fix="brew install mlx-lm",
         )
 
-    # Parse version
-    parts = brew_out.split()
-    version = parts[-1] if len(parts) >= 2 else "unknown"
-
-    # Check if server is running on port 8080
-    data, _ = http_get_json("http://localhost:8080/v1/models")
     if data is None:
         return CheckResult(
             "engine",
             "mlx-lm",
             "warn",
-            f"v{version} installed but server not running",
+            f"v{version} installed but not running" if version else "installed but not running",
             fix="mlx_lm.server --host 0.0.0.0 --port 8080",
         )
 
@@ -282,7 +319,22 @@ def _check_llamacpp() -> CheckResult:
         logger.debug("llama.cpp brew check failed: %s", e)
         brew_out = ""
 
-    if not brew_out:
+    parts = brew_out.split() if brew_out else []
+    version = parts[-1] if len(parts) >= 2 else ""
+    installed = bool(brew_out)
+
+    # Check if server is running on any known port
+    urls = _get_engine_urls("llamacpp", "http://localhost:8080")
+    data = None
+    reachable_url = ""
+    for url in urls:
+        data, _ = http_get_json(f"{url}/health")
+        if data is not None and data.get("status") == "ok":
+            reachable_url = url
+            break
+        data = None  # reset if health not ok
+
+    if not installed and data is None:
         return CheckResult(
             "engine",
             "llama.cpp",
@@ -291,22 +343,17 @@ def _check_llamacpp() -> CheckResult:
             fix="brew install llama.cpp",
         )
 
-    parts = brew_out.split()
-    version = parts[-1] if len(parts) >= 2 else "unknown"
-
-    # Check if server is running via /health
-    data, _ = http_get_json("http://localhost:8080/health")
-    if data is None or data.get("status") != "ok":
+    if data is None:
         return CheckResult(
             "engine",
             "llama.cpp",
             "warn",
-            f"v{version} installed but server not running",
+            f"v{version} installed but not running" if version else "installed but not running",
             fix="llama-server -m model.gguf --port 8080",
         )
 
     # Get model info via /v1/models
-    models_data, _ = http_get_json("http://localhost:8080/v1/models")
+    models_data, _ = http_get_json(f"{reachable_url}/v1/models")
     models = models_data.get("data", []) if models_data else []
     if models:
         names = ", ".join(m.get("id", "?") for m in models)
@@ -346,7 +393,19 @@ def _check_vllm_mlx() -> CheckResult:
                 version = line.split(":", 1)[1].strip()
                 break
 
-    if not version:
+    installed = bool(version)
+
+    # Check if server is running on any known port
+    urls = _get_engine_urls("vllm_mlx", "http://localhost:8000")
+    data = None
+    reachable_url = ""
+    for url in urls:
+        data, _ = http_get_json(f"{url}/version")
+        if data is not None:
+            reachable_url = url
+            break
+
+    if not installed and data is None:
         return CheckResult(
             "engine",
             "vllm-mlx",
@@ -355,19 +414,17 @@ def _check_vllm_mlx() -> CheckResult:
             fix="pip install vllm-mlx",
         )
 
-    # Check if server is running
-    data, _ = http_get_json("http://localhost:8000/version")
     if data is None:
         return CheckResult(
             "engine",
             "vllm-mlx",
             "warn",
-            f"v{version} installed but server not running",
+            f"v{version} installed but not running" if version else "installed but not running",
             fix="vllm serve <model> --port 8000",
         )
 
     server_version = data.get("version", version)
-    models_data, _ = http_get_json("http://localhost:8000/v1/models")
+    models_data, _ = http_get_json(f"{reachable_url}/v1/models")
     models = models_data.get("data", []) if models_data else []
     if models:
         names = ", ".join(m.get("id", "?") for m in models)
@@ -387,7 +444,7 @@ def _check_vllm_mlx() -> CheckResult:
 
 def _check_omlx() -> CheckResult:
     """Check oMLX installation and reachability."""
-    # Check if installed via brew or which
+    # Check if installed via which or .app
     installed = False
     try:
         result = subprocess.run(
@@ -401,11 +458,21 @@ def _check_omlx() -> CheckResult:
         pass
 
     if not installed:
-        # Also check if the app exists
         if os.path.exists("/Applications/oMLX.app"):
             installed = True
 
-    if not installed:
+    # Check if reachable on any known port (config + default)
+    urls = _get_engine_urls("omlx", "http://localhost:8000")
+    data = None
+    reachable_url = ""
+    for url in urls:
+        data, _ = http_get_json(f"{url}/v1/models")
+        if data is not None:
+            reachable_url = url
+            break
+
+    # Binary OR port
+    if not installed and data is None:
         return CheckResult(
             "engine",
             "oMLX",
@@ -414,8 +481,6 @@ def _check_omlx() -> CheckResult:
             fix="brew tap jundot/omlx && brew install omlx",
         )
 
-    # Check if server is running on port 8000
-    data, _ = http_get_json("http://localhost:8000/v1/models")
     if data is None:
         return CheckResult(
             "engine",
@@ -425,6 +490,10 @@ def _check_omlx() -> CheckResult:
             fix="open /Applications/oMLX.app",
         )
 
+    port_info = ""
+    if reachable_url and reachable_url != "http://localhost:8000":
+        port_info = f" (port {reachable_url.rsplit(':', 1)[-1]})"
+
     models = data.get("data", [])
     if models:
         names = ", ".join(m.get("id", "?") for m in models)
@@ -432,9 +501,9 @@ def _check_omlx() -> CheckResult:
             "engine",
             "oMLX",
             "ok",
-            f"{len(models)} model(s): {names}",
+            f"{len(models)} model(s): {names}{port_info}",
         )
-    return CheckResult("engine", "oMLX", "ok", "running — no models loaded")
+    return CheckResult("engine", "oMLX", "ok", f"running — no models loaded{port_info}")
 
 
 def _check_exo() -> CheckResult:
@@ -452,7 +521,15 @@ def _check_exo() -> CheckResult:
         logger.debug("Exo 'which' check failed: %s", e)
         installed = False
 
-    if not installed:
+    # Check if reachable on any known port
+    urls = _get_engine_urls("exo", "http://localhost:52415")
+    data = None
+    for url in urls:
+        data, _ = http_get_json(f"{url}/v1/models")
+        if data is not None:
+            break
+
+    if not installed and data is None:
         return CheckResult(
             "engine",
             "Exo",
@@ -461,8 +538,6 @@ def _check_exo() -> CheckResult:
             fix="pip install exo-inference",
         )
 
-    # Check if reachable
-    data, _ = http_get_json("http://localhost:52415/v1/models")
     if data is None:
         return CheckResult(
             "engine",

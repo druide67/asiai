@@ -1,4 +1,12 @@
-"""Engine auto-detection from a URL."""
+"""Engine auto-detection with 3-layer cascade.
+
+Layer 1: Persistent config (~/.config/asiai/engines.json)
+Layer 2: Port scanning (default + extended ports)
+Layer 3: Process detection (ps + lsof)
+
+Engines discovered in L2/L3 are auto-persisted to L1 for faster
+subsequent detection.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +20,6 @@ _LMSTUDIO_APP_PLIST = "/Applications/LM Studio.app/Contents/Info.plist"
 
 logger = logging.getLogger("asiai.engines.detect")
 
-# Map process command names to engine identifiers.
 # Max response body size (10 MB) to prevent memory exhaustion from rogue servers.
 _MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 
@@ -24,6 +31,7 @@ _PORT_PROCESS_MAP: dict[str, str] = {
     "omlx": "omlx",
     "vllm": "vllm_mlx",
     "exo": "exo",
+    "ollama": "ollama",
 }
 
 # Default ports to scan when no explicit URL is given.
@@ -33,6 +41,14 @@ DEFAULT_URLS = [
     "http://localhost:8080",  # mlx-lm / llama.cpp default
     "http://localhost:8000",  # oMLX / vllm-mlx default
     "http://localhost:52415",  # Exo default
+]
+
+# Extended ports scanned in L2 to catch non-standard configurations.
+EXTENDED_SCAN_PORTS = [
+    *range(8000, 8010),  # 8000-8009: oMLX, vllm-mlx, generic
+    8080,
+    8081,
+    8082,  # mlx-lm, llama.cpp variants
 ]
 
 
@@ -198,7 +214,17 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                         ver = build_info.get("version", "")
                     return "llamacpp", ver
 
-        # 2c. oMLX: /admin endpoint (unique to oMLX)
+        # 2c. oMLX: check owned_by field first (most reliable), then /admin
+        if isinstance(data, dict):
+            for model_entry in data.get("data", []):
+                if isinstance(model_entry, dict) and model_entry.get("owned_by") == "omlx":
+                    # Try to get version from /admin/info
+                    admin_data, _ = http_get_json(f"{base_url}/admin/info")
+                    ver = ""
+                    if admin_data and isinstance(admin_data, dict):
+                        ver = admin_data.get("version", "")
+                    return "omlx", ver
+
         admin_data, _ = http_get_json(f"{base_url}/admin/info")
         if admin_data and isinstance(admin_data, dict):
             ver = admin_data.get("version", "")
@@ -237,24 +263,140 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
     return "unknown", ""
 
 
+def discover_via_processes() -> list[tuple[str, int]]:
+    """Discover inference engines via running processes (Layer 3).
+
+    Scans ``ps aux`` for known engine process names, then uses ``lsof``
+    to find which port each is listening on.
+
+    Returns:
+        List of (engine_name, port) tuples.
+    """
+    try:
+        ps_out = subprocess.run(
+            ["ps", "axo", "pid,command"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.debug("ps failed: %s", e)
+        return []
+
+    # Collect PIDs for known engine processes.
+    # Use full command line so we catch e.g. "Python .../omlx serve"
+    pid_engine: list[tuple[str, str]] = []  # (pid, engine_name)
+    for line in ps_out.splitlines()[1:]:  # skip header
+        parts = line.split(None, 1)
+        if len(parts) < 2:
+            continue
+        pid, cmdline = parts
+        for pattern, engine_name in _PORT_PROCESS_MAP.items():
+            if pattern in cmdline:
+                pid_engine.append((pid, engine_name))
+                break
+
+    if not pid_engine:
+        return []
+
+    results: list[tuple[str, int]] = []
+    for pid, engine_name in pid_engine:
+        try:
+            lsof_out = subprocess.run(
+                ["lsof", "-anP", "-p", pid, "-iTCP", "-sTCP:LISTEN"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout
+        except (OSError, subprocess.SubprocessError) as e:
+            logger.debug("lsof for PID %s failed: %s", pid, e)
+            continue
+
+        for lsof_line in lsof_out.splitlines()[1:]:  # skip header
+            # Parse port from lsof output: ... TCP *:8800 (LISTEN)
+            parts = lsof_line.split()
+            for part in parts:
+                if part.startswith("*:") or part.startswith("localhost:"):
+                    try:
+                        port = int(part.rsplit(":", 1)[-1])
+                        results.append((engine_name, port))
+                    except ValueError:
+                        pass
+
+    return results
+
+
 def detect_engines(
     urls: list[str] | None = None,
 ) -> list[tuple[str, str, str]]:
-    """Scan URLs and return detected engines.
+    """Detect inference engines using 3-layer cascade.
+
+    If ``urls`` is provided (explicit --url flag), only those URLs are
+    scanned with no config persistence.  Otherwise the 3-layer cascade
+    runs: L1 Config -> L2 Port Scan -> L3 Process Detection, with
+    auto-persist of newly discovered engines.
 
     Args:
-        urls: URLs to scan. Defaults to DEFAULT_URLS.
+        urls: Explicit URLs to scan.  Bypasses config when provided.
 
     Returns:
         List of (base_url, engine_name, version) for each reachable engine.
     """
-    if urls is None:
-        urls = DEFAULT_URLS
+    # Explicit URLs: scan only those, no config interaction
+    if urls is not None:
+        found: list[tuple[str, str, str]] = []
+        for url in urls:
+            engine, version = detect_engine_type(url)
+            if engine != "unknown":
+                found.append((url, engine, version))
+                logger.info("Detected %s %s at %s", engine, version, url)
+        return found
 
+    # --- 3-layer cascade ---
+    from asiai.engines.config import get_known_urls, prune_stale, upsert_engine
+
+    found_urls: set[str] = set()
     found: list[tuple[str, str, str]] = []
-    for url in urls:
+
+    def _probe_and_add(url: str, persist: bool = False) -> None:
+        """Probe a URL and add to results if an engine responds."""
+        if url in found_urls:
+            return
         engine, version = detect_engine_type(url)
         if engine != "unknown":
+            found_urls.add(url)
             found.append((url, engine, version))
             logger.info("Detected %s %s at %s", engine, version, url)
+            if persist:
+                upsert_engine(url, engine, version)
+
+    # L1: Config — known engines from previous runs
+    for url in get_known_urls():
+        _probe_and_add(url, persist=True)
+
+    # L2: Port scan — default + extended ports
+    for url in DEFAULT_URLS:
+        _probe_and_add(url, persist=True)
+
+    # Extended port scan with shorter timeout
+    _default_ports = {extract_port(u) for u in DEFAULT_URLS}
+    for port in EXTENDED_SCAN_PORTS:
+        if port not in _default_ports:
+            url = f"http://localhost:{port}"
+            if url not in found_urls:
+                engine, version = detect_engine_type(url)
+                if engine != "unknown":
+                    found_urls.add(url)
+                    found.append((url, engine, version))
+                    upsert_engine(url, engine, version)
+                    logger.info("L2 extended: %s %s at %s", engine, version, url)
+
+    # L3: Process detection — find engines on any port
+    for engine_name, port in discover_via_processes():
+        url = f"http://localhost:{port}"
+        _probe_and_add(url, persist=True)
+
+    # Housekeeping
+    prune_stale()
+
     return found

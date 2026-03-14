@@ -890,6 +890,79 @@ def cmd_setup(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_config(args: argparse.Namespace) -> int:
+    """Handle 'config' command — manage persistent engine configuration."""
+    from asiai.display.formatters import bold, dim, green, yellow
+    from asiai.engines.config import (
+        load_config,
+        remove_engine,
+        reset_config,
+        upsert_engine,
+    )
+
+    action = getattr(args, "config_action", None)
+
+    if action == "show":
+        config = load_config()
+        engines = config.get("engines", [])
+        if not engines:
+            print(dim("No engines in config. Run 'asiai detect' to discover engines."))
+            return 0
+
+        import time as _time
+
+        print(bold(f"Known engines ({len(engines)}):"))
+        for entry in engines:
+            url = entry.get("url", "?")
+            engine = entry.get("engine", "?")
+            version = entry.get("version", "")
+            source = entry.get("source", "auto")
+            label = entry.get("label", "")
+            last_seen = entry.get("last_seen", 0)
+
+            age = int(_time.time()) - last_seen if last_seen else 0
+            if age < 3600:
+                ago = f"{age // 60}m ago"
+            elif age < 86400:
+                ago = f"{age // 3600}h ago"
+            else:
+                ago = f"{age // 86400}d ago"
+
+            ver_str = f" v{version}" if version else ""
+            label_str = f" [{label}]" if label else ""
+            source_str = dim(f"({source})") if source == "auto" else green(f"({source})")
+
+            print(f"  {engine}{ver_str} at {url}{label_str}  {source_str}  last seen {ago}")
+        return 0
+
+    if action == "add":
+        engine = args.engine_name
+        url = args.engine_url
+        label = getattr(args, "label", "") or ""
+        upsert_engine(url, engine, source="manual", label=label)
+        print(green(f"Added {engine} at {url}"))
+        return 0
+
+    if action == "remove":
+        url = args.engine_url
+        if remove_engine(url):
+            print(green(f"Removed {url}"))
+        else:
+            print(yellow(f"No engine found at {url}"))
+        return 0
+
+    if action == "reset":
+        if reset_config():
+            print(green("Config reset — all engines cleared."))
+        else:
+            print(dim("No config file to reset."))
+        return 0
+
+    # No action specified
+    print(dim("Usage: asiai config {show,add,remove,reset}"))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="asiai",
@@ -1144,6 +1217,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Register with asiai agent network (opt-in, anonymous)",
     )
 
+    # config
+    config_parser = subparsers.add_parser(
+        "config", help="Manage persistent engine configuration"
+    )
+    config_sub = config_parser.add_subparsers(dest="config_action")
+    config_sub.add_parser("show", help="Show known engines")
+    config_add_p = config_sub.add_parser("add", help="Add an engine manually")
+    config_add_p.add_argument("engine_name", help="Engine type (ollama, lmstudio, omlx, ...)")
+    config_add_p.add_argument("engine_url", help="Engine URL (e.g. http://localhost:8800)")
+    config_add_p.add_argument("--label", help="Optional label (e.g. mac-mini)")
+    config_remove_p = config_sub.add_parser("remove", help="Remove an engine by URL")
+    config_remove_p.add_argument("engine_url", help="URL to remove")
+    config_sub.add_parser("reset", help="Clear all engine configuration")
+
     # unregister
     subparsers.add_parser("unregister", help="Remove agent registration (delete local credentials)")
 
@@ -1225,6 +1312,7 @@ def main(argv: list[str] | None = None) -> int:
         "recommend": cmd_recommend,
         "unregister": cmd_unregister,
         "setup": cmd_setup,
+        "config": cmd_config,
     }
 
     handler = commands.get(args.command)

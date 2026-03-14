@@ -8,7 +8,7 @@ asiai is designed for both human operators and AI agents managing local LLM infr
 
 - [Getting Started](https://asiai.dev/getting-started/): Installation, first benchmark, basic usage
 - [Agent Integration Guide](https://asiai.dev/agent/): API reference, metric thresholds, decision trees, and example code for AI agents
-- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, bench, models, monitor, doctor, daemon, setup, version, web, tui, mcp, leaderboard, compare, recommend)
+- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, config, bench, models, monitor, doctor, daemon, setup, version, web, tui, mcp, leaderboard, compare, recommend)
 - [Metrics Specification](https://asiai.dev/metrics-spec/): Detailed definitions of all 8 benchmark metrics (tok/s, TTFT, power, efficiency, stability, VRAM, thermal, context)
 - [Methodology](https://asiai.dev/methodology/): MLPerf/SPEC-inspired methodology (warmup, median, greedy decoding, cooldown, CI 95%)
 - [Benchmark Best Practices](https://asiai.dev/benchmark-best-practices/): How to get reproducible results

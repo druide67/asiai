@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 
 from asiai.engines.detect import (
     detect_engine_type,
+    detect_engines,
     detect_port_process,
+    discover_via_processes,
     http_get_json,
     http_post_json,
 )
@@ -692,6 +694,49 @@ class TestDetectCascade:
         assert engine == "llamacpp"
         assert version == "8180"
 
+    def test_detect_omlx_via_owned_by(self):
+        """oMLX: /v1/models with owned_by:'omlx' -> detected as omlx."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "Qwen3-Coder-30B", "owned_by": "omlx"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/admin/info" in url:
+                return {"detail": "Not Found"}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8800")
+
+        assert engine == "omlx"
+
+    def test_detect_omlx_via_owned_by_with_version(self):
+        """oMLX: owned_by:'omlx' + /admin/info version."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model", "owned_by": "omlx"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/admin/info" in url:
+                return {"version": "0.9.2"}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8800")
+
+        assert engine == "omlx"
+        assert version == "0.9.2"
+
     def test_detect_vllm_mlx(self):
         """vllm-mlx: /v1/models OK, no LM Studio, no /health, /version OK."""
 
@@ -808,3 +853,206 @@ class TestDetectCascade:
 
         # Should fall through to mlxlm fallback
         assert engine == "mlxlm"
+
+
+class TestDetectEnginesCascade:
+    """Tests for the 3-layer detection cascade in detect_engines()."""
+
+    def test_explicit_urls_bypass_config(self):
+        """When urls are provided, config is not consulted."""
+        def mock_detect(url):
+            if url == "http://localhost:9999":
+                return "ollama", "0.17"
+            return "unknown", ""
+
+        with (
+            patch("asiai.engines.detect.detect_engine_type", side_effect=mock_detect),
+        ):
+            result = detect_engines(urls=["http://localhost:9999"])
+
+        assert len(result) == 1
+        assert result[0] == ("http://localhost:9999", "ollama", "0.17")
+
+    def test_config_layer_returns_known_engines(self, tmp_path, monkeypatch):
+        """L1: engines from config are probed first."""
+        config_dir = str(tmp_path / "asiai")
+        config_path = str(tmp_path / "asiai" / "engines.json")
+        monkeypatch.setattr("asiai.engines.config.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("asiai.engines.config.CONFIG_PATH", config_path)
+
+        # Pre-populate config with a non-standard port
+        import json
+        import os
+        import time
+
+        os.makedirs(config_dir, exist_ok=True)
+        config = {
+            "version": 1,
+            "engines": [{
+                "url": "http://localhost:8800",
+                "engine": "omlx",
+                "version": "0.9",
+                "last_seen": int(time.time()),
+                "source": "auto",
+                "label": "",
+            }],
+        }
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        def mock_detect(url):
+            if url == "http://localhost:8800":
+                return "omlx", "0.9.2"
+            return "unknown", ""
+
+        with (
+            patch("asiai.engines.detect.detect_engine_type", side_effect=mock_detect),
+            patch("asiai.engines.detect.discover_via_processes", return_value=[]),
+        ):
+            result = detect_engines()
+
+        urls = [r[0] for r in result]
+        assert "http://localhost:8800" in urls
+
+    def test_dedup_across_layers(self, tmp_path, monkeypatch):
+        """An engine found in L1 should not be duplicated in L2."""
+        config_dir = str(tmp_path / "asiai")
+        config_path = str(tmp_path / "asiai" / "engines.json")
+        monkeypatch.setattr("asiai.engines.config.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("asiai.engines.config.CONFIG_PATH", config_path)
+
+        import json
+        import os
+        import time
+
+        os.makedirs(config_dir, exist_ok=True)
+        config = {
+            "version": 1,
+            "engines": [{
+                "url": "http://localhost:11434",
+                "engine": "ollama",
+                "version": "0.17",
+                "last_seen": int(time.time()),
+                "source": "auto",
+                "label": "",
+            }],
+        }
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        def mock_detect(url):
+            if url == "http://localhost:11434":
+                return "ollama", "0.17"
+            return "unknown", ""
+
+        with (
+            patch("asiai.engines.detect.detect_engine_type", side_effect=mock_detect),
+            patch("asiai.engines.detect.discover_via_processes", return_value=[]),
+        ):
+            result = detect_engines()
+
+        ollama_entries = [r for r in result if r[1] == "ollama"]
+        assert len(ollama_entries) == 1
+
+    def test_process_detection_finds_odd_port(self, tmp_path, monkeypatch):
+        """L3: process detection discovers an engine on a non-default port."""
+        config_dir = str(tmp_path / "asiai")
+        config_path = str(tmp_path / "asiai" / "engines.json")
+        monkeypatch.setattr("asiai.engines.config.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("asiai.engines.config.CONFIG_PATH", config_path)
+
+        def mock_detect(url):
+            if url == "http://localhost:8800":
+                return "omlx", "0.9"
+            return "unknown", ""
+
+        with (
+            patch("asiai.engines.detect.detect_engine_type", side_effect=mock_detect),
+            patch(
+                "asiai.engines.detect.discover_via_processes",
+                return_value=[("omlx", 8800)],
+            ),
+        ):
+            result = detect_engines()
+
+        urls = [r[0] for r in result]
+        assert "http://localhost:8800" in urls
+
+    def test_explicit_urls_no_persist(self, tmp_path, monkeypatch):
+        """Explicit --url should not write to config."""
+        config_dir = str(tmp_path / "asiai")
+        config_path = str(tmp_path / "asiai" / "engines.json")
+        monkeypatch.setattr("asiai.engines.config.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("asiai.engines.config.CONFIG_PATH", config_path)
+
+        def mock_detect(url):
+            return "ollama", "0.17"
+
+        with patch("asiai.engines.detect.detect_engine_type", side_effect=mock_detect):
+            detect_engines(urls=["http://localhost:11434"])
+
+        from asiai.engines.config import load_config
+        config = load_config()
+        assert len(config["engines"]) == 0
+
+
+class TestDiscoverViaProcesses:
+    def test_returns_empty_on_ps_failure(self):
+        with patch(
+            "asiai.engines.detect.subprocess.run",
+            side_effect=OSError("no ps"),
+        ):
+            result = discover_via_processes()
+        assert result == []
+
+    def test_finds_process_with_port(self):
+        ps_output = "  PID COMMAND\n  123 /opt/homebrew/opt/omlx/bin/omlx serve --port 8800\n"
+        lsof_output = (
+            "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\n"
+            "omlx    123 user 5u  IPv4 0x1234 0t0  TCP *:8800 (LISTEN)\n"
+        )
+
+        mock_ps = MagicMock()
+        mock_ps.stdout = ps_output
+        mock_lsof = MagicMock()
+        mock_lsof.stdout = lsof_output
+
+        def mock_run(cmd, **kwargs):
+            if cmd[0] == "ps":
+                return mock_ps
+            if cmd[0] == "lsof":
+                return mock_lsof
+            return MagicMock(stdout="")
+
+        with patch("asiai.engines.detect.subprocess.run", side_effect=mock_run):
+            result = discover_via_processes()
+
+        assert ("omlx", 8800) in result
+
+    def test_finds_python_wrapped_engine(self):
+        """Python process running omlx via full command line."""
+        ps_output = (
+            "  PID COMMAND\n"
+            "  83180 /opt/homebrew/.../Python /opt/homebrew/opt/omlx/bin/omlx serve --port 8800\n"
+        )
+        lsof_output = (
+            "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\n"
+            "Python  83180 user 8u  IPv4 0x1234 0t0  TCP *:8800 (LISTEN)\n"
+        )
+
+        mock_ps = MagicMock()
+        mock_ps.stdout = ps_output
+        mock_lsof = MagicMock()
+        mock_lsof.stdout = lsof_output
+
+        def mock_run(cmd, **kwargs):
+            if cmd[0] == "ps":
+                return mock_ps
+            if cmd[0] == "lsof":
+                return mock_lsof
+            return MagicMock(stdout="")
+
+        with patch("asiai.engines.detect.subprocess.run", side_effect=mock_run):
+            result = discover_via_processes()
+
+        assert ("omlx", 8800) in result

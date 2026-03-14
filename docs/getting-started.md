@@ -61,6 +61,16 @@ asiai bench -m qwen3.5 --runs 3 --power
 | [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | OpenAI-compatible |
 | [Exo](https://github.com/exo-explore/exo) | 52415 | OpenAI-compatible |
 
+## Custom ports
+
+If your engine runs on a non-standard port, asiai will usually find it automatically via process detection. You can also register it manually:
+
+```bash
+asiai config add omlx http://localhost:8800 --label mac-mini
+```
+
+Manually added engines are persisted and never auto-pruned. See [config](commands/config.md) for details.
+
 ## Requirements
 
 - macOS on Apple Silicon (M1 / M2 / M3 / M4)

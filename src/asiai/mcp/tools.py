@@ -185,12 +185,16 @@ async def detect_engines(
 ) -> dict:
     """Auto-detect running LLM inference engines on this Mac.
 
-    Scans default ports (Ollama:11434, LM Studio:1234, mlx-lm:8080,
-    llama.cpp:8080, oMLX/vllm-mlx:8000, Exo:52415) or custom URLs.
-    Also refreshes the server's internal engine list.
+    Uses a 3-layer detection cascade:
+    1. Config — engines remembered from previous runs (non-standard ports)
+    2. Port scan — default ports + extended range (8000-8009, 8080-8082)
+    3. Process detection — ps/lsof to find engines on any port
+
+    Discovered engines are auto-persisted to ~/.config/asiai/engines.json.
 
     Args:
-        urls: Optional list of URLs to scan instead of defaults.
+        urls: Optional list of URLs to scan instead of auto-detection.
+             Bypasses config when provided.
              Example: ["http://localhost:11434", "http://192.168.0.16:11434"]
     """
     from asiai.cli import _discover_engines
@@ -470,8 +474,12 @@ async def diagnose(ctx: Context) -> dict:
     """Run comprehensive diagnostic checks on the asiai installation.
 
     Checks: Apple Silicon hardware, RAM, memory pressure, thermal state,
-    each engine (Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, Exo),
+    each engine (Ollama, LM Studio, mlx-lm, llama.cpp, vllm-mlx, oMLX, Exo),
     database integrity, daemon status, and alerting configuration.
+
+    Engine checks use a binary-OR-port strategy: an engine is considered
+    available if its binary is found OR if it responds on any known port
+    (including non-standard ports from ~/.config/asiai/engines.json).
 
     Each check returns status ("ok", "warn", "fail") with a message
     and optional fix suggestion.
@@ -615,7 +623,7 @@ async def refresh_engines(ctx: Context) -> dict:
     return {
         "engines_detected": len(engines),
         "engines": [
-            {"name": e.name, "url": e.url}
+            {"name": e.name, "url": e.base_url}
             for e in engines
         ],
     }

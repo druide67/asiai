@@ -36,6 +36,7 @@ nav:
   - Installation: installation.md
   - Commands:
       - detect: commands/detect.md
+      - config: commands/config.md
       - bench: commands/bench.md
       - models: commands/models.md
       - monitor: commands/monitor.md
