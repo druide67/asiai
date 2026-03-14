@@ -54,6 +54,7 @@ nav:
       - LM Studio: engines/lmstudio.md
       - mlx-lm: engines/mlxlm.md
       - llama.cpp: engines/llamacpp.md
+      - oMLX: engines/omlx.md
       - vllm-mlx: engines/vllm-mlx.md
       - Exo: engines/exo.md
   - Benchmark Card: benchmark-card.md
