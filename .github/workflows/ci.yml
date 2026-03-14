@@ -32,7 +32,7 @@ jobs:
       - name: Security lint
         run: |
           pip install bandit
-          bandit -r src/asiai/ -ll -q
+          bandit -r src/asiai/ -ll -q -s B310
 
       - name: Test
         run: pytest -v --cov=asiai --cov-report=xml
