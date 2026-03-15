@@ -47,6 +47,25 @@ def get_api_url() -> str:
     return os.environ.get("ASIAI_COMMUNITY_URL", DEFAULT_API_URL).rstrip("/")
 
 
+def normalize_model_name(raw: str) -> str:
+    """Normalize a model name before community submission.
+
+    Strips filesystem paths (vllm-mlx local dirs) and SHA256 blob names
+    (llamacpp blobs) to produce a clean, human-readable model name.
+    """
+    name = raw
+
+    # Strip filesystem paths
+    if "/" in name or "\\" in name:
+        name = os.path.basename(name)
+
+    # Drop SHA256 blob names entirely
+    if name.startswith("sha256-") and len(name) > 20:
+        return ""
+
+    return name.strip()
+
+
 def _safe_get(url: str, timeout: int = _GET_TIMEOUT) -> Any:
     """Issue a GET request and return parsed JSON, or *None* on any error."""
     try:
@@ -148,6 +167,11 @@ def build_submission(
     context_size = first.get("context_size", 0)
     gpu_cores = first.get("gpu_cores", 0)
 
+    raw_model = report.get("model", "")
+    clean_model = normalize_model_name(raw_model)
+    if not clean_model:
+        logger.warning("Model name '%s' could not be normalized — skipping submission", raw_model)
+
     payload: dict[str, Any] = {
         "id": submission_id,
         "schema_version": 2,
@@ -158,7 +182,7 @@ def build_submission(
         "os_version": first.get("os_version", ""),
         "asiai_version": __version__,
         "benchmark": {
-            "model": report.get("model", ""),
+            "model": clean_model or raw_model,
             "runs_per_prompt": len(run_indices),
             "prompts": prompts,
             "context_size": context_size,
@@ -225,8 +249,22 @@ def submit_benchmark(
                 )
     except HTTPError as exc:
         result.http_status = exc.code
-        result.error = f"HTTP {exc.code}"
-        logger.warning("Community submission HTTP error %d: %s", exc.code, url)
+        if exc.code == 429:
+            # Rate limited — tell user clearly, don't retry
+            try:
+                body = json.loads(exc.read().decode("utf-8", errors="replace"))
+                result.error = body.get("error", "Rate limited — try again later")
+            except Exception:
+                result.error = "Rate limited — try again later"
+            logger.info("Community submission rate-limited (429), not retrying")
+        elif exc.code == 409:
+            # Duplicate — already submitted, treat as success
+            result.success = True
+            result.error = ""
+            logger.info("Community submission %s already exists (409)", submission_id)
+        else:
+            result.error = f"HTTP {exc.code}"
+            logger.warning("Community submission HTTP error %d: %s", exc.code, url)
     except (URLError, OSError) as exc:
         result.error = str(exc)
         logger.warning("Community submission failed: %s (%s)", exc, url)
