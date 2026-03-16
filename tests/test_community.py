@@ -265,7 +265,7 @@ class TestSubmitBenchmark:
             )
         assert result.success is False
         assert result.http_status == 429
-        assert "429" in result.error
+        assert "Rate limited" in result.error
 
     def test_submit_network_error(self):
         exc = URLError("Connection refused")
