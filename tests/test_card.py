@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +17,90 @@ from asiai.benchmark.card import (
     get_share_url,
     save_card,
 )
+
+
+# ---------------------------------------------------------------------------
+# Helpers: data factories
+# ---------------------------------------------------------------------------
+
+
+def _make_engine(
+    tok_s: float = 50.0,
+    ttft_ms: float = 200.0,
+    stability: str = "stable",
+    vram_bytes: int = 8_000_000_000,
+    runs_count: int = 3,
+) -> dict:
+    return {
+        "median_tok_s": tok_s,
+        "median_ttft_ms": ttft_ms,
+        "stability": stability,
+        "vram_bytes": vram_bytes,
+        "runs_count": runs_count,
+    }
+
+
+def _make_report(
+    model: str = "qwen3.5:35b-a3b",
+    engines: dict | None = None,
+    winner: dict | None = None,
+) -> dict:
+    if engines is None:
+        engines = {"ollama": _make_engine(tok_s=48.0)}
+    return {"model": model, "engines": engines, "winner": winner}
+
+
+# ---------------------------------------------------------------------------
+# Helpers: SVG coordinate extraction (regex-based)
+# ---------------------------------------------------------------------------
+
+
+def _extract_text_y(svg: str, pattern: str) -> list[float]:
+    """Return y-coordinates of <text> elements whose content matches *pattern*."""
+    results = []
+    for m in re.finditer(r'<text[^>]*\by="([^"]+)"[^>]*>([^<]*(?:<[^/][^>]*>[^<]*)*)</text>', svg):
+        if pattern in m.group(2):
+            results.append(float(m.group(1)))
+    return results
+
+
+def _extract_hero_y(svg: str) -> float | None:
+    """Return y of the hero number (font-size 60 or 72)."""
+    m = re.search(r'<text[^>]*\by="(\d+(?:\.\d+)?)"[^>]*font-size="(?:60|72)"', svg)
+    return float(m.group(1)) if m else None
+
+
+def _extract_frame_bounds(svg: str) -> tuple[float, float]:
+    """Return (frame_top, frame_bottom) of the terminal frame rect."""
+    m = re.search(r'<rect x="40" y="(\d+)" width="1120" height="(\d+)"', svg)
+    if m:
+        top = float(m.group(1))
+        return top, top + float(m.group(2))
+    return 0.0, 0.0
+
+
+def _extract_footer_y(svg: str) -> float | None:
+    """Return y of the footer pill (rx=14 rounded rect)."""
+    m = re.search(r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*rx="14"', svg)
+    return float(m.group(1)) if m else None
+
+
+def _extract_chip_ys(svg: str) -> list[float]:
+    """Return y-coordinates of all chip rects (height=28, rx=6)."""
+    return [float(m.group(1)) for m in re.finditer(r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*height="28"[^>]*rx="6"', svg)]
+
+
+def _extract_bar_rects(svg: str) -> list[tuple[float, float]]:
+    """Return (y, width) of engine bar rects (rx=4, opacity=0.9)."""
+    return [
+        (float(m.group(1)), float(m.group(2)))
+        for m in re.finditer(r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*width="(\d+(?:\.\d+)?)"[^>]*rx="4"[^>]*opacity="0\.9"', svg)
+    ]
+
+
+def _extract_all_y(svg: str) -> list[float]:
+    """Return all y= attribute values in the SVG."""
+    return [float(m.group(1)) for m in re.finditer(r'\by="(\d+(?:\.\d+)?)"', svg)]
 
 
 class TestCardSvg:
@@ -343,3 +428,360 @@ class TestIntegrationWithAggregateResults:
         assert "ollama" in svg
         assert "72.6" in svg
         assert "M4 Pro" in svg
+
+
+# ===========================================================================
+# Layout tests — verify positioning invariants, not exact pixel values
+# ===========================================================================
+
+# --- Scenario fixtures ---
+
+_S0 = _make_report(model="", engines={}, winner=None)
+
+_S1 = _make_report(engines={"ollama": _make_engine(tok_s=48.0)})
+
+_S1_POWER = (
+    _make_report(engines={"ollama": _make_engine(tok_s=48.0)}),
+    {"ollama": {"avg_watts": 20.3, "avg_eff": 2.29}},
+)
+
+_S1_UNSTABLE = _make_report(engines={"ollama": _make_engine(tok_s=48.0, stability="unstable")})
+
+_S2 = _make_report(
+    engines={
+        "lmstudio": _make_engine(tok_s=72.6, ttft_ms=280, vram_bytes=0),
+        "ollama": _make_engine(tok_s=30.4, ttft_ms=250, vram_bytes=26_000_000_000),
+    },
+    winner={"name": "lmstudio", "tok_s_delta": "2.4x faster", "vram_delta": ""},
+)
+
+_S2_POWER = (
+    _make_report(
+        engines={
+            "lmstudio": _make_engine(tok_s=72.6, ttft_ms=280),
+            "ollama": _make_engine(tok_s=30.4, ttft_ms=250),
+        },
+        winner={"name": "lmstudio", "tok_s_delta": "2.4x faster"},
+    ),
+    {"lmstudio": {"avg_watts": 42, "avg_eff": 1.7}, "ollama": {"avg_watts": 20, "avg_eff": 1.5}},
+    {"lmstudio": "Q4_K_M", "ollama": "Q5_K_S"},
+)
+
+_S2_MIXED_STABILITY = _make_report(
+    engines={
+        "lmstudio": _make_engine(tok_s=72.6, stability="stable"),
+        "ollama": _make_engine(tok_s=30.4, stability="unstable"),
+    },
+    winner={"name": "lmstudio", "tok_s_delta": "2.4x faster"},
+)
+
+_S3 = _make_report(
+    engines={
+        "lmstudio": _make_engine(tok_s=72.6),
+        "ollama": _make_engine(tok_s=30.4),
+        "llamacpp": _make_engine(tok_s=45.0),
+    },
+    winner={"name": "lmstudio", "tok_s_delta": "1.6x faster"},
+)
+
+_S4 = _make_report(
+    engines={
+        "lmstudio": _make_engine(tok_s=72.6),
+        "ollama": _make_engine(tok_s=30.4),
+        "llamacpp": _make_engine(tok_s=45.0),
+        "omlx": _make_engine(tok_s=55.0),
+    },
+    winner={"name": "lmstudio", "tok_s_delta": "1.3x faster"},
+)
+
+_S5 = _make_report(
+    engines={
+        "lmstudio": _make_engine(tok_s=72.6),
+        "ollama": _make_engine(tok_s=30.4),
+        "llamacpp": _make_engine(tok_s=45.0),
+        "omlx": _make_engine(tok_s=55.0),
+        "vllm": _make_engine(tok_s=60.0),
+    },
+    winner={"name": "lmstudio", "tok_s_delta": "1.2x faster"},
+)
+
+
+class TestCardLayoutRegression:
+    """P0 — Anti-regression: the single-engine overlap bug must never return."""
+
+    def test_single_engine_hero_above_chips(self):
+        svg = generate_card_svg(_S1)
+        hero_y = _extract_hero_y(svg)
+        chip_ys = _extract_chip_ys(svg)
+        assert hero_y is not None, "Hero number missing for single engine"
+        assert chip_ys, "No metric chips found"
+        assert hero_y < min(chip_ys), (
+            f"Hero y={hero_y} overlaps first chip y={min(chip_ys)}"
+        )
+
+    def test_hero_above_chips_all_scenarios(self):
+        scenarios = [
+            ("S1", generate_card_svg(_S1)),
+            ("S1_power", generate_card_svg(_S1_POWER[0], power_data=_S1_POWER[1])),
+            ("S2", generate_card_svg(_S2)),
+            ("S3", generate_card_svg(_S3)),
+            ("S4", generate_card_svg(_S4)),
+        ]
+        for name, svg in scenarios:
+            hero_y = _extract_hero_y(svg)
+            chip_ys = _extract_chip_ys(svg)
+            if hero_y is not None and chip_ys:
+                assert hero_y < min(chip_ys), (
+                    f"{name}: hero y={hero_y} overlaps first chip y={min(chip_ys)}"
+                )
+
+    def test_frame_bottom_contains_all_chips(self):
+        for name, svg in [("S1", generate_card_svg(_S1)), ("S2", generate_card_svg(_S2)), ("S4", generate_card_svg(_S4))]:
+            _, frame_bottom = _extract_frame_bounds(svg)
+            chip_ys = _extract_chip_ys(svg)
+            if chip_ys:
+                last_chip_bottom = max(chip_ys) + 28  # chip height
+                assert last_chip_bottom <= frame_bottom, (
+                    f"{name}: chip bottom {last_chip_bottom} exceeds frame {frame_bottom}"
+                )
+
+    def test_footer_below_frame(self):
+        for name, report in [("S0", _S0), ("S1", _S1), ("S2", _S2), ("S4", _S4)]:
+            svg = generate_card_svg(report)
+            _, frame_bottom = _extract_frame_bounds(svg)
+            footer_y = _extract_footer_y(svg)
+            assert footer_y is not None, f"{name}: footer missing"
+            assert footer_y >= frame_bottom, (
+                f"{name}: footer y={footer_y} inside frame (bottom={frame_bottom})"
+            )
+
+    def test_footer_within_canvas(self):
+        all_reports = [_S0, _S1, _S2, _S3, _S4, _S5, _S1_UNSTABLE]
+        for report in all_reports:
+            svg = generate_card_svg(report)
+            footer_y = _extract_footer_y(svg)
+            if footer_y is not None:
+                assert footer_y + 28 <= 630, f"Footer spills below canvas: y={footer_y}"
+
+    def test_single_engine_frame_compact(self):
+        svg = generate_card_svg(_S1)
+        _, frame_bottom = _extract_frame_bounds(svg)
+        assert frame_bottom < 480, (
+            f"Single-engine frame too tall: bottom={frame_bottom}, expected <480"
+        )
+
+
+class TestCardLayoutOrdering:
+    """P1 — Visual hierarchy: elements must appear in correct top-to-bottom order."""
+
+    def test_vertical_order_two_engines(self):
+        svg = generate_card_svg(_S2)
+        frame_top, frame_bottom = _extract_frame_bounds(svg)
+        bars = _extract_bar_rects(svg)
+        hero_y = _extract_hero_y(svg)
+        chip_ys = _extract_chip_ys(svg)
+        footer_y = _extract_footer_y(svg)
+
+        assert bars, "No bars found"
+        first_bar_y = bars[0][0]
+        last_bar_y = bars[-1][0]
+
+        assert frame_top < first_bar_y, "Bars above frame top"
+        assert last_bar_y < hero_y, "Hero above last bar"
+        if chip_ys:
+            assert hero_y < min(chip_ys), "Chips above hero"
+            assert max(chip_ys) < frame_bottom, "Chips below frame"
+        assert frame_bottom <= footer_y, "Footer inside frame"
+
+    def test_vertical_order_single_engine(self):
+        svg = generate_card_svg(_S1)
+        frame_top, frame_bottom = _extract_frame_bounds(svg)
+        bars = _extract_bar_rects(svg)
+        hero_y = _extract_hero_y(svg)
+        chip_ys = _extract_chip_ys(svg)
+        footer_y = _extract_footer_y(svg)
+
+        assert len(bars) == 1
+        assert frame_top < bars[0][0]
+        assert bars[0][0] < hero_y
+        if chip_ys:
+            assert hero_y < min(chip_ys)
+        assert frame_bottom <= footer_y
+
+    def test_bars_sorted_by_speed_descending(self):
+        svg = generate_card_svg(_S4)
+        bars = _extract_bar_rects(svg)
+        assert len(bars) == 4
+        # Bars sorted by y ascending = sorted by speed descending
+        # Wider bar = faster engine should be first (lowest y)
+        widths = [w for _, w in bars]
+        assert widths[0] >= max(widths), "Fastest engine bar should be widest and first"
+        ys = [y for y, _ in bars]
+        assert ys == sorted(ys), "Bars should be ordered top to bottom"
+
+    def test_no_element_exceeds_canvas(self):
+        for report in [_S0, _S1, _S2, _S4, _S5]:
+            svg = generate_card_svg(report)
+            all_y = _extract_all_y(svg)
+            over = [y for y in all_y if y > 630]
+            assert not over, f"Elements beyond canvas: {over}"
+
+
+class TestCardColors:
+    """P1 — UI: color rules for winner/loser bars and chip states."""
+
+    def test_winner_bar_green_fill(self):
+        svg = generate_card_svg(_S2)
+        # First bar rect (winner) should use accent color
+        m = re.search(r'<rect[^>]*rx="4"[^>]*fill="(#[0-9a-f]+)"[^>]*opacity="0\.9"', svg)
+        assert m and m.group(1) == "#00d4aa", "Winner bar should be green"
+
+    def test_loser_bar_gray_fill(self):
+        svg = generate_card_svg(_S2)
+        fills = re.findall(r'<rect[^>]*rx="4"[^>]*fill="(#[0-9a-f]+)"[^>]*opacity="0\.9"', svg)
+        assert len(fills) >= 2
+        assert fills[1] == "#4a5568", "Loser bar should be gray"
+
+    def test_unstable_red_border(self):
+        svg = generate_card_svg(_S1_UNSTABLE)
+        assert 'stroke="#ef4444"' in svg, "Unstable chip should have red border"
+
+    def test_stable_no_red(self):
+        svg = generate_card_svg(_S1)
+        assert "#ef4444" not in svg, "Stable card should have no red elements"
+
+    def test_mixed_stability_only_unstable_red(self):
+        svg = generate_card_svg(_S2_MIXED_STABILITY)
+        assert 'stroke="#ef4444"' in svg, "Unstable engine should have red"
+        assert "unstable" in svg
+
+
+class TestCardChipsContent:
+    """P1 — Per-engine metric chips: content and format."""
+
+    def test_engine_version_in_label(self):
+        svg = generate_card_svg(_S1, engine_versions={"ollama": "0.18.1"})
+        assert "ollama v0.18.1" in svg
+
+    def test_power_chip_format(self):
+        svg = generate_card_svg(
+            _S1_POWER[0], power_data=_S1_POWER[1]
+        )
+        # Unicode middle dot
+        assert "20W" in svg
+        assert "2.3" in svg or "2.29" in svg
+
+    def test_runs_chip_only_when_multiple(self):
+        single_run = _make_report(engines={"ollama": _make_engine(runs_count=1)})
+        svg_single = generate_card_svg(single_run)
+        assert "1 runs" not in svg_single
+
+        multi_run = _make_report(engines={"ollama": _make_engine(runs_count=5)})
+        svg_multi = generate_card_svg(multi_run)
+        assert "5 runs" in svg_multi
+
+    def test_quant_global_when_all_same(self):
+        report = _make_report(
+            engines={
+                "lmstudio": _make_engine(tok_s=72.6),
+                "ollama": _make_engine(tok_s=30.4),
+            },
+            winner={"name": "lmstudio", "tok_s_delta": "2.4x faster"},
+        )
+        svg = generate_card_svg(report, engine_quants={"lmstudio": "Q4_K_M", "ollama": "Q4_K_M"})
+        # Global quant should appear once in specs area, not per-engine
+        assert "Q4_K_M" in svg
+
+    def test_quant_per_engine_when_different(self):
+        report = _make_report(
+            engines={
+                "lmstudio": _make_engine(tok_s=72.6),
+                "ollama": _make_engine(tok_s=30.4),
+            },
+            winner={"name": "lmstudio", "tok_s_delta": "2.4x faster"},
+        )
+        svg = generate_card_svg(
+            report, engine_quants={"lmstudio": "Q4_K_M", "ollama": "Q5_K_S"}
+        )
+        assert "Q4_K_M" in svg
+        assert "Q5_K_S" in svg
+
+
+class TestCardEdgeCases:
+    """P2 — Robustness: extreme inputs must not crash or break layout."""
+
+    def test_five_engines_capped_at_four_bars(self):
+        svg = generate_card_svg(_S5)
+        bars = _extract_bar_rects(svg)
+        assert len(bars) == 4, f"Expected 4 bars, got {len(bars)}"
+
+    def test_very_long_model_name(self):
+        report = _make_report(model="super-long-model-name-that-exceeds-normal-width:35b-a3b-q4_k_m")
+        svg = generate_card_svg(report)
+        assert "<svg" in svg
+
+    def test_same_speed_engines(self):
+        report = _make_report(
+            engines={
+                "lmstudio": _make_engine(tok_s=50.0),
+                "ollama": _make_engine(tok_s=50.0),
+            },
+            winner=None,
+        )
+        svg = generate_card_svg(report)
+        assert "<svg" in svg
+        bars = _extract_bar_rects(svg)
+        assert len(bars) == 2
+
+    def test_extreme_speed_ratio(self):
+        report = _make_report(
+            engines={
+                "fast": _make_engine(tok_s=200.0),
+                "slow": _make_engine(tok_s=2.0),
+            },
+            winner={"name": "fast", "tok_s_delta": "100.0x faster"},
+        )
+        svg = generate_card_svg(report)
+        bars = _extract_bar_rects(svg)
+        assert len(bars) == 2
+        # Slow bar should still have minimum width (60px)
+        slow_bar_width = min(w for _, w in bars)
+        assert slow_bar_width >= 60, f"Slow bar too narrow: {slow_bar_width}px"
+
+    def test_zero_tok_s_no_crash(self):
+        report = _make_report(engines={"ollama": _make_engine(tok_s=0.0)})
+        svg = generate_card_svg(report)
+        assert "<svg" in svg
+
+    def test_model_name_latest_stripped(self):
+        report = _make_report(model="llama3.1:latest")
+        svg = generate_card_svg(report)
+        assert "Llama 3.1" in svg
+        assert "LATEST" not in svg
+
+    def test_model_name_with_tag(self):
+        report = _make_report(model="qwen3.5:35b-a3b")
+        svg = generate_card_svg(report)
+        assert "Qwen 3.5" in svg
+        assert "35B-A3B" in svg
+
+
+class TestCardSocialSharing:
+    """P2 — UX: OG image compatibility for Twitter/Discord embeds."""
+
+    def test_svg_dimensions(self):
+        svg = generate_card_svg(_S1)
+        assert 'width="1200"' in svg
+        assert 'height="630"' in svg
+        assert 'viewBox="0 0 1200 630"' in svg
+
+    def test_key_content_safe_zone(self):
+        svg = generate_card_svg(_S2, hw_chip="Apple M4 Pro")
+        hero_y = _extract_hero_y(svg)
+        model_ys = _extract_text_y(svg, "Qwen 3.5")
+        assert hero_y and 80 < hero_y < 580, f"Hero outside safe zone: y={hero_y}"
+        assert model_ys and 80 < model_ys[0] < 580, f"Model outside safe zone"
+
+    def test_clip_path_present(self):
+        svg = generate_card_svg(_S1)
+        assert 'clip-path="url(#card-clip)"' in svg

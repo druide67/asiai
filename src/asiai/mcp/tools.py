@@ -249,6 +249,7 @@ async def run_benchmark(
     ctx: Context,
     model: str = "",
     engines: str = "",
+    compare: list[str] | None = None,
     prompts: str = "",
     runs: int = 3,
     context_size: str = "",
@@ -260,9 +261,21 @@ async def run_benchmark(
     It sends prompts to inference engines and measures tok/s, TTFT,
     and throughput. Only use when the user explicitly asks for a benchmark.
 
+    Two modes:
+    - **Engine comparison** (default): benchmark one model across engines.
+      Use ``model`` + ``engines`` parameters.
+    - **Cross-model comparison**: benchmark different models (optionally on
+      different engines). Use ``compare`` parameter with ``model@engine``
+      syntax. Examples: ``["qwen3.5:4b@ollama", "deepseek-r1:7b@lmstudio"]``
+      or ``["qwen3.5:4b", "deepseek-r1:7b"]`` (auto-expands to all engines).
+
+    ``model`` and ``compare`` are mutually exclusive.
+
     Args:
         model: Model name to benchmark. If empty, auto-detects the first loaded model.
         engines: Comma-separated engine filter (e.g. "ollama,lmstudio"). Empty = all.
+        compare: List of "model" or "model@engine" strings for cross-model comparison.
+                 Mutually exclusive with ``model``. Max 8 slots.
         prompts: Comma-separated prompt types: "code", "tool_call", "reasoning", "long_gen".
                  Empty = all standard prompts.
         runs: Number of runs per prompt for variance measurement (1-10, default 3).
@@ -271,16 +284,20 @@ async def run_benchmark(
               filesystem). The returned card_path is local to the server machine.
 
     Returns:
-        Aggregated benchmark report with per-engine tok/s, TTFT, CI 95%,
+        Aggregated benchmark report with per-slot tok/s, TTFT, CI 95%,
         stability rating, and winner determination. If card=True, includes card_path
         (absolute path on the server, e.g. ~/.local/share/asiai/cards/...).
     """
-    from asiai.benchmark.reporter import aggregate_results
-    from asiai.benchmark.runner import find_common_model
+    from asiai.benchmark.reporter import aggregate_results, build_report
+    from asiai.benchmark.runner import BenchmarkSlot, find_common_model
     from asiai.benchmark.runner import run_benchmark as _run_bench
     from asiai.storage.db import store_benchmark
 
     app_ctx = _get_ctx(ctx)
+
+    # Mutual exclusion
+    if model and compare:
+        return {"error": "'model' and 'compare' are mutually exclusive."}
 
     # Rate limiting: minimum 60s between benchmarks
     now = time.time()
@@ -303,14 +320,6 @@ async def run_benchmark(
         if not target_engines:
             return {"error": f"None of the specified engines found: {engines}"}
 
-    # Resolve model
-    resolved_model = find_common_model(target_engines, model)
-    if not resolved_model:
-        return {
-            "error": "No model available for benchmarking. Load a model first.",
-            "suggestion": "Use list_models to see what's loaded.",
-        }
-
     # Parse prompt types
     prompt_names = [p.strip() for p in prompts.split(",")] if prompts else None
 
@@ -324,16 +333,49 @@ async def run_benchmark(
 
         ctx_size = parse_context_size(context_size)
 
-    # Run benchmark in thread pool to avoid blocking the event loop
-    bench_run = await asyncio.to_thread(
-        _run_bench,
-        target_engines,
-        resolved_model,
-        prompt_names,
-        runs=runs,
-        power=False,  # No sudo in MCP context
-        context_size=ctx_size,
-    )
+    compare_mode = bool(compare)
+
+    if compare_mode:
+        # Cross-model mode: build slots from compare args
+        from asiai.cli import expand_compare_args
+
+        engines_filter = engines or ""
+        try:
+            slots = expand_compare_args(compare, engines_filter, target_engines)
+        except (ValueError, SystemExit) as e:
+            return {"error": str(e)}
+
+        if not slots:
+            return {"error": "No valid slots could be built from compare arguments."}
+
+        bench_run = await asyncio.to_thread(
+            _run_bench,
+            None,
+            "",
+            prompt_names,
+            runs=runs,
+            power=False,
+            context_size=ctx_size,
+            slots=slots,
+        )
+    else:
+        # Legacy engine comparison mode
+        resolved_model = find_common_model(target_engines, model)
+        if not resolved_model:
+            return {
+                "error": "No model available for benchmarking. Load a model first.",
+                "suggestion": "Use list_models to see what's loaded.",
+            }
+
+        bench_run = await asyncio.to_thread(
+            _run_bench,
+            target_engines,
+            resolved_model,
+            prompt_names,
+            runs=runs,
+            power=False,
+            context_size=ctx_size,
+        )
 
     app_ctx.last_bench_ts = time.time()
 
@@ -345,8 +387,12 @@ async def run_benchmark(
         store_benchmark_process(app_ctx.db_path, bench_run.results)
 
     # Aggregate
-    report = aggregate_results(bench_run.results)
-    report["model"] = resolved_model
+    if compare_mode:
+        report = build_report(bench_run.results)
+    else:
+        report = aggregate_results(bench_run.results)
+        report["model"] = resolved_model  # type: ignore[possibly-undefined]
+
     report["errors"] = bench_run.errors
     report["total_runs"] = len(bench_run.results)
 
@@ -633,7 +679,7 @@ async def refresh_engines(ctx: Context) -> dict:
     annotations={
         "readOnlyHint": True,
         "openWorldHint": False,
-        "title": "Compare Engines for a Model",
+        "title": "Compare Engines or Models",
     }
 )
 async def compare_engines(
@@ -641,21 +687,30 @@ async def compare_engines(
     model: str = "",
     hours: int = 0,
 ) -> dict:
-    """Compare inference engines side-by-side for a given model.
+    """Compare inference engines or models side-by-side from benchmark history.
 
     Analyzes local benchmark history and returns a ranked comparison
     with tok/s, TTFT, VRAM, stability, and a verdict indicating
     the winner and by how much.
 
+    Supports all session types: engine comparison (same model, multiple engines),
+    model comparison (same engine, multiple models), and full matrix.
+
     Args:
-        model: Model name to compare across engines (e.g. "qwen3.5:35b").
+        model: Model name to filter (e.g. "qwen3.5:35b").
                If empty, uses the most recently benchmarked model.
+               For cross-model comparisons, leave empty to get all models.
         hours: Limit analysis to last N hours. 0 = all history (default).
 
     Returns:
-        Ranked engine comparison with winner verdict.
+        Ranked comparison with winner verdict.
     """
-    from asiai.benchmark.reporter import aggregate_results
+    from asiai.benchmark.reporter import (
+        aggregate_results,
+        aggregate_slots,
+        detect_session_type,
+        report_to_slots,
+    )
     from asiai.storage.db import query_benchmarks
 
     app_ctx = _get_ctx(ctx)
@@ -667,52 +722,63 @@ async def compare_engines(
             "suggestion": "Run a benchmark first: run_benchmark tool.",
         }
 
-    report = aggregate_results(rows)
-    engines_data = report.get("engines", {})
+    # Use slots-based aggregation if data has multiple models
+    models_in_data = {r.get("model", "") for r in rows}
+    if len(models_in_data) > 1:
+        slots = aggregate_slots(rows)
+        session_type = detect_session_type(slots)
+    else:
+        report = aggregate_results(rows)
+        slots = report_to_slots(report)
+        session_type = "engine"
 
-    if len(engines_data) < 2:
+    if len(slots) < 2:
         return {
-            "error": "Need benchmarks from at least 2 engines to compare.",
-            "engines_found": list(engines_data.keys()),
-            "suggestion": "Load the same model on multiple engines and benchmark.",
+            "error": "Need benchmarks from at least 2 engines/models to compare.",
+            "suggestion": "Run benchmarks with multiple engines or use --compare.",
         }
 
     # Build ranked comparison
-    ranked = sorted(
-        engines_data.items(),
-        key=lambda x: x[1].get("avg_tok_s", 0),
-        reverse=True,
-    )
-
     comparison = []
-    for rank, (name, data) in enumerate(ranked, 1):
+    for rank, slot in enumerate(slots, 1):
+        if session_type == "engine":
+            label = slot.get("engine", "")
+        elif session_type == "model":
+            label = slot.get("model", "")
+        else:
+            label = f"{slot.get('model', '')} / {slot.get('engine', '')}"
+
         comparison.append(
             {
                 "rank": rank,
-                "engine": name,
-                "avg_tok_s": round(data.get("avg_tok_s", 0), 1),
-                "avg_ttft_ms": round(data.get("avg_ttft_ms", 0), 1),
-                "vram_bytes": data.get("vram_bytes", 0),
-                "stability": data.get("stability", "unknown"),
-                "runs_count": data.get("runs_count", 0),
+                "label": label,
+                "engine": slot.get("engine", ""),
+                "model": slot.get("model", ""),
+                "median_tok_s": round(slot.get("median_tok_s", 0), 1),
+                "avg_tok_s": round(slot.get("avg_tok_s", 0), 1),
+                "avg_ttft_ms": round(slot.get("avg_ttft_ms", 0) or slot.get("median_ttft_ms", 0), 1),
+                "vram_bytes": slot.get("vram_bytes", 0),
+                "stability": slot.get("stability", "unknown"),
+                "runs_count": slot.get("runs_count", 0),
             }
         )
 
     # Verdict
-    best = ranked[0]
-    second = ranked[1]
-    best_tok = best[1].get("avg_tok_s", 0)
-    second_tok = second[1].get("avg_tok_s", 0)
+    best = slots[0]
+    second = slots[1]
+    best_tok = best.get("median_tok_s", 0) or best.get("avg_tok_s", 0)
+    second_tok = second.get("median_tok_s", 0) or second.get("avg_tok_s", 0)
     speedup = round(best_tok / second_tok, 1) if second_tok > 0 else 0
 
+    best_label = comparison[0]["label"]
+    second_label = comparison[1]["label"]
     verdict = (
-        f"{best[0]} is {speedup}x faster than {second[0]} "
+        f"{best_label} is {speedup}x faster than {second_label} "
         f"({best_tok:.1f} vs {second_tok:.1f} tok/s)"
     )
 
     return {
-        "model": report.get("model", model),
+        "session_type": session_type,
         "comparison": comparison,
         "verdict": verdict,
-        "winner": report.get("winner"),
     }

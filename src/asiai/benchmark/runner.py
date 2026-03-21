@@ -21,6 +21,14 @@ logger = logging.getLogger("asiai.benchmark.runner")
 
 
 @dataclass
+class BenchmarkSlot:
+    """A single (engine, model) pair to benchmark."""
+
+    engine: InferenceEngine
+    model: str
+
+
+@dataclass
 class BenchmarkRun:
     """Complete results from a single benchmark session."""
 
@@ -73,34 +81,48 @@ def find_common_model(
 
 
 def run_benchmark(
-    engines: list[InferenceEngine],
-    model: str,
+    engines: list[InferenceEngine] | None = None,
+    model: str = "",
     prompt_names: list[str] | None = None,
     runs: int = 1,
     power: bool = False,
     context_size: int = 0,
+    *,
+    slots: list[BenchmarkSlot] | None = None,
 ) -> BenchmarkRun:
-    """Run benchmarks across engines for a given model.
+    """Run benchmarks across engines for a given model, or across arbitrary slots.
 
     Args:
-        engines: Inference engines to benchmark.
-        model: Model name to benchmark.
+        engines: Inference engines to benchmark (legacy, use slots instead).
+        model: Model name to benchmark (legacy, use slots instead).
         prompt_names: Optional subset of prompt types to run.
         runs: Number of runs per prompt (for variance measurement).
         power: If True, measure GPU power via powermetrics (sudo required).
         context_size: If > 0, use a single context-fill prompt of this many tokens.
+        slots: List of (engine, model) pairs to benchmark. If provided,
+               engines and model args are ignored. Supports cross-model comparison.
 
     Execution is sequential to avoid memory/thermal interference
     on unified memory Apple Silicon.
     """
     from asiai.collectors.power import PowerMonitor
 
+    # Build slots from legacy args if not provided directly
+    if slots is None:
+        if engines is None:
+            raise ValueError("Either engines+model or slots must be provided")
+        slots = [BenchmarkSlot(engine=e, model=model) for e in engines]
+
     if context_size > 0:
         prompts = [generate_context_fill_prompt(context_size)]
     else:
         prompts = get_prompts(prompt_names)
     ts = int(time.time())
-    run = BenchmarkRun(ts=ts, model=model)
+
+    # For BenchmarkRun.model: use the model if all slots share it, else first slot's
+    all_models = {s.model for s in slots}
+    run_model = slots[0].model if len(all_models) == 1 else slots[0].model
+    run = BenchmarkRun(ts=ts, model=run_model)
 
     # Collect machine info once per run (stable during session)
     hw_chip = collect_hw_chip()
@@ -120,25 +142,31 @@ def run_benchmark(
         else:
             test_monitor.stop()
 
-    engines_run = 0
-    for engine in engines:
+    slots_run = 0
+    prev_model = ""
+    for slot in slots:
+        engine = slot.engine
+        slot_model = slot.model
+
         if not engine.is_reachable():
             run.errors.append(f"{engine.name}: not reachable")
             continue
 
-        # Cooldown between engines to stabilize thermals
-        if engines_run > 0:
-            logger.info("Cooldown 3s between engines")
-            time.sleep(3)
+        # Cooldown between slots to stabilize thermals
+        # 5s if model changes (heavier thermal impact from load), 3s otherwise
+        if slots_run > 0:
+            cooldown = 5 if slot_model != prev_model else 3
+            logger.info("Cooldown %ds between slots", cooldown)
+            time.sleep(cooldown)
 
         # Pre-check: verify the model exists on this engine
-        check = _check_model_availability(engine, model)
+        check = _check_model_availability(engine, slot_model)
         if not check["found"]:
             run.errors.append(check["error"])
             continue
 
         # Resolve engine-specific model name
-        engine_model = check.get("resolved_name", model)
+        engine_model = check.get("resolved_name", slot_model)
         vram_bytes = check.get("vram_bytes", 0)
         model_format = check.get("model_format", "")
         model_quantization = check.get("model_quantization", "")
@@ -248,7 +276,8 @@ def run_benchmark(
                     )
                     break  # One warning per engine is enough
 
-        engines_run += 1
+        slots_run += 1
+        prev_model = slot_model
 
     return run
 

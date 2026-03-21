@@ -94,23 +94,84 @@ def _safe_get(url: str, timeout: int = _GET_TIMEOUT) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def _build_slot_entry(
+    slot_data: dict,
+    raw_results: list[dict],
+) -> dict[str, Any]:
+    """Build a single slot entry for community submission payload.
+
+    Extracts stats from aggregated slot data and metadata from raw results.
+    Shared between v2 (engine-keyed) and v3 (slots array) payloads.
+    """
+    engine_name = slot_data.get("engine", "")
+    model_name = slot_data.get("model", "")
+
+    # Pick raw results for this slot.
+    # Filter by (engine, model) when model is present in raw data,
+    # otherwise filter by engine only (legacy single-model benchmarks).
+    slot_results = [
+        r
+        for r in raw_results
+        if r.get("engine") == engine_name
+        and (not r.get("model") or r.get("model") == model_name)
+    ]
+    er: dict = slot_results[0] if slot_results else {}
+
+    # Power/efficiency/load from raw results
+    power_vals = [r.get("power_watts", 0) for r in slot_results if r.get("power_watts", 0) > 0]
+    eff_vals = [
+        r.get("tok_per_sec_per_watt", 0)
+        for r in slot_results
+        if r.get("tok_per_sec_per_watt", 0) > 0
+    ]
+    load_vals = [
+        r.get("load_time_ms", 0) for r in slot_results if r.get("load_time_ms", 0) > 0
+    ]
+
+    entry: dict[str, Any] = {
+        "median_tok_s": slot_data.get("median_tok_s", 0.0),
+        "avg_tok_s": slot_data.get("avg_tok_s", 0.0),
+        "ci95": [slot_data.get("ci95_lower", 0.0), slot_data.get("ci95_upper", 0.0)],
+        "median_ttft_ms": slot_data.get("median_ttft_ms", 0.0),
+        "vram_bytes": slot_data.get("vram_bytes", 0),
+        "engine_version": er.get("engine_version", ""),
+        "model_format": er.get("model_format", ""),
+        "model_quantization": er.get("model_quantization", ""),
+        "stability": slot_data.get("stability", ""),
+        "runs_count": slot_data.get("runs_count", 1),
+        "p90_tok_s": slot_data.get("p90_tok_s", 0.0),
+        "p99_tok_s": slot_data.get("p99_tok_s", 0.0),
+        "p90_ttft_ms": slot_data.get("p90_ttft_ms", 0.0),
+    }
+    if power_vals:
+        entry["avg_power_watts"] = round(sum(power_vals) / len(power_vals), 1)
+    if eff_vals:
+        entry["avg_tok_per_sec_per_watt"] = round(sum(eff_vals) / len(eff_vals), 2)
+    if load_vals:
+        entry["load_time_ms"] = round(sum(load_vals) / len(load_vals), 1)
+
+    return entry
+
+
 def build_submission(
     raw_results: list[dict],
     report: dict,
 ) -> dict:
     """Build an anonymized submission payload from benchmark results.
 
-    Uses the same export format as *reporter.export_benchmark()* but adds
-    community-specific fields (``id``, ``hw_ram_gb``, ``_hash``).
+    Produces **schema_version 2** for engine-comparison sessions (backward
+    compatible) and **schema_version 3** for model/matrix sessions (slots
+    array where each slot = independent leaderboard entry).
 
     Args:
         raw_results: Raw per-run result dicts from ``BenchmarkRun.results``.
-        report: Aggregated report from ``aggregate_results()``.
+        report: Aggregated report from ``aggregate_results()`` or ``build_report()``.
 
     Returns:
         Dict ready to be JSON-serialized and POSTed.
     """
     from asiai import __version__
+    from asiai.benchmark.reporter import report_to_slots
     from asiai.collectors.system import collect_memory
 
     mem = collect_memory()
@@ -119,76 +180,82 @@ def build_submission(
     first: dict = raw_results[0] if raw_results else {}
     submission_id = str(uuid.uuid4())
 
-    # Build per-engine summaries from the aggregated report.
-    engines_data: dict[str, dict] = {}
-    for engine_name, data in report.get("engines", {}).items():
-        # Pick the first raw result for this engine (for metadata fields).
-        engine_results = [r for r in raw_results if r.get("engine") == engine_name]
-        er: dict = engine_results[0] if engine_results else {}
-        # Power data from raw results
-        power_vals = [
-            r.get("power_watts", 0) for r in engine_results if r.get("power_watts", 0) > 0
-        ]
-        eff_vals = [
-            r.get("tok_per_sec_per_watt", 0)
-            for r in engine_results
-            if r.get("tok_per_sec_per_watt", 0) > 0
-        ]
-        load_vals = [
-            r.get("load_time_ms", 0) for r in engine_results if r.get("load_time_ms", 0) > 0
-        ]
-
-        engine_entry: dict[str, Any] = {
-            "median_tok_s": data.get("median_tok_s", 0.0),
-            "avg_tok_s": data.get("avg_tok_s", 0.0),
-            "ci95": [data.get("ci95_lower", 0.0), data.get("ci95_upper", 0.0)],
-            "median_ttft_ms": data.get("median_ttft_ms", 0.0),
-            "vram_bytes": data.get("vram_bytes", 0),
-            "engine_version": er.get("engine_version", ""),
-            "model_format": er.get("model_format", ""),
-            "model_quantization": er.get("model_quantization", ""),
-            "stability": data.get("stability", ""),
-            "runs_count": data.get("runs_count", 1),
-            "p90_tok_s": data.get("p90_tok_s", 0.0),
-            "p99_tok_s": data.get("p99_tok_s", 0.0),
-            "p90_ttft_ms": data.get("p90_ttft_ms", 0.0),
-        }
-        if power_vals:
-            engine_entry["avg_power_watts"] = round(sum(power_vals) / len(power_vals), 1)
-        if eff_vals:
-            engine_entry["avg_tok_per_sec_per_watt"] = round(sum(eff_vals) / len(eff_vals), 2)
-        if load_vals:
-            engine_entry["load_time_ms"] = round(sum(load_vals) / len(load_vals), 1)
-
-        engines_data[engine_name] = engine_entry
-
     prompts = sorted({r.get("prompt_type", "") for r in raw_results if r.get("prompt_type")})
     run_indices = {r.get("run_index", 0) for r in raw_results}
     context_size = first.get("context_size", 0)
     gpu_cores = first.get("gpu_cores", 0)
 
-    raw_model = report.get("model", "")
-    clean_model = normalize_model_name(raw_model)
-    if not clean_model:
-        logger.warning("Model name '%s' could not be normalized — skipping submission", raw_model)
+    session_type = report.get("session_type", "engine")
+    slots = report_to_slots(report)
 
-    payload: dict[str, Any] = {
+    # Common payload fields
+    payload_base: dict[str, Any] = {
         "id": submission_id,
-        "schema_version": 2,
         "ts": first.get("ts", int(time.time())),
         "hw_chip": first.get("hw_chip", ""),
         "hw_ram_gb": hw_ram_gb,
         "hw_gpu_cores": gpu_cores,
         "os_version": first.get("os_version", ""),
         "asiai_version": __version__,
-        "benchmark": {
-            "model": clean_model or raw_model,
-            "runs_per_prompt": len(run_indices),
-            "prompts": prompts,
-            "context_size": context_size,
-            "engines": engines_data,
-        },
     }
+
+    if session_type == "engine":
+        # Schema v2 — backward compatible engine comparison
+        raw_model = report.get("model", slots[0]["model"] if slots else "")
+        clean_model = normalize_model_name(raw_model)
+        if not clean_model:
+            logger.warning(
+                "Model name '%s' could not be normalized — skipping submission",
+                raw_model,
+            )
+
+        engines_data: dict[str, dict] = {}
+        for slot in slots:
+            entry = _build_slot_entry(slot, raw_results)
+            engines_data[slot["engine"]] = entry
+
+        payload: dict[str, Any] = {
+            **payload_base,
+            "schema_version": 2,
+            "benchmark": {
+                "model": clean_model or raw_model,
+                "runs_per_prompt": len(run_indices),
+                "prompts": prompts,
+                "context_size": context_size,
+                "engines": engines_data,
+            },
+        }
+    else:
+        # Schema v3 — model/matrix sessions with slots array
+        # Each slot is an independent leaderboard entry (no data loss).
+        slots_data: list[dict[str, Any]] = []
+        for slot in slots:
+            raw_model = slot.get("model", "")
+            clean_model = normalize_model_name(raw_model)
+            if not clean_model:
+                logger.warning(
+                    "Model name '%s' could not be normalized — slot skipped",
+                    raw_model,
+                )
+                continue
+
+            entry = _build_slot_entry(slot, raw_results)
+            entry["engine"] = slot["engine"]
+            entry["model"] = clean_model
+            entry["model_raw"] = raw_model
+            slots_data.append(entry)
+
+        payload = {
+            **payload_base,
+            "schema_version": 3,
+            "session_type": session_type,
+            "benchmark": {
+                "slots": slots_data,
+                "runs_per_prompt": len(run_indices),
+                "prompts": prompts,
+                "context_size": context_size,
+            },
+        }
 
     # Deterministic hash for server-side dedup.
     payload_json = json.dumps(payload, sort_keys=True)

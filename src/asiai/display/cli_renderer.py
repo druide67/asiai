@@ -338,15 +338,44 @@ def render_compare(data: dict) -> None:
 
 def render_bench(report: dict, context_size: int = 0) -> None:
     """Render benchmark comparison table with machine context."""
+    from asiai.benchmark.reporter import report_to_slots
     from asiai.collectors.system import collect_machine_info, collect_memory
 
-    model = report.get("model", "unknown")
-    engines = report.get("engines", {})
+    session_type = report.get("session_type", "engine")
+    slots = report_to_slots(report)
     winner = report.get("winner")
 
-    if not engines:
+    if not slots:
         print(dim("No benchmark results to display."))
         return
+
+    # Build display items: (display_name, data_dict) pairs
+    items: list[tuple[str, dict]] = []
+    for s in slots:
+        if session_type == "model":
+            display_name = s.get("model", "")
+        elif session_type == "matrix":
+            display_name = f"{s.get('model', '')} / {s.get('engine', '')}"
+        else:
+            display_name = s.get("engine", "")
+        items.append((display_name, s))
+
+    # Column label and width
+    if session_type == "model":
+        col_label = "Model"
+    elif session_type == "matrix":
+        col_label = "Model/Engine"
+    else:
+        col_label = "Engine"
+    col_w = max(max(len(name) for name, _ in items), len(col_label), 12)
+
+    # Title
+    if session_type == "model" and slots:
+        title = slots[0].get("engine", "unknown")
+    elif session_type == "matrix":
+        title = "Cross-model comparison"
+    else:
+        title = report.get("model", "unknown")
 
     print()
     # Machine context header
@@ -362,18 +391,20 @@ def render_bench(report: dict, context_size: int = 0) -> None:
             ctx_str = f" [{context_size // 1024}K context fill]"
         else:
             ctx_str = f" [{context_size} context fill]"
-    print(bold(f"Benchmark: {model}{ctx_str}"))
+    print(bold(f"Benchmark: {title}{ctx_str}"))
     print()
 
     # Table header
     print(
-        f"  {'Engine':<12} {'tok/s':>24} {'Tokens':>8} {'Duration':>8} "
+        f"  {col_label:<{col_w}} {'tok/s':>24} {'Tokens':>8} {'Duration':>8} "
         f"{'TTFT':>8} {'VRAM':>10} {'Thermal':>10}"
     )
-    print(f"  {'─' * 12} {'─' * 24} {'─' * 8} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}")
+    print(
+        f"  {'─' * col_w} {'─' * 24} {'─' * 8} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}"
+    )
 
-    for engine_name, data in sorted(engines.items()):
-        avg_tok = data["avg_tok_s"]
+    for display_name, data in items:
+        avg_tok = data.get("avg_tok_s", 0.0)
         median_tok = data.get("median_tok_s", 0.0)
         stddev = data.get("std_dev_tok_s", 0.0)
         runs_count = data.get("runs_count", 1)
@@ -381,7 +412,6 @@ def render_bench(report: dict, context_size: int = 0) -> None:
 
         if avg_tok > 0:
             if runs_count > 1 and stddev > 0:
-                # Show median as primary (SPEC standard), ± stddev
                 primary = median_tok if median_tok > 0 else avg_tok
                 tok_s = f"{primary:.1f} \u00b1 {stddev:.1f}"
                 if stability:
@@ -398,21 +428,23 @@ def render_bench(report: dict, context_size: int = 0) -> None:
         )
         dur_ms = data.get("avg_total_duration_ms", 0.0)
         duration = f"{dur_ms / 1000:.2f}s" if dur_ms > 0 else "N/A"
-        ttft = f"{data['avg_ttft_ms'] / 1000:.2f}s" if data["avg_ttft_ms"] > 0 else "N/A"
+        ttft = (
+            f"{data.get('avg_ttft_ms', 0) / 1000:.2f}s"
+            if data.get("avg_ttft_ms", 0) > 0
+            else "N/A"
+        )
 
-        # VRAM only (no RSS fallback — misleading on unified memory)
         vram_bytes = data.get("vram_bytes", 0)
         vram = format_bytes(vram_bytes) if vram_bytes > 0 else "—"
 
-        # Pad before coloring to preserve alignment (ANSI codes are invisible)
-        name_pad = f"{engine_name:<12}"
+        name_pad = f"{display_name:<{col_w}}"
         tok_s_pad = f"{tok_s:>24}"
         tokens_pad = f"{tokens:>8}"
         dur_pad = f"{duration:>8}"
         ttft_pad = f"{ttft:>8}"
         vram_pad = f"{vram:>10}"
 
-        thermal_raw = data["thermal_level"] if data["thermal_level"] else "N/A"
+        thermal_raw = data.get("thermal_level", "") or "N/A"
         thermal_pad = f"{thermal_raw:>10}"
         if thermal_raw == "nominal":
             thermal_pad = green(thermal_pad)
@@ -421,7 +453,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
         elif thermal_raw in ("serious", "critical"):
             thermal_pad = red(thermal_pad)
 
-        if winner and winner["name"] == engine_name:
+        if winner and winner.get("name") == display_name:
             name_pad = green(name_pad)
             tok_s_pad = green(tok_s_pad)
 
@@ -432,55 +464,60 @@ def render_bench(report: dict, context_size: int = 0) -> None:
     print()
 
     if winner:
-        parts = [winner["tok_s_delta"], winner["vram_delta"]]
+        parts = [winner.get("tok_s_delta", ""), winner.get("vram_delta", "")]
         parts = [p for p in parts if p]
         detail = f" ({', '.join(parts)})" if parts else ""
         print(f"  {bold('Winner:')} {green(winner['name'])}{detail}")
-    elif len(engines) == 1:
-        print(dim("  Single engine — no comparison available."))
+    elif len(slots) == 1:
+        if session_type == "engine":
+            print(dim("  Single engine — no comparison available."))
+        else:
+            print(dim("  Single result — no comparison available."))
 
     # Load time (if available)
     has_load_time = any(
-        any(p.get("load_time_ms", 0) > 0 for p in d["prompt_results"]) for d in engines.values()
+        any(p.get("load_time_ms", 0) > 0 for p in d.get("prompt_results", []))
+        for _, d in items
     )
     if has_load_time:
         print()
         print(bold("  Model Load Time"))
-        for engine_name, data in sorted(engines.items()):
-            pr = data["prompt_results"]
+        for display_name, data in items:
+            pr = data.get("prompt_results", [])
             load_vals = [p["load_time_ms"] for p in pr if p.get("load_time_ms", 0) > 0]
             if load_vals:
-                load_ms = load_vals[0]  # Same for all prompts in one engine
+                load_ms = load_vals[0]
                 if load_ms >= 1000:
-                    print(f"    {engine_name:<12} {load_ms / 1000:.1f}s")
+                    print(f"    {display_name:<{col_w}} {load_ms / 1000:.1f}s")
                 else:
-                    print(f"    {engine_name:<12} {load_ms:.0f}ms")
+                    print(f"    {display_name:<{col_w}} {load_ms:.0f}ms")
 
     # Statistical details (CI, percentiles, outliers)
-    has_stats = any(d.get("runs_count", 1) >= 2 for d in engines.values())
+    has_stats = any(d.get("runs_count", 1) >= 2 for _, d in items)
     if has_stats:
         print()
         print(bold("  Statistics"))
-        for engine_name, data in sorted(engines.items()):
+        for display_name, data in items:
             if data.get("runs_count", 1) < 2:
                 continue
             ci_lo = data.get("ci95_lower", 0)
             ci_hi = data.get("ci95_upper", 0)
             p90 = data.get("p90_tok_s", 0)
             p90_ttft = data.get("p90_ttft_ms", 0)
-            parts = [f"95% CI: [{ci_lo:.1f}, {ci_hi:.1f}] tok/s"]
+            stat_parts = [f"95% CI: [{ci_lo:.1f}, {ci_hi:.1f}] tok/s"]
             if p90 > 0:
-                parts.append(f"P90: {p90:.1f} tok/s")
+                stat_parts.append(f"P90: {p90:.1f} tok/s")
             if p90_ttft > 0:
-                parts.append(f"P90 TTFT: {p90_ttft / 1000:.2f}s")
+                stat_parts.append(f"P90 TTFT: {p90_ttft / 1000:.2f}s")
             outliers = data.get("outliers", [])
             if outliers:
-                parts.append(yellow(f"{len(outliers)} outlier(s)"))
-            print(f"    {engine_name:<12} {', '.join(parts)}")
+                stat_parts.append(yellow(f"{len(outliers)} outlier(s)"))
+            print(f"    {display_name:<{col_w}} {', '.join(stat_parts)}")
 
     # Power tip (when no power data)
     has_power = any(
-        any(p.get("power_watts", 0) > 0 for p in d["prompt_results"]) for d in engines.values()
+        any(p.get("power_watts", 0) > 0 for p in d.get("prompt_results", []))
+        for _, d in items
     )
     if not has_power:
         print(dim("  Tip: run with --power for tok/s per watt (requires sudo)"))
@@ -489,8 +526,8 @@ def render_bench(report: dict, context_size: int = 0) -> None:
     if has_power:
         print()
         print(bold("  Power Efficiency"))
-        for engine_name, data in sorted(engines.items()):
-            pr = data["prompt_results"]
+        for display_name, data in items:
+            pr = data.get("prompt_results", [])
             power_vals = [p["power_watts"] for p in pr if p.get("power_watts", 0) > 0]
             eff_vals = [
                 p["tok_per_sec_per_watt"] for p in pr if p.get("tok_per_sec_per_watt", 0) > 0
@@ -498,21 +535,20 @@ def render_bench(report: dict, context_size: int = 0) -> None:
             if power_vals:
                 avg_w = sum(power_vals) / len(power_vals)
                 avg_eff = sum(eff_vals) / len(eff_vals) if eff_vals else 0.0
-                tok_s = data["avg_tok_s"]
+                tok_s_val = data.get("avg_tok_s", 0.0)
                 print(
-                    f"    {engine_name:<12} {tok_s:.1f} tok/s @ {avg_w:.1f}W"
+                    f"    {display_name:<{col_w}} {tok_s_val:.1f} tok/s @ {avg_w:.1f}W"
                     f" = {avg_eff:.2f} tok/s/W (tok/J)"
                 )
 
     # Process metrics (if available)
     has_proc = any(
-        data.get("avg_proc_cpu", 0) > 0 or data.get("proc_rss_bytes", 0) > 0
-        for data in engines.values()
+        d.get("avg_proc_cpu", 0) > 0 or d.get("proc_rss_bytes", 0) > 0 for _, d in items
     )
     if has_proc:
         print()
         print(bold("  Process"))
-        for engine_name, data in sorted(engines.items()):
+        for display_name, data in items:
             cpu = data.get("avg_proc_cpu", 0)
             rss = data.get("proc_rss_bytes", 0)
             if cpu > 0 or rss > 0:
@@ -521,7 +557,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
                     parts_proc.append(f"{cpu:.0f}% CPU")
                 if rss > 0:
                     parts_proc.append(f"{format_bytes(rss)} RSS (peak)")
-                print(f"    {engine_name:<12} {' · '.join(parts_proc)}")
+                print(f"    {display_name:<{col_w}} {' · '.join(parts_proc)}")
     print()
 
 

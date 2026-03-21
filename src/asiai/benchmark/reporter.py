@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import statistics
+from collections import defaultdict
 
 
 def aggregate_results(results: list[dict]) -> dict:
@@ -45,56 +46,9 @@ def aggregate_results(results: list[dict]) -> dict:
             }
         engines[name]["prompt_results"].append(r)
 
-    # Compute averages and variance
+    # Compute aggregated stats per engine
     for data in engines.values():
-        pr = data["prompt_results"]
-        tok_values = [p["tok_per_sec"] for p in pr if p["tok_per_sec"] > 0]
-        ttft_values = [p["ttft_ms"] for p in pr if p["ttft_ms"] > 0]
-        cpu_values = [p["proc_cpu_pct"] for p in pr if p.get("proc_cpu_pct", 0) > 0]
-        rss_values = [p["proc_rss_bytes"] for p in pr if p.get("proc_rss_bytes", 0) > 0]
-        data["avg_tok_s"] = round(sum(tok_values) / len(tok_values), 1) if tok_values else 0.0
-        data["median_tok_s"] = round(statistics.median(tok_values), 1) if tok_values else 0.0
-        data["avg_ttft_ms"] = round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
-        data["median_ttft_ms"] = round(statistics.median(ttft_values), 1) if ttft_values else 0.0
-        data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
-        data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
-
-        # Tokens generated and total duration (for display)
-        tok_gen_values = [p["tokens_generated"] for p in pr if p.get("tokens_generated", 0) > 0]
-        duration_values = [p["total_duration_ms"] for p in pr if p.get("total_duration_ms", 0) > 0]
-        data["avg_tokens_generated"] = (
-            round(sum(tok_gen_values) / len(tok_gen_values)) if tok_gen_values else 0
-        )
-        data["avg_total_duration_ms"] = (
-            round(sum(duration_values) / len(duration_values), 1) if duration_values else 0.0
-        )
-
-        # Variance: pooled intra-prompt stddev (excludes inter-prompt variance)
-        data["std_dev_tok_s"] = _pooled_stddev(pr)
-        data["runs_count"] = _count_runs(pr)
-        data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
-
-        # Statistical rigor: CI 95%, percentiles, outliers
-        if tok_values and len(tok_values) >= 2:
-            n = len(tok_values)
-            se = data["std_dev_tok_s"] / math.sqrt(n) if n > 0 else 0.0
-            data["ci95_lower"] = round(data["avg_tok_s"] - 2 * se, 1)
-            data["ci95_upper"] = round(data["avg_tok_s"] + 2 * se, 1)
-        else:
-            data["ci95_lower"] = data["avg_tok_s"]
-            data["ci95_upper"] = data["avg_tok_s"]
-
-        data["p50_tok_s"] = data["median_tok_s"]
-        data["p90_tok_s"] = round(_percentile(tok_values, 90), 1) if tok_values else 0.0
-        data["p99_tok_s"] = round(_percentile(tok_values, 99), 1) if tok_values else 0.0
-
-        # TTFT percentiles (tail latency matters)
-        data["p50_ttft_ms"] = data["median_ttft_ms"]
-        data["p90_ttft_ms"] = round(_percentile(ttft_values, 90), 1) if ttft_values else 0.0
-        data["p99_ttft_ms"] = round(_percentile(ttft_values, 99), 1) if ttft_values else 0.0
-
-        # IQR outlier detection
-        data["outliers"] = _detect_outliers(tok_values) if tok_values else []
+        _compute_stats(data["prompt_results"], data)
 
     # Determine winner by median tok/s (falls back to avg if single run)
     winner = _determine_winner(engines)
@@ -191,6 +145,58 @@ def _classify_stability(avg: float, stddev: float) -> str:
     if cv < 10:
         return "variable"
     return "unstable"
+
+
+def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
+    """Compute aggregated statistics from raw per-run results into data dict.
+
+    Shared between aggregate_results() (groups by engine) and
+    aggregate_slots() (groups by engine+model).
+    """
+    pr = prompt_results
+    tok_values = [p["tok_per_sec"] for p in pr if p["tok_per_sec"] > 0]
+    ttft_values = [p["ttft_ms"] for p in pr if p["ttft_ms"] > 0]
+    cpu_values = [p["proc_cpu_pct"] for p in pr if p.get("proc_cpu_pct", 0) > 0]
+    rss_values = [p["proc_rss_bytes"] for p in pr if p.get("proc_rss_bytes", 0) > 0]
+
+    data["avg_tok_s"] = round(sum(tok_values) / len(tok_values), 1) if tok_values else 0.0
+    data["median_tok_s"] = round(statistics.median(tok_values), 1) if tok_values else 0.0
+    data["avg_ttft_ms"] = round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
+    data["median_ttft_ms"] = round(statistics.median(ttft_values), 1) if ttft_values else 0.0
+    data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
+    data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
+
+    tok_gen_values = [p["tokens_generated"] for p in pr if p.get("tokens_generated", 0) > 0]
+    duration_values = [p["total_duration_ms"] for p in pr if p.get("total_duration_ms", 0) > 0]
+    data["avg_tokens_generated"] = (
+        round(sum(tok_gen_values) / len(tok_gen_values)) if tok_gen_values else 0
+    )
+    data["avg_total_duration_ms"] = (
+        round(sum(duration_values) / len(duration_values), 1) if duration_values else 0.0
+    )
+
+    data["std_dev_tok_s"] = _pooled_stddev(pr)
+    data["runs_count"] = _count_runs(pr)
+    data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
+
+    if tok_values and len(tok_values) >= 2:
+        n = len(tok_values)
+        se = data["std_dev_tok_s"] / math.sqrt(n) if n > 0 else 0.0
+        data["ci95_lower"] = round(data["avg_tok_s"] - 2 * se, 1)
+        data["ci95_upper"] = round(data["avg_tok_s"] + 2 * se, 1)
+    else:
+        data["ci95_lower"] = data["avg_tok_s"]
+        data["ci95_upper"] = data["avg_tok_s"]
+
+    data["p50_tok_s"] = data["median_tok_s"]
+    data["p90_tok_s"] = round(_percentile(tok_values, 90), 1) if tok_values else 0.0
+    data["p99_tok_s"] = round(_percentile(tok_values, 99), 1) if tok_values else 0.0
+    data["p50_ttft_ms"] = data["median_ttft_ms"]
+    data["p90_ttft_ms"] = round(_percentile(ttft_values, 90), 1) if ttft_values else 0.0
+    data["p99_ttft_ms"] = round(_percentile(ttft_values, 99), 1) if ttft_values else 0.0
+    data["outliers"] = _detect_outliers(tok_values) if tok_values else []
+
+    return data
 
 
 def _determine_winner(engines: dict[str, dict]) -> dict | None:
@@ -346,3 +352,149 @@ def export_benchmark(
         json.dump(export, f, indent=2)
 
     return output_path
+
+
+# ---------------------------------------------------------------------------
+# Cross-model / matrix comparison support
+# ---------------------------------------------------------------------------
+
+
+def aggregate_slots(results: list[dict]) -> list[dict]:
+    """Group results by (engine, model) and compute stats per slot.
+
+    Returns a list of slot dicts ordered by median tok/s descending.
+    Each slot contains engine, model, and all aggregated stats.
+    """
+    if not results:
+        return []
+
+    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for r in results:
+        key = (r["engine"], r["model"])
+        groups[key].append(r)
+
+    slots = []
+    for (engine, model), runs in groups.items():
+        data: dict = {
+            "engine": engine,
+            "model": model,
+            "prompt_results": runs,
+            "vram_bytes": runs[0].get("vram_bytes", 0),
+            "thermal_level": runs[0].get("thermal_level", ""),
+        }
+        _compute_stats(runs, data)
+        slots.append(data)
+
+    return sorted(slots, key=lambda s: s.get("median_tok_s", 0), reverse=True)
+
+
+def detect_session_type(slots: list[dict]) -> str:
+    """Derive session type from slot data.
+
+    Returns:
+        "engine" — all slots share the same model (current behavior)
+        "model"  — all slots share the same engine
+        "matrix" — mixed models and engines
+    """
+    if not slots:
+        return "engine"
+    models = {s["model"] for s in slots}
+    engines = {s["engine"] for s in slots}
+    if len(models) == 1:
+        return "engine"
+    if len(engines) == 1:
+        return "model"
+    return "matrix"
+
+
+def _determine_winner_slots(slots: list[dict]) -> dict | None:
+    """Pick winner by median tok/s from a list of slots."""
+    if len(slots) < 2:
+        return None
+
+    def _primary_tok_s(data: dict) -> float:
+        return data.get("median_tok_s", 0.0) or data.get("avg_tok_s", 0.0)
+
+    # slots already sorted by median_tok_s desc from aggregate_slots()
+    best = slots[0]
+    second = slots[1]
+
+    best_tok = _primary_tok_s(best)
+    second_tok = _primary_tok_s(second)
+    if best_tok <= 0 or second_tok <= 0:
+        return None
+
+    tok_ratio = best_tok / second_tok
+    if tok_ratio >= 1.5:
+        tok_s_delta = f"{tok_ratio:.1f}x faster"
+    else:
+        tok_pct = (tok_ratio - 1) * 100
+        tok_s_delta = f"+{tok_pct:.0f}% tok/s"
+
+    vram_delta = ""
+    if best.get("vram_bytes", 0) > 0 and second.get("vram_bytes", 0) > 0:
+        vram_pct = (
+            (best["vram_bytes"] - second["vram_bytes"]) / second["vram_bytes"]
+        ) * 100
+        sign = "+" if vram_pct >= 0 else ""
+        vram_delta = f"{sign}{vram_pct:.0f}% VRAM"
+
+    # Build winner label based on what differs between best and second
+    if best["model"] != second["model"] and best["engine"] != second["engine"]:
+        winner_name = f"{best['model']} / {best['engine']}"
+    elif best["model"] != second["model"]:
+        winner_name = best["model"]
+    else:
+        winner_name = best["engine"]
+
+    return {"name": winner_name, "tok_s_delta": tok_s_delta, "vram_delta": vram_delta}
+
+
+def build_report(results: list[dict]) -> dict:
+    """Unified report builder for all session types.
+
+    Detects session_type from the data and returns a report with
+    a "slots" list. For session_type == "engine", also populates
+    legacy "model" and "engines" fields for backward compatibility.
+    """
+    if not results:
+        return {
+            "session_type": "engine",
+            "slots": [],
+            "winner": None,
+            "model": "",
+            "engines": {},
+        }
+
+    slots = aggregate_slots(results)
+    session_type = detect_session_type(slots)
+    winner = _determine_winner_slots(slots)
+
+    report: dict = {
+        "session_type": session_type,
+        "slots": slots,
+        "winner": winner,
+    }
+
+    # Backward compat: populate legacy fields for engine comparison
+    if session_type == "engine":
+        report["model"] = slots[0]["model"] if slots else ""
+        report["engines"] = {s["engine"]: s for s in slots}
+
+    return report
+
+
+def report_to_slots(report: dict) -> list[dict]:
+    """Convert any report format to a list of slot dicts.
+
+    Works with both legacy reports (from aggregate_results) and
+    new reports (from build_report). Code downstream can always
+    call this to get a uniform list.
+    """
+    if "slots" in report:
+        return report["slots"]
+    # Legacy engine report: convert engines dict to slots list
+    model = report.get("model", "")
+    engines = report.get("engines", {})
+    slots = [{"engine": name, "model": model, **stats} for name, stats in engines.items()]
+    return sorted(slots, key=lambda s: s.get("median_tok_s", 0), reverse=True)

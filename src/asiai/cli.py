@@ -425,11 +425,79 @@ def cmd_web(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_compare_arg(arg: str) -> tuple[str, str | None]:
+    """Parse 'model@engine' or 'model' into (model, engine_name_or_None)."""
+    if "@" in arg:
+        idx = arg.rfind("@")
+        return arg[:idx], arg[idx + 1:]
+    return arg, None
+
+
+def expand_compare_args(
+    compare_args: list[str],
+    engines_filter: str | None,
+    detected_engines: list,
+) -> list:
+    """Expand --compare arguments into BenchmarkSlot list.
+
+    Args:
+        compare_args: Raw --compare values (e.g. ["qwen3.5:4b@lmstudio", "deepseek:7b"])
+        engines_filter: --engines value (comma-separated) or None
+        detected_engines: All detected InferenceEngine instances
+
+    Returns:
+        List of BenchmarkSlot instances. Raises SystemExit on error.
+    """
+    from asiai.benchmark.runner import BenchmarkSlot
+
+    # Determine available engines (filtered or all detected)
+    if engines_filter:
+        wanted = {e.strip().lower() for e in engines_filter.split(",")}
+        available_engines = [e for e in detected_engines if e.name in wanted]
+    else:
+        available_engines = detected_engines
+
+    engine_by_name = {e.name: e for e in detected_engines}
+
+    slots: list = []
+    for arg in compare_args:
+        model, engine_name = _parse_compare_arg(arg)
+        if engine_name:
+            # Explicit slot: model@engine
+            engine = engine_by_name.get(engine_name)
+            if engine is None:
+                known = ", ".join(sorted(engine_by_name.keys()))
+                print(
+                    f"✗ Engine '{engine_name}' not found (available: {known})",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            slots.append(BenchmarkSlot(engine=engine, model=model))
+        else:
+            # Expand across available engines
+            for engine in available_engines:
+                slots.append(BenchmarkSlot(engine=engine, model=model))
+
+    if not slots:
+        print("✗ No benchmark slots to run.", file=sys.stderr)
+        sys.exit(1)
+
+    if len(slots) > 8:
+        print(
+            f"✗ Too many slots ({len(slots)}). Use -e to narrow engines "
+            f"or model@engine for explicit pairs.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return slots
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
     from asiai.benchmark.regression import detect_regressions
-    from asiai.benchmark.reporter import aggregate_results, export_benchmark
-    from asiai.benchmark.runner import find_common_model, run_benchmark
+    from asiai.benchmark.reporter import aggregate_results, build_report, export_benchmark
+    from asiai.benchmark.runner import BenchmarkSlot, find_common_model, run_benchmark
     from asiai.display.cli_renderer import render_bench, render_bench_history, render_regressions
     from asiai.display.formatters import dim, red, yellow
     from asiai.storage.db import (
@@ -462,19 +530,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
         print(dim("  Try: brew install ollama && ollama serve"), file=sys.stderr)
         return 1
 
-    # Filter engines if --engines specified
-    if args.engines:
-        wanted = {e.strip().lower() for e in args.engines.split(",")}
-        engines = [e for e in engines if e.name in wanted]
-        if not engines:
-            print(red(f"✗ None of the specified engines found: {args.engines}"), file=sys.stderr)
-            return 1
-
-    # Determine model
-    model = find_common_model(engines, args.model or "")
-    if not model:
-        print(yellow("⚠ No model to benchmark. Load a model or use --model."), file=sys.stderr)
-        return 1
+    compare_mode = getattr(args, "compare", None)
 
     # Quick mode: 1 prompt (code), 1 run
     if getattr(args, "quick", False):
@@ -487,12 +543,6 @@ def cmd_bench(args: argparse.Namespace) -> int:
     if args.prompts:
         prompt_names = [p.strip() for p in args.prompts.split(",")]
 
-    # Show what we are about to do
-    engine_names = ", ".join(e.name for e in engines)
-    print(f"Benchmarking {model} on {engine_names}...")
-    print()
-
-    # Run benchmark
     runs = max(1, min(getattr(args, "runs", 1), 100))
     power = getattr(args, "power", False)
     context_size = 0
@@ -500,14 +550,58 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.benchmark.prompts import parse_context_size
 
         context_size = parse_context_size(args.context_size)
-    bench_run = run_benchmark(
-        engines,
-        model,
-        prompt_names,
-        runs=runs,
-        power=power,
-        context_size=context_size,
-    )
+
+    if compare_mode:
+        # --- Cross-model comparison mode ---
+        bench_slots = expand_compare_args(args.compare, args.engines, engines)
+
+        # Show what we are about to do
+        slot_descs = []
+        for s in bench_slots:
+            slot_descs.append(f"{s.model}@{s.engine.name}")
+        print(f"Comparing {len(bench_slots)} slots: {', '.join(slot_descs)}...")
+        print()
+
+        bench_run = run_benchmark(
+            prompt_names=prompt_names,
+            runs=runs,
+            power=power,
+            context_size=context_size,
+            slots=bench_slots,
+        )
+    else:
+        # --- Legacy engine comparison mode ---
+        # Filter engines
+        if args.engines:
+            wanted = {e.strip().lower() for e in args.engines.split(",")}
+            engines = [e for e in engines if e.name in wanted]
+            if not engines:
+                print(
+                    red(f"✗ None of the specified engines found: {args.engines}"),
+                    file=sys.stderr,
+                )
+                return 1
+
+        model = find_common_model(engines, args.model or "")
+        if not model:
+            print(
+                yellow("⚠ No model to benchmark. Load a model or use --model."),
+                file=sys.stderr,
+            )
+            return 1
+
+        engine_names = ", ".join(e.name for e in engines)
+        print(f"Benchmarking {model} on {engine_names}...")
+        print()
+
+        bench_run = run_benchmark(
+            engines,
+            model,
+            prompt_names,
+            runs=runs,
+            power=power,
+            context_size=context_size,
+        )
 
     # Store results
     if bench_run.results:
@@ -521,8 +615,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
         print(f"  {yellow('⚠')} {err}", file=sys.stderr)
 
     # Aggregate and render
-    report = aggregate_results(bench_run.results)
-    report["model"] = model  # Use user-requested name, not engine-resolved
+    if compare_mode:
+        report = build_report(bench_run.results)
+    else:
+        report = aggregate_results(bench_run.results)
+        report["model"] = model  # Use user-requested name, not engine-resolved
     bench_ctx_size = bench_run.results[0].get("context_size", 0) if bench_run.results else 0
     render_bench(report, context_size=bench_ctx_size)
 
@@ -1118,7 +1215,20 @@ def main(argv: list[str] | None = None) -> int:
     # bench
     bench_parser = subparsers.add_parser("bench", help="Benchmark models across engines")
     bench_parser.add_argument("--url", metavar="URL", help="URL(s) to scan")
-    bench_parser.add_argument("--model", "-m", help="Model to benchmark (default: auto-detect)")
+    bench_model_group = bench_parser.add_mutually_exclusive_group()
+    bench_model_group.add_argument(
+        "--model", "-m", help="Model to benchmark (default: auto-detect)"
+    )
+    bench_model_group.add_argument(
+        "--compare",
+        nargs="+",
+        metavar="MODEL",
+        help=(
+            "Compare models across engines. Use model@engine for explicit slots "
+            "(e.g. qwen3.5:4b@lmstudio deepseek-r1:7b@ollama) or model names "
+            "with -e to expand across engines"
+        ),
+    )
     bench_parser.add_argument("--db", metavar="PATH", help="SQLite database path")
     bench_parser.add_argument(
         "--engines",

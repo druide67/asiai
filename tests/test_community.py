@@ -224,6 +224,185 @@ class TestBuildSubmission:
         assert engines["lmstudio"]["engine_version"] == "0.4.6"
         assert engines["lmstudio"]["model_quantization"] == "Q8_0"
 
+    def test_build_submission_v3_model_session(self):
+        """Schema v3 for model comparison (same engine, different models)."""
+        raw = [
+            {
+                "engine": "ollama",
+                "model": "qwen3.5:4b",
+                "hw_chip": "Apple M4 Pro",
+                "os_version": "Darwin 25.3.0",
+                "ts": 1709900000,
+                "prompt_type": "general",
+                "run_index": 0,
+                "engine_version": "0.6.5",
+                "model_format": "gguf",
+                "model_quantization": "Q4_K_M",
+            },
+            {
+                "engine": "ollama",
+                "model": "deepseek-r1:7b",
+                "hw_chip": "Apple M4 Pro",
+                "os_version": "Darwin 25.3.0",
+                "ts": 1709900010,
+                "prompt_type": "general",
+                "run_index": 0,
+                "engine_version": "0.6.5",
+                "model_format": "gguf",
+                "model_quantization": "Q8_0",
+            },
+        ]
+        report = {
+            "session_type": "model",
+            "slots": [
+                {
+                    "engine": "ollama",
+                    "model": "qwen3.5:4b",
+                    "median_tok_s": 48.0,
+                    "avg_tok_s": 47.0,
+                    "ci95_lower": 44.0,
+                    "ci95_upper": 51.0,
+                    "median_ttft_ms": 100.0,
+                    "vram_bytes": 3_000_000_000,
+                    "stability": "stable",
+                    "runs_count": 1,
+                },
+                {
+                    "engine": "ollama",
+                    "model": "deepseek-r1:7b",
+                    "median_tok_s": 32.0,
+                    "avg_tok_s": 31.5,
+                    "ci95_lower": 29.0,
+                    "ci95_upper": 34.0,
+                    "median_ttft_ms": 180.0,
+                    "vram_bytes": 5_000_000_000,
+                    "stability": "stable",
+                    "runs_count": 1,
+                },
+            ],
+            "winner": None,
+        }
+        payload = self._build(raw_results=raw, report=report)
+
+        assert payload["schema_version"] == 3
+        assert payload["session_type"] == "model"
+        assert "slots" in payload["benchmark"]
+        assert "engines" not in payload["benchmark"]
+        assert "model" not in payload["benchmark"]
+
+        slots = payload["benchmark"]["slots"]
+        assert len(slots) == 2
+        assert slots[0]["engine"] == "ollama"
+        assert slots[0]["model"] == "qwen3.5:4b"
+        assert slots[0]["median_tok_s"] == 48.0
+        assert slots[0]["model_quantization"] == "Q4_K_M"
+        assert slots[1]["model"] == "deepseek-r1:7b"
+        assert slots[1]["model_quantization"] == "Q8_0"
+
+    def test_build_submission_v3_matrix_session(self):
+        """Schema v3 for matrix (different engines AND different models)."""
+        raw = [
+            {
+                "engine": "lmstudio",
+                "model": "qwen3.5:4b",
+                "hw_chip": "Apple M4 Pro",
+                "os_version": "Darwin 25.3.0",
+                "ts": 1709900000,
+                "prompt_type": "general",
+                "run_index": 0,
+                "engine_version": "0.4.6",
+            },
+            {
+                "engine": "ollama",
+                "model": "deepseek-r1:7b",
+                "hw_chip": "Apple M4 Pro",
+                "os_version": "Darwin 25.3.0",
+                "ts": 1709900010,
+                "prompt_type": "general",
+                "run_index": 0,
+                "engine_version": "0.6.5",
+            },
+        ]
+        report = {
+            "session_type": "matrix",
+            "slots": [
+                {
+                    "engine": "lmstudio",
+                    "model": "qwen3.5:4b",
+                    "median_tok_s": 50.0,
+                    "avg_tok_s": 49.0,
+                    "vram_bytes": 3_000_000_000,
+                    "stability": "stable",
+                    "runs_count": 1,
+                },
+                {
+                    "engine": "ollama",
+                    "model": "deepseek-r1:7b",
+                    "median_tok_s": 30.0,
+                    "avg_tok_s": 29.0,
+                    "vram_bytes": 5_000_000_000,
+                    "stability": "stable",
+                    "runs_count": 1,
+                },
+            ],
+            "winner": None,
+        }
+        payload = self._build(raw_results=raw, report=report)
+
+        assert payload["schema_version"] == 3
+        assert payload["session_type"] == "matrix"
+        slots = payload["benchmark"]["slots"]
+        assert len(slots) == 2
+        # Each slot has engine + model (independent leaderboard entries)
+        assert slots[0]["engine"] == "lmstudio"
+        assert slots[0]["model"] == "qwen3.5:4b"
+        assert slots[0]["engine_version"] == "0.4.6"
+        assert slots[1]["engine"] == "ollama"
+        assert slots[1]["model"] == "deepseek-r1:7b"
+        assert slots[1]["engine_version"] == "0.6.5"
+
+    def test_build_submission_v2_backward_compat(self):
+        """Engine-only sessions still produce schema v2."""
+        report = _sample_report("ollama")
+        # No session_type = defaults to "engine"
+        payload = self._build(report=report)
+
+        assert payload["schema_version"] == 2
+        assert "session_type" not in payload
+        assert "model" in payload["benchmark"]
+        assert "engines" in payload["benchmark"]
+        assert "slots" not in payload["benchmark"]
+
+    def test_build_submission_v3_skips_unnormalizable_model(self):
+        """Slots with SHA256 blob names are skipped in v3."""
+        raw = [
+            {
+                "engine": "ollama",
+                "model": "sha256-abcdef1234567890abcdef1234567890",
+                "hw_chip": "Apple M4 Pro",
+                "os_version": "Darwin 25.3.0",
+                "ts": 1709900000,
+                "prompt_type": "general",
+                "run_index": 0,
+            },
+        ]
+        report = {
+            "session_type": "model",
+            "slots": [
+                {
+                    "engine": "ollama",
+                    "model": "sha256-abcdef1234567890abcdef1234567890",
+                    "median_tok_s": 10.0,
+                    "avg_tok_s": 10.0,
+                    "runs_count": 1,
+                },
+            ],
+            "winner": None,
+        }
+        payload = self._build(raw_results=raw, report=report)
+        assert payload["schema_version"] == 3
+        assert len(payload["benchmark"]["slots"]) == 0
+
 
 # ---------------------------------------------------------------------------
 # submit_benchmark

@@ -40,26 +40,48 @@ def generate_card_svg(
 
     Design: dark theme, terminal-inspired, asiai branding.
     v2: per-engine chips, insight line, left-aligned hero, bigger logo.
+    v3: cross-model/matrix comparison support via session_type.
     """
-    model = _format_model_name(report.get("model", "Unknown"))
-    engines = report.get("engines", {})
+    from asiai.benchmark.reporter import report_to_slots
+
+    session_type = report.get("session_type", "engine")
+    slots = report_to_slots(report)
     winner = report.get("winner")
 
-    # Collect engine data for bars
+    # Title depends on session type
+    if session_type == "model" and slots:
+        model = _format_model_name(slots[0].get("engine", "Unknown"))
+    elif session_type == "matrix":
+        model = "Cross-model benchmark"
+    else:
+        model = _format_model_name(report.get("model", "Unknown"))
+
+    # Collect data for bars from slots
     bars: list[dict] = []
     max_tok = 0.0
-    for eng_name, data in engines.items():
-        tok_s = data.get("median_tok_s", 0.0) or data.get("avg_tok_s", 0.0)
-        ttft = data.get("median_ttft_ms", 0.0)
-        stability = data.get("stability", "")
-        vram = data.get("vram_bytes", 0)
-        runs = data.get("runs_count", 0)
+    for s in slots:
+        tok_s = s.get("median_tok_s", 0.0) or s.get("avg_tok_s", 0.0)
+        ttft = s.get("median_ttft_ms", 0.0)
+        stability = s.get("stability", "")
+        vram = s.get("vram_bytes", 0)
+        runs = s.get("runs_count", 0)
+        eng_name = s.get("engine", "")
+
+        # Bar label depends on session type
+        if session_type == "model":
+            label = _format_model_name(s.get("model", ""))
+        elif session_type == "matrix":
+            label = f"{_format_model_name(s.get('model', ''))} / {eng_name}"
+        else:
+            label = eng_name
+
         quant = ""
         if engine_quants and eng_name in engine_quants:
             quant = engine_quants[eng_name]
         bars.append(
             {
-                "name": eng_name,
+                "name": label,
+                "engine": eng_name,  # Keep for engine_versions/power_data lookup
                 "tok_s": tok_s,
                 "ttft_ms": ttft,
                 "stability": stability,
@@ -102,9 +124,9 @@ def generate_card_svg(
     # If only some report it, show per-engine (only on those that have it).
     specs_parts: list[str] = []
     quant_values = set(v for v in (engine_quants or {}).values() if v)
-    num_engines = len(engines)
+    num_slots = len(slots)
     num_with_quant = len([v for v in (engine_quants or {}).values() if v])
-    if len(quant_values) == 1 and num_with_quant == num_engines and num_engines > 0:
+    if len(quant_values) == 1 and num_with_quant == num_slots and num_slots > 0:
         # All engines report same quant → global
         specs_parts.append(quant_values.pop())
         engine_quants = None
@@ -217,7 +239,7 @@ def generate_card_svg(
             f'font-family="{_SANS}" font-weight="800">'
             f"{bars[0]['tok_s']:.1f} tok/s</text>"
         )
-        hero_end_y = hero_y + 10
+        hero_end_y = hero_y + 20
 
     # --- Insight line (auto-generated) --- [Change #4]
     insight_svg = ""
@@ -274,13 +296,13 @@ def generate_card_svg(
             )
         # Power efficiency: higher is better
         if power_data:
-            eff0 = power_data.get(b0["name"], {}).get("avg_eff", 0)
-            eff1 = power_data.get(b1["name"], {}).get("avg_eff", 0)
+            eff0 = power_data.get(b0.get("engine", b0["name"]), {}).get("avg_eff", 0)
+            eff1 = power_data.get(b1.get("engine", b1["name"]), {}).get("avg_eff", 0)
             if eff0 > 0 and eff1 > 0:
                 metric_winners["power"] = b0["name"] if eff0 >= eff1 else b1["name"]
 
     # Tighter spacing: hero→insight 12px (done above), insight→chips 16px [Change #4]
-    chip_y_start = (hero_end_y + 16) if winner else (bars_end_y + 24)
+    chip_y_start = (hero_end_y + 16) if hero_svg else (bars_end_y + 24)
     if insight_svg:
         chip_y_start += 20
     all_chip_elements = []
@@ -299,8 +321,9 @@ def generate_card_svg(
         if bar["vram_bytes"] > 0:
             chips.append((_format_vram(bar["vram_bytes"]), "vram"))
         # Power per engine [Change #8]
-        if power_data and bar["name"] in power_data:
-            pw = power_data[bar["name"]]
+        eng_key = bar.get("engine", bar["name"])
+        if power_data and eng_key in power_data:
+            pw = power_data[eng_key]
             watts = pw.get("avg_watts", 0)
             eff = pw.get("avg_eff", 0)
             if watts > 0 and eff > 0:
@@ -315,8 +338,9 @@ def generate_card_svg(
         name_color = "#00d4aa" if eng_idx == 0 else "#718096"
         chip_x = 60
         name_raw = bar["name"]
-        if engine_versions and name_raw in engine_versions and engine_versions[name_raw]:
-            name_raw = f"{name_raw} v{engine_versions[name_raw]}"
+        eng_key = bar.get("engine", name_raw)
+        if engine_versions and eng_key in engine_versions and engine_versions[eng_key]:
+            name_raw = f"{name_raw} v{engine_versions[eng_key]}"
         name_text = _escape(name_raw)
         name_w = int(len(name_text) * 7.5) + 16
         all_chip_elements.append(
@@ -362,7 +386,9 @@ def generate_card_svg(
 
     # --- Terminal frame height (dynamic, 20px padding bottom) --- [Change #1]
     last_chip_y = chip_y_start + min(len(bars), 2) * 36
-    frame_bottom = max(last_chip_y + 20, 520)
+    min_frame_bottom = 440 if num_bars <= 1 else 520
+    max_frame_bottom = 592  # 630 - 10 (gap) - 28 (footer pill) = footer fits in canvas
+    frame_bottom = min(max(last_chip_y + 20, min_frame_bottom), max_frame_bottom)
     frame_height = frame_bottom - frame_top
 
     # --- Logo + tagline (bigger) --- [Change #7]
