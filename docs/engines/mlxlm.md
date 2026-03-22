@@ -1,3 +1,7 @@
+---
+description: Benchmark mlx-lm server on Apple Silicon. Pure MLX backend, ideal for models optimized for Metal GPU.
+---
+
 # mlx-lm
 
 [mlx-lm](https://github.com/ml-explore/mlx-examples) runs models natively on Apple MLX, providing efficient unified memory utilization.

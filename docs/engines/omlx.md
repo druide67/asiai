@@ -1,3 +1,7 @@
+---
+description: Benchmark oMLX on Apple Silicon. Lightweight MLX-based server with efficient memory management.
+---
+
 # oMLX
 
 [oMLX](https://omlx.ai/) is a native macOS LLM inference server with paged SSD KV caching and continuous batching, managed from the menu bar. Built on MLX for Apple Silicon.

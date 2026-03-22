@@ -1,3 +1,7 @@
+---
+description: Install asiai and run your first LLM benchmark in under 2 minutes. One command, zero dependencies, works on any Apple Silicon Mac.
+---
+
 # Getting Started
 
 **Apple Silicon AI** — Multi-engine LLM benchmark & monitoring CLI.

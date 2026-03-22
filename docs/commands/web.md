@@ -1,3 +1,7 @@
+---
+description: Real-time LLM monitoring dashboard in your browser. GPU metrics, engine health, performance history. No setup required.
+---
+
 # asiai web
 
 Launch the web dashboard for visual monitoring and benchmarking.

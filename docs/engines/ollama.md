@@ -1,3 +1,7 @@
+---
+description: Benchmark Ollama on Apple Silicon with asiai. Measure real tok/s, TTFT and GPU power on your Mac.
+---
+
 # Ollama
 
 [Ollama](https://ollama.com) is the most popular local LLM runner. asiai uses its native API.

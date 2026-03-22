@@ -1,3 +1,7 @@
+---
+description: Benchmark Exo distributed inference on Apple Silicon. Split models across multiple Macs.
+---
+
 # Exo
 
 [Exo](https://github.com/exo-explore/exo) enables distributed inference across multiple Apple Silicon devices. Run large models (70B+) by pooling VRAM from several Macs.

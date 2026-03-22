@@ -1,3 +1,7 @@
+---
+description: Generate shareable benchmark cards with your results. SVG or PNG, with model, engine, hardware and performance data.
+---
+
 # Benchmark Card
 
 Share your benchmark results as a beautiful, branded image. One command generates a card you can post on Reddit, X, Discord, or any social platform.

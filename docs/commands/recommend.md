@@ -1,3 +1,7 @@
+---
+description: Hardware-aware model recommendations based on your Mac's RAM, GPU cores and thermal headroom.
+---
+
 # asiai recommend
 
 Get engine recommendations for your hardware and use case.

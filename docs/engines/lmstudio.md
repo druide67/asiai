@@ -1,3 +1,7 @@
+---
+description: Benchmark LM Studio MLX on Apple Silicon. Typically 2x faster than llama.cpp engines on MoE models.
+---
+
 # LM Studio
 
 [LM Studio](https://lmstudio.ai) provides an OpenAI-compatible API with a GUI for model management.

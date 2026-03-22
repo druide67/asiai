@@ -1,3 +1,7 @@
+---
+description: MCP server exposing 11 tools for AI agents to monitor inference engines, run benchmarks and get hardware-aware recommendations.
+---
+
 # asiai mcp
 
 Start the MCP (Model Context Protocol) server, enabling AI agents to monitor and benchmark your inference infrastructure.

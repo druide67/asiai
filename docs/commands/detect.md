@@ -1,3 +1,7 @@
+---
+description: Auto-detect running LLM inference engines on your Mac. 3-layer cascade — config, port scan, process detection.
+---
+
 # asiai detect
 
 Auto-detect running inference engines using a 3-layer cascade.

@@ -1,3 +1,7 @@
+---
+description: Cross-model and cross-engine benchmark matrix. Compare up to 8 model@engine combinations in a single run.
+---
+
 # asiai compare
 
 Compare your local benchmarks against community data.

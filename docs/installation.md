@@ -1,3 +1,7 @@
+---
+description: Install asiai via pip, Homebrew, or from source. Requirements: macOS on Apple Silicon (M1+), Python 3.11+.
+---
+
 # Installation
 
 ## pipx (recommended)

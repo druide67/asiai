@@ -1,3 +1,7 @@
+---
+description: Community benchmark results across Apple Silicon Macs. Compare tok/s by engine, model and hardware. Submit your own results.
+---
+
 # Community Leaderboard
 
 <div id="leaderboard-app">

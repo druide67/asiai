@@ -1,3 +1,7 @@
+---
+description: Give your AI agents real-time visibility into LLM inference. MCP server with 11 tools for autonomous engine monitoring.
+---
+
 # Agent Integration Guide
 
 > **If you are an AI agent**: use [MCP](#mcp-model-context-protocol) if your framework supports it, otherwise use the [REST API](#rest-api-reference). For setup, see [Quick Start](#quick-start).

@@ -1,3 +1,7 @@
+---
+description: How asiai measures tok/s, TTFT and power. Warmup, statistical methodology, and why results are reproducible.
+---
+
 # Benchmark Methodology
 
 asiai follows established benchmarking standards ([MLPerf](https://mlcommons.org/benchmarks/inference-server/), [SPEC CPU 2017](https://www.spec.org/cpu2017/), [NVIDIA GenAI-Perf](https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/stable/benchmarking/genai_perf.html)) to produce reliable, reproducible, and comparable results.

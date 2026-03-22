@@ -1,3 +1,7 @@
+---
+description: Benchmark standalone llama.cpp server on your Mac. Metal GPU backend, GGUF format, wide model support.
+---
+
 # llama.cpp
 
 [llama.cpp](https://github.com/ggml-org/llama.cpp) is a high-performance C++ inference engine supporting GGUF models.

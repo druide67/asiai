@@ -1,3 +1,7 @@
+---
+description: Continuous GPU utilization, thermal state and memory pressure monitoring for Apple Silicon. No sudo required.
+---
+
 # asiai monitor
 
 System and inference metrics snapshot, stored in SQLite.

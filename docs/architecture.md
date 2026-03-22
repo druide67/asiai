@@ -1,3 +1,7 @@
+---
+description: How asiai detects engines, collects GPU metrics via IOReport, and stores time-series data. Technical deep-dive.
+---
+
 # Architecture
 
 How data flows through asiai — from hardware sensors to your terminal, browser, and AI agents.

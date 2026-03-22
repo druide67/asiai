@@ -1,3 +1,7 @@
+---
+description: Run side-by-side LLM benchmarks on Apple Silicon. Compare engines, measure tok/s, TTFT, power efficiency. Share results.
+---
+
 # asiai bench
 
 Cross-engine benchmark with standardized prompts.

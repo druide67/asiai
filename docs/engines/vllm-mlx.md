@@ -1,3 +1,7 @@
+---
+description: Benchmark vllm-mlx on Apple Silicon. vLLM-compatible API with MLX backend for Mac inference.
+---
+
 # vllm-mlx
 
 [vllm-mlx](https://github.com/vllm-project/vllm) brings continuous batching to Apple Silicon via MLX.
