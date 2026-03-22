@@ -86,14 +86,18 @@ def _extract_footer_y(svg: str) -> float | None:
 
 def _extract_chip_ys(svg: str) -> list[float]:
     """Return y-coordinates of all chip rects (height=28, rx=6)."""
-    return [float(m.group(1)) for m in re.finditer(r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*height="28"[^>]*rx="6"', svg)]
+    pat = r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*height="28"[^>]*rx="6"'
+    return [float(m.group(1)) for m in re.finditer(pat, svg)]
 
 
 def _extract_bar_rects(svg: str) -> list[tuple[float, float]]:
     """Return (y, width) of engine bar rects (rx=4, opacity=0.9)."""
     return [
         (float(m.group(1)), float(m.group(2)))
-        for m in re.finditer(r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*width="(\d+(?:\.\d+)?)"[^>]*rx="4"[^>]*opacity="0\.9"', svg)
+        for m in re.finditer(
+            r'<rect[^>]*\by="(\d+(?:\.\d+)?)"[^>]*width="(\d+(?:\.\d+)?)"[^>]*rx="4"[^>]*opacity="0\.9"',
+            svg,
+        )
     ]
 
 
@@ -535,7 +539,12 @@ class TestCardLayoutRegression:
                 )
 
     def test_frame_bottom_contains_all_chips(self):
-        for name, svg in [("S1", generate_card_svg(_S1)), ("S2", generate_card_svg(_S2)), ("S4", generate_card_svg(_S4))]:
+        cases = [
+            ("S1", generate_card_svg(_S1)),
+            ("S2", generate_card_svg(_S2)),
+            ("S4", generate_card_svg(_S4)),
+        ]
+        for name, svg in cases:
             _, frame_bottom = _extract_frame_bounds(svg)
             chip_ys = _extract_chip_ys(svg)
             if chip_ys:
@@ -715,7 +724,8 @@ class TestCardEdgeCases:
         assert len(bars) == 4, f"Expected 4 bars, got {len(bars)}"
 
     def test_very_long_model_name(self):
-        report = _make_report(model="super-long-model-name-that-exceeds-normal-width:35b-a3b-q4_k_m")
+        long_name = "super-long-model-name-that-exceeds-normal-width:35b-a3b-q4_k_m"
+        report = _make_report(model=long_name)
         svg = generate_card_svg(report)
         assert "<svg" in svg
 
