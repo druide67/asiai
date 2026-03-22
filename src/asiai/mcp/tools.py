@@ -289,7 +289,7 @@ async def run_benchmark(
         (absolute path on the server, e.g. ~/.local/share/asiai/cards/...).
     """
     from asiai.benchmark.reporter import aggregate_results, build_report
-    from asiai.benchmark.runner import BenchmarkSlot, find_common_model
+    from asiai.benchmark.runner import find_common_model
     from asiai.benchmark.runner import run_benchmark as _run_bench
     from asiai.storage.db import store_benchmark
 
@@ -756,7 +756,9 @@ async def compare_engines(
                 "model": slot.get("model", ""),
                 "median_tok_s": round(slot.get("median_tok_s", 0), 1),
                 "avg_tok_s": round(slot.get("avg_tok_s", 0), 1),
-                "avg_ttft_ms": round(slot.get("avg_ttft_ms", 0) or slot.get("median_ttft_ms", 0), 1),
+                "avg_ttft_ms": round(
+                    slot.get("avg_ttft_ms", 0) or slot.get("median_ttft_ms", 0), 1
+                ),
                 "vram_bytes": slot.get("vram_bytes", 0),
                 "stability": slot.get("stability", "unknown"),
                 "runs_count": slot.get("runs_count", 0),

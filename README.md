@@ -112,6 +112,13 @@ Options:
 -H, --history PERIOD       Show past benchmarks (e.g. 7d, 24h)
 ```
 
+Cross-model comparison — benchmark multiple models in one run and get a ranked summary:
+
+```bash
+# Cross-model comparison
+asiai bench --compare qwen3.5:4b deepseek-r1:7b -e ollama --card
+```
+
 The runner resolves model names across engines automatically — `gemma2:9b` (Ollama) and `gemma-2-9b` (LM Studio) are matched as the same model.
 
 ### `asiai models`

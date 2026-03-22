@@ -113,7 +113,13 @@ def run_benchmark(
             raise ValueError("Either engines+model or slots must be provided")
         slots = [BenchmarkSlot(engine=e, model=model) for e in engines]
 
+    # Validate slots
+    for s in slots:
+        if not s.model:
+            raise ValueError(f"BenchmarkSlot has empty model (engine={s.engine.name})")
+
     if context_size > 0:
+        context_size = min(context_size, 131072)  # Cap at 128K
         prompts = [generate_context_fill_prompt(context_size)]
     else:
         prompts = get_prompts(prompt_names)

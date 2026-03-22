@@ -18,7 +18,6 @@ from asiai.benchmark.card import (
     save_card,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers: data factories
 # ---------------------------------------------------------------------------
@@ -780,8 +779,131 @@ class TestCardSocialSharing:
         hero_y = _extract_hero_y(svg)
         model_ys = _extract_text_y(svg, "Qwen 3.5")
         assert hero_y and 80 < hero_y < 580, f"Hero outside safe zone: y={hero_y}"
-        assert model_ys and 80 < model_ys[0] < 580, f"Model outside safe zone"
+        assert model_ys and 80 < model_ys[0] < 580, "Model outside safe zone"
 
     def test_clip_path_present(self):
         svg = generate_card_svg(_S1)
         assert 'clip-path="url(#card-clip)"' in svg
+
+
+# ===========================================================================
+# Session-type tests — verify title and bar labels per session_type
+# ===========================================================================
+
+
+def _make_slot(
+    engine: str = "ollama",
+    model: str = "qwen:4b",
+    median_tok_s: float = 50.0,
+    avg_tok_s: float = 49.0,
+    median_ttft_ms: float = 200.0,
+    stability: str = "stable",
+    vram_bytes: int = 0,
+    runs_count: int = 3,
+) -> dict:
+    return {
+        "engine": engine,
+        "model": model,
+        "median_tok_s": median_tok_s,
+        "avg_tok_s": avg_tok_s,
+        "median_ttft_ms": median_ttft_ms,
+        "stability": stability,
+        "vram_bytes": vram_bytes,
+        "runs_count": runs_count,
+    }
+
+
+class TestCardSessionTypes:
+    """Session-type handling: title and bar labels vary by engine/model/matrix."""
+
+    def test_card_engine_session_title(self):
+        """session_type='engine': title should contain the model name."""
+        report = {
+            "session_type": "engine",
+            "slots": [
+                _make_slot(engine="ollama", model="qwen:4b", median_tok_s=50.0),
+                _make_slot(engine="lmstudio", model="qwen:4b", median_tok_s=30.0),
+            ],
+            "model": "qwen:4b",
+            "winner": {"name": "ollama", "tok_s_delta": "+67% tok/s", "vram_delta": ""},
+        }
+        svg = generate_card_svg(report, hw_chip="Apple M4 Pro")
+        # _format_model_name("qwen:4b") → "Qwen 4B"
+        assert "Qwen" in svg
+        assert "4B" in svg
+
+    def test_card_engine_session_bar_labels(self):
+        """session_type='engine': bars should be labeled by engine name."""
+        report = {
+            "session_type": "engine",
+            "slots": [
+                _make_slot(engine="ollama", model="qwen:4b", median_tok_s=50.0),
+                _make_slot(engine="lmstudio", model="qwen:4b", median_tok_s=30.0),
+            ],
+            "model": "qwen:4b",
+            "winner": None,
+        }
+        svg = generate_card_svg(report)
+        # Bar labels should be engine names, not model names
+        assert "ollama" in svg
+        assert "lmstudio" in svg
+
+    def test_card_model_session_title(self):
+        """session_type='model': title should contain the engine name (formatted)."""
+        report = {
+            "session_type": "model",
+            "slots": [
+                _make_slot(engine="ollama", model="qwen:4b", median_tok_s=50.0),
+                _make_slot(engine="ollama", model="deepseek:7b", median_tok_s=30.0),
+            ],
+            "winner": {"name": "qwen:4b", "tok_s_delta": "+67% tok/s", "vram_delta": ""},
+        }
+        svg = generate_card_svg(report, hw_chip="Apple M4 Pro")
+        # _format_model_name("ollama") → "Ollama"
+        assert "Ollama" in svg
+
+    def test_card_model_session_bar_labels(self):
+        """session_type='model': bars should be labeled by model name."""
+        report = {
+            "session_type": "model",
+            "slots": [
+                _make_slot(engine="ollama", model="qwen:4b", median_tok_s=50.0),
+                _make_slot(engine="ollama", model="deepseek:7b", median_tok_s=30.0),
+            ],
+            "winner": None,
+        }
+        svg = generate_card_svg(report)
+        # _format_model_name("qwen:4b") → "Qwen 4B"
+        # _format_model_name("deepseek:7b") → "Deepseek 7B"
+        assert "Qwen" in svg
+        assert "4B" in svg
+        assert "Deepseek" in svg
+        assert "7B" in svg
+
+    def test_card_matrix_session_title(self):
+        """session_type='matrix': title should be 'Cross-model benchmark'."""
+        report = {
+            "session_type": "matrix",
+            "slots": [
+                _make_slot(engine="ollama", model="qwen:4b", median_tok_s=50.0),
+                _make_slot(engine="lmstudio", model="deepseek:7b", median_tok_s=30.0),
+            ],
+            "winner": None,
+        }
+        svg = generate_card_svg(report, hw_chip="Apple M4 Pro")
+        assert "Cross-model benchmark" in svg
+
+    def test_card_matrix_session_bar_labels(self):
+        """session_type='matrix': bars should be labeled 'model / engine'."""
+        report = {
+            "session_type": "matrix",
+            "slots": [
+                _make_slot(engine="ollama", model="qwen:4b", median_tok_s=50.0),
+                _make_slot(engine="lmstudio", model="deepseek:7b", median_tok_s=30.0),
+            ],
+            "winner": None,
+        }
+        svg = generate_card_svg(report)
+        # _format_model_name("qwen:4b") + " / " + "ollama" → "Qwen 4B / ollama"
+        assert "Qwen 4B / ollama" in svg
+        assert "Deepseek 7B / lmstudio" in svg

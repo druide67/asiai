@@ -479,3 +479,131 @@ def test_bench_share_flag(capsys, tmp_path):
         ret = main(["bench", "--db", db_path, "--share"])
     assert ret == 0
     mock_submit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# --compare argument parsing
+# ---------------------------------------------------------------------------
+
+
+class TestCompareArgs:
+    """Tests for _parse_compare_arg and expand_compare_args."""
+
+    def test_parse_compare_arg_model_only(self):
+        from asiai.cli import _parse_compare_arg
+
+        assert _parse_compare_arg("qwen:4b") == ("qwen:4b", None)
+
+    def test_parse_compare_arg_with_engine(self):
+        from asiai.cli import _parse_compare_arg
+
+        assert _parse_compare_arg("qwen:4b@ollama") == ("qwen:4b", "ollama")
+
+    def test_parse_compare_arg_model_with_colons(self):
+        from asiai.cli import _parse_compare_arg
+
+        assert _parse_compare_arg("qwen3.5:4b-instruct@lmstudio") == (
+            "qwen3.5:4b-instruct",
+            "lmstudio",
+        )
+
+    def _make_engines(self):
+        engine_ollama = MagicMock()
+        engine_ollama.name = "ollama"
+        engine_lmstudio = MagicMock()
+        engine_lmstudio.name = "lmstudio"
+        return engine_ollama, engine_lmstudio
+
+    def test_expand_compare_explicit_slots(self):
+        from asiai.cli import expand_compare_args
+
+        engine_ollama, engine_lmstudio = self._make_engines()
+        slots = expand_compare_args(
+            ["qwen:4b@ollama", "qwen:4b@lmstudio"],
+            engines_filter=None,
+            detected_engines=[engine_ollama, engine_lmstudio],
+        )
+        assert len(slots) == 2
+        assert slots[0].engine is engine_ollama
+        assert slots[0].model == "qwen:4b"
+        assert slots[1].engine is engine_lmstudio
+        assert slots[1].model == "qwen:4b"
+
+    def test_expand_compare_auto_expand(self):
+        from asiai.cli import expand_compare_args
+
+        engine_ollama, engine_lmstudio = self._make_engines()
+        slots = expand_compare_args(
+            ["qwen:4b"],
+            engines_filter=None,
+            detected_engines=[engine_ollama, engine_lmstudio],
+        )
+        assert len(slots) == 2
+        assert {s.engine.name for s in slots} == {"ollama", "lmstudio"}
+        assert all(s.model == "qwen:4b" for s in slots)
+
+    def test_expand_compare_mixed(self):
+        from asiai.cli import expand_compare_args
+
+        engine_ollama, engine_lmstudio = self._make_engines()
+        slots = expand_compare_args(
+            ["qwen:4b@ollama", "deepseek:7b"],
+            engines_filter=None,
+            detected_engines=[engine_ollama, engine_lmstudio],
+        )
+        # 1 explicit + 2 auto-expanded
+        assert len(slots) == 3
+        assert slots[0].engine is engine_ollama
+        assert slots[0].model == "qwen:4b"
+        models_engines = {(s.model, s.engine.name) for s in slots}
+        assert ("deepseek:7b", "ollama") in models_engines
+        assert ("deepseek:7b", "lmstudio") in models_engines
+
+    def test_expand_compare_too_many_slots(self):
+        from asiai.cli import expand_compare_args
+
+        engines = []
+        for i in range(9):
+            e = MagicMock()
+            e.name = f"engine{i}"
+            engines.append(e)
+        with pytest.raises(SystemExit):
+            expand_compare_args(
+                ["model:7b"],
+                engines_filter=None,
+                detected_engines=engines,
+            )
+
+    def test_expand_compare_unknown_engine(self):
+        from asiai.cli import expand_compare_args
+
+        engine_ollama, engine_lmstudio = self._make_engines()
+        with pytest.raises(SystemExit):
+            expand_compare_args(
+                ["qwen:4b@unknown"],
+                engines_filter=None,
+                detected_engines=[engine_ollama, engine_lmstudio],
+            )
+
+    def test_expand_compare_dedup(self):
+        from asiai.cli import expand_compare_args
+
+        engine_ollama, engine_lmstudio = self._make_engines()
+        slots = expand_compare_args(
+            ["qwen:4b@ollama", "qwen:4b@ollama"],
+            engines_filter=None,
+            detected_engines=[engine_ollama, engine_lmstudio],
+        )
+        assert len(slots) == 1
+        assert slots[0].engine is engine_ollama
+        assert slots[0].model == "qwen:4b"
+
+    def test_expand_compare_empty(self):
+        from asiai.cli import expand_compare_args
+
+        with pytest.raises(SystemExit):
+            expand_compare_args(
+                ["qwen:4b"],
+                engines_filter=None,
+                detected_engines=[],
+            )

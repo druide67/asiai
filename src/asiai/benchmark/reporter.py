@@ -370,7 +370,7 @@ def aggregate_slots(results: list[dict]) -> list[dict]:
 
     groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for r in results:
-        key = (r["engine"], r["model"])
+        key = (r.get("engine", ""), r.get("model", ""))
         groups[key].append(r)
 
     slots = []

@@ -459,7 +459,20 @@ def expand_compare_args(
 
     engine_by_name = {e.name: e for e in detected_engines}
 
+    # Pre-validate: estimate max expansion before building slots
+    explicit_count = sum(1 for a in compare_args if "@" in a)
+    expandable_count = len(compare_args) - explicit_count
+    max_slots = explicit_count + expandable_count * max(len(available_engines), 1)
+    if max_slots > 8:
+        print(
+            f"✗ Too many slots (up to {max_slots}). Use -e to narrow engines "
+            f"or model@engine for explicit pairs. Max 8.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     slots: list = []
+    seen: set = set()
     for arg in compare_args:
         model, engine_name = _parse_compare_arg(arg)
         if engine_name:
@@ -472,22 +485,20 @@ def expand_compare_args(
                     file=sys.stderr,
                 )
                 sys.exit(1)
-            slots.append(BenchmarkSlot(engine=engine, model=model))
+            key = (engine_name, model)
+            if key not in seen:
+                seen.add(key)
+                slots.append(BenchmarkSlot(engine=engine, model=model))
         else:
             # Expand across available engines
             for engine in available_engines:
-                slots.append(BenchmarkSlot(engine=engine, model=model))
+                key = (engine.name, model)
+                if key not in seen:
+                    seen.add(key)
+                    slots.append(BenchmarkSlot(engine=engine, model=model))
 
     if not slots:
         print("✗ No benchmark slots to run.", file=sys.stderr)
-        sys.exit(1)
-
-    if len(slots) > 8:
-        print(
-            f"✗ Too many slots ({len(slots)}). Use -e to narrow engines "
-            f"or model@engine for explicit pairs.",
-            file=sys.stderr,
-        )
         sys.exit(1)
 
     return slots
@@ -497,7 +508,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
     from asiai.benchmark.regression import detect_regressions
     from asiai.benchmark.reporter import aggregate_results, build_report, export_benchmark
-    from asiai.benchmark.runner import BenchmarkSlot, find_common_model, run_benchmark
+    from asiai.benchmark.runner import find_common_model, run_benchmark
     from asiai.display.cli_renderer import render_bench, render_bench_history, render_regressions
     from asiai.display.formatters import dim, red, yellow
     from asiai.storage.db import (

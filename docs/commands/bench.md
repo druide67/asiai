@@ -21,6 +21,7 @@ asiai bench [options]
 | `--export FILE` | Export results to JSON file |
 | `-H, --history PERIOD` | Show past benchmarks (e.g., `7d`, `24h`) |
 | `-Q, --quick` | Quick benchmark: 1 prompt (code), 1 run (~15 seconds) |
+| `--compare MODEL [MODEL...]` | Cross-model comparison (2–8 models, mutually exclusive with `-m`) |
 | `--card` | Generate a shareable benchmark card (SVG locally, PNG with `--share`) |
 | `--share` | Share results to community benchmark database |
 
@@ -85,6 +86,49 @@ asiai bench -Q -m qwen3.5
 ```
 
 This is ideal for demos, GIFs, and quick checks. The `code` prompt is used by default. You can override with `--prompts` if needed.
+
+## Cross-model comparison
+
+Compare multiple models in a single session with `--compare`:
+
+```bash
+# Auto-expand across all available engines
+asiai bench --compare qwen3.5:4b deepseek-r1:7b
+
+# Filter to a specific engine
+asiai bench --compare qwen3.5:4b deepseek-r1:7b -e ollama
+
+# Pin each model to an engine with @
+asiai bench --compare qwen3.5:4b@lmstudio deepseek-r1:7b@ollama
+```
+
+The `@` notation splits on the **last** `@` in the string, so model names containing `@` are handled correctly.
+
+### Rules
+
+- `--compare` and `--model` are **mutually exclusive** — use one or the other.
+- Accepts 2 to 8 model slots.
+- Without `@`, each model is expanded to every engine where it is available.
+
+### Session types
+
+The session type is detected automatically based on the slot list:
+
+| Type | Condition | Example |
+|------|-----------|---------|
+| **engine** | Same model, different engines | `--compare qwen3.5:4b@lmstudio qwen3.5:4b@ollama` |
+| **model** | Different models, same engine | `--compare qwen3.5:4b deepseek-r1:7b -e ollama` |
+| **matrix** | Mixed models and engines | `--compare qwen3.5:4b@lmstudio deepseek-r1:7b@ollama` |
+
+### Combined with other flags
+
+`--compare` works with all output and run flags:
+
+```bash
+asiai bench --compare qwen3.5:4b deepseek-r1:7b --quick
+asiai bench --compare qwen3.5:4b deepseek-r1:7b --card --share
+asiai bench --compare qwen3.5:4b deepseek-r1:7b --runs 5 --power
+```
 
 ## Benchmark card
 

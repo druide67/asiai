@@ -27,12 +27,12 @@ asiai mcp --transport sse --port 9000
 | `get_inference_snapshot` | Full system snapshot with all metrics | Yes |
 | `list_models` | List all loaded models across engines | Yes |
 | `detect_engines` | Re-scan for inference engines | Yes |
-| `run_benchmark` | Run a benchmark (rate-limited to 1/min) | No |
+| `run_benchmark` | Run a benchmark or cross-model comparison (rate-limited to 1/min) | No |
 | `get_recommendations` | Hardware-aware engine/model recommendations | Yes |
 | `diagnose` | Run diagnostic checks (like `asiai doctor`) | Yes |
 | `get_metrics_history` | Query historical metrics (1-168 hours) | Yes |
 | `get_benchmark_history` | Query past benchmark results with filters | Yes |
-| `compare_engines` | Compare engine performance for a model with verdict | Yes |
+| `compare_engines` | Compare engine performance for a model with verdict; supports multi-model comparison from history | Yes |
 | `refresh_engines` | Re-detect engines without restarting the server | Yes |
 
 ## Resources (3)
@@ -66,6 +66,12 @@ The `run_benchmark` tool supports card generation via the `card` parameter. When
 
 ```json
 {"tool": "run_benchmark", "arguments": {"model": "qwen3.5", "card": true}}
+```
+
+Cross-model comparison (mutually exclusive with `model`, max 8 slots):
+
+```json
+{"tool": "run_benchmark", "arguments": {"compare": ["qwen3.5:4b", "deepseek-r1:7b"], "card": true}}
 ```
 
 CLI equivalent for PNG + sharing:

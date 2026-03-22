@@ -10,10 +10,15 @@ from asiai.benchmark.prompts import PROMPTS, generate_context_fill_prompt, get_p
 from asiai.benchmark.reporter import (
     _classify_stability,
     _detect_outliers,
+    _determine_winner_slots,
     _percentile,
     _pooled_stddev,
     _stddev,
     aggregate_results,
+    aggregate_slots,
+    build_report,
+    detect_session_type,
+    report_to_slots,
 )
 from asiai.benchmark.runner import (
     _check_model_availability,
@@ -1305,3 +1310,209 @@ class TestThermalDrift:
         )
         run = run_benchmark([engine], "test-model", ["code"], runs=3)
         assert not any("thermal drift" in e for e in run.errors)
+
+
+# --- Cross-model / matrix reporter ---
+
+
+def _raw(engine: str, model: str, tok: float, **overrides: object) -> dict:
+    """Build a minimal raw result dict for cross-model tests."""
+    base = {
+        "engine": engine,
+        "model": model,
+        "tok_per_sec": tok,
+        "ttft_ms": 100,
+        "tokens_generated": 100,
+        "total_duration_ms": 2000,
+        "vram_bytes": 0,
+        "thermal_level": "nominal",
+        "prompt_type": "code",
+        "run_index": 0,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestCrossModelReporter:
+    # -- aggregate_slots --
+
+    def test_aggregate_slots_empty(self):
+        assert aggregate_slots([]) == []
+
+    def test_aggregate_slots_single_slot(self):
+        slots = aggregate_slots([_raw("ollama", "qwen:4b", 50.0)])
+        assert len(slots) == 1
+        assert slots[0]["engine"] == "ollama"
+        assert slots[0]["model"] == "qwen:4b"
+        assert slots[0]["median_tok_s"] == 50.0
+
+    def test_aggregate_slots_two_engines_same_model(self):
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("lmstudio", "qwen:4b", 60.0),
+        ]
+        slots = aggregate_slots(results)
+        assert len(slots) == 2
+        engines = {s["engine"] for s in slots}
+        assert engines == {"ollama", "lmstudio"}
+
+    def test_aggregate_slots_two_models_same_engine(self):
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("ollama", "llama:7b", 40.0),
+        ]
+        slots = aggregate_slots(results)
+        assert len(slots) == 2
+        models = {s["model"] for s in slots}
+        assert models == {"qwen:4b", "llama:7b"}
+
+    def test_aggregate_slots_matrix(self):
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("ollama", "llama:7b", 40.0),
+            _raw("lmstudio", "qwen:4b", 60.0),
+            _raw("lmstudio", "llama:7b", 35.0),
+        ]
+        slots = aggregate_slots(results)
+        assert len(slots) == 4
+
+    def test_aggregate_slots_sorted_by_median(self):
+        results = [
+            _raw("slow", "m", 10.0),
+            _raw("fast", "m", 90.0),
+            _raw("mid", "m", 50.0),
+        ]
+        slots = aggregate_slots(results)
+        medians = [s["median_tok_s"] for s in slots]
+        assert medians == sorted(medians, reverse=True)
+
+    # -- detect_session_type --
+
+    def test_detect_session_type_engine(self):
+        slots = [
+            {"engine": "ollama", "model": "qwen:4b"},
+            {"engine": "lmstudio", "model": "qwen:4b"},
+        ]
+        assert detect_session_type(slots) == "engine"
+
+    def test_detect_session_type_model(self):
+        slots = [
+            {"engine": "ollama", "model": "qwen:4b"},
+            {"engine": "ollama", "model": "llama:7b"},
+        ]
+        assert detect_session_type(slots) == "model"
+
+    def test_detect_session_type_matrix(self):
+        slots = [
+            {"engine": "ollama", "model": "qwen:4b"},
+            {"engine": "lmstudio", "model": "llama:7b"},
+        ]
+        assert detect_session_type(slots) == "matrix"
+
+    def test_detect_session_type_empty(self):
+        assert detect_session_type([]) == "engine"
+
+    # -- _determine_winner_slots --
+
+    def test_determine_winner_slots_two_slots(self):
+        slots = aggregate_slots([
+            _raw("fast", "m", 80.0),
+            _raw("slow", "m", 40.0),
+        ])
+        winner = _determine_winner_slots(slots)
+        assert winner is not None
+        assert winner["name"] == "fast"
+
+    def test_determine_winner_slots_single(self):
+        slots = aggregate_slots([_raw("only", "m", 50.0)])
+        assert _determine_winner_slots(slots) is None
+
+    def test_determine_winner_slots_label_engine(self):
+        """Same model, different engines -> label is engine name."""
+        slots = aggregate_slots([
+            _raw("ollama", "qwen:4b", 80.0),
+            _raw("lmstudio", "qwen:4b", 40.0),
+        ])
+        winner = _determine_winner_slots(slots)
+        assert winner is not None
+        assert winner["name"] == "ollama"
+
+    def test_determine_winner_slots_label_model(self):
+        """Same engine, different models -> label is model name."""
+        slots = aggregate_slots([
+            _raw("ollama", "fast-model", 80.0),
+            _raw("ollama", "slow-model", 40.0),
+        ])
+        winner = _determine_winner_slots(slots)
+        assert winner is not None
+        assert winner["name"] == "fast-model"
+
+    def test_determine_winner_slots_label_matrix(self):
+        """Different engine AND model -> label is 'model / engine'."""
+        slots = aggregate_slots([
+            _raw("ollama", "qwen:4b", 80.0),
+            _raw("lmstudio", "llama:7b", 40.0),
+        ])
+        winner = _determine_winner_slots(slots)
+        assert winner is not None
+        assert winner["name"] == "qwen:4b / ollama"
+
+    # -- build_report --
+
+    def test_build_report_engine_session(self):
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("lmstudio", "qwen:4b", 60.0),
+        ]
+        report = build_report(results)
+        assert report["session_type"] == "engine"
+        assert "model" in report
+        assert report["model"] == "qwen:4b"
+        assert "engines" in report
+        assert set(report["engines"].keys()) == {"ollama", "lmstudio"}
+        assert len(report["slots"]) == 2
+
+    def test_build_report_model_session(self):
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("ollama", "llama:7b", 40.0),
+        ]
+        report = build_report(results)
+        assert report["session_type"] == "model"
+        assert "model" not in report
+        assert "engines" not in report
+        assert len(report["slots"]) == 2
+
+    def test_build_report_empty(self):
+        report = build_report([])
+        assert report["session_type"] == "engine"
+        assert report["slots"] == []
+        assert report["winner"] is None
+        assert report["model"] == ""
+        assert report["engines"] == {}
+
+    # -- report_to_slots --
+
+    def test_report_to_slots_from_build_report(self):
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("lmstudio", "qwen:4b", 60.0),
+        ]
+        report = build_report(results)
+        slots = report_to_slots(report)
+        assert len(slots) == 2
+        assert slots[0]["engine"] == "lmstudio"  # faster first
+
+    def test_report_to_slots_from_legacy(self):
+        """Legacy report (from aggregate_results) should be convertible."""
+        results = [
+            _raw("ollama", "qwen:4b", 50.0),
+            _raw("lmstudio", "qwen:4b", 60.0),
+        ]
+        report = aggregate_results(results)
+        # Legacy report has no "slots" key
+        assert "slots" not in report
+        slots = report_to_slots(report)
+        assert len(slots) == 2
+        # Should be sorted by median_tok_s desc
+        assert slots[0]["median_tok_s"] >= slots[1]["median_tok_s"]
