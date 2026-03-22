@@ -1415,10 +1415,12 @@ class TestCrossModelReporter:
     # -- _determine_winner_slots --
 
     def test_determine_winner_slots_two_slots(self):
-        slots = aggregate_slots([
-            _raw("fast", "m", 80.0),
-            _raw("slow", "m", 40.0),
-        ])
+        slots = aggregate_slots(
+            [
+                _raw("fast", "m", 80.0),
+                _raw("slow", "m", 40.0),
+            ]
+        )
         winner = _determine_winner_slots(slots)
         assert winner is not None
         assert winner["name"] == "fast"
@@ -1429,30 +1431,36 @@ class TestCrossModelReporter:
 
     def test_determine_winner_slots_label_engine(self):
         """Same model, different engines -> label is engine name."""
-        slots = aggregate_slots([
-            _raw("ollama", "qwen:4b", 80.0),
-            _raw("lmstudio", "qwen:4b", 40.0),
-        ])
+        slots = aggregate_slots(
+            [
+                _raw("ollama", "qwen:4b", 80.0),
+                _raw("lmstudio", "qwen:4b", 40.0),
+            ]
+        )
         winner = _determine_winner_slots(slots)
         assert winner is not None
         assert winner["name"] == "ollama"
 
     def test_determine_winner_slots_label_model(self):
         """Same engine, different models -> label is model name."""
-        slots = aggregate_slots([
-            _raw("ollama", "fast-model", 80.0),
-            _raw("ollama", "slow-model", 40.0),
-        ])
+        slots = aggregate_slots(
+            [
+                _raw("ollama", "fast-model", 80.0),
+                _raw("ollama", "slow-model", 40.0),
+            ]
+        )
         winner = _determine_winner_slots(slots)
         assert winner is not None
         assert winner["name"] == "fast-model"
 
     def test_determine_winner_slots_label_matrix(self):
         """Different engine AND model -> label is 'model / engine'."""
-        slots = aggregate_slots([
-            _raw("ollama", "qwen:4b", 80.0),
-            _raw("lmstudio", "llama:7b", 40.0),
-        ])
+        slots = aggregate_slots(
+            [
+                _raw("ollama", "qwen:4b", 80.0),
+                _raw("lmstudio", "llama:7b", 40.0),
+            ]
+        )
         winner = _determine_winner_slots(slots)
         assert winner is not None
         assert winner["name"] == "qwen:4b / ollama"

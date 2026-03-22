@@ -399,9 +399,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
         f"  {col_label:<{col_w}} {'tok/s':>24} {'Tokens':>8} {'Duration':>8} "
         f"{'TTFT':>8} {'VRAM':>10} {'Thermal':>10}"
     )
-    print(
-        f"  {'─' * col_w} {'─' * 24} {'─' * 8} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}"
-    )
+    print(f"  {'─' * col_w} {'─' * 24} {'─' * 8} {'─' * 8} {'─' * 8} {'─' * 10} {'─' * 10}")
 
     for display_name, data in items:
         avg_tok = data.get("avg_tok_s", 0.0)
@@ -429,9 +427,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
         dur_ms = data.get("avg_total_duration_ms", 0.0)
         duration = f"{dur_ms / 1000:.2f}s" if dur_ms > 0 else "N/A"
         ttft = (
-            f"{data.get('avg_ttft_ms', 0) / 1000:.2f}s"
-            if data.get("avg_ttft_ms", 0) > 0
-            else "N/A"
+            f"{data.get('avg_ttft_ms', 0) / 1000:.2f}s" if data.get("avg_ttft_ms", 0) > 0 else "N/A"
         )
 
         vram_bytes = data.get("vram_bytes", 0)
@@ -476,8 +472,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
 
     # Load time (if available)
     has_load_time = any(
-        any(p.get("load_time_ms", 0) > 0 for p in d.get("prompt_results", []))
-        for _, d in items
+        any(p.get("load_time_ms", 0) > 0 for p in d.get("prompt_results", [])) for _, d in items
     )
     if has_load_time:
         print()
@@ -516,8 +511,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
 
     # Power tip (when no power data)
     has_power = any(
-        any(p.get("power_watts", 0) > 0 for p in d.get("prompt_results", []))
-        for _, d in items
+        any(p.get("power_watts", 0) > 0 for p in d.get("prompt_results", [])) for _, d in items
     )
     if not has_power:
         print(dim("  Tip: run with --power for tok/s per watt (requires sudo)"))
@@ -542,9 +536,7 @@ def render_bench(report: dict, context_size: int = 0) -> None:
                 )
 
     # Process metrics (if available)
-    has_proc = any(
-        d.get("avg_proc_cpu", 0) > 0 or d.get("proc_rss_bytes", 0) > 0 for _, d in items
-    )
+    has_proc = any(d.get("avg_proc_cpu", 0) > 0 or d.get("proc_rss_bytes", 0) > 0 for _, d in items)
     if has_proc:
         print()
         print(bold("  Process"))

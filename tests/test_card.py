@@ -518,9 +518,7 @@ class TestCardLayoutRegression:
         chip_ys = _extract_chip_ys(svg)
         assert hero_y is not None, "Hero number missing for single engine"
         assert chip_ys, "No metric chips found"
-        assert hero_y < min(chip_ys), (
-            f"Hero y={hero_y} overlaps first chip y={min(chip_ys)}"
-        )
+        assert hero_y < min(chip_ys), f"Hero y={hero_y} overlaps first chip y={min(chip_ys)}"
 
     def test_hero_above_chips_all_scenarios(self):
         scenarios = [
@@ -672,9 +670,7 @@ class TestCardChipsContent:
         assert "ollama v0.18.1" in svg
 
     def test_power_chip_format(self):
-        svg = generate_card_svg(
-            _S1_POWER[0], power_data=_S1_POWER[1]
-        )
+        svg = generate_card_svg(_S1_POWER[0], power_data=_S1_POWER[1])
         # Unicode middle dot
         assert "20W" in svg
         assert "2.3" in svg or "2.29" in svg
@@ -708,9 +704,7 @@ class TestCardChipsContent:
             },
             winner={"name": "lmstudio", "tok_s_delta": "2.4x faster"},
         )
-        svg = generate_card_svg(
-            report, engine_quants={"lmstudio": "Q4_K_M", "ollama": "Q5_K_S"}
-        )
+        svg = generate_card_svg(report, engine_quants={"lmstudio": "Q4_K_M", "ollama": "Q5_K_S"})
         assert "Q4_K_M" in svg
         assert "Q5_K_S" in svg
 

@@ -112,8 +112,7 @@ def _build_slot_entry(
     slot_results = [
         r
         for r in raw_results
-        if r.get("engine") == engine_name
-        and (not r.get("model") or r.get("model") == model_name)
+        if r.get("engine") == engine_name and (not r.get("model") or r.get("model") == model_name)
     ]
     er: dict = slot_results[0] if slot_results else {}
 
@@ -124,9 +123,7 @@ def _build_slot_entry(
         for r in slot_results
         if r.get("tok_per_sec_per_watt", 0) > 0
     ]
-    load_vals = [
-        r.get("load_time_ms", 0) for r in slot_results if r.get("load_time_ms", 0) > 0
-    ]
+    load_vals = [r.get("load_time_ms", 0) for r in slot_results if r.get("load_time_ms", 0) > 0]
 
     entry: dict[str, Any] = {
         "median_tok_s": slot_data.get("median_tok_s", 0.0),

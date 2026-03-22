@@ -433,9 +433,7 @@ def _determine_winner_slots(slots: list[dict]) -> dict | None:
 
     vram_delta = ""
     if best.get("vram_bytes", 0) > 0 and second.get("vram_bytes", 0) > 0:
-        vram_pct = (
-            (best["vram_bytes"] - second["vram_bytes"]) / second["vram_bytes"]
-        ) * 100
+        vram_pct = ((best["vram_bytes"] - second["vram_bytes"]) / second["vram_bytes"]) * 100
         sign = "+" if vram_pct >= 0 else ""
         vram_delta = f"{sign}{vram_pct:.0f}% VRAM"
 

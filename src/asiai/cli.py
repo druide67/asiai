@@ -429,7 +429,7 @@ def _parse_compare_arg(arg: str) -> tuple[str, str | None]:
     """Parse 'model@engine' or 'model' into (model, engine_name_or_None)."""
     if "@" in arg:
         idx = arg.rfind("@")
-        return arg[:idx], arg[idx + 1:]
+        return arg[:idx], arg[idx + 1 :]
     return arg, None
 
 
