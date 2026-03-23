@@ -24,7 +24,7 @@
     </p>
 </div>
 
-<div class="card-grid-2 fade-in">
+<div class="fade-in" style="max-width: 720px;">
     <!-- Benchmark form -->
     <div class="card">
         <details id="advanced-options">
@@ -32,14 +32,52 @@
                 <span class="chevron">&#9654;</span> Advanced options
             </summary>
             <form id="bench-form" style="margin-top: 1rem;">
-                <!-- Model -->
+                <!-- Model (dropdown of loaded models + free text) -->
                 <div class="form-group">
-                    <label class="form-label">Model (auto-detect if empty)</label>
-                    <input type="text" name="model" class="form-input" placeholder="e.g. qwen2.5:7b">
+                    <label class="form-label">Model</label>
+                    <select name="model" class="form-select" id="model-select">
+                        <option value="">(auto-detect)</option>
+                        {% for engine in engines %}
+                        {% if engine.reachable %}
+                        {% for model in engine.models %}
+                        <option value="{{ model }}">{{ model }} ({{ engine.name }})</option>
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="model_custom" class="form-input" id="model-custom"
+                           placeholder="or type a model name" style="margin-top: 0.5rem; display: none;">
+                    <a href="#" id="model-custom-toggle" class="text-xs" style="margin-top: 0.25rem; display: inline-block;">
+                        Type custom model name
+                    </a>
+                </div>
+
+                <!-- Compare mode -->
+                <div class="form-group" id="compare-group" style="display: none;">
+                    <label class="form-label">Compare models (select 2-8)</label>
+                    <select name="compare_models" class="form-select" id="compare-select" multiple
+                            size="4" style="min-height: 100px;">
+                        {% for engine in engines %}
+                        {% if engine.reachable %}
+                        {% for model in engine.models %}
+                        <option value="{{ model }}@{{ engine.name }}">{{ model }} @ {{ engine.name }}</option>
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <p class="help-hint" style="margin-top: 0.25rem;">
+                        <span class="text-neutral-500 text-xs">Hold Cmd/Ctrl to select multiple. Format: model@engine.</span>
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="compare-toggle" name="compare_mode">
+                        Compare multiple models
+                    </label>
                 </div>
 
                 <!-- Engines -->
-                <div class="form-group">
+                <div class="form-group" id="engines-group">
                     <label class="form-label">Engines</label>
                     {% for engine in engines %}
                     <label class="form-checkbox">
@@ -141,8 +179,8 @@
         </details>
     </div>
 
-    <!-- Progress & Status -->
-    <div class="card">
+    <!-- Progress & Status (below form, same column) -->
+    <div class="card" id="status-card" style="margin-top: 1rem;">
         <h3 class="card-title">Status</h3>
         <div id="bench-status">
             {% if bench_running %}
@@ -183,6 +221,45 @@
     const quickBtn = document.getElementById('quick-bench-btn');
     const statusDiv = document.getElementById('bench-status');
     const resultsDiv = document.getElementById('bench-results');
+
+    /* Model: custom text toggle */
+    var customToggle = document.getElementById('model-custom-toggle');
+    var customInput = document.getElementById('model-custom');
+    var modelSelect = document.getElementById('model-select');
+    if (customToggle) {
+        customToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (customInput.style.display === 'none') {
+                customInput.style.display = '';
+                modelSelect.style.display = 'none';
+                customToggle.textContent = 'Use model dropdown';
+            } else {
+                customInput.style.display = 'none';
+                modelSelect.style.display = '';
+                customToggle.textContent = 'Type custom model name';
+                customInput.value = '';
+            }
+        });
+    }
+
+    /* Compare mode toggle */
+    var compareToggle = document.getElementById('compare-toggle');
+    var compareGroup = document.getElementById('compare-group');
+    var enginesGroup = document.getElementById('engines-group');
+    var modelGroup = modelSelect ? modelSelect.closest('.form-group') : null;
+    if (compareToggle) {
+        compareToggle.addEventListener('change', function() {
+            if (this.checked) {
+                compareGroup.style.display = '';
+                if (enginesGroup) enginesGroup.style.display = 'none';
+                if (modelGroup) modelGroup.style.display = 'none';
+            } else {
+                compareGroup.style.display = 'none';
+                if (enginesGroup) enginesGroup.style.display = '';
+                if (modelGroup) modelGroup.style.display = '';
+            }
+        });
+    }
 
     function showBenchProgress() {
         statusDiv.textContent = '';

@@ -59,7 +59,9 @@ async def bench_run(request: Request) -> JSONResponse:
         return JSONResponse({"error": "Benchmark already running"}, status_code=409)
 
     # Parse form data
-    model = form.get("model", "")
+    compare_mode = form.get("compare_mode") == "on"
+    compare_models = form.getlist("compare_models")
+    model = form.get("model_custom") or form.get("model", "")
     engine_names = form.getlist("engines")
     prompt_names = form.getlist("prompts")
     quick = bool(form.get("quick"))
@@ -100,6 +102,7 @@ async def bench_run(request: Request) -> JSONResponse:
             context_size,
             generate_card,
             share,
+            compare_models if compare_mode else None,
         ),
         daemon=True,
     )
@@ -183,13 +186,14 @@ def _run_benchmark_thread(
     context_size: int = 0,
     generate_card: bool = True,
     share: bool = True,
+    compare_models: list[str] | None = None,
 ) -> None:
     """Run benchmark in background thread, updating state.bench_status."""
     try:
         import os
 
         from asiai.benchmark.reporter import aggregate_results
-        from asiai.benchmark.runner import find_common_model, run_benchmark
+        from asiai.benchmark.runner import BenchmarkSlot, find_common_model, run_benchmark
         from asiai.storage.db import store_benchmark
 
         # Filter engines
@@ -198,26 +202,72 @@ def _run_benchmark_thread(
             wanted = {n.lower() for n in engine_names}
             engines = [e for e in engines if e.name in wanted]
 
-        if not engines:
+        if not engines and not compare_models:
             state.update_bench(error="No engines available", running=False, done=True)
             return
 
-        # Resolve model
-        actual_model = find_common_model(engines, model)
-        if not actual_model:
-            state.update_bench(error="No model available to benchmark", running=False, done=True)
-            return
+        # Compare mode: build slots from "model@engine" strings
+        if compare_models:
+            engine_map = {e.name: e for e in state.engines}
+            slots = []
+            for entry in compare_models:
+                if "@" in entry:
+                    m, e = entry.rsplit("@", 1)
+                    eng = engine_map.get(e)
+                    if eng:
+                        slots.append(BenchmarkSlot(engine=eng, model=m))
+                else:
+                    # model only — use all engines
+                    for eng in engines:
+                        slots.append(BenchmarkSlot(engine=eng, model=entry))
 
-        state.update_bench(progress=f"Benchmarking {actual_model}...", total_runs=runs)
+            if not slots:
+                state.update_bench(
+                    error="No valid model@engine pairs",
+                    running=False,
+                    done=True,
+                )
+                return
 
-        bench_run = run_benchmark(
-            engines,
-            actual_model,
-            prompt_names,
-            runs=runs,
-            power=power,
-            context_size=context_size,
-        )
+            actual_model = slots[0].model
+            state.update_bench(
+                progress=f"Comparing {len(slots)} model×engine slots...",
+                total_runs=runs,
+            )
+
+            bench_run = run_benchmark(
+                None,
+                None,
+                prompt_names,
+                runs=runs,
+                power=power,
+                context_size=context_size,
+                slots=slots,
+            )
+        else:
+            # Standard mode: single model across engines
+            actual_model = find_common_model(engines, model)
+            if not actual_model:
+                state.update_bench(
+                    error="No model available to benchmark",
+                    running=False,
+                    done=True,
+                )
+                return
+
+            state.update_bench(
+                progress=f"Benchmarking {actual_model}...",
+                total_runs=runs,
+            )
+
+            bench_run = run_benchmark(
+                engines,
+                actual_model,
+                prompt_names,
+                runs=runs,
+                power=power,
+                context_size=context_size,
+            )
 
         # Store results
         if bench_run.results:
