@@ -87,9 +87,21 @@ class TestPowerSampleExtended:
 # ── Hardware integration test ──────────────────────────────────────
 
 
+def _can_create_sampler() -> bool:
+    """Check if IOReportSampler can actually be created (fails on CI VMs)."""
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        return False
+    try:
+        s = IOReportSampler()
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
 @pytest.mark.skipif(
-    platform.system() != "Darwin" or platform.machine() != "arm64",
-    reason="Requires macOS on Apple Silicon",
+    not _can_create_sampler(),
+    reason="IOReport not available (CI VM or non-Apple Silicon)",
 )
 class TestIOReportHardware:
     def test_real_sample(self):
