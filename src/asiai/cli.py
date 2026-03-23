@@ -196,42 +196,58 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     if args.watch is not None and args.watch < 1:
         args.watch = 1
 
+    # IOReport power sampler (no sudo, optional)
+    ioreport_sampler = None
+    try:
+        from asiai.collectors.ioreport import IOReportSampler, ioreport_available
+
+        if ioreport_available():
+            ioreport_sampler = IOReportSampler()
+            # Allow initial baseline to accumulate (1s minimum)
+            time.sleep(1)
+    except Exception:
+        pass
+
     prev_snapshot: dict | None = None
 
     # Default: snapshot (with optional --watch)
-    if args.watch:
-        try:
-            while True:
+    try:
+        if args.watch:
+            try:
+                while True:
+                    if not quiet:
+                        subprocess.run(["clear"], check=False)
+                    snap = collect_snapshot(engines, ioreport_sampler=ioreport_sampler)
+                    store_snapshot(db_path, snap)
+                    if webhook_url:
+                        from asiai.alerting import check_and_alert
+
+                        check_and_alert(snap, prev_snapshot, webhook_url, db_path)
+                        prev_snapshot = snap
+                    if json_output:
+                        print(json.dumps(snap, indent=2))
+                    elif not quiet:
+                        render_snapshot(snap)
+                    time.sleep(args.watch)
+            except KeyboardInterrupt:
                 if not quiet:
-                    subprocess.run(["clear"], check=False)
-                snap = collect_snapshot(engines)
-                store_snapshot(db_path, snap)
-                if webhook_url:
-                    from asiai.alerting import check_and_alert
+                    print()
+                return 0
+        else:
+            snap = collect_snapshot(engines, ioreport_sampler=ioreport_sampler)
+            store_snapshot(db_path, snap)
+            if webhook_url:
+                from asiai.alerting import check_and_alert
 
-                    check_and_alert(snap, prev_snapshot, webhook_url, db_path)
-                    prev_snapshot = snap
-                if json_output:
-                    print(json.dumps(snap, indent=2))
-                elif not quiet:
-                    render_snapshot(snap)
-                time.sleep(args.watch)
-        except KeyboardInterrupt:
-            if not quiet:
-                print()
+                check_and_alert(snap, prev_snapshot, webhook_url, db_path)
+            if json_output:
+                print(json.dumps(snap, indent=2))
+            elif not quiet:
+                render_snapshot(snap)
             return 0
-    else:
-        snap = collect_snapshot(engines)
-        store_snapshot(db_path, snap)
-        if webhook_url:
-            from asiai.alerting import check_and_alert
-
-            check_and_alert(snap, prev_snapshot, webhook_url, db_path)
-        if json_output:
-            print(json.dumps(snap, indent=2))
-        elif not quiet:
-            render_snapshot(snap)
-        return 0
+    finally:
+        if ioreport_sampler is not None:
+            ioreport_sampler.close()
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:

@@ -53,8 +53,11 @@ def store_snapshot(db_path: str, snap: dict) -> None:
                 thermal_level, thermal_speed_limit, uptime,
                 inference_engine, engine_version,
                 gpu_utilization_pct, gpu_renderer_pct, gpu_tiler_pct,
-                gpu_mem_in_use, gpu_mem_allocated)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                gpu_mem_in_use, gpu_mem_allocated,
+                power_gpu_watts, power_cpu_watts, power_ane_watts,
+                power_dram_watts, power_total_watts, power_source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, ?, ?)""",
             (
                 snap["ts"],
                 snap["cpu_load_1"],
@@ -73,6 +76,12 @@ def store_snapshot(db_path: str, snap: dict) -> None:
                 snap.get("gpu_tiler_pct", -1),
                 snap.get("gpu_mem_in_use", 0),
                 snap.get("gpu_mem_allocated", 0),
+                snap.get("power_gpu_watts", -1),
+                snap.get("power_cpu_watts", -1),
+                snap.get("power_ane_watts", -1),
+                snap.get("power_dram_watts", -1),
+                snap.get("power_total_watts", -1),
+                snap.get("power_source", ""),
             ),
         )
         for model in snap.get("models", []):

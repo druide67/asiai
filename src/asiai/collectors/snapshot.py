@@ -20,11 +20,15 @@ from asiai.engines.detect import extract_port
 logger = logging.getLogger("asiai.collectors.snapshot")
 
 
-def collect_snapshot(engines: list[InferenceEngine]) -> dict:
+def collect_snapshot(
+    engines: list[InferenceEngine],
+    ioreport_sampler: object | None = None,
+) -> dict:
     """Collect a full snapshot: system metrics + inference models.
 
     Args:
         engines: List of detected inference engines to query.
+        ioreport_sampler: Optional IOReportSampler for power metrics (no sudo).
 
     Returns:
         Dict with all metrics, suitable for store_snapshot().
@@ -60,7 +64,7 @@ def collect_snapshot(engines: list[InferenceEngine]) -> dict:
         except Exception as e:
             logger.warning("Engine %s error: %s", engine.name, e)
 
-    return {
+    result = {
         "ts": int(time.time()),
         "cpu_load_1": cpu.load_1,
         "cpu_load_5": cpu.load_5,
@@ -81,6 +85,21 @@ def collect_snapshot(engines: list[InferenceEngine]) -> dict:
         "gpu_mem_in_use": gpu.mem_in_use,
         "gpu_mem_allocated": gpu.mem_allocated,
     }
+
+    # Power via IOReport (no sudo) — if sampler available
+    if ioreport_sampler is not None:
+        try:
+            reading = ioreport_sampler.sample()
+            result["power_gpu_watts"] = reading.gpu_watts
+            result["power_cpu_watts"] = reading.cpu_watts
+            result["power_ane_watts"] = reading.ane_watts
+            result["power_dram_watts"] = reading.dram_watts
+            result["power_total_watts"] = reading.total_watts
+            result["power_source"] = "ioreport"
+        except Exception as e:
+            logger.debug("IOReport power collection failed: %s", e)
+
+    return result
 
 
 def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
@@ -135,11 +154,14 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
     return statuses
 
 
-def collect_full_snapshot(engines: list[InferenceEngine]) -> dict:
+def collect_full_snapshot(
+    engines: list[InferenceEngine],
+    ioreport_sampler: object | None = None,
+) -> dict:
     """Extended snapshot: system metrics + per-engine status.
 
     Combines collect_snapshot() data with detailed per-engine status.
     """
-    base = collect_snapshot(engines)
+    base = collect_snapshot(engines, ioreport_sampler=ioreport_sampler)
     base["engines_status"] = collect_engines_status(engines)
     return base

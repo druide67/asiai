@@ -22,7 +22,13 @@ CREATE TABLE IF NOT EXISTS metrics (
     gpu_renderer_pct REAL DEFAULT -1,
     gpu_tiler_pct REAL DEFAULT -1,
     gpu_mem_in_use INTEGER DEFAULT 0,
-    gpu_mem_allocated INTEGER DEFAULT 0
+    gpu_mem_allocated INTEGER DEFAULT 0,
+    power_gpu_watts REAL DEFAULT -1,
+    power_cpu_watts REAL DEFAULT -1,
+    power_ane_watts REAL DEFAULT -1,
+    power_dram_watts REAL DEFAULT -1,
+    power_total_watts REAL DEFAULT -1,
+    power_source TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS models (
@@ -247,5 +253,25 @@ MIGRATIONS = [
         "table": "benchmark_process",
         "columns": ["ts"],
         "sql": [],
+    },
+    # v1.2: IOReport power monitoring on metrics (continuous, no sudo)
+    {
+        "table": "metrics",
+        "columns": [
+            "power_gpu_watts",
+            "power_cpu_watts",
+            "power_ane_watts",
+            "power_dram_watts",
+            "power_total_watts",
+            "power_source",
+        ],
+        "sql": [
+            "ALTER TABLE metrics ADD COLUMN power_gpu_watts REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN power_cpu_watts REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN power_ane_watts REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN power_dram_watts REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN power_total_watts REAL DEFAULT -1",
+            "ALTER TABLE metrics ADD COLUMN power_source TEXT DEFAULT ''",
+        ],
     },
 ]

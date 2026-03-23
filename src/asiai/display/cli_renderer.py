@@ -161,6 +161,30 @@ def render_snapshot(snap: dict) -> None:
             )
         print()
 
+    # Power (conditional — only if IOReport data available)
+    power_gpu = snap.get("power_gpu_watts", -1)
+    if power_gpu >= 0:
+        print(bold("Power"))
+        power_cpu = snap.get("power_cpu_watts", 0)
+        power_ane = snap.get("power_ane_watts", 0)
+        power_dram = snap.get("power_dram_watts", 0)
+        power_total = snap.get("power_total_watts", 0)
+
+        # Color GPU power: >30W red, >15W yellow, else green
+        if power_gpu > 30:
+            gpu_str = red(f"{power_gpu:.1f}W")
+        elif power_gpu > 15:
+            gpu_str = yellow(f"{power_gpu:.1f}W")
+        else:
+            gpu_str = green(f"{power_gpu:.1f}W")
+
+        print(
+            f"  GPU: {gpu_str}  CPU: {power_cpu:.1f}W"
+            f"  ANE: {power_ane:.1f}W  DRAM: {power_dram:.1f}W"
+        )
+        print(f"  Total: {power_total:.1f}W  {dim('(IOReport, no sudo)')}")
+        print()
+
     # Engines
     engine_str = snap.get("inference_engine", "none")
     version_str = snap.get("engine_version", "")

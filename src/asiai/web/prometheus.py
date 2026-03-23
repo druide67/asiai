@@ -99,6 +99,34 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             )
         )
 
+    # Power metrics (IOReport, no sudo)
+    power_gpu = snapshot.get("power_gpu_watts", -1)
+    if power_gpu >= 0:
+        sections.append(
+            _gauge("asiai_power_gpu_watts", "GPU power consumption in watts", power_gpu)
+        )
+        sections.append(
+            _gauge(
+                "asiai_power_cpu_watts",
+                "CPU power consumption in watts",
+                snapshot.get("power_cpu_watts", 0),
+            )
+        )
+        sections.append(
+            _gauge(
+                "asiai_power_ane_watts",
+                "ANE power consumption in watts",
+                snapshot.get("power_ane_watts", 0),
+            )
+        )
+        sections.append(
+            _gauge(
+                "asiai_power_total_watts",
+                "Total package power consumption in watts",
+                snapshot.get("power_total_watts", 0),
+            )
+        )
+
     # Per-engine metrics
     engines_status = snapshot.get("engines_status", [])
     if engines_status:
