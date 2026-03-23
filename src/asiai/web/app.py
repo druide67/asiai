@@ -127,6 +127,15 @@ def create_app(state: AppState) -> FastAPI:
     templates.env.filters["format_bytes"] = format_bytes_filter
     templates.env.filters["format_number"] = format_number_filter
 
+    # IOReport power sampler (no sudo, optional)
+    try:
+        from asiai.collectors.ioreport import IOReportSampler, ioreport_available
+
+        if ioreport_available():
+            state.ioreport_sampler = IOReportSampler()
+    except Exception:
+        pass
+
     # Store state and templates on app for route access
     app.state.app_state = state
     app.state.templates = templates

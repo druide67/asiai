@@ -42,17 +42,20 @@ class TestAvailability:
         with patch("asiai.collectors.ioreport._load_libs", side_effect=OSError("not macOS")):
             # Reset cached state
             import asiai.collectors.ioreport as mod
+
             mod._available = None
             assert ioreport_available() is False
 
     def test_available_when_libs_load(self):
         with patch("asiai.collectors.ioreport._load_libs"):
             import asiai.collectors.ioreport as mod
+
             mod._available = None
             assert ioreport_available() is True
 
     def test_cached_result(self):
         import asiai.collectors.ioreport as mod
+
         mod._available = True
         # Should not call _load_libs again
         assert ioreport_available() is True
@@ -65,6 +68,7 @@ class TestAvailability:
 class TestPowerSampleExtended:
     def test_new_fields_exist(self):
         from asiai.collectors.power import PowerSample
+
         s = PowerSample()
         assert s.ane_watts == 0.0
         assert s.dram_watts == 0.0
@@ -72,6 +76,7 @@ class TestPowerSampleExtended:
 
     def test_backward_compatible(self):
         from asiai.collectors.power import PowerSample
+
         s = PowerSample(gpu_watts=15.0, cpu_watts=4.0, source="test")
         assert s.gpu_watts == 15.0
         assert s.cpu_watts == 4.0
@@ -90,6 +95,7 @@ class TestIOReportHardware:
     def test_real_sample(self):
         """Integration test: take a real IOReport sample on Apple Silicon."""
         import time
+
         sampler = IOReportSampler()
         time.sleep(1)
         reading = sampler.sample()
@@ -106,6 +112,7 @@ class TestIOReportHardware:
     def test_context_manager(self):
         """Test context manager usage."""
         import time
+
         with IOReportSampler() as sampler:
             time.sleep(1)
             reading = sampler.sample()

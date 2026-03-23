@@ -57,6 +57,7 @@ class AppState:
     max_sse_connections: int = 10
     _snapshot_cache: dict | None = field(default=None, repr=False)
     _snapshot_ts: float = 0.0
+    ioreport_sampler: object | None = field(default=None, repr=False)
 
     def refresh_engines_if_stale(self, max_age: float = 30.0) -> list:
         """Return cached engines, refreshing if older than max_age seconds."""

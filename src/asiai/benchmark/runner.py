@@ -155,9 +155,7 @@ def run_benchmark(
         test_monitor = PowerMonitor()
         if not test_monitor.start():
             if not ioreport_sampler:
-                run.errors.append(
-                    "Power monitoring: sudo access required (run 'sudo -v' first)"
-                )
+                run.errors.append("Power monitoring: sudo access required (run 'sudo -v' first)")
             power_unavailable = True
         else:
             test_monitor.stop()

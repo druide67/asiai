@@ -35,7 +35,10 @@ def _get_or_refresh_snapshot(state: AppState) -> dict:
 
     from asiai.collectors.snapshot import collect_full_snapshot
 
-    snapshot = collect_full_snapshot(state.engines)
+    snapshot = collect_full_snapshot(
+        state.engines,
+        ioreport_sampler=state.ioreport_sampler,
+    )
     state.set_snapshot_cache(snapshot)
 
     # Persist engine status
@@ -66,7 +69,10 @@ async def api_status(request: Request) -> JSONResponse:
     else:
         from asiai.collectors.snapshot import collect_full_snapshot
 
-        snapshot = collect_full_snapshot(state.engines)
+        snapshot = collect_full_snapshot(
+            state.engines,
+            ioreport_sampler=state.ioreport_sampler,
+        )
         state.set_snapshot_cache(snapshot)
 
     # Build lightweight response

@@ -63,29 +63,40 @@ def _load_libs() -> None:
 
     # IOReport signatures
     _iorep.IOReportCopyChannelsInGroup.argtypes = [
-        ctypes.c_void_p, ctypes.c_void_p,
-        ctypes.c_uint64, ctypes.c_uint64, ctypes.c_uint64,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint64,
+        ctypes.c_uint64,
+        ctypes.c_uint64,
     ]
     _iorep.IOReportCopyChannelsInGroup.restype = ctypes.c_void_p
 
     _iorep.IOReportCreateSubscription.argtypes = [
-        ctypes.c_void_p, ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_void_p), ctypes.c_uint64, ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_uint64,
+        ctypes.c_void_p,
     ]
     _iorep.IOReportCreateSubscription.restype = ctypes.c_void_p
 
     _iorep.IOReportCreateSamples.argtypes = [
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
     ]
     _iorep.IOReportCreateSamples.restype = ctypes.c_void_p
 
     _iorep.IOReportCreateSamplesDelta.argtypes = [
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
     ]
     _iorep.IOReportCreateSamplesDelta.restype = ctypes.c_void_p
 
     _iorep.IOReportSimpleGetIntegerValue.argtypes = [
-        ctypes.c_void_p, ctypes.c_int32,
+        ctypes.c_void_p,
+        ctypes.c_int32,
     ]
     _iorep.IOReportSimpleGetIntegerValue.restype = ctypes.c_int64
 
@@ -97,7 +108,9 @@ def _load_libs() -> None:
 
     # CoreFoundation signatures
     _cf.CFStringCreateWithCString.argtypes = [
-        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_uint32,
     ]
     _cf.CFStringCreateWithCString.restype = ctypes.c_void_p
 
@@ -105,7 +118,10 @@ def _load_libs() -> None:
     _cf.CFStringGetCStringPtr.restype = ctypes.c_char_p
 
     _cf.CFStringGetCString.argtypes = [
-        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_long,
+        ctypes.c_uint32,
     ]
     _cf.CFStringGetCString.restype = ctypes.c_bool
 
@@ -203,21 +219,31 @@ class IOReportSampler:
         _load_libs()
 
         channels = _iorep.IOReportCopyChannelsInGroup(
-            _cfstr("Energy Model"), None, 0, 0, 0,
+            _cfstr("Energy Model"),
+            None,
+            0,
+            0,
+            0,
         )
         if not channels:
             raise RuntimeError("IOReportCopyChannelsInGroup returned NULL")
 
         self._sub_channels = ctypes.c_void_p()
         self._subscription = _iorep.IOReportCreateSubscription(
-            None, channels, ctypes.byref(self._sub_channels), 0, None,
+            None,
+            channels,
+            ctypes.byref(self._sub_channels),
+            0,
+            None,
         )
         if not self._subscription:
             raise RuntimeError("IOReportCreateSubscription returned NULL")
 
         # Take initial sample as baseline
         self._prev_sample = _iorep.IOReportCreateSamples(
-            self._subscription, self._sub_channels, None,
+            self._subscription,
+            self._sub_channels,
+            None,
         )
         self._prev_time = time.monotonic()
 
@@ -229,7 +255,9 @@ class IOReportSampler:
     def sample(self) -> IOReportReading:
         """Take a new sample and return watts since previous sample."""
         now_sample = _iorep.IOReportCreateSamples(
-            self._subscription, self._sub_channels, None,
+            self._subscription,
+            self._sub_channels,
+            None,
         )
         now_time = time.monotonic()
         interval = now_time - self._prev_time
@@ -238,7 +266,9 @@ class IOReportSampler:
             return IOReportReading()
 
         delta = _iorep.IOReportCreateSamplesDelta(
-            self._prev_sample, now_sample, None,
+            self._prev_sample,
+            now_sample,
+            None,
         )
         self._prev_sample = now_sample
         self._prev_time = now_time

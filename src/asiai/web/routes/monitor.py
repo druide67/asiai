@@ -92,6 +92,6 @@ def _get_snapshot(state: AppState) -> dict:
     from asiai.collectors.snapshot import collect_snapshot
 
     try:
-        return collect_snapshot(state.engines)
+        return collect_snapshot(state.engines, ioreport_sampler=state.ioreport_sampler)
     except Exception:
         return {}
