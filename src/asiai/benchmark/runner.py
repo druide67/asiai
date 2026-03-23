@@ -138,12 +138,26 @@ def run_benchmark(
     gpu_info = collect_gpu()
     gpu_cores = gpu_info.cores
 
-    # Track whether power monitoring was requested but unavailable
+    # IOReport power (no sudo, always available on Apple Silicon)
+    ioreport_sampler = None
+    try:
+        from asiai.collectors.ioreport import IOReportSampler, ioreport_available
+
+        if ioreport_available():
+            ioreport_sampler = IOReportSampler()
+            time.sleep(1)  # baseline warmup
+    except Exception:
+        pass
+
+    # Track whether powermetrics (sudo) is available for cross-validation
     power_unavailable = False
     if power:
         test_monitor = PowerMonitor()
         if not test_monitor.start():
-            run.errors.append("Power monitoring: sudo access required (run 'sudo -v' first)")
+            if not ioreport_sampler:
+                run.errors.append(
+                    "Power monitoring: sudo access required (run 'sudo -v' first)"
+                )
             power_unavailable = True
         else:
             test_monitor.stop()
@@ -207,12 +221,16 @@ def run_benchmark(
         except Exception as e:
             logger.debug("warmup failed for %s: %s", engine.name, e)
 
-        # Start per-engine power monitoring
+        # Start per-engine power monitoring (both sources if available)
         engine_power: PowerMonitor | None = None
         if power and not power_unavailable:
             engine_power = PowerMonitor()
             if not engine_power.start():
                 engine_power = None
+
+        # IOReport: discard stale sample, start fresh for this engine
+        if ioreport_sampler:
+            ioreport_sampler.sample()  # discard
 
         results_before = len(run.results)
 
@@ -246,13 +264,42 @@ def run_benchmark(
                 )
 
         # Stop per-engine power monitoring and annotate this engine's results
+        pm_gpu_watts = 0.0
+        io_gpu_watts = 0.0
+        power_source = ""
+
         if engine_power:
             power_sample = engine_power.stop()
-            gpu_watts = power_sample.gpu_watts
+            pm_gpu_watts = power_sample.gpu_watts
+
+        if ioreport_sampler:
+            try:
+                io_reading = ioreport_sampler.sample()
+                io_gpu_watts = io_reading.gpu_watts
+            except Exception:
+                pass
+
+        # Determine display value and source
+        if io_gpu_watts > 0 and pm_gpu_watts > 0:
+            gpu_watts = io_gpu_watts  # prefer IOReport (no sudo)
+            power_source = "both"
+        elif io_gpu_watts > 0:
+            gpu_watts = io_gpu_watts
+            power_source = "ioreport"
+        elif pm_gpu_watts > 0:
+            gpu_watts = pm_gpu_watts
+            power_source = "powermetrics"
+        else:
+            gpu_watts = 0.0
+
+        if gpu_watts > 0:
             for result in run.results[results_before:]:
                 result["power_watts"] = gpu_watts
+                result["power_watts_ioreport"] = io_gpu_watts
+                result["power_watts_powermetrics"] = pm_gpu_watts
+                result["power_source"] = power_source
                 tok_s = result.get("tok_per_sec", 0.0)
-                if gpu_watts > 0 and tok_s > 0:
+                if tok_s > 0:
                     result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
 
         # Check for thermal throttling during this engine's runs
@@ -284,6 +331,9 @@ def run_benchmark(
 
         slots_run += 1
         prev_model = slot_model
+
+    if ioreport_sampler:
+        ioreport_sampler.close()
 
     return run
 

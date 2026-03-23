@@ -56,7 +56,10 @@ CREATE TABLE IF NOT EXISTS benchmarks (
     vram_bytes INTEGER,
     mem_used INTEGER,
     thermal_level TEXT,
-    thermal_speed_limit INTEGER
+    thermal_speed_limit INTEGER,
+    power_watts_ioreport REAL DEFAULT 0,
+    power_watts_powermetrics REAL DEFAULT 0,
+    power_source TEXT DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_benchmarks_ts ON benchmarks(ts);
@@ -253,6 +256,16 @@ MIGRATIONS = [
         "table": "benchmark_process",
         "columns": ["ts"],
         "sql": [],
+    },
+    # v1.2: cross-validation columns on benchmarks (IOReport vs powermetrics)
+    {
+        "table": "benchmarks",
+        "columns": ["power_watts_ioreport", "power_watts_powermetrics", "power_source"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN power_watts_ioreport REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN power_watts_powermetrics REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN power_source TEXT DEFAULT ''",
+        ],
     },
     # v1.2: IOReport power monitoring on metrics (continuous, no sudo)
     {

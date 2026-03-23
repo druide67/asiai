@@ -647,8 +647,9 @@ class TestRunBenchmarkPower:
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
+    @patch("asiai.collectors.ioreport.ioreport_available", return_value=False)
     def test_power_no_sudo_adds_error(
-        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
+        self, _mock_ior, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
     ):
         """power=True without sudo should add error and still run benchmark."""
         mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
@@ -673,8 +674,9 @@ class TestRunBenchmarkPower:
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
+    @patch("asiai.collectors.ioreport.ioreport_available", return_value=False)
     def test_power_zero_watts_no_efficiency(
-        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
+        self, _mock_ior, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
     ):
         """If GPU reports 0W, tok_per_sec_per_watt should not be set."""
         from asiai.collectors.power import PowerSample
@@ -694,8 +696,8 @@ class TestRunBenchmarkPower:
         engine = _mock_engine()
         run = run_benchmark([engine], "test-model", ["code"], power=True)
 
-        assert run.results[0]["power_watts"] == 0.0
-        # Division by zero guard: tok_per_sec_per_watt should not be set
+        # Neither source had power data, so power_watts not annotated
+        assert "power_watts" not in run.results[0]
         assert "tok_per_sec_per_watt" not in run.results[0]
 
 
@@ -934,6 +936,7 @@ class TestTokenFallback:
 
 
 class TestPerEnginePower:
+    @patch("asiai.collectors.ioreport.ioreport_available", return_value=False)
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
     @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
@@ -941,7 +944,7 @@ class TestPerEnginePower:
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
     def test_per_engine_power_isolation(
-        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
+        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os, _mock_ior
     ):
         """Each engine should get its own power measurement."""
         from asiai.collectors.power import PowerSample

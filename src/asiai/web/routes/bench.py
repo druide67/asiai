@@ -336,7 +336,17 @@ def _get_latest_bench_rows(state) -> list[dict]:
 
 
 def _check_power_available() -> bool:
-    """Check if sudo powermetrics is available without a password prompt."""
+    """Check if power monitoring is available (IOReport or sudo powermetrics)."""
+    # IOReport: no sudo needed, preferred
+    try:
+        from asiai.collectors.ioreport import ioreport_available
+
+        if ioreport_available():
+            return True
+    except Exception:
+        pass
+
+    # Fallback: sudo powermetrics
     import subprocess
 
     try:
