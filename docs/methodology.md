@@ -88,6 +88,29 @@ asiai records `thermal_speed_limit` per result and warns if throttling is detect
 
 Large context sizes (32k+) can cause instability on engines that pre-allocate KV cache. Set engine context length to match the actual test size for fair results.
 
+## Power Measurement
+
+asiai measures GPU, CPU, ANE and DRAM power consumption via Apple's IOReport Energy Model framework — **no sudo required**. Power is measured automatically in every benchmark and every monitoring snapshot.
+
+IOReport reads the same hardware energy counters as `sudo powermetrics`, but through a user-space API (`libIOReport.dylib` via ctypes). This eliminates the need for passwordless sudo configuration.
+
+### Validation
+
+We cross-validated IOReport against `sudo powermetrics` under LLM inference load on M4 Pro 64GB, using 10 paired samples per engine at 2-second intervals:
+
+| Engine | IOReport avg | powermetrics avg | Mean delta | Max delta |
+|--------|-------------|-----------------|------------|-----------|
+| LM Studio (MLX) | 12.6 W | 12.6 W | 0.9% | 2.1% |
+| Ollama (llama.cpp) | 15.6 W | 15.4 W | 1.3% | 4.1% |
+
+Both engines confirmed <1.5% average delta with 10/10 paired samples. ANE power was 0.000W across all 20 samples, confirming no LLM engine currently uses the Neural Engine.
+
+The `--power` flag enables additional cross-validation by running both IOReport and `sudo powermetrics` simultaneously, storing both readings for comparison.
+
+### Power Efficiency
+
+Power efficiency (tok/s per watt) is calculated as `tok_per_sec / gpu_watts` for each benchmark result. This metric enables comparison of inference cost across engines and hardware.
+
 ## Metadata
 
-Every benchmark result stores: engine, engine_version, model, model_format, model_quantization, hw_chip, os_version, thermal_level, thermal_speed_limit, metrics_version. This enables fair regression comparison and cross-machine benchmarks.
+Every benchmark result stores: engine, engine_version, model, model_format, model_quantization, hw_chip, os_version, thermal_level, thermal_speed_limit, power_watts, power_source, metrics_version. This enables fair regression comparison and cross-machine benchmarks.

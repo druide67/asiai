@@ -104,7 +104,7 @@ Options:
 -e, --engines LIST         Filter engines (e.g. ollama,lmstudio,mlxlm)
 -p, --prompts LIST         Prompt types: code, tool_call, reasoning, long_gen
 -r, --runs N               Runs per prompt (default: 3, for median + stddev)
-    --power                Measure GPU power via powermetrics (sudo required)
+    --power                Cross-validate power with sudo powermetrics (IOReport always-on)
     --context-size SIZE    Context fill prompt: 4k, 16k, 32k, 64k
     --share                Share results with the community (anonymous, opt-in)
 -Q, --quick                Quick benchmark: 1 prompt, 1 run (~15 seconds)
@@ -309,7 +309,7 @@ Every shared card includes asiai branding — the [Speedtest.net model](https://
 |--------|-------------|
 | **tok/s** | Generation speed (tokens/sec), excluding prompt processing (TTFT) |
 | **TTFT** | Time to first token — prompt processing latency |
-| **Power** | GPU power draw in watts (`sudo powermetrics`) |
+| **Power** | GPU, CPU, ANE, DRAM power in watts (IOReport, no sudo) |
 | **tok/s/W** | Energy efficiency — tokens per second per watt |
 | **Stability** | Run-to-run variance: stable (CV<5%), variable (<10%), unstable (>10%) |
 | **VRAM** | GPU memory footprint (Ollama, LM Studio via `lms` CLI) |
@@ -324,7 +324,7 @@ Following [MLPerf](https://mlcommons.org/benchmarks/inference-server/), [SPEC CP
 - **Warmup**: 1 non-timed generation per engine before measured runs
 - **Runs**: 3 iterations per prompt (configurable), median as primary metric
 - **Sampling**: `temperature=0` (greedy decoding) for deterministic results
-- **Power**: Per-engine monitoring (not session-wide average)
+- **Power**: Always-on via IOReport (no sudo). Per-engine, not session-wide average
 - **Variance**: Pooled intra-prompt stddev (isolates run-to-run noise)
 - **Metadata**: Engine version, model quantization, hardware chip, macOS version stored per result
 

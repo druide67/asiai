@@ -87,6 +87,18 @@
 
                 <!-- Power -->
                 <div class="form-group">
+                    {% if ioreport_power %}
+                    <p class="help-hint" style="margin-left: 0;">
+                        <span class="text-neutral-400 text-xs">Power monitoring: always-on via IOReport (no sudo needed)</span>
+                    </p>
+                    {% if power_available %}
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="power">
+                        Cross-validate with powermetrics (sudo)
+                        <span class="text-neutral-500 text-xs">(stores both readings for comparison)</span>
+                    </label>
+                    {% endif %}
+                    {% else %}
                     <label class="form-checkbox">
                         <input type="checkbox" name="power" {% if not power_available %}disabled{% endif %}>
                         Measure power (tok/s per watt)
@@ -100,6 +112,7 @@
                     <p class="help-hint" style="margin-top: 0.25rem; margin-left: 1.5rem;">
                         Enable with: <code style="font-size: 0.7rem; background: var(--bg-elevated); padding: 0.1rem 0.4rem; border-radius: 0.25rem;">echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/powermetrics" | sudo tee /etc/sudoers.d/powermetrics</code>
                     </p>
+                    {% endif %}
                     {% endif %}
                 </div>
 

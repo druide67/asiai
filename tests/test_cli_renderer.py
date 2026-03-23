@@ -327,7 +327,6 @@ class TestRenderBench:
         assert "gemma2:9b" in out
         assert "45.0" in out
         assert "Single engine" in out
-        assert "--power" in out
 
     @patch("asiai.collectors.system.collect_memory")
     @patch("asiai.collectors.system.collect_machine_info")

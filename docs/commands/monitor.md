@@ -33,6 +33,14 @@ System
   Pressure:  normal
   Thermal:   nominal  (100%)
 
+GPU
+  Utilization: 45%  (renderer 44%, tiler 45%)
+  Memory:      24.2 GB in use / 48.0 GB allocated
+
+Power
+  GPU: 12.6W  CPU: 4.4W  ANE: 0.0W  DRAM: 5.2W
+  Total: 22.2W  (IOReport, no sudo)
+
 Inference  ollama 0.17.4
   Models loaded: 1  VRAM total: 26.0 GB
 
@@ -40,6 +48,8 @@ Inference  ollama 0.17.4
   ──────────────────────────────────────── ────────── ──────── ──────
   qwen3.5:35b-a3b                            26.0 GB     gguf Q4_K_M
 ```
+
+Power monitoring uses Apple's IOReport Energy Model to read GPU, CPU, ANE and DRAM power consumption — no sudo required. See [Methodology](../methodology.md#power-measurement) for validation details.
 
 ## Alert webhooks
 

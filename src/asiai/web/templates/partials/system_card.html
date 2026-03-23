@@ -69,6 +69,28 @@
             </div>
         </div>
         {% endif %}
+
+        {% if snapshot.power_gpu_watts is defined and snapshot.power_gpu_watts >= 0 %}
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">GPU Power</div>
+                <div class="metric-value text-sm">{{ snapshot.power_gpu_watts | format_number }}W</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">CPU Power</div>
+                <div class="metric-value text-sm">{{ snapshot.power_cpu_watts | format_number }}W</div>
+            </div>
+        </div>
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">Total</div>
+                <div class="metric-value text-sm">{{ snapshot.power_total_watts | format_number }}W</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label text-neutral-500 text-xs">IOReport · no sudo</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% else %}
     <p class="text-neutral-400 text-sm">Unable to collect system metrics</p>

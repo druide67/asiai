@@ -26,6 +26,15 @@ async def bench_page(request: Request) -> HTMLResponse:
         asyncio.to_thread(_check_power_available),
     )
 
+    # Check if IOReport provides always-on power (no sudo)
+    ioreport_power = False
+    try:
+        from asiai.collectors.ioreport import ioreport_available
+
+        ioreport_power = ioreport_available()
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
         request,
         "bench.html",
@@ -35,6 +44,7 @@ async def bench_page(request: Request) -> HTMLResponse:
             "prompts": prompts,
             "bench_running": state.get_bench_snapshot()["running"],
             "power_available": power_available,
+            "ioreport_power": ioreport_power,
         },
     )
 

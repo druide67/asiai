@@ -20,7 +20,7 @@ asiai bench [options]
 | `-e, --engines LIST` | Filter engines (e.g., `ollama,lmstudio,mlxlm`) |
 | `-p, --prompts LIST` | Prompt types: `code`, `tool_call`, `reasoning`, `long_gen` |
 | `-r, --runs N` | Runs per prompt (default: 3, for median + stddev) |
-| `--power` | Measure GPU power via powermetrics (sudo required) |
+| `--power` | Cross-validate power with sudo powermetrics (IOReport always-on) |
 | `--context-size SIZE` | Context fill prompt: `4k`, `16k`, `32k`, `64k` |
 | `--export FILE` | Export results to JSON file |
 | `-H, --history PERIOD` | Show past benchmarks (e.g., `7d`, `24h`) |

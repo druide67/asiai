@@ -533,14 +533,10 @@ def render_bench(report: dict, context_size: int = 0) -> None:
                 stat_parts.append(yellow(f"{len(outliers)} outlier(s)"))
             print(f"    {display_name:<{col_w}} {', '.join(stat_parts)}")
 
-    # Power tip (when no power data)
+    # Power efficiency table (if power data available)
     has_power = any(
         any(p.get("power_watts", 0) > 0 for p in d.get("prompt_results", [])) for _, d in items
     )
-    if not has_power:
-        print(dim("  Tip: run with --power for tok/s per watt (requires sudo)"))
-
-    # Power efficiency table (if power data available)
     if has_power:
         print()
         print(bold("  Power Efficiency"))

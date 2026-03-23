@@ -601,8 +601,9 @@ class TestRunBenchmarkPower:
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
+    @patch("asiai.collectors.ioreport.ioreport_available", return_value=False)
     def test_power_annotates_results(
-        self, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
+        self, _mock_ior, mock_power_cls, mock_mem, mock_thermal, _mock_procs, _hw, _os
     ):
         """power=True should annotate each result with watts and tok/s/W."""
         from asiai.collectors.power import PowerSample
