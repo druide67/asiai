@@ -22,6 +22,9 @@ class PowerSample:
 
     gpu_watts: float = 0.0
     cpu_watts: float = 0.0
+    ane_watts: float = 0.0
+    dram_watts: float = 0.0
+    total_package_watts: float = 0.0
     source: str = ""
 
 
