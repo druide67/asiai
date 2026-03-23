@@ -2,7 +2,7 @@
 
 {% block extrahead %}
   <!-- OpenGraph -->
-  <meta property="og:title" content="{{ page.title }} — asiai">
+  <meta property="og:title" content="{{ page.meta.get('title', page.title) }} — asiai">
   <meta property="og:description" content="Multi-engine LLM benchmark & monitoring CLI for Apple Silicon. 7 engines, GPU observability, community leaderboard.">
   <meta property="og:url" content="{{ page.canonical_url }}">
   <meta property="og:type" content="website">
@@ -11,7 +11,7 @@
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="{{ page.title }} — asiai">
+  <meta name="twitter:title" content="{{ page.meta.get('title', page.title) }} — asiai">
   <meta name="twitter:description" content="Benchmark, monitor, and manage 7 LLM engines on Apple Silicon. Zero dependencies.">
   <meta name="twitter:image" content="https://asiai.dev/assets/og-image.png?v=3">
   <meta name="twitter:creator" content="@jmn67">
