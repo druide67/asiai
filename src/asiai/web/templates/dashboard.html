@@ -21,14 +21,16 @@
 <!-- Last benchmark -->
 {% if last_bench and last_bench.engines %}
 <div class="mt-6 fade-in-delay-2">
-    <div class="card">
+    <div class="card card-accent">
         <h3 class="card-title">Last Benchmark</h3>
-        {% if last_bench.winner %}
-        <div style="margin-bottom: 1rem;">
-            <span class="text-green-400 font-bold">{{ last_bench.winner.name }}</span>
-            <span class="text-neutral-400 text-sm">{{ last_bench.winner.tok_s_delta }}</span>
+        {% if last_bench.winner and last_bench.engines.get(last_bench.winner.name) %}
+        {% set winner_data = last_bench.engines[last_bench.winner.name] %}
+        <div style="margin-bottom: 1.5rem;">
+            <div class="hero-number glow">{{ winner_data.avg_tok_s | format_number }}<span class="hero-unit">tok/s</span></div>
+            <div class="hero-subtitle"><span class="accent">{{ last_bench.winner.name }}</span> · {{ last_bench.winner.tok_s_delta }}</div>
         </div>
         {% endif %}
+        <div class="overflow-x-auto">
         <table class="results-table">
             <thead>
                 <tr>
@@ -61,6 +63,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 {% endif %}

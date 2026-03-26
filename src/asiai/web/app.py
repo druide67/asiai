@@ -33,9 +33,10 @@ def format_bytes_filter(n: int) -> str:
 
 def format_number_filter(n: float, decimals: int = 1) -> str:
     """Jinja2 filter: format number with fixed decimals."""
-    if n is None:
+    try:
+        return f"{float(n):.{decimals}f}"
+    except (TypeError, ValueError):
         return "—"
-    return f"{n:.{decimals}f}"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -84,8 +85,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src https://fonts.gstatic.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "font-src 'self'; "
             "connect-src 'self'; "
             "img-src 'self' data:; "
             "frame-ancestors 'none'"
