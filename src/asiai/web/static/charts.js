@@ -1,21 +1,25 @@
 /* asiai web dashboard — ApexCharts dark config and chart factories */
 
+/* Precision Instrument — Data Palette (cyan → blue → violet) */
 const COLORS = {
-    blue: '#3b82f6',
     cyan: '#06b6d4',
+    blue: '#3b82f6',
+    violet: '#8b5cf6',
+    purple: '#a855f7',
+    pink: '#ec4899',
     green: '#22c55e',
     yellow: '#eab308',
     red: '#ef4444',
-    purple: '#a855f7',
-    orange: '#f97316',
 };
 
 const ENGINE_COLORS = {
     ollama: COLORS.blue,
     lmstudio: COLORS.cyan,
-    mlxlm: COLORS.green,
-    llamacpp: COLORS.yellow,
-    vllm_mlx: COLORS.purple,
+    mlxlm: COLORS.violet,
+    llamacpp: COLORS.purple,
+    vllm_mlx: COLORS.pink,
+    exo: COLORS.green,
+    koboldcpp: COLORS.yellow,
 };
 
 function isLightTheme() {
@@ -27,8 +31,8 @@ function getChartTheme() {
     return {
         chart: {
             background: 'transparent',
-            foreColor: light ? '#525252' : '#a3a3a3',
-            fontFamily: 'Inter, system-ui, sans-serif',
+            foreColor: light ? '#52525b' : '#a1a1aa',
+            fontFamily: "'Geist Mono', 'SF Mono', ui-monospace, monospace",
             toolbar: { show: false },
             animations: {
                 enabled: true,
@@ -37,20 +41,21 @@ function getChartTheme() {
             },
         },
         grid: {
-            borderColor: light ? '#e5e5e5' : '#262626',
-            strokeDashArray: 4,
+            borderColor: light ? '#e4e4e7' : '#1c1c1f',
+            strokeDashArray: 3,
+            xaxis: { lines: { show: false } },
         },
         tooltip: {
             theme: light ? 'light' : 'dark',
-            style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' },
+            style: { fontFamily: "'Geist Mono', monospace", fontSize: '11px' },
         },
         xaxis: {
-            axisBorder: { color: light ? '#e5e5e5' : '#262626' },
-            axisTicks: { color: light ? '#e5e5e5' : '#262626' },
-            labels: { style: { colors: light ? '#525252' : '#737373', fontSize: '11px' } },
+            axisBorder: { color: light ? '#e4e4e7' : '#1c1c1f' },
+            axisTicks: { color: light ? '#e4e4e7' : '#1c1c1f' },
+            labels: { style: { colors: light ? '#52525b' : '#52525b', fontSize: '10px', fontFamily: "'Geist Mono', monospace" } },
         },
         yaxis: {
-            labels: { style: { colors: light ? '#525252' : '#737373', fontSize: '11px' } },
+            labels: { style: { colors: light ? '#52525b' : '#52525b', fontSize: '10px', fontFamily: "'Geist Mono', monospace" } },
         },
     };
 }

@@ -8,15 +8,18 @@
 </div>
 
 <!-- Quick Bench CTA -->
-<div class="card fade-in" style="margin-bottom: 1.5rem;">
-    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+<div class="card card-accent fade-in" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
         <button type="button" id="quick-bench-btn" class="btn btn-quick"
                 {% if bench_running %}disabled{% endif %}>
             &#9654; Quick Bench
         </button>
-        <span class="text-neutral-500 text-xs">
-            1 prompt &middot; 1 run &middot; ~15s &middot; shareable card
-        </span>
+        <div>
+            <div class="text-sm" style="color: var(--text-secondary); font-weight: 500;">One-click inference benchmark</div>
+            <span class="text-neutral-500 text-xs">
+                1 prompt &middot; 1 run &middot; ~15s &middot; shareable card
+            </span>
+        </div>
     </div>
     <p class="help-hint" style="margin-top: 0.75rem;">
         <a href="https://asiai.dev/commands/bench/" target="_blank" rel="noopener">Documentation</a>
@@ -195,6 +198,53 @@
     </div>
 </div>
 
+<!-- System summary -->
+<div class="card-grid mt-6 fade-in-delay-1" id="bench-system-info">
+    {% if snapshot %}
+    <div class="card">
+        <h3 class="card-title">System</h3>
+        <div class="metric-row">
+            <div>
+                <div class="metric-label">CPU</div>
+                <div class="metric-value text-sm">{{ snapshot.cpu_cores }} cores &middot; load {{ snapshot.cpu_load_1 | format_number }}</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">Memory</div>
+                <div class="metric-value text-sm">{{ snapshot.mem_used | format_bytes }} / {{ snapshot.mem_total | format_bytes }}</div>
+            </div>
+        </div>
+        {% if snapshot.gpu_utilization_pct is defined and snapshot.gpu_utilization_pct >= 0 %}
+        <div class="metric-row" style="margin-top: 0.5rem;">
+            <div>
+                <div class="metric-label">GPU</div>
+                <div class="metric-value text-sm">{{ snapshot.gpu_utilization_pct | format_number }}%</div>
+            </div>
+            <div class="text-right">
+                <div class="metric-label">GPU Memory</div>
+                <div class="metric-value text-sm">{{ snapshot.gpu_mem_in_use | format_bytes }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="card">
+        <h3 class="card-title">Engines</h3>
+        {% for engine in engines %}
+        <div class="metric-row" {% if not loop.first %}style="margin-top: 0.5rem;"{% endif %}>
+            <span>
+                <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
+                {{ engine.name }}
+                {% if engine.version %}<span class="text-neutral-500 text-xs">{{ engine.version }}</span>{% endif %}
+            </span>
+            <span class="text-neutral-500 text-xs">{{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}</span>
+        </div>
+        {% endfor %}
+        {% if not engines %}
+        <p class="text-neutral-400 text-sm">No engines detected</p>
+        {% endif %}
+    </div>
+</div>
+
 <!-- Results area -->
 <div id="bench-results" class="mt-6"></div>
 
@@ -221,6 +271,8 @@
     const quickBtn = document.getElementById('quick-bench-btn');
     const statusDiv = document.getElementById('bench-status');
     const resultsDiv = document.getElementById('bench-results');
+    var benchTokChart = null;
+    var benchTtftChart = null;
 
     /* Model: custom text toggle */
     var customToggle = document.getElementById('model-custom-toggle');
@@ -494,10 +546,13 @@
 
         document.getElementById('bench-charts-row').style.display = '';
 
-        createBarChart('bench-tok-chart', names, tokValues, {
+        if (benchTokChart) { benchTokChart.destroy(); benchTokChart = null; }
+        if (benchTtftChart) { benchTtftChart.destroy(); benchTtftChart = null; }
+
+        benchTokChart = createBarChart('bench-tok-chart', names, tokValues, {
             label: 'Throughput', unit: 'tok/s', height: 200,
         });
-        createBarChart('bench-ttft-chart', names, ttftValues, {
+        benchTtftChart = createBarChart('bench-ttft-chart', names, ttftValues, {
             label: 'TTFT', unit: 'ms', height: 200,
         });
     }
@@ -627,5 +682,13 @@
 
         section.appendChild(card);
     }
+
+    // Cleanup: destroy charts when leaving page
+    function cleanupBench() {
+        if (benchTokChart) { benchTokChart.destroy(); benchTokChart = null; }
+        if (benchTtftChart) { benchTtftChart.destroy(); benchTtftChart = null; }
+    }
+    window.addEventListener('pagehide', cleanupBench);
+    window.addEventListener('beforeunload', cleanupBench);
 </script>
 {% endblock %}

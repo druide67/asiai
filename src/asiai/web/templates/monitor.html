@@ -11,7 +11,7 @@
     <!-- CPU Load -->
     <div class="card">
         <h3 class="card-title">CPU Load</h3>
-        <div id="cpu-value" class="metric-value">{{ snapshot.cpu_load_1 | format_number if snapshot else '—' }}</div>
+        <div id="cpu-value" class="hero-number" style="font-size: 3rem;">{{ snapshot.cpu_load_1 | format_number if snapshot else '—' }}</div>
         <div class="metric-label">1-min average</div>
         <div id="cpu-sparkline" class="sparkline-container mt-4"></div>
     </div>
@@ -60,7 +60,7 @@
     <!-- GPU Activity Sparkline -->
     <div class="card">
         <h3 class="card-title">GPU Activity</h3>
-        <div id="gpu-value" class="metric-value">—</div>
+        <div id="gpu-value" class="hero-number" style="font-size: 2.5rem;">—</div>
         <div class="metric-label">utilization %</div>
         <div id="gpu-sparkline" class="sparkline-container mt-4"></div>
         <div class="metric-row mt-4">
@@ -80,7 +80,7 @@
         <h3 class="card-title">GPU Memory</h3>
         <div style="text-align: center; padding: 1rem 0;">
             <div class="metric-label">In Use</div>
-            <div id="gpu-mem-in-use" class="metric-value">—</div>
+            <div id="gpu-mem-in-use" class="hero-number" style="font-size: 2rem;">—</div>
             <div class="metric-label mt-4">Allocated</div>
             <div id="gpu-mem-allocated" class="metric-value text-sm">—</div>
         </div>
@@ -91,12 +91,22 @@
 <div class="card-grid mt-6 fade-in-delay-2">
     <div class="card">
         <h3 class="card-title">Uptime</h3>
-        <div id="uptime-value" class="metric-value">—</div>
+        <div id="uptime-value" class="hero-number" style="font-size: 2rem;"><span class="text-neutral-500" style="font-size: 1rem;">waiting...</span></div>
     </div>
     <div class="card">
         <h3 class="card-title">Memory Pressure</h3>
         <div id="pressure-badge" style="text-align: center; padding: 0.5rem 0;">
-            <span class="badge badge-gray">—</span>
+            {% if snapshot and snapshot.mem_pressure %}
+                {% if snapshot.mem_pressure == 'normal' %}
+                <span class="badge badge-green">normal</span>
+                {% elif snapshot.mem_pressure == 'warn' %}
+                <span class="badge badge-yellow">warn</span>
+                {% else %}
+                <span class="badge badge-red">{{ snapshot.mem_pressure }}</span>
+                {% endif %}
+            {% else %}
+            <span class="badge badge-gray">waiting...</span>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -105,7 +115,7 @@
 <div class="mt-6 fade-in-delay-3">
     <div class="card">
         <h3 class="card-title">Models Loaded</h3>
-        <div id="models-list" class="text-sm text-neutral-400">Loading...</div>
+        <div id="models-list" class="text-sm text-neutral-500">waiting for data...</div>
     </div>
 </div>
 {% endblock %}
@@ -189,16 +199,16 @@
         cpuHistory.push(data.cpu_load_1);
         if (cpuHistory.length > 60) cpuHistory.shift();
         if (cpuChart) {
-            cpuChart.updateSeries([{ data: cpuHistory }]);
+            cpuChart.updateSeries([{ data: cpuHistory }], false);
         } else if (cpuHistory.length >= 2) {
-            cpuChart = createSparkline('cpu-sparkline', cpuHistory, { color: '#3b82f6' });
+            cpuChart = createSparkline('cpu-sparkline', cpuHistory, { color: '#06b6d4' });
         }
 
         // Memory gauge
         if (data.mem_total > 0) {
             const memPct = Math.round((data.mem_used / data.mem_total) * 100);
             if (memGauge) {
-                memGauge.updateSeries([memPct]);
+                memGauge.updateSeries([memPct], false);
             }
         }
 
@@ -240,14 +250,14 @@
             gpuHistory.push(gpuPct);
             if (gpuHistory.length > 60) gpuHistory.shift();
             if (gpuChart) {
-                gpuChart.updateSeries([{ data: gpuHistory }]);
+                gpuChart.updateSeries([{ data: gpuHistory }], false);
             } else if (gpuHistory.length >= 2) {
-                gpuChart = createSparkline('gpu-sparkline', gpuHistory, { color: '#22c55e' });
+                gpuChart = createSparkline('gpu-sparkline', gpuHistory, { color: '#8b5cf6' });
             }
 
             // GPU gauge
             if (gpuGauge) {
-                gpuGauge.updateSeries([Math.round(gpuPct)]);
+                gpuGauge.updateSeries([Math.round(gpuPct)], false);
             } else {
                 gpuGauge = createGauge('gpu-gauge', gpuPct, { label: 'GPU' });
             }
@@ -269,5 +279,16 @@
     evtSource.onerror = function() {
         console.warn('Monitor SSE connection lost, will retry...');
     };
+
+    // Cleanup: destroy charts and close SSE when leaving page
+    function cleanupMonitor() {
+        if (evtSource) { evtSource.close(); }
+        if (cpuChart) { cpuChart.destroy(); cpuChart = null; }
+        if (memGauge) { memGauge.destroy(); memGauge = null; }
+        if (gpuGauge) { gpuGauge.destroy(); gpuGauge = null; }
+        if (gpuChart) { gpuChart.destroy(); gpuChart = null; }
+    }
+    window.addEventListener('pagehide', cleanupMonitor);
+    window.addEventListener('beforeunload', cleanupMonitor);
 </script>
 {% endblock %}

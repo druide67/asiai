@@ -9,13 +9,13 @@
 
 <!-- Filters -->
 <div class="filter-bar fade-in">
-    <span class="text-xs text-neutral-500" style="margin-right: 0.5rem;">Time range:</span>
+    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Time range:</span>
     <button class="filter-chip" data-hours="1" onclick="setTimeRange(1, this)">1h</button>
     <button class="filter-chip" data-hours="24" onclick="setTimeRange(24, this)">24h</button>
     <button class="filter-chip active" data-hours="168" onclick="setTimeRange(168, this)">7d</button>
     <button class="filter-chip" data-hours="720" onclick="setTimeRange(720, this)">30d</button>
     <button class="filter-chip" data-hours="2160" onclick="setTimeRange(2160, this)">90d</button>
-    <span class="text-xs text-neutral-500" style="margin-left: 1rem; margin-right: 0.5rem;">Custom:</span>
+    <span class="text-xs text-neutral-500 filter-label" style="margin-left: 1rem; margin-right: 0.5rem;">Custom:</span>
     <input type="datetime-local" id="range-from" class="range-input" title="From">
     <span class="text-xs text-neutral-500">—</span>
     <input type="datetime-local" id="range-to" class="range-input" title="To">
@@ -25,7 +25,7 @@
 <!-- System Metrics -->
 <div id="system-charts-section" class="fade-in-delay-1">
     <h3 style="margin-bottom: 0.75rem; color: var(--text-secondary);">System Metrics</h3>
-    <div class="card-grid">
+    <div class="card-grid-3">
         <div class="card">
             <h3 class="card-title">CPU Load</h3>
             <div id="sys-cpu-chart" style="min-height: 200px;"></div>
@@ -45,9 +45,9 @@
 </div>
 
 <!-- Engine Activity -->
-<div id="engine-activity-section" class="fade-in-delay-2" style="display: none;">
+<div id="engine-activity-section" class="mt-6 fade-in-delay-2" style="display: none;">
     <h3 style="margin-bottom: 0.75rem; color: var(--text-secondary);">Engine Activity</h3>
-    <div class="card-grid">
+    <div class="card-grid-2">
         <div class="card">
             <h3 class="card-title">Connections &amp; Requests</h3>
             <div id="engine-conn-chart" style="min-height: 200px;"></div>
@@ -55,12 +55,13 @@
         <div class="card">
             <h3 class="card-title">KV Cache Usage %</h3>
             <div id="engine-kv-chart" style="min-height: 200px;"></div>
+            <div id="engine-kv-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 2rem 0;">No KV cache data</div>
         </div>
     </div>
 </div>
 
 <!-- Charts -->
-<div class="card-grid-2 fade-in-delay-2">
+<div class="card-grid-2 mt-6 fade-in-delay-2">
     <div class="card">
         <h3 class="card-title">Throughput (tok/s)</h3>
         <div id="history-tok-chart" style="min-height: 300px;"></div>
@@ -74,7 +75,7 @@
 </div>
 
 <!-- Process Metrics -->
-<div id="process-metrics-section" class="fade-in-delay-2" style="display: none;">
+<div id="process-metrics-section" class="mt-6 fade-in-delay-2" style="display: none;">
     <h3 style="margin-bottom: 0.75rem; color: var(--text-secondary);">Process Metrics (Benchmark Runs)</h3>
     <div class="card-grid">
         <div class="card">
@@ -495,6 +496,18 @@
             });
         }
     }
+
+    // Cleanup: destroy all charts when leaving page
+    function cleanupHistory() {
+        [tokChart, ttftChart, sysCpuChart, sysMemChart, sysGpuChart,
+         engineConnChart, engineKvChart, procCpuChart, procRssChart].forEach(function(c) {
+            if (c) { c.destroy(); }
+        });
+        tokChart = ttftChart = sysCpuChart = sysMemChart = sysGpuChart = null;
+        engineConnChart = engineKvChart = procCpuChart = procRssChart = null;
+    }
+    window.addEventListener('pagehide', cleanupHistory);
+    window.addEventListener('beforeunload', cleanupHistory);
 
     // Initial load
     loadData();

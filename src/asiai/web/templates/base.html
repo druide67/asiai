@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}asiai — Apple Silicon AI bench{% endblock %}</title>
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Fonts: Geist (Vercel) — self-hosted, no CDN dependency -->
+    <style>
+    @font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('/static/fonts/Geist-Regular.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('/static/fonts/Geist-Medium.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('/static/fonts/Geist-SemiBold.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('/static/fonts/Geist-Bold.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('/static/fonts/GeistMono-Regular.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('/static/fonts/GeistMono-Medium.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('/static/fonts/GeistMono-Bold.woff2') format('woff2'); }
+    </style>
 
     <!-- htmx (local vendor, no CDN dependency) -->
     <script src="/static/vendor/htmx-2.0.4.min.js"></script>
@@ -20,7 +26,7 @@
     <script src="/static/vendor/apexcharts-3.54.1.min.js"></script>
 
     <!-- asiai styles & charts -->
-    <link rel="stylesheet" href="/static/style.css?v=1.0.1">
+    <link rel="stylesheet" href="/static/style.css?v=2.0.0">
     <script src="/static/charts.js"></script>
 </head>
 <body>
@@ -34,31 +40,31 @@
             <ul class="sidebar-nav">
                 <li>
                     <a href="/" class="{% if nav_active == 'dashboard' %}active{% endif %}">
-                        <span class="nav-icon">&#9632;</span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor"/><rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.5"/><rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.5"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/></svg></span>
                         <span>Dashboard</span>
                     </a>
                 </li>
                 <li>
                     <a href="/monitor" class="{% if nav_active == 'monitor' %}active{% endif %}">
-                        <span class="nav-icon">&#9679;</span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg></span>
                         <span>Monitor</span>
                     </a>
                 </li>
                 <li>
                     <a href="/bench" class="{% if nav_active == 'bench' %}active{% endif %}">
-                        <span class="nav-icon">&#9654;</span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 13V7M8 13V3M12 13V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                         <span>Benchmark</span>
                     </a>
                 </li>
                 <li>
                     <a href="/history" class="{% if nav_active == 'history' %}active{% endif %}">
-                        <span class="nav-icon">&#9776;</span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12L5.5 7L8.5 9.5L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         <span>History</span>
                     </a>
                 </li>
                 <li>
                     <a href="/doctor" class="{% if nav_active == 'doctor' %}active{% endif %}">
-                        <span class="nav-icon">&#10010;</span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                         <span>Doctor</span>
                     </a>
                 </li>
@@ -103,6 +109,32 @@
         document.documentElement.setAttribute('data-theme', saved);
         updateThemeButton(saved);
     })();
+    </script>
+
+    <script>
+    /* Precision Instrument — counter animation for hero numbers */
+    function animateCounter(el, target, duration) {
+        if (!el || isNaN(target)) return;
+        var start = 0;
+        var startTime = null;
+        var decimals = String(target).includes('.') ? String(target).split('.')[1].length : 0;
+        function step(ts) {
+            if (!startTime) startTime = ts;
+            var progress = Math.min((ts - startTime) / duration, 1);
+            var eased = 1 - Math.pow(1 - progress, 3); /* easeOutCubic */
+            var current = start + (target - start) * eased;
+            el.textContent = current.toFixed(decimals);
+            if (progress < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+    }
+    /* Auto-animate hero numbers on load */
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.hero-number[data-animate]').forEach(function(el) {
+            var val = parseFloat(el.textContent);
+            if (!isNaN(val)) animateCounter(el, val, 800);
+        });
+    });
     </script>
 
     {% block scripts %}{% endblock %}
