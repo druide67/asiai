@@ -228,18 +228,20 @@ class TestListRunningVram:
         assert models[0].name == "mlx-community/gemma-2-9b-8bit"
         assert models[0].size_vram == 9837652042
 
-    def test_no_lms_keeps_zero_vram(self):
+    def test_no_lms_falls_back_to_footprint(self):
+        """When lms CLI has no VRAM, openai_compat enriches with process footprint."""
         engine = LMStudioEngine("http://localhost:1234")
         api_response = {"data": [{"id": "mlx-community/gemma-2-9b-8bit"}]}
 
         with (
             patch("asiai.engines.openai_compat.http_get_json", return_value=(api_response, {})),
             patch.object(engine, "_get_vram_from_lms", return_value={}),
+            patch("asiai.collectors.system.collect_engine_processes", return_value=[]),
         ):
             models = engine.list_running()
 
         assert len(models) == 1
-        assert models[0].size_vram == 0
+        assert models[0].size_vram == 0  # No process found = stays 0
 
     def test_no_models_skips_lms(self):
         engine = LMStudioEngine("http://localhost:1234")
