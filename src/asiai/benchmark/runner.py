@@ -89,6 +89,7 @@ def run_benchmark(
     context_size: int = 0,
     *,
     slots: list[BenchmarkSlot] | None = None,
+    progress_cb: object | None = None,
 ) -> BenchmarkRun:
     """Run benchmarks across engines for a given model, or across arbitrary slots.
 
