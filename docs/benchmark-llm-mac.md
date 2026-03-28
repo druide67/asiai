@@ -61,15 +61,17 @@ Mac16,11 — Apple M4 Pro  RAM: 64.0 GB  Pressure: normal
 Benchmark: qwen3-coder-30b
 
   Engine        tok/s   Tokens Duration     TTFT       VRAM    Thermal
-  lmstudio      102.2      537    7.00s    0.26s    24.2 GB    nominal
-  ollama         69.8      512   17.33s    0.23s    32.0 GB    nominal
+  lmstudio      102.2      537    7.00s    0.29s    24.2 GB    nominal
+  ollama         69.8      512   17.33s    0.18s    32.0 GB    nominal
 
-  Winner: lmstudio (2.6x faster, -24% VRAM)
+  Winner: lmstudio (+46% tok/s)
 
   Power Efficiency
     lmstudio     102.2 tok/s @ 12.4W = 8.23 tok/s/W
     ollama        69.8 tok/s @ 15.4W = 4.53 tok/s/W
 ```
+
+*Example output from a real benchmark on M4 Pro 64GB. Your numbers will vary by hardware and model. [See more results →](ollama-vs-lmstudio.md)*
 
 ## Advanced Options
 
