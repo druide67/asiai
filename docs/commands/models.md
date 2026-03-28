@@ -20,4 +20,4 @@ lmstudio  v0.4.6  http://localhost:1234
 
 Shows engine version, model name, VRAM usage (when available), format, and quantization level for each engine.
 
-VRAM reporting is supported by Ollama and LM Studio. Other engines show "—".
+VRAM is reported natively by Ollama and LM Studio. For other engines, asiai estimates memory usage via `ri_phys_footprint` (the macOS physical footprint, same as Activity Monitor). Estimated values are labeled "(est.)".

@@ -82,8 +82,10 @@ Apple Silicon shares memory between CPU and GPU. Two key implications:
 
 1. **Never benchmark two engines simultaneously** — they compete for the same memory pool.
    `asiai bench` runs engines sequentially by design.
-2. **VRAM reporting** — Ollama and LM Studio report `size_vram` (GPU-mapped portion). Other
-   OpenAI-compatible engines don't expose this. We show "—" rather than misleading values.
+2. **VRAM reporting** — Ollama and LM Studio report `size_vram` natively. For other engines
+   (llama.cpp, mlx-lm, oMLX, vLLM-MLX, Exo), asiai uses `ri_phys_footprint` via libproc as a
+   fallback estimate. This is what Activity Monitor displays and includes Metal/GPU allocations.
+   Estimated values are labeled "(est.)" in the UI.
 
 ### Thermal Throttling
 

@@ -312,7 +312,7 @@ Every shared card includes asiai branding — the [Speedtest.net model](https://
 | **Power** | GPU, CPU, ANE, DRAM power in watts (IOReport, no sudo) |
 | **tok/s/W** | Energy efficiency — tokens per second per watt |
 | **Stability** | Run-to-run variance: stable (CV<5%), variable (<10%), unstable (>10%) |
-| **VRAM** | GPU memory footprint (Ollama, LM Studio via `lms` CLI) |
+| **VRAM** | Memory footprint — native API (Ollama, LM Studio) or `ri_phys_footprint` estimate (all other engines) |
 | **Thermal** | CPU throttling state and speed limit percentage |
 
 All metrics stored in SQLite (`~/.local/share/asiai/metrics.db`) with 90-day retention and automatic regression detection.
@@ -404,7 +404,9 @@ Optional extras:
 | **v0.7** | Alert webhooks, LM Studio VRAM, Ollama config in doctor | **Done** |
 | **v1.0** | Community Benchmark DB, smart recommendations, Exo engine, leaderboard | **Done** |
 | **v1.0.1** | MCP server (11 tools), benchmark card, `--quick` mode, setup wizard, agent integration | **Done** |
-| v1.1 | Fleet mode (multi-Mac), notifications macOS, MCP prompts, VRAM predictor | Planned |
+| **v1.2** | Web dashboard redesign, shareable cards, Share on X/Reddit, community API | **Done** |
+| **v1.3** | Dark theme, self-hosted fonts, universal VRAM (phys_footprint), power in Monitor/History | **Done** |
+| v1.4 | Fleet mode (multi-Mac), notifications macOS, MCP prompts, bench methodology improvements | Planned |
 
 ## License
 

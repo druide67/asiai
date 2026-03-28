@@ -66,7 +66,7 @@ Benchmark: qwen3.5
 | **Power** | GPU power draw in watts (`sudo powermetrics`) |
 | **tok/s/W** | Energy efficiency — tokens per second per watt |
 | **Stability** | Run-to-run variance: stable (<5%), variable (<10%), unstable (>10%) |
-| **VRAM** | GPU memory footprint (Ollama, LM Studio) |
+| **VRAM** | Memory footprint — native (Ollama, LM Studio) or estimated via `ri_phys_footprint` (all engines) |
 | **Thermal** | CPU throttling state and speed limit percentage |
 
 ## Supported engines

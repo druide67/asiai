@@ -38,7 +38,7 @@ asiai bench -m qwen3.5 --runs 3 --power
 | **Power** | Consumo de GPU em watts (`sudo powermetrics`) |
 | **tok/s/W** | Eficiência energética — tokens por segundo por watt |
 | **Stability** | Variância entre execuções: estável (<5%), variável (<10%), instável (>10%) |
-| **VRAM** | Footprint de memória GPU (Ollama, LM Studio) |
+| **VRAM** | Footprint de memória — nativo (Ollama, LM Studio) ou estimado via `ri_phys_footprint` (todos os motores) |
 | **Thermal** | Estado de throttling da CPU e percentual de limitação |
 
 ## Motores suportados
