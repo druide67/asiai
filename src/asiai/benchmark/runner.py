@@ -203,6 +203,7 @@ def run_benchmark(
             logger.debug("load_time failed for %s: %s", engine.name, e)
 
         # Re-read VRAM after load (model may have been auto-loaded by measure_load_time)
+        vram_estimated = False
         if vram_bytes == 0:
             try:
                 for m in engine.list_running():
@@ -211,6 +212,21 @@ def run_benchmark(
                         break
             except Exception as e:
                 logger.debug("VRAM re-read failed for %s: %s", engine.name, e)
+
+        # Fallback: use process physical footprint as VRAM estimate
+        if vram_bytes == 0:
+            from asiai.collectors.system import collect_engine_processes
+
+            procs = collect_engine_processes()
+            engine_proc = next((p for p in procs if p.name == engine.name), None)
+            if engine_proc and engine_proc.rss_bytes > 0:
+                vram_bytes = engine_proc.rss_bytes
+                vram_estimated = True
+                logger.info(
+                    "VRAM fallback for %s: %d bytes (physical footprint)",
+                    engine.name,
+                    vram_bytes,
+                )
 
         # Warmup: one short non-timed generation to prime JIT/caches
         logger.info("Warmup run for %s on %s", engine_model, engine.name)
@@ -380,6 +396,7 @@ def _run_single(
             "total_duration_ms": gen.total_duration_ms,
             "generation_duration_ms": gen.generation_duration_ms,
             "vram_bytes": vram_bytes,
+            "vram_estimated": vram_estimated,
             "mem_used": mem.used,
             "thermal_level": thermal.level,
             "thermal_speed_limit": thermal.speed_limit,

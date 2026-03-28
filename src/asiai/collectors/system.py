@@ -298,7 +298,37 @@ class ProcessInfo:
     name: str = ""
     cpu_pct: float = 0.0
     mem_pct: float = 0.0
-    rss_bytes: int = 0
+    rss_bytes: int = 0  # physical footprint (includes Metal/GPU), fallback to RSS
+
+
+# ---------------------------------------------------------------------------
+# Physical footprint via libproc (what Activity Monitor shows)
+# More accurate than RSS: includes Metal/GPU allocations that are resident.
+# ---------------------------------------------------------------------------
+
+def _get_phys_footprint(pid: int) -> int:
+    """Get physical footprint (bytes) for a process via proc_pid_rusage.
+
+    Uses RUSAGE_INFO_V6.  ri_phys_footprint is at byte offset 72.
+    Returns 0 on failure (wrong PID, permission denied, non-macOS).
+    """
+    try:
+        import ctypes
+        import ctypes.util
+
+        lib = ctypes.util.find_library("proc")
+        if not lib:
+            return 0
+        libproc = ctypes.CDLL(lib)
+        buf = (ctypes.c_uint8 * 512)()
+        ret = libproc.proc_pid_rusage(pid, 6, ctypes.byref(buf))
+        if ret != 0:
+            return 0
+        import struct
+
+        return struct.unpack_from("<Q", buf, 72)[0]
+    except Exception:
+        return 0
 
 
 # Process name patterns for inference engines
@@ -306,7 +336,7 @@ _ENGINE_PATTERNS = ["ollama", "LM Studio", "lmstudio", "mlx_lm", "llama-server",
 
 
 def collect_engine_processes() -> list[ProcessInfo]:
-    """Collect CPU% and MEM% for inference engine processes via ps."""
+    """Collect CPU%, MEM%, and physical footprint for inference engine processes."""
     try:
         out = subprocess.run(
             ["ps", "aux"],
@@ -343,7 +373,10 @@ def collect_engine_processes() -> list[ProcessInfo]:
                     totals[key] = ProcessInfo(name=key)
                 totals[key].cpu_pct += float(cols[2].replace(",", "."))
                 totals[key].mem_pct += float(cols[3].replace(",", "."))
-                totals[key].rss_bytes += int(cols[5]) * 1024  # RSS in KB
+                # Prefer phys_footprint (includes Metal/GPU), fallback to RSS
+                pid = int(cols[1])
+                phys = _get_phys_footprint(pid)
+                totals[key].rss_bytes += phys if phys > 0 else int(cols[5]) * 1024
                 break
 
     return list(totals.values())
