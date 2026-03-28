@@ -302,6 +302,7 @@ def run_benchmark(
                     context_size=context_size,
                     gpu_cores=gpu_cores,
                     ram_gb=ram_gb,
+                    vram_estimated=vram_estimated,
                 )
 
         # Stop per-engine power monitoring and annotate this engine's results
@@ -397,6 +398,7 @@ def _run_single(
     context_size: int = 0,
     gpu_cores: int = 0,
     ram_gb: int = 0,
+    vram_estimated: bool = False,
 ) -> None:
     """Run a single engine+prompt benchmark and append to run."""
     mem = collect_memory()
