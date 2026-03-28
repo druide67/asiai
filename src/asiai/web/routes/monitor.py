@@ -68,6 +68,12 @@ async def monitor_stream(request: Request) -> Response:
                         "gpu_tiler_pct": snapshot.get("gpu_tiler_pct", -1),
                         "gpu_mem_in_use": snapshot.get("gpu_mem_in_use", 0),
                         "gpu_mem_allocated": snapshot.get("gpu_mem_allocated", 0),
+                        "power_gpu_watts": snapshot.get("power_gpu_watts", -1),
+                        "power_cpu_watts": snapshot.get("power_cpu_watts", -1),
+                        "power_ane_watts": snapshot.get("power_ane_watts", -1),
+                        "power_dram_watts": snapshot.get("power_dram_watts", -1),
+                        "power_total_watts": snapshot.get("power_total_watts", -1),
+                        "power_source": snapshot.get("power_source", ""),
                         "ts": int(time.time()),
                     }
                 )

@@ -52,6 +52,9 @@ async def api_history(
                 "gpu_tiler_pct": r.get("gpu_tiler_pct", -1),
                 "gpu_mem_in_use": r.get("gpu_mem_in_use", 0),
                 "gpu_mem_allocated": r.get("gpu_mem_allocated", 0),
+                "power_gpu_watts": r.get("power_gpu_watts", -1),
+                "power_cpu_watts": r.get("power_cpu_watts", -1),
+                "power_total_watts": r.get("power_total_watts", -1),
             }
             for r in rows
         ]

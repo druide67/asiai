@@ -87,6 +87,42 @@
     </div>
 </div>
 
+<!-- Power -->
+<div id="power-row" class="card-grid mt-6 fade-in-delay-2" style="display: none;">
+    <div class="card">
+        <h3 class="card-title">Total Power</h3>
+        <div id="power-total" class="hero-number" style="font-size: 2.5rem;">—</div>
+        <div class="metric-label">watts</div>
+        <div id="power-sparkline" class="sparkline-container mt-4"></div>
+    </div>
+    <div class="card">
+        <h3 class="card-title">Power Breakdown</h3>
+        <div style="padding: 0.5rem 0;">
+            <div class="metric-row">
+                <div>
+                    <div class="metric-label">GPU</div>
+                    <div id="power-gpu" class="metric-value">—</div>
+                </div>
+                <div class="text-right">
+                    <div class="metric-label">CPU</div>
+                    <div id="power-cpu" class="metric-value">—</div>
+                </div>
+            </div>
+            <div class="metric-row mt-4">
+                <div>
+                    <div class="metric-label">ANE</div>
+                    <div id="power-ane" class="metric-value">—</div>
+                </div>
+                <div class="text-right">
+                    <div class="metric-label">DRAM</div>
+                    <div id="power-dram" class="metric-value">—</div>
+                </div>
+            </div>
+        </div>
+        <div id="power-source" class="metric-label mt-4" style="text-align: center;"></div>
+    </div>
+</div>
+
 <!-- Uptime + Pressure -->
 <div class="card-grid mt-6 fade-in-delay-2">
     <div class="card">
@@ -124,10 +160,12 @@
 <script>
     const cpuHistory = [];
     const gpuHistory = [];
+    const powerHistory = [];
     let cpuChart = null;
     let memGauge = null;
     let gpuGauge = null;
     let gpuChart = null;
+    let powerChart = null;
 
     // Initial gauge
     {% if snapshot and snapshot.mem_total > 0 %}
@@ -274,6 +312,35 @@
         } else {
             gpuRow.style.display = 'none';
         }
+
+        // Power
+        var powerTotal = data.power_total_watts;
+        var powerRow = document.getElementById('power-row');
+        if (powerTotal >= 0) {
+            powerRow.style.display = '';
+
+            document.getElementById('power-total').textContent = powerTotal.toFixed(1);
+            document.getElementById('power-gpu').textContent =
+                data.power_gpu_watts >= 0 ? data.power_gpu_watts.toFixed(1) + ' W' : '—';
+            document.getElementById('power-cpu').textContent =
+                data.power_cpu_watts >= 0 ? data.power_cpu_watts.toFixed(1) + ' W' : '—';
+            document.getElementById('power-ane').textContent =
+                data.power_ane_watts >= 0 ? data.power_ane_watts.toFixed(2) + ' W' : '—';
+            document.getElementById('power-dram').textContent =
+                data.power_dram_watts >= 0 ? data.power_dram_watts.toFixed(1) + ' W' : '—';
+            document.getElementById('power-source').textContent =
+                data.power_source ? data.power_source + ' · no sudo' : '';
+
+            powerHistory.push(powerTotal);
+            if (powerHistory.length > 60) powerHistory.shift();
+            if (powerChart) {
+                powerChart.updateSeries([{ data: powerHistory }], false);
+            } else if (powerHistory.length >= 2) {
+                powerChart = createSparkline('power-sparkline', powerHistory, { color: '#f59e0b' });
+            }
+        } else {
+            powerRow.style.display = 'none';
+        }
     };
 
     evtSource.onerror = function() {
@@ -287,6 +354,7 @@
         if (memGauge) { memGauge.destroy(); memGauge = null; }
         if (gpuGauge) { gpuGauge.destroy(); gpuGauge = null; }
         if (gpuChart) { gpuChart.destroy(); gpuChart = null; }
+        if (powerChart) { powerChart.destroy(); powerChart = null; }
     }
     window.addEventListener('pagehide', cleanupMonitor);
     window.addEventListener('beforeunload', cleanupMonitor);

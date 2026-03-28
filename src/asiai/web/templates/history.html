@@ -42,6 +42,16 @@
             <div id="sys-gpu-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 2rem 0;">No GPU data</div>
         </div>
     </div>
+    <div class="card-grid-2 mt-4" id="sys-power-row" style="display: none;">
+        <div class="card">
+            <h3 class="card-title">Total Power (W)</h3>
+            <div id="sys-power-total-chart" style="min-height: 200px;"></div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">GPU vs CPU Power (W)</h3>
+            <div id="sys-power-breakdown-chart" style="min-height: 200px;"></div>
+        </div>
+    </div>
 </div>
 
 <!-- Engine Activity -->
@@ -127,6 +137,8 @@
     var sysCpuChart = null;
     var sysMemChart = null;
     var sysGpuChart = null;
+    var sysPowerTotalChart = null;
+    var sysPowerBreakdownChart = null;
     var engineConnChart = null;
     var engineKvChart = null;
     var procCpuChart = null;
@@ -281,6 +293,47 @@
                 { height: 200, yTitle: '%', yFormatter: function(v) { return v.toFixed(0) + '%'; } });
         } else {
             gpuCard.style.display = 'none';
+        }
+
+        // Power charts
+        if (sysPowerTotalChart) { sysPowerTotalChart.destroy(); sysPowerTotalChart = null; }
+        if (sysPowerBreakdownChart) { sysPowerBreakdownChart.destroy(); sysPowerBreakdownChart = null; }
+
+        var powerTotalData = [];
+        var powerGpuData = [];
+        var powerCpuData = [];
+
+        rows.forEach(function(r) {
+            var tsMs = r.ts * 1000;
+            if (r.power_total_watts >= 0) {
+                powerTotalData.push([tsMs, r.power_total_watts]);
+            }
+            if (r.power_gpu_watts >= 0) {
+                powerGpuData.push([tsMs, r.power_gpu_watts]);
+            }
+            if (r.power_cpu_watts >= 0) {
+                powerCpuData.push([tsMs, r.power_cpu_watts]);
+            }
+        });
+
+        var powerRow = document.getElementById('sys-power-row');
+        if (powerTotalData.length > 0) {
+            powerRow.style.display = '';
+            sysPowerTotalChart = createTimeChart('sys-power-total-chart',
+                [{ name: 'Total Power', data: powerTotalData }],
+                { height: 200, yTitle: 'W', colors: ['#f59e0b'],
+                  yFormatter: function(v) { return v.toFixed(1) + ' W'; } });
+            if (powerGpuData.length > 0 || powerCpuData.length > 0) {
+                var breakdownSeries = [];
+                if (powerGpuData.length > 0) breakdownSeries.push({ name: 'GPU', data: powerGpuData });
+                if (powerCpuData.length > 0) breakdownSeries.push({ name: 'CPU', data: powerCpuData });
+                sysPowerBreakdownChart = createTimeChart('sys-power-breakdown-chart',
+                    breakdownSeries,
+                    { height: 200, yTitle: 'W', colors: ['#8b5cf6', '#06b6d4'],
+                      yFormatter: function(v) { return v.toFixed(1) + ' W'; } });
+            }
+        } else {
+            powerRow.style.display = 'none';
         }
     }
 
