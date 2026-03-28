@@ -58,6 +58,8 @@ nav:
       - oMLX: engines/omlx.md
       - vllm-mlx: engines/vllm-mlx.md
       - Exo: engines/exo.md
+  - Ollama vs LM Studio: ollama-vs-lmstudio.md
+  - How to Benchmark LLMs on Mac: benchmark-llm-mac.md
   - Benchmark Card: benchmark-card.md
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md
