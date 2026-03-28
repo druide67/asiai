@@ -31,7 +31,7 @@
                         <span class="status-dot green"></span>{{ m.engine }}
                     </td>
                     <td class="text-right">
-                        {{ m.size_vram | format_bytes }}
+                        {{ m.size_vram | format_bytes }}{% if m.size_vram > 0 and m.engine not in ['ollama', 'lmstudio'] %} <span class="text-neutral-500 text-xs">(est.)</span>{% endif %}
                         {% if m.size_total > 0 %}
                         <div class="progress-bar" style="width: 80px; display: inline-block; vertical-align: middle; margin-left: 0.5rem;">
                             {% set vram_pct = (m.size_vram / m.size_total * 100) | int if m.size_total > 0 else 0 %}

@@ -319,7 +319,11 @@ def generate_card_svg(
         if bar["stability"]:
             chips.append((bar["stability"], "stability"))
         if bar["vram_bytes"] > 0:
-            chips.append((_format_vram(bar["vram_bytes"]), "vram"))
+            native_vram_engines = {"ollama", "lmstudio"}
+            vram_label = _format_vram(bar["vram_bytes"])
+            if bar.get("engine", "") not in native_vram_engines:
+                vram_label += " (est.)"
+            chips.append((vram_label, "vram"))
         # Power per engine [Change #8]
         eng_key = bar.get("engine", bar["name"])
         if power_data and eng_key in power_data:

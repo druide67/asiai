@@ -522,7 +522,12 @@
 
             var tdVram = document.createElement('td');
             tdVram.className = 'text-right font-mono';
-            tdVram.textContent = formatBytes(e.vram);
+            var vramText = formatBytes(e.vram);
+            var nativeVramEngines = ['ollama', 'lmstudio'];
+            if (e.vram > 0 && nativeVramEngines.indexOf(name) === -1) {
+                vramText += ' (est.)';
+            }
+            tdVram.textContent = vramText;
             tr.appendChild(tdVram);
 
             tbody.appendChild(tr);

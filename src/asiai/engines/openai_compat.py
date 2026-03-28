@@ -46,6 +46,20 @@ class OpenAICompatEngine(InferenceEngine):
                     format=self._model_format,
                 )
             )
+        # Enrich with process footprint when engine doesn't report VRAM
+        if models and all(m.size_vram == 0 for m in models):
+            try:
+                from asiai.collectors.system import collect_engine_processes
+
+                procs = collect_engine_processes()
+                engine_proc = next((p for p in procs if p.name == self.name), None)
+                if engine_proc and engine_proc.rss_bytes > 0:
+                    # Divide evenly if multiple models (rough estimate)
+                    per_model = engine_proc.rss_bytes // len(models)
+                    for m in models:
+                        m.size_vram = per_model
+            except Exception:
+                pass
         return models
 
     def list_available(self) -> list[ModelInfo]:
