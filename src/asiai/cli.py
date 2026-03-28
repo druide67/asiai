@@ -595,6 +595,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             power=power,
             context_size=context_size,
             slots=bench_slots,
+            progress_cb=lambda msg: print(f"  {msg}"),
         )
     else:
         # --- Legacy engine comparison mode ---
@@ -628,6 +629,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             runs=runs,
             power=power,
             context_size=context_size,
+            progress_cb=lambda msg: print(f"  {msg}"),
         )
 
     # Store results

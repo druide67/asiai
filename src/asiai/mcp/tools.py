@@ -357,6 +357,7 @@ async def run_benchmark(
             power=False,
             context_size=ctx_size,
             slots=slots,
+            progress_cb=lambda msg: logger.info("bench: %s", msg),
         )
     else:
         # Legacy engine comparison mode
@@ -375,6 +376,7 @@ async def run_benchmark(
             runs=runs,
             power=False,
             context_size=ctx_size,
+            progress_cb=lambda msg: logger.info("bench: %s", msg),
         )
 
     app_ctx.last_bench_ts = time.time()

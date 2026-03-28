@@ -188,7 +188,9 @@ def run_benchmark(
         if prev_engine is not None and prev_engine != engine:
             if progress_cb:
                 progress_cb(f"Unloading model from {prev_engine.name}...")
-            prev_engine.unload_model(prev_model)
+            unloaded = prev_engine.unload_model(prev_model)
+            if not unloaded:
+                logger.info("Engine %s does not support model unloading", prev_engine.name)
             # Adaptive cooldown: wait for memory pressure to normalize (max 30s)
             waited = 0
             while waited < 30:

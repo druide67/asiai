@@ -243,6 +243,7 @@ def _run_benchmark_thread(
                 power=power,
                 context_size=context_size,
                 slots=slots,
+                progress_cb=lambda msg: state.update_bench(progress=msg),
             )
         else:
             # Standard mode: single model across engines
@@ -267,6 +268,7 @@ def _run_benchmark_thread(
                 runs=runs,
                 power=power,
                 context_size=context_size,
+                progress_cb=lambda msg: state.update_bench(progress=msg),
             )
 
         # Store results
