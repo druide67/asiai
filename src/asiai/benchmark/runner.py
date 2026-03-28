@@ -160,8 +160,21 @@ def run_benchmark(
         else:
             test_monitor.stop()
 
+    # Gate check: refuse to start if system is in bad shape
+    pre_mem = collect_memory()
+    pre_thermal = collect_thermal()
+    if pre_mem.pressure == "critical":
+        run.errors.append("Memory pressure critical — free memory before benchmarking")
+        return run
+    if pre_thermal.speed_limit > 0 and pre_thermal.speed_limit < 80:
+        logger.warning(
+            "System throttled to %d%% at benchmark start — results may be degraded",
+            pre_thermal.speed_limit,
+        )
+
     slots_run = 0
     prev_model = ""
+    prev_engine = None
     for slot in slots:
         engine = slot.engine
         slot_model = slot.model
@@ -170,12 +183,25 @@ def run_benchmark(
             run.errors.append(f"{engine.name}: not reachable")
             continue
 
-        # Cooldown between slots to stabilize thermals
-        # 5s if model changes (heavier thermal impact from load), 3s otherwise
-        if slots_run > 0:
-            cooldown = 5 if slot_model != prev_model else 3
-            logger.info("Cooldown %ds between slots", cooldown)
-            time.sleep(cooldown)
+        # Unload previous engine's model to free memory
+        if prev_engine is not None and prev_engine != engine:
+            if progress_cb:
+                progress_cb(f"Unloading model from {prev_engine.name}...")
+            prev_engine.unload_model(prev_model)
+            # Adaptive cooldown: wait for memory pressure to normalize (max 30s)
+            waited = 0
+            while waited < 30:
+                mem_check = collect_memory()
+                if mem_check.pressure == "normal":
+                    break
+                if progress_cb and waited == 0:
+                    progress_cb("Waiting for memory pressure to normalize...")
+                time.sleep(2)
+                waited += 2
+            time.sleep(max(0, 5 - waited))  # minimum 5s total cooldown
+        elif slots_run > 0:
+            # Same engine, different model — lighter cooldown
+            time.sleep(3)
 
         # Pre-check: verify the model exists on this engine
         check = _check_model_availability(engine, slot_model)
@@ -344,7 +370,8 @@ def run_benchmark(
                     break  # One warning per engine is enough
 
         slots_run += 1
-        prev_model = slot_model
+        prev_model = engine_model
+        prev_engine = engine
 
     if ioreport_sampler:
         ioreport_sampler.close()
@@ -383,6 +410,15 @@ def _run_single(
     if gen.error:
         run.errors.append(f"{engine.name}/{prompt.name}: {gen.error}")
         return
+
+    # Sanity checks on measurements
+    if gen.tok_per_sec <= 0:
+        run.errors.append(f"{engine.name}/{prompt.name}: invalid tok/s ({gen.tok_per_sec})")
+        return
+    if gen.tok_per_sec > 500:
+        logger.warning("Suspicious tok/s: %.1f on %s — possible measurement error", gen.tok_per_sec, engine.name)
+    if gen.ttft_ms > 60000:
+        logger.warning("TTFT >60s (%.0fms) on %s — likely memory swapping", gen.ttft_ms, engine.name)
 
     run.results.append(
         {

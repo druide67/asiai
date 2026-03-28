@@ -101,6 +101,20 @@ class OllamaEngine(InferenceEngine):
                     return value
         return 0
 
+    def unload_model(self, model: str) -> bool:
+        """Unload model from Ollama by setting keep_alive to 0."""
+        try:
+            http_post_json(
+                f"{self.base_url}/api/generate",
+                {"model": model, "keep_alive": 0},
+                timeout=10,
+            )
+            logger.info("Unloaded %s from Ollama", model)
+            return True
+        except Exception as e:
+            logger.debug("Ollama unload failed for %s: %s", model, e)
+            return False
+
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
         """Generate text using Ollama /api/generate endpoint."""
         data, _ = http_post_json(

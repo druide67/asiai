@@ -77,6 +77,14 @@ class InferenceEngine(ABC):
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
         """Send a generation request and return timing metrics."""
 
+    def unload_model(self, model: str) -> bool:
+        """Unload a model from engine memory to free resources.
+
+        Returns True if unload was attempted, False if not supported.
+        Override in engines that support model unloading (Ollama, LM Studio).
+        """
+        return False
+
     def measure_load_time(self, model: str) -> float:
         """Measure model load time in milliseconds.
 

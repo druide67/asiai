@@ -8,12 +8,16 @@ asiai follows established benchmarking standards ([MLPerf](https://mlcommons.org
 
 ## Protocol
 
-1. **Warmup**: 1 non-timed generation per engine to prime caches
-2. **Measured runs**: Default 3 runs per prompt per engine (configurable via `--runs`)
-3. **Sampling**: `temperature=0` (greedy) for deterministic output
-4. **Reporting**: Median tok/s as primary metric (SPEC standard), mean +/- stddev as secondary
-5. **Throttling**: Warning emitted if `thermal_speed_limit < 100%` during any run
-6. **Metadata**: Engine version, model format, quantization, hardware chip, macOS version stored per result
+1. **Pre-flight gate check**: Refuse to start if memory pressure is critical or system is heavily throttled (<80%)
+2. **Warmup**: 1 non-timed generation per engine to prime JIT compilers and caches
+3. **Measured runs**: Default 3 runs per prompt per engine (configurable via `--runs`)
+4. **Sampling**: `temperature=0` (greedy) for deterministic output
+5. **Model unloading**: After benchmarking each engine, the model is unloaded to free unified memory before the next engine starts. This prevents memory accumulation and swapping when comparing multiple engines on large models
+6. **Adaptive cooldown**: After unloading, asiai waits for macOS memory pressure to return to "normal" (max 30s), then adds a minimum 5s thermal cooldown
+7. **Sanity checks**: Results with tok/s ≤ 0 are discarded. TTFT > 60s or tok/s > 500 trigger warnings (likely swapping or measurement errors)
+8. **Reporting**: Median tok/s as primary metric (SPEC standard), mean ± stddev as secondary
+9. **Throttling**: Warning emitted if `thermal_speed_limit < 100%` during any run. Thermal drift (monotone tok/s decrease across runs, ≥5% drop) is detected and reported
+10. **Metadata**: Engine version, model format, quantization, hardware chip, macOS version stored per result
 
 ## Metrics
 
@@ -58,23 +62,29 @@ Where CV = `(std_dev / mean) * 100`.
 
 | Practice | Status |
 |----------|--------|
+| Pre-flight gate check (memory pressure + thermal) | Implemented |
 | TTFT separated from tok/s | Implemented |
 | Deterministic sampling (temperature=0) | Implemented |
 | Token count from server API (not SSE chunks) | Implemented |
-| Per-engine power monitoring | Implemented |
+| Per-engine power monitoring (IOReport, no sudo) | Implemented |
 | 1 warmup generation per engine | Implemented |
 | Default 3 runs (SPEC minimum) | Implemented |
 | Median as primary metric (SPEC standard) | Implemented |
 | Pooled intra-prompt stddev | Implemented |
+| Model unloading between engines | Implemented |
+| Adaptive cooldown (memory pressure-aware) | Implemented |
+| Sanity checks (tok/s, TTFT bounds) | Implemented |
 | Thermal throttling detection + warning | Implemented |
+| Thermal drift detection (monotone decrease) | Implemented |
 | Engine version + model metadata stored | Implemented |
+| Universal VRAM via ri_phys_footprint | Implemented |
 | Historical regression detection | Implemented |
 
 ## Apple Silicon Considerations
 
 ### Unified Memory
 
-Apple Silicon shares memory between CPU and GPU. asiai runs engines **sequentially** to avoid memory contention. Ollama and LM Studio report VRAM per model — other engines show "—".
+Apple Silicon shares memory between CPU and GPU. asiai runs engines **sequentially** and **unloads models between engines** to avoid memory contention and swapping. VRAM is reported natively by Ollama and LM Studio; for other engines, asiai estimates memory usage via `ri_phys_footprint` (the macOS physical footprint metric, same as Activity Monitor). Estimated values are labeled "(est.)" in the UI.
 
 ### Thermal Throttling
 

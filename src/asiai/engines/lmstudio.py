@@ -118,6 +118,26 @@ class LMStudioEngine(OpenAICompatEngine):
                     vram_map[val] = size
         return vram_map
 
+    def unload_model(self, model: str) -> bool:
+        """Unload model from LM Studio via lms CLI."""
+        if not os.path.isfile(_LMS_PATH):
+            return False
+        try:
+            result = subprocess.run(
+                [_LMS_PATH, "unload", "--yes", model],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if result.returncode == 0:
+                logger.info("Unloaded %s from LM Studio", model)
+                return True
+            logger.debug("lms unload failed: %s", result.stderr.strip())
+            return False
+        except Exception as e:
+            logger.debug("LM Studio unload failed for %s: %s", model, e)
+            return False
+
     def version(self) -> str:
         # Check header first
         _, headers = http_get_json(f"{self.base_url}/v1/models")
