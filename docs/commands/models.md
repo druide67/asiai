@@ -1,3 +1,7 @@
+---
+description: "List all loaded LLM models across engines: see VRAM usage, quantization, context length, and format for each model."
+---
+
 # asiai models
 
 List loaded models across all detected engines.

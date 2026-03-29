@@ -1,3 +1,7 @@
+---
+description: "Detailed definitions of all asiai benchmark metrics: tok/s, TTFT, power watts, efficiency, VRAM, stability, thermal state."
+---
+
 # Benchmark Metrics Specification
 
 > **Version**: 0.4.0

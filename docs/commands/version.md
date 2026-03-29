@@ -1,3 +1,7 @@
+---
+description: "Check asiai version, Python environment, and agent registration status with a single command."
+---
+
 # asiai version
 
 Display version and system information.

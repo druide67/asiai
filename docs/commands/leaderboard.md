@@ -1,3 +1,7 @@
+---
+description: "Browse and query the asiai community leaderboard: compare benchmark results across Apple Silicon chips and inference engines."
+---
+
 # asiai leaderboard
 
 Browse community benchmark data from the asiai network.

@@ -1,3 +1,7 @@
+---
+description: "Quick setup for asiai: configure engines, test connections, and verify your Apple Silicon Mac is ready for LLM benchmarking."
+---
+
 # asiai setup
 
 Interactive setup wizard for first-time users. Detects your hardware, checks for inference engines, and suggests next steps.

@@ -1,3 +1,7 @@
+---
+description: "Run asiai as a background daemon on Mac: auto-start monitoring, web dashboard, and Prometheus metrics at boot."
+---
+
 # asiai daemon
 
 Manage background services via macOS launchd LaunchAgents.

@@ -1,3 +1,7 @@
+---
+description: "Terminal UI for asiai: monitor LLM inference engines in real-time with an interactive dashboard in your terminal."
+---
+
 # asiai tui
 
 Interactive terminal dashboard with auto-refresh.

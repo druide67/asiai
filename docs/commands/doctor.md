@@ -1,3 +1,7 @@
+---
+description: "Diagnose LLM inference issues on Mac: asiai doctor checks engine health, port conflicts, model loading, and GPU status."
+---
+
 # asiai doctor
 
 Diagnose installation, engines, system health, and database.

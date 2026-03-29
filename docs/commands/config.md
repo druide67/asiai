@@ -1,3 +1,7 @@
+---
+description: "How to configure asiai: manage engine URLs, ports, and persistent settings for your LLM benchmark setup on Mac."
+---
+
 # asiai config
 
 Manage persistent engine configuration. Engines discovered by `asiai detect` are automatically saved to `~/.config/asiai/engines.json` for faster subsequent detection.

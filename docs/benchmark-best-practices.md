@@ -1,3 +1,7 @@
+---
+description: "How to get accurate LLM benchmark results on Mac: thermal management, background apps, run count, and reproducibility tips."
+---
+
 # Benchmark Best Practices
 
 > **Version**: 0.3.2
