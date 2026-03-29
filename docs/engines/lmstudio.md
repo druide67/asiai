@@ -1,8 +1,10 @@
 ---
-description: Benchmark LM Studio MLX on Apple Silicon. Typically 2x faster than llama.cpp engines on MoE models.
+description: "LM Studio benchmark on Apple Silicon: fastest MLX engine, port 1234 setup, VRAM usage, and how it compares to Ollama."
 ---
 
 # LM Studio
+
+LM Studio is the fastest MLX inference engine on Apple Silicon, serving models on port 1234 with an OpenAI-compatible API. On M4 Pro 64GB, it reaches 130 tok/s on Qwen3-Coder-30B (MLX), nearly 2x faster than Ollama's llama.cpp backend for MoE models.
 
 [LM Studio](https://lmstudio.ai) provides an OpenAI-compatible API with a GUI for model management.
 
@@ -35,3 +37,7 @@ If the `lms` CLI is not installed or unavailable, asiai gracefully falls back to
 - LM Studio supports both GGUF and MLX model formats.
 - Version detection uses the `/lms/version` API endpoint, with a fallback to the app bundle plist on disk.
 - Model names typically use the HuggingFace format (e.g., `gemma-2-9b-it`).
+
+## See also
+
+See how LM Studio compares: [Ollama vs LM Studio benchmark](../ollama-vs-lmstudio.md)

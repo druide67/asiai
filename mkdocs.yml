@@ -64,6 +64,7 @@ nav:
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md
   - Benchmark Best Practices: benchmark-best-practices.md
+  - FAQ: faq.md
 
 plugins:
   - search
@@ -97,6 +98,9 @@ plugins:
         - locale: ko
           name: 한국어
           build: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
 
 markdown_extensions:
   - admonition

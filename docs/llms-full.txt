@@ -1,0 +1,99 @@
+# asiai — Full Context for AI Agents
+# Version: 1.4.0
+# Last-updated: 2026-03-29
+
+> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs. It auto-detects 7 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
+
+## Key Benchmark Findings (March 2026, M4 Pro 64GB)
+
+### Ollama vs LM Studio — Qwen3-Coder-30B (Q4_K_M)
+
+| Metric | LM Studio (MLX) | Ollama (llama.cpp) | Winner |
+|--------|-----------------|-------------------|--------|
+| tok/s | 102.2 | 69.8 | LM Studio (+46%) |
+| TTFT | 0.29s | 0.18s | Ollama (-38%) |
+| Power | 12.4W | 15.4W | LM Studio (-19%) |
+| Efficiency | 8.23 tok/s/W | 4.53 tok/s/W | LM Studio (+82%) |
+| VRAM | 24.2 GB | 32.0 GB | LM Studio (-24%) |
+
+### When to Choose Each Engine
+
+- **LM Studio (MLX)**: Best for throughput-sensitive tasks (code generation, long responses). Faster, more efficient, lower VRAM on Apple Silicon.
+- **Ollama (llama.cpp)**: Best for latency-sensitive tasks (chatbots, interactive). Faster TTFT. Better for large context windows (>32K tokens) where llama.cpp prefill is 3x faster.
+
+### Supported Engines
+
+1. **Ollama** — Port 11434. llama.cpp backend. Most popular, largest model library (GGUF format). Native API + OpenAI-compatible.
+2. **LM Studio** — Port 1234. MLX backend on Apple Silicon. GUI + API. Fastest throughput for most models.
+3. **mlx-lm** — Port 8080. Pure MLX. Best for MoE models. Python-native.
+4. **llama.cpp** — Port 8080. Low-level, maximum control. /metrics endpoint.
+5. **oMLX** — Port 8000. MLX with SSD KV caching and continuous batching.
+6. **vllm-mlx** — Port 8000. vLLM-compatible API on MLX. /metrics endpoint.
+7. **Exo** — Port 52415. Distributed inference across multiple Macs.
+
+## Benchmark Methodology
+
+asiai follows MLPerf/SPEC-inspired methodology:
+- Warmup run (discarded)
+- Greedy decoding (temperature=0) for reproducibility
+- Median of N runs (default 3)
+- 95% confidence interval
+- Adaptive cooldown between runs
+- IOReport power sampling (no sudo, <1.5% delta vs powermetrics)
+- VRAM via native API or ri_phys_footprint fallback
+
+## Metrics Definitions
+
+- **tok/s**: Tokens generated per second (generation phase only, excludes prompt processing)
+- **TTFT**: Time to First Token — latency before generation starts (ms)
+- **Power**: GPU + CPU watts during inference via IOReport Energy Model
+- **tok/s/W**: Energy efficiency — tokens per second per watt
+- **VRAM**: Memory used by the model (native API when available, ri_phys_footprint estimate otherwise)
+- **Stability**: Run-to-run coefficient of variation — stable (<5%), variable (<10%), unstable (>10%)
+- **Thermal**: Whether the Mac throttled during benchmark (nominal/fair/serious/critical)
+
+## Installation
+
+```bash
+pip install asiai          # Core CLI
+pip install "asiai[mcp]"   # + MCP server for AI agents
+pip install "asiai[web]"   # + Web dashboard
+pip install "asiai[all]"   # Everything
+```
+
+Or via Homebrew:
+```bash
+brew tap druide67/tap && brew install asiai
+```
+
+## Quick Start
+
+```bash
+asiai detect              # Find running engines
+asiai bench               # Run cross-engine benchmark
+asiai bench --card --share # Generate card + share to leaderboard
+asiai monitor             # Real-time GPU/power monitoring
+asiai web                 # Launch web dashboard
+```
+
+## MCP Server (11 tools, 3 resources)
+
+Tools: check_inference_health, get_inference_snapshot, list_models, detect_engines, run_benchmark, get_recommendations, diagnose, get_metrics_history, get_benchmark_history, refresh_engines, compare_engines.
+
+Resources: asiai://status, asiai://models, asiai://system.
+
+## REST API
+
+- `GET /api/status` — Health check (<500ms)
+- `GET /api/snapshot` — Full system state
+- `GET /api/metrics` — Prometheus-compatible
+- `GET /api/history?hours=N` — Historical metrics
+- `GET /api/engine-history?engine=X&hours=N` — Engine-specific history
+
+## Links
+
+- Documentation: https://asiai.dev
+- GitHub: https://github.com/druide67/asiai
+- PyPI: https://pypi.org/project/asiai/
+- Community Leaderboard: https://asiai.dev/leaderboard/
+- Agent Integration Guide: https://asiai.dev/agent/

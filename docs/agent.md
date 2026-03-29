@@ -1,5 +1,17 @@
 ---
 description: Give your AI agents real-time visibility into LLM inference. MCP server with 11 tools for autonomous engine monitoring.
+type: faq
+faq:
+  - q: "Does asiai require root/sudo?"
+    a: "No. GPU observability uses ioreg (no privileges). Power metrics use IOReport which also requires no sudo. The optional --power flag for cross-validation uses sudo powermetrics."
+  - q: "What is the API response time?"
+    a: "/api/status responds in under 500ms (cached 10s). /api/snapshot takes 1-3s as it collects live data from all engines."
+  - q: "Can I run asiai on Linux?"
+    a: "No. asiai is macOS Apple Silicon only. It uses sysctl, vm_stat, ioreg, IOReport, and launchd — all macOS-specific APIs."
+  - q: "How do I monitor multiple Macs?"
+    a: "Run asiai daemon start web --host 0.0.0.0 on each Mac. Scrape /api/metrics with Prometheus. Visualize in Grafana."
+  - q: "What if an engine crashes during monitoring?"
+    a: "asiai detects engine failures automatically. Use asiai doctor for diagnostics. Set up webhook alerts with asiai alert add for automated notifications."
 ---
 
 # Agent Integration Guide

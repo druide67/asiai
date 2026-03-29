@@ -42,7 +42,7 @@ web = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "jinja2>=3.1", "python-multi
 mcp = ["mcp>=1.12"]
 all = ["textual>=0.80", "fastapi>=0.115", "uvicorn[standard]>=0.34", "jinja2>=3.1", "python-multipart>=0.0.9", "mcp>=1.12"]
 dev = ["pytest", "ruff", "pytest-asyncio", "pytest-cov", "httpx"]
-docs = ["mkdocs-material"]
+docs = ["mkdocs-material", "mkdocs-git-revision-date-localized-plugin>=1.2"]
 
 [project.urls]
 Homepage = "https://github.com/druide67/asiai"

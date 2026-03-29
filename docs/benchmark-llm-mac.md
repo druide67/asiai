@@ -1,5 +1,17 @@
 ---
+title: "How to Benchmark LLMs on Mac"
 description: "How to benchmark LLM inference on Mac: step-by-step guide to measure tok/s, TTFT, power, and VRAM on Apple Silicon with multiple engines."
+type: howto
+date: 2026-03-28
+updated: 2026-03-29
+duration: PT5M
+steps:
+  - name: "Install asiai"
+    text: "Install asiai via pip (pip install asiai) or Homebrew (brew tap druide67/tap && brew install asiai)."
+  - name: "Detect your engines"
+    text: "Run 'asiai detect' to automatically find running inference engines (Ollama, LM Studio, llama.cpp, mlx-lm, oMLX, vLLM-MLX, Exo) on your Mac."
+  - name: "Run a benchmark"
+    text: "Run 'asiai bench' to auto-detect the best model across engines and run a cross-engine comparison measuring tok/s, TTFT, power, and VRAM."
 ---
 
 # How to Benchmark LLMs on Mac
@@ -124,6 +136,26 @@ asiai compare
 ```
 
 Or visit the [online leaderboard](leaderboard.md).
+
+## FAQ
+
+**Q: What is the fastest LLM inference engine on Apple Silicon?**
+A: In our benchmarks on M4 Pro 64GB, LM Studio (MLX backend) is the fastest for token generation — 46% faster than Ollama (llama.cpp). However, Ollama has lower TTFT (time to first token). See our [detailed comparison](ollama-vs-lmstudio.md).
+
+**Q: How much RAM do I need to run a 30B model on Mac?**
+A: A Q4_K_M quantized 30B model uses 24-32 GB of unified memory depending on the engine. You need at least 32 GB RAM, ideally 64 GB to avoid memory pressure. MoE models like Qwen3.5-35B-A3B only use ~7 GB active parameters.
+
+**Q: Does asiai work on Intel Macs?**
+A: No. asiai requires Apple Silicon (M1/M2/M3/M4). It uses macOS-specific APIs for GPU metrics, power monitoring, and hardware detection that are only available on Apple Silicon.
+
+**Q: Is Ollama or LM Studio faster on M4?**
+A: LM Studio is faster for throughput (102 tok/s vs 70 tok/s on Qwen3-Coder-30B). Ollama is faster for first-token latency (0.18s vs 0.29s) and for large context windows (>32K tokens) where llama.cpp prefill is up to 3x faster.
+
+**Q: How long does a benchmark take?**
+A: A quick benchmark takes about 2 minutes. A full cross-engine comparison with multiple prompts and runs takes 10-15 minutes. Use `asiai bench --quick` for a fast single-run test.
+
+**Q: Can I compare my results with other Mac users?**
+A: Yes. Run `asiai bench --share` to anonymously submit results to the [community leaderboard](leaderboard.md). Use `asiai compare` to see how your Mac compares to other Apple Silicon machines.
 
 ## Further Reading
 

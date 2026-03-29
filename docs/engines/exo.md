@@ -1,8 +1,10 @@
 ---
-description: Benchmark Exo distributed inference on Apple Silicon. Split models across multiple Macs.
+description: "Exo distributed LLM inference: benchmark multiple Macs together, port 52415, cluster setup and performance."
 ---
 
 # Exo
+
+Exo enables distributed LLM inference by pooling VRAM across multiple Apple Silicon Macs on your local network, serving on port 52415. It lets you run 70B+ parameter models that would not fit on a single machine, with automatic peer discovery and an OpenAI-compatible API.
 
 [Exo](https://github.com/exo-explore/exo) enables distributed inference across multiple Apple Silicon devices. Run large models (70B+) by pooling VRAM from several Macs.
 
@@ -45,3 +47,7 @@ Exo is benchmarked like any other engine. asiai auto-detects it on port 52415.
 - VRAM displayed in asiai reflects the total memory aggregated across all cluster nodes.
 - Large models that don't fit on a single Mac can run seamlessly across the cluster.
 - Start `exo` on each Mac in the cluster before running benchmarks.
+
+## See also
+
+Compare engines with `asiai bench --engines exo` --- [learn how](../benchmark-llm-mac.md)

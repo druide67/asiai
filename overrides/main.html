@@ -1,15 +1,26 @@
 {% extends "base.html" %}
 
 {% block extrahead %}
+  <!-- Standard meta description -->
+  {% if page.meta and page.meta.description %}
+  <meta name="description" content="{{ page.meta.description }}">
+  {% else %}
+  <meta name="description" content="Multi-engine LLM benchmark &amp; monitoring CLI for Apple Silicon. 7 engines, GPU observability, community leaderboard.">
+  {% endif %}
+
   <!-- OpenGraph -->
   {% if page.meta and page.meta.title %}
   <meta property="og:title" content="{{ page.meta.title }}">
   {% else %}
   <meta property="og:title" content="{{ page.title }} — asiai">
   {% endif %}
-  <meta property="og:description" content="Multi-engine LLM benchmark & monitoring CLI for Apple Silicon. 7 engines, GPU observability, community leaderboard.">
+  {% if page.meta and page.meta.description %}
+  <meta property="og:description" content="{{ page.meta.description }}">
+  {% else %}
+  <meta property="og:description" content="Multi-engine LLM benchmark &amp; monitoring CLI for Apple Silicon. 7 engines, GPU observability, community leaderboard.">
+  {% endif %}
   <meta property="og:url" content="{{ page.canonical_url }}">
-  <meta property="og:type" content="website">
+  <meta property="og:type" content="{% if page.meta and page.meta.type == 'article' %}article{% else %}website{% endif %}">
   <meta property="og:site_name" content="asiai">
   <meta property="og:image" content="https://asiai.dev/assets/og-image.png?v=3">
 
@@ -20,12 +31,27 @@
   {% else %}
   <meta name="twitter:title" content="{{ page.title }} — asiai">
   {% endif %}
+  {% if page.meta and page.meta.description %}
+  <meta name="twitter:description" content="{{ page.meta.description }}">
+  {% else %}
   <meta name="twitter:description" content="Benchmark, monitor, and manage 7 LLM engines on Apple Silicon. Zero dependencies.">
+  {% endif %}
   <meta name="twitter:image" content="https://asiai.dev/assets/og-image.png?v=3">
   <meta name="twitter:creator" content="@jmn67">
   <meta name="twitter:site" content="@asiai_dev">
 
-  <!-- Structured Data -->
+  <!-- hreflang alternate links -->
+  {% set langs = ['en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ja', 'ko'] %}
+  {% for lang in langs %}
+  {% if lang == 'en' %}
+  <link rel="alternate" href="{{ page.canonical_url }}" hreflang="en">
+  <link rel="alternate" href="{{ page.canonical_url }}" hreflang="x-default">
+  {% else %}
+  <link rel="alternate" href="{{ page.canonical_url | replace('https://asiai.dev/', 'https://asiai.dev/' ~ lang ~ '/') }}" hreflang="{{ lang }}">
+  {% endif %}
+  {% endfor %}
+
+  <!-- Structured Data: SoftwareApplication (global) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -38,11 +64,12 @@
     "license": "https://opensource.org/licenses/Apache-2.0",
     "author": {
       "@type": "Person",
-      "name": "druide67",
+      "name": "Jean-Marc Nahlovsky",
+      "alternateName": "druide67",
       "url": "https://github.com/druide67"
     },
     "codeRepository": "https://github.com/druide67/asiai",
-    "softwareVersion": "1.1.1",
+    "softwareVersion": "1.4.0",
     "downloadUrl": "https://pypi.org/project/asiai/",
     "installUrl": "https://pypi.org/project/asiai/",
     "softwareRequirements": "macOS on Apple Silicon (M1/M2/M3/M4), Python 3.11+",
@@ -55,6 +82,133 @@
     "keywords": ["LLM", "benchmark", "Apple Silicon", "inference", "monitoring", "CLI", "Ollama", "LM Studio", "MLX"]
   }
   </script>
+
+  <!-- Structured Data: BreadcrumbList -->
+  {% if page.url != '.' and page.url != '' and page.url != 'index.html' %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://asiai.dev/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "{{ page.title }}",
+        "item": "{{ page.canonical_url }}"
+      }
+    ]
+  }
+  </script>
+  {% endif %}
+
+  <!-- Structured Data: Article (for content pages) -->
+  {% if page.meta and page.meta.type == 'article' %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "{{ page.meta.title | default(page.title) }}",
+    "description": "{{ page.meta.description | default('') }}",
+    "url": "{{ page.canonical_url }}",
+    "author": {
+      "@type": "Person",
+      "name": "Jean-Marc Nahlovsky",
+      "url": "https://github.com/druide67"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "asiai",
+      "url": "https://asiai.dev",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://asiai.dev/assets/logo.svg"
+      }
+    },
+    "mainEntityOfPage": "{{ page.canonical_url }}"
+    {% if page.meta.date %},
+    "datePublished": "{{ page.meta.date }}"
+    {% endif %}
+    {% if page.meta.updated %},
+    "dateModified": "{{ page.meta.updated }}"
+    {% endif %}
+  }
+  </script>
+  {% endif %}
+
+  <!-- Structured Data: FAQPage -->
+  {% if page.meta and page.meta.type == 'faq' and page.meta.faq %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {% for item in page.meta.faq %}
+      {
+        "@type": "Question",
+        "name": "{{ item.q }}",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "{{ item.a }}"
+        }
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+  </script>
+  {% endif %}
+
+  <!-- Structured Data: HowTo -->
+  {% if page.meta and page.meta.type == 'howto' and page.meta.steps %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "{{ page.meta.title | default(page.title) }}",
+    "description": "{{ page.meta.description | default('') }}",
+    "totalTime": "{{ page.meta.duration | default('PT5M') }}",
+    "tool": {
+      "@type": "HowToTool",
+      "name": "asiai CLI"
+    },
+    "step": [
+      {% for step in page.meta.steps %}
+      {
+        "@type": "HowToStep",
+        "position": {{ loop.index }},
+        "name": "{{ step.name }}",
+        "text": "{{ step.text }}"
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+  </script>
+  {% endif %}
+
+  <!-- Structured Data: Dataset (for benchmark data pages) -->
+  {% if page.meta and page.meta.dataset %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    "name": "{{ page.meta.dataset.name }}",
+    "description": "{{ page.meta.dataset.description }}",
+    "url": "{{ page.canonical_url }}",
+    "license": "https://opensource.org/licenses/Apache-2.0",
+    "creator": {
+      "@type": "Person",
+      "name": "Jean-Marc Nahlovsky"
+    },
+    "temporalCoverage": "{{ page.meta.dataset.date | default('2026-03') }}",
+    "measurementTechnique": "asiai CLI automated benchmark (MLPerf/SPEC-inspired methodology)"
+  }
+  </script>
+  {% endif %}
 
   <!-- Brand header styling -->
   <style>

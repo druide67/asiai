@@ -1,10 +1,18 @@
 ---
+title: "Ollama vs LM Studio: Apple Silicon Benchmark"
 description: "Ollama vs LM Studio benchmark on Apple Silicon: tok/s, TTFT, power, VRAM compared side by side on M4 Pro with real measurements."
+type: article
+date: 2026-03-28
+updated: 2026-03-29
+dataset:
+  name: "Ollama vs LM Studio Benchmark on Apple Silicon M4 Pro"
+  description: "Head-to-head benchmark comparing Ollama (llama.cpp) and LM Studio (MLX) on Mac Mini M4 Pro 64GB with Qwen3-Coder-30B. Metrics: tok/s, TTFT, GPU power, efficiency, VRAM."
+  date: "2026-03"
 ---
 
 # Ollama vs LM Studio: Apple Silicon Benchmark
 
-Which inference engine is faster on your Mac? We benchmarked Ollama (llama.cpp backend) and LM Studio (MLX backend) head-to-head on the same model and hardware.
+Which inference engine is faster on your Mac? We benchmarked Ollama (llama.cpp backend) and LM Studio (MLX backend) head-to-head on the same model and hardware using asiai 1.4.0 in March 2026.
 
 ## Test Setup
 
