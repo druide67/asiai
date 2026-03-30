@@ -9,16 +9,15 @@ theme:
   custom_dir: overrides
   logo: assets/logo.svg
   favicon: assets/logo.svg
+  font: false
   palette:
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep purple
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -26,6 +25,9 @@ theme:
     - navigation.sections
     - navigation.expand
     - content.code.copy
+
+extra_css:
+  - assets/stylesheets/custom.css
 
 nav:
   - Home: index.md

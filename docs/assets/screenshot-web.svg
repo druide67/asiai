@@ -16,17 +16,17 @@
       .yellow { fill: #f9e2af; }
       .cyan { fill: #89dceb; }
       .red { fill: #f38ba8; }
-      .accent { fill: #00d4aa; }
+      .accent { fill: #06b6d4; }
       .bold { font-weight: 700; }
-      .nav-active { fill: #00d4aa; font-weight: 600; font-size: 12px; }
+      .nav-active { fill: #06b6d4; font-weight: 600; font-size: 12px; }
       .nav-item { fill: #6c7086; font-size: 12px; }
       .stat-big { fill: #cdd6f4; font-size: 28px; font-weight: 700; }
       .stat-label { fill: #6c7086; font-size: 10px; }
       .bar-bg { fill: #313244; }
     </style>
     <linearGradient id="chart1" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#00d4aa" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#00d4aa"/>
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
     </linearGradient>
     <linearGradient id="chart2" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#89dceb" stop-opacity="0.8"/>
@@ -132,7 +132,7 @@
     <rect class="card" x="0" y="300" width="165" height="80" rx="8"/>
     <text class="text bold" x="15" y="322" font-size="11">CPU</text>
     <!-- Mini sparkline -->
-    <polyline fill="none" stroke="#00d4aa" stroke-width="1.5" points="15,350 30,345 45,348 60,340 75,342 90,338 105,344 120,336 135,340 150,335"/>
+    <polyline fill="none" stroke="#06b6d4" stroke-width="1.5" points="15,350 30,345 45,348 60,340 75,342 90,338 105,344 120,336 135,340 150,335"/>
     <text class="accent bold" x="15" y="370" font-size="11">8%</text>
     <text class="dim" x="40" y="370">nominal</text>
 

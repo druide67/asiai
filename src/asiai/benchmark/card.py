@@ -178,7 +178,7 @@ def generate_card_svg(
         ratio = (bar["tok_s"] / max_tok) if max_tok > 0 else 0
         width = max(int(ratio * bar_max_width), 60)
 
-        fill = "#00d4aa" if i == 0 else "#4a5568"
+        fill = "#06b6d4" if i == 0 else "#4a5568"
 
         # Engine name (left of bar)
         bar_elements.append(
@@ -224,7 +224,7 @@ def generate_card_svg(
             hero_y = bars_end_y + 32
             hero_svg = (
                 f'  <text x="80" y="{hero_y}" '
-                f'fill="#00d4aa" font-size="72" '
+                f'fill="#06b6d4" font-size="72" '
                 f'font-family="{_SANS}" font-weight="800">{_escape(delta_display)}</text>\n'
                 f'  <text x="80" y="{hero_y + 28}" '
                 f'fill="#718096" font-size="15" '
@@ -235,7 +235,7 @@ def generate_card_svg(
         hero_y = bars_end_y + 32
         hero_svg = (
             f'  <text x="80" y="{hero_y}" '
-            f'fill="#00d4aa" font-size="60" '
+            f'fill="#06b6d4" font-size="60" '
             f'font-family="{_SANS}" font-weight="800">'
             f"{bars[0]['tok_s']:.1f} tok/s</text>"
         )
@@ -339,7 +339,7 @@ def generate_card_svg(
             chips.append((f"{bar['runs_count']} runs", ""))
 
         # Engine name label with version (colored for winner) [Change #3]
-        name_color = "#00d4aa" if eng_idx == 0 else "#718096"
+        name_color = "#06b6d4" if eng_idx == 0 else "#718096"
         chip_x = 60
         name_raw = bar["name"]
         eng_key = bar.get("engine", name_raw)
@@ -369,7 +369,7 @@ def generate_card_svg(
                 text_color = "#fca5a5"
             elif is_winner:
                 chip_fill = "#2d3748"
-                stroke = ' stroke="#00d4aa" stroke-width="1"'
+                stroke = ' stroke="#06b6d4" stroke-width="1"'
                 text_color = "#e2e8f0"
             else:
                 chip_fill = "#2d3748"
@@ -399,22 +399,22 @@ def generate_card_svg(
     logo = (
         '  <g transform="translate(32, 24) scale(0.30)">\n'
         '    <circle cx="100" cy="100" r="90" fill="#0f0f23"/>\n'
-        '    <circle cx="100" cy="100" r="86" fill="none" stroke="#00d4aa" stroke-width="0.5" opacity="0.15"/>\n'
-        '    <line x1="30.4" y1="148.8" x2="43.5" y2="139.6" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.3"/>\n'
-        '    <line x1="15.5" y1="109.1" x2="31.4" y2="107.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.37"/>\n'
-        '    <line x1="21.6" y1="67.2" x2="36.3" y2="73.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.44"/>\n'
-        '    <line x1="47.1" y1="33.4" x2="57.1" y2="46.0" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.51"/>\n'
-        '    <line x1="85.8" y1="16.2" x2="88.5" y2="32.0" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.58"/>\n'
-        '    <line x1="128.0" y1="19.7" x2="122.7" y2="34.9" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.65"/>\n'
-        '    <line x1="163.2" y1="43.2" x2="151.3" y2="53.9" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.72"/>\n'
-        '    <line x1="182.8" y1="80.8" x2="167.2" y2="84.4" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.78"/>\n'
-        '    <line x1="181.8" y1="123.1" x2="166.4" y2="118.8" stroke="#00d4aa" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>\n'
-        '    <path d="M136.8,63.2 L101.98,101.98 L98.02,98.02 Z" fill="#00d4aa"/>\n'
-        '    <circle cx="100" cy="100" r="3.5" fill="#00d4aa"/>\n'
+        '    <circle cx="100" cy="100" r="86" fill="none" stroke="#06b6d4" stroke-width="0.5" opacity="0.15"/>\n'
+        '    <line x1="30.4" y1="148.8" x2="43.5" y2="139.6" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.3"/>\n'
+        '    <line x1="15.5" y1="109.1" x2="31.4" y2="107.4" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.37"/>\n'
+        '    <line x1="21.6" y1="67.2" x2="36.3" y2="73.4" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.44"/>\n'
+        '    <line x1="47.1" y1="33.4" x2="57.1" y2="46.0" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.51"/>\n'
+        '    <line x1="85.8" y1="16.2" x2="88.5" y2="32.0" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.58"/>\n'
+        '    <line x1="128.0" y1="19.7" x2="122.7" y2="34.9" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.65"/>\n'
+        '    <line x1="163.2" y1="43.2" x2="151.3" y2="53.9" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.72"/>\n'
+        '    <line x1="182.8" y1="80.8" x2="167.2" y2="84.4" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.78"/>\n'
+        '    <line x1="181.8" y1="123.1" x2="166.4" y2="118.8" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>\n'
+        '    <path d="M136.8,63.2 L101.98,101.98 L98.02,98.02 Z" fill="#06b6d4"/>\n'
+        '    <circle cx="100" cy="100" r="3.5" fill="#06b6d4"/>\n'
         "  </g>\n"
         f'  <text x="100" y="72" fill="#e2e8f0" font-size="36" '
         f'font-family="{_SANS}" font-weight="700">'
-        f'asi<tspan fill="#00d4aa">ai</tspan></text>\n'
+        f'asi<tspan fill="#06b6d4">ai</tspan></text>\n'
         f'  <text x="230" y="72" fill="#718096" font-size="16" '
         f'font-family="{_SANS}">The Speedtest for local LLMs</text>'
     )
@@ -426,9 +426,9 @@ def generate_card_svg(
     footer_y = frame_bottom + 10
     footer = (
         f'  <rect x="{url_x}" y="{footer_y}" width="{url_w}" height="28" '
-        f'rx="14" fill="#1a202c" stroke="#00d4aa" stroke-width="1" opacity="0.8"/>\n'
+        f'rx="14" fill="#1a202c" stroke="#06b6d4" stroke-width="1" opacity="0.8"/>\n'
         f'  <text x="{url_x + url_w // 2}" y="{footer_y + 19}" text-anchor="middle" '
-        f'fill="#00d4aa" font-size="13" '
+        f'fill="#06b6d4" font-size="13" '
         f'font-family="{_SANS}" font-weight="500">{url_text}</text>'
     )
 
@@ -450,7 +450,7 @@ def generate_card_svg(
         '  <rect width="1200" height="630" rx="12" fill="url(#bg)"/>',
         "",
         "  <!-- Top accent bar -->",
-        '  <rect x="0" y="0" width="1200" height="4" fill="#00d4aa"/>',
+        '  <rect x="0" y="0" width="1200" height="4" fill="#06b6d4"/>',
         "",
         "  <!-- Logo + tagline -->",
         logo,

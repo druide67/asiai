@@ -199,7 +199,7 @@ class TestCardSvg:
         svg = generate_card_svg(report)
         assert "asiai.dev" in svg
         # Should have a stroke border (pill badge)
-        assert 'stroke="#00d4aa"' in svg
+        assert 'stroke="#06b6d4"' in svg
 
     def test_bars_contain_engine_and_toks(self):
         """Bars should show engine name and tok/s value."""
@@ -640,7 +640,7 @@ class TestCardColors:
         svg = generate_card_svg(_S2)
         # First bar rect (winner) should use accent color
         m = re.search(r'<rect[^>]*rx="4"[^>]*fill="(#[0-9a-f]+)"[^>]*opacity="0\.9"', svg)
-        assert m and m.group(1) == "#00d4aa", "Winner bar should be green"
+        assert m and m.group(1) == "#06b6d4", "Winner bar should be green"
 
     def test_loser_bar_gray_fill(self):
         svg = generate_card_svg(_S2)

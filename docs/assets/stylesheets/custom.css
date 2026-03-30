@@ -1,0 +1,196 @@
+/* ==========================================================================
+   asiai Design System — "Precision Instrument"
+   Unifies dashboard, homepage, and docs under one visual identity.
+   ========================================================================== */
+
+/* --- Geist Fonts (self-hosted, no Google Fonts CDN) --- */
+
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('../fonts/Geist-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('../fonts/Geist-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('../fonts/Geist-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('../fonts/Geist-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Typography override --- */
+
+:root {
+  --md-text-font: 'Geist Sans', system-ui, -apple-system, sans-serif;
+  --md-code-font: 'Geist Mono', 'SF Mono', ui-monospace, monospace;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Dark mode: "Precision Instrument" palette --- */
+
+[data-md-color-scheme="slate"] {
+  /* Background hierarchy */
+  --md-default-bg-color: #09090b;
+  --md-default-bg-color--light: #111113;
+  --md-default-bg-color--lighter: #18181b;
+  --md-default-bg-color--lightest: #1f1f23;
+
+  /* Code & surfaces */
+  --md-code-bg-color: #111113;
+
+  /* Accent — Cyan */
+  --md-primary-fg-color: #06b6d4;
+  --md-primary-fg-color--light: rgba(6, 182, 212, 0.7);
+  --md-primary-fg-color--dark: #0891b2;
+  --md-primary-bg-color: #09090b;
+  --md-primary-bg-color--light: #111113;
+
+  --md-accent-fg-color: #06b6d4;
+  --md-accent-fg-color--transparent: rgba(6, 182, 212, 0.1);
+  --md-accent-bg-color: #06b6d4;
+  --md-accent-bg-color--light: rgba(6, 182, 212, 0.1);
+
+  /* Text */
+  --md-default-fg-color: #fafafa;
+  --md-default-fg-color--light: #a1a1aa;
+  --md-default-fg-color--lighter: #71717a;
+  --md-default-fg-color--lightest: #27272a;
+
+  /* Typeset links */
+  --md-typeset-a-color: #06b6d4;
+
+  /* Header */
+  --md-header-bg-color: #09090b;
+
+  /* Footer */
+  --md-footer-bg-color: #09090b;
+  --md-footer-bg-color--dark: #09090b;
+
+  /* Nav/sidebar */
+  --md-sidebar-bg-color: #09090b;
+}
+
+/* Header bar — solid dark with subtle border */
+[data-md-color-scheme="slate"] .md-header {
+  background-color: #09090b;
+  border-bottom: 1px solid #1c1c1f;
+}
+
+/* Tabs bar */
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: #09090b;
+  border-bottom: 1px solid #1c1c1f;
+}
+
+/* Code blocks — darker surface */
+[data-md-color-scheme="slate"] .md-typeset code {
+  background-color: #111113;
+}
+
+[data-md-color-scheme="slate"] .md-typeset pre > code {
+  background-color: #0d0d0f;
+}
+
+/* Tables — subtle borders */
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background-color: #111113;
+  border-bottom: 1px solid #1c1c1f;
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) td {
+  border-bottom: 1px solid #1c1c1f;
+}
+
+/* Admonitions — darker backgrounds */
+[data-md-color-scheme="slate"] .md-typeset .admonition,
+[data-md-color-scheme="slate"] .md-typeset details {
+  background-color: #111113;
+  border-color: #1c1c1f;
+}
+
+/* Search */
+[data-md-color-scheme="slate"] .md-search__form {
+  background-color: #111113;
+  border: 1px solid #1c1c1f;
+}
+
+/* --- Light mode: lighter cyan accent --- */
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0891b2;
+  --md-primary-fg-color--light: rgba(8, 145, 178, 0.7);
+  --md-primary-fg-color--dark: #0e7490;
+
+  --md-accent-fg-color: #0891b2;
+  --md-accent-fg-color--transparent: rgba(8, 145, 178, 0.1);
+
+  --md-typeset-a-color: #0891b2;
+}
+
+/* --- Subtle refinements --- */
+
+/* Smoother scrollbar (dark mode) */
+[data-md-color-scheme="slate"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+[data-md-color-scheme="slate"] ::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+[data-md-color-scheme="slate"] ::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+
+[data-md-color-scheme="slate"] ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}

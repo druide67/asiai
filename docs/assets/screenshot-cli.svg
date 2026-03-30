@@ -14,7 +14,7 @@
       .cyan { fill: #89dceb; }
       .red { fill: #f38ba8; }
       .bold { font-weight: 700; }
-      .accent { fill: #00d4aa; }
+      .accent { fill: #06b6d4; }
     </style>
   </defs>
   <!-- Window frame -->

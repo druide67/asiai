@@ -5,7 +5,7 @@
 
 <style>
   /* ── Accent color (changes with mode) ── */
-  :root { --accent: #00d4aa; --accent-rgb: 0, 212, 170; }
+  :root { --accent: #06b6d4; --accent-rgb: 6, 182, 212; }
   body.agent-mode { --accent: #60a5fa; --accent-rgb: 96, 165, 250; }
 
   /* Hide article/content padding for homepage */
@@ -59,7 +59,7 @@
   .asiai-hero {
     text-align: center;
     padding: 5rem 1.5rem 4rem;
-    background: linear-gradient(180deg, rgba(0, 212, 170, 0.12) 0%, transparent 100%);
+    background: linear-gradient(180deg, rgba(6, 182, 212, 0.12) 0%, transparent 100%);
   }
   .asiai-hero img {
     width: 120px;
@@ -357,7 +357,7 @@
   /* ── Bottom CTA ── */
   .asiai-bottom-cta {
     text-align: center;
-    background: linear-gradient(0deg, rgba(0, 212, 170, 0.12) 0%, transparent 100%);
+    background: linear-gradient(0deg, rgba(6, 182, 212, 0.12) 0%, transparent 100%);
   }
   .install-commands {
     display: flex;
@@ -532,18 +532,18 @@
     font-weight: 700;
     padding: 0.15rem 0.5rem;
     border-radius: 3px;
-    font-family: 'SF Mono', 'Menlo', monospace;
+    font-family: var(--md-code-font, 'Geist Mono', monospace);
   }
   .api-preview-url {
     color: #ccc;
     font-size: 0.85rem;
-    font-family: 'SF Mono', 'Menlo', monospace;
+    font-family: var(--md-code-font, 'Geist Mono', monospace);
   }
   .api-preview-badge {
     margin-left: auto;
     font-size: 0.7rem;
     color: #6a6a8a;
-    font-family: 'SF Mono', 'Menlo', monospace;
+    font-family: var(--md-code-font, 'Geist Mono', monospace);
   }
   .api-preview-body {
     padding: 1rem;
@@ -551,7 +551,7 @@
     font-size: 0.78rem;
     line-height: 1.6;
     color: #c5c5d5;
-    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-family: var(--md-code-font, 'Geist Mono', monospace);
     overflow-x: auto;
     background: transparent;
   }
@@ -596,6 +596,12 @@
   }
   [data-md-color-scheme="slate"] .engine-table td {
     border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* ── Progressive disclosure animation ── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   /* ── Responsive ── */
@@ -1233,17 +1239,17 @@
       <p class="section-subtitle">{{ tr("pain_subtitle") }}</p>
       <div class="pain-grid">
         <div class="pain-card">
-          <div class="pain-icon">&#x1F9E9;</div>
+          <div class="pain-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h7v7h-7z" opacity="0.3" stroke-dasharray="3 2"/></svg></div>
           <h3>{{ tr("pain1_title") }}</h3>
           <p>{{ tr("pain1_desc") }}</p>
         </div>
         <div class="pain-card">
-          <div class="pain-icon">&#x1F648;</div>
+          <div class="pain-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="4" y1="4" x2="20" y2="20" stroke-width="2"/></svg></div>
           <h3>{{ tr("pain2_title") }}</h3>
           <p>{{ tr("pain2_desc") }}</p>
         </div>
         <div class="pain-card">
-          <div class="pain-icon">&#x1F4CB;</div>
+          <div class="pain-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg></div>
           <h3>{{ tr("pain3_title") }}</h3>
           <p>{{ tr("pain3_desc") }}</p>
         </div>
@@ -1256,79 +1262,86 @@
     <div class="asiai-container">
       <h2>{{ tr("feat_title") }}</h2>
       <p class="section-subtitle">{{ tr("feat_subtitle") }}</p>
-      <div class="feature-grid">
+      <div class="feature-grid" id="feature-grid">
+        <!-- Top 6 (always visible) -->
         <div class="feature-card">
-          <div class="feature-icon">&#x2694;&#xFE0F;</div>
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
           <h3>{{ tr("feat1_t") }}</h3>
           <p>{{ tr("feat1_d") }}</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x26A1;</div>
-          <h3>{{ tr("feat2_t") }}</h3>
-          <p>{{ tr("feat2_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F527;</div>
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
           <h3>{{ tr("feat3_t") }}</h3>
           <p>{{ tr("feat3_d") }}</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F4E6;</div>
-          <h3>{{ tr("feat4_t") }}</h3>
-          <p>{{ tr("feat4_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F50D;</div>
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/><path d="M16 16l2 2"/></svg></div>
           <h3>{{ tr("feat5_t") }}</h3>
           <p>{{ tr("feat5_d") }}</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F4C9;</div>
-          <h3>{{ tr("feat6_t") }}</h3>
-          <p>{{ tr("feat6_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F310;</div>
-          <h3>{{ tr("feat7_t") }}</h3>
-          <p>{{ tr("feat7_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F4C8;</div>
-          <h3>{{ tr("feat8_t") }}</h3>
-          <p>{{ tr("feat8_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F514;</div>
-          <h3>{{ tr("feat9_t") }}</h3>
-          <p>{{ tr("feat9_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F3C6;</div>
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/><circle cx="4" cy="12" r="1" fill="var(--accent)"/></svg></div>
           <h3>{{ tr("feat10_t") }}</h3>
           <p>{{ tr("feat10_d") }}</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F4A1;</div>
-          <h3>{{ tr("feat11_t") }}</h3>
-          <p>{{ tr("feat11_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F310;</div>
-          <h3>{{ tr("feat12_t") }}</h3>
-          <p>{{ tr("feat12_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F3B4;</div>
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/><circle cx="15" cy="15" r="2" fill="var(--accent)" opacity="0.3"/></svg></div>
           <h3>{{ tr("feat14_t") }}</h3>
           <p>{{ tr("feat14_d") }}</p>
         </div>
         <div class="feature-card feature-card-agent" id="feature-agent">
-          <div class="feature-icon">&#x1F916;</div>
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5" fill="var(--accent)"/><circle cx="15" cy="10" r="1.5" fill="var(--accent)"/><path d="M9 15h6"/><path d="M12 2v2"/><path d="M12 20v2"/></svg></div>
           <div class="feature-card-text">
             <h3>{{ tr("feat13_t") }}</h3>
             <p>{{ tr("feat13_d") }}</p>
           </div>
         </div>
+        <!-- Hidden features (revealed by "See all") -->
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <h3>{{ tr("feat2_t") }}</h3>
+          <p>{{ tr("feat2_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
+          <h3>{{ tr("feat4_t") }}</h3>
+          <p>{{ tr("feat4_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <h3>{{ tr("feat6_t") }}</h3>
+          <p>{{ tr("feat6_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0118 0"/><path d="M4 11V8"/><path d="M22 11V8"/><path d="M12 11v9"/><circle cx="12" cy="11" r="2"/></svg></div>
+          <h3>{{ tr("feat7_t") }}</h3>
+          <p>{{ tr("feat7_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <h3>{{ tr("feat8_t") }}</h3>
+          <p>{{ tr("feat8_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div>
+          <h3>{{ tr("feat9_t") }}</h3>
+          <p>{{ tr("feat9_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/></svg></div>
+          <h3>{{ tr("feat11_t") }}</h3>
+          <p>{{ tr("feat11_d") }}</p>
+        </div>
+        <div class="feature-card feature-extra" style="display:none;">
+          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="6" height="12" rx="1"/><rect x="16" y="6" width="6" height="12" rx="1"/><path d="M8 12h8"/><path d="M8 9h8"/><path d="M8 15h8"/></svg></div>
+          <h3>{{ tr("feat12_t") }}</h3>
+          <p>{{ tr("feat12_d") }}</p>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:1.5rem;">
+        <button id="show-all-features" onclick="document.querySelectorAll('.feature-extra').forEach(e=>{e.style.display='';e.style.animation='fadeInUp 0.3s ease forwards'});this.style.display='none';" style="background:none;border:1px solid var(--md-default-fg-color--lightest);color:var(--md-default-fg-color--light);padding:0.6rem 1.5rem;border-radius:0.5rem;cursor:pointer;font-size:0.9rem;font-weight:500;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='';this.style.color=''">
+          ↓ See all 14 features
+        </button>
       </div>
     </div>
   </section>
@@ -1340,51 +1353,51 @@
       <p class="section-subtitle">{{ tr("uc_subtitle") }}</p>
       <div class="usecase-grid">
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F3C6;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg></div>
           <div><h4>"{{ tr("uc1_t") }}"</h4><p>{{ tr("uc1_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F916;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5" fill="var(--accent)"/><circle cx="15" cy="10" r="1.5" fill="var(--accent)"/><path d="M9 15h6"/></svg></div>
           <div><h4>"{{ tr("uc2_t") }}"</h4><p>{{ tr("uc2_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F50B;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
           <div><h4>"{{ tr("uc3_t") }}"</h4><p>{{ tr("uc3_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F6A8;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
           <div><h4>"{{ tr("uc4_t") }}"</h4><p>{{ tr("uc4_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F4CF;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
           <div><h4>"{{ tr("uc5_t") }}"</h4><p>{{ tr("uc5_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F525;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg></div>
           <div><h4>"{{ tr("uc6_t") }}"</h4><p>{{ tr("uc6_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F4CA;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1"/><polyline points="13 15 9 19 13 23"/></svg></div>
           <div><h4>"{{ tr("uc7_t") }}"</h4><p>{{ tr("uc7_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1FA7A;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <div><h4>"{{ tr("uc8_t") }}"</h4><p>{{ tr("uc8_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F4BB;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
           <div><h4>"{{ tr("uc9_t") }}"</h4><p>{{ tr("uc9_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F504;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
           <div><h4>"{{ tr("uc10_t") }}"</h4><p>{{ tr("uc10_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F4E1;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
           <div><h4>"{{ tr("uc11_t") }}"</h4><p>{{ tr("uc11_d") }}</p></div>
         </div>
         <div class="usecase-item">
-          <div class="usecase-icon">&#x1F9E0;</div>
+          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2a7 7 0 017 7c0 3-2 5-3 7h-8c-1-2-3-4-3-7a7 7 0 017-7z"/><path d="M9 22h6"/><path d="M10 18h4"/></svg></div>
           <div><h4>"{{ tr("uc12_t") }}"</h4><p>{{ tr("uc12_d") }}</p></div>
         </div>
       </div>
@@ -1526,42 +1539,42 @@ mlx-lm     30.1   38ms</code>
       <p class="section-subtitle">{{ tr("met_subtitle") }}</p>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-icon">&#x1F680;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
           <h4>tok/s</h4>
           <p>{{ tr("m_toks") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x23F1;&#xFE0F;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
           <h4>TTFT</h4>
           <p>{{ tr("m_ttft") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x26A1;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
           <h4>Power (W)</h4>
           <p>{{ tr("m_power") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x1F50B;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <h4>tok/s/W</h4>
           <p>{{ tr("m_eff") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x1F4C8;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
           <h4>Stability</h4>
           <p>{{ tr("m_stab") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x1F4BE;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h4"/></svg></div>
           <h4>VRAM</h4>
           <p>{{ tr("m_vram") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x1F321;&#xFE0F;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M14 4v10.54a4 4 0 11-4 0V4a2 2 0 014 0z"/></svg></div>
           <h4>Thermal</h4>
           <p>{{ tr("m_therm") }}</p>
         </div>
         <div class="metric-card">
-          <div class="metric-icon">&#x1F4CF;</div>
+          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
           <h4>Context</h4>
           <p>{{ tr("m_ctx") }}</p>
         </div>
