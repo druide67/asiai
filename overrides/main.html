@@ -41,15 +41,24 @@
   <meta name="twitter:site" content="@asiai_dev">
 
   <!-- hreflang alternate links -->
-  {% set langs = ['en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ja', 'ko'] %}
-  {% for lang in langs %}
-  {% if lang == 'en' %}
-  <link rel="alternate" href="{{ page.canonical_url }}" hreflang="en">
-  <link rel="alternate" href="{{ page.canonical_url }}" hreflang="x-default">
+  {% set base_url = 'https://asiai.dev/' %}
+  {% set raw_path = page.canonical_url | replace(base_url, '') %}
+  {# Strip language prefix (fr/, de/, etc.) to get the EN base path #}
+  {% if raw_path[:3] in ['fr/', 'de/', 'es/', 'it/', 'pt/', 'zh/', 'ja/', 'ko/'] %}
+  {% set en_path = raw_path[3:] %}
   {% else %}
-  <link rel="alternate" href="{{ page.canonical_url | replace('https://asiai.dev/', 'https://asiai.dev/' ~ lang ~ '/') }}" hreflang="{{ lang }}">
+  {% set en_path = raw_path %}
   {% endif %}
-  {% endfor %}
+  <link rel="alternate" href="{{ base_url }}{{ en_path }}" hreflang="en">
+  <link rel="alternate" href="{{ base_url }}{{ en_path }}" hreflang="x-default">
+  <link rel="alternate" href="{{ base_url }}fr/{{ en_path }}" hreflang="fr">
+  <link rel="alternate" href="{{ base_url }}de/{{ en_path }}" hreflang="de">
+  <link rel="alternate" href="{{ base_url }}es/{{ en_path }}" hreflang="es">
+  <link rel="alternate" href="{{ base_url }}it/{{ en_path }}" hreflang="it">
+  <link rel="alternate" href="{{ base_url }}pt/{{ en_path }}" hreflang="pt">
+  <link rel="alternate" href="{{ base_url }}zh/{{ en_path }}" hreflang="zh">
+  <link rel="alternate" href="{{ base_url }}ja/{{ en_path }}" hreflang="ja">
+  <link rel="alternate" href="{{ base_url }}ko/{{ en_path }}" hreflang="ko">
 
   <!-- Structured Data: SoftwareApplication (global) -->
   <script type="application/ld+json">
