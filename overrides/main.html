@@ -265,6 +265,42 @@
   });
   </script>
 
+  <!-- Accessibility: language selector aria-expanded + Escape -->
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var sel = document.querySelector('.md-select');
+    if (!sel) return;
+    var btn = sel.querySelector('button, [role="button"]');
+    if (btn) {
+      btn.setAttribute('aria-expanded', 'false');
+      btn.addEventListener('click', function(e) {
+        var open = sel.classList.toggle('md-select--open');
+        btn.setAttribute('aria-expanded', String(open));
+        e.stopPropagation();
+      });
+    }
+    var list = sel.querySelector('ul');
+    if (list) list.setAttribute('role', 'menu');
+    /* Admonitions: add role="note" for screen readers */
+    document.querySelectorAll('.admonition').forEach(function(el) {
+      el.setAttribute('role', 'note');
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && sel.classList.contains('md-select--open')) {
+        sel.classList.remove('md-select--open');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        if (btn) btn.focus();
+      }
+    });
+    document.addEventListener('click', function(e) {
+      if (!sel.contains(e.target) && sel.classList.contains('md-select--open')) {
+        sel.classList.remove('md-select--open');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+  </script>
+
   <!-- GoatCounter analytics (privacy-friendly, no cookies) -->
   <script data-goatcounter="https://asiai.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>

@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 620" width="800" height="620">
+  <defs>
+    <style>
+      @media (prefers-color-scheme: light) {
+        .bg { fill: #fafafa; }
+        .box-fill { fill: #ffffff; }
+        .box-stroke { stroke: #e4e4e7; }
+        .box-accent-stroke { stroke: #0891b2; }
+        .text-primary { fill: #09090b; }
+        .text-secondary { fill: #52525b; }
+        .text-accent { fill: #0891b2; }
+        .text-muted { fill: #a1a1aa; }
+        .arrow-line { stroke: #d4d4d8; }
+        .arrow-head { fill: #d4d4d8; }
+        .arrow-accent-line { stroke: #0891b2; }
+        .arrow-accent-head { fill: #0891b2; }
+        .group-stroke { stroke: #e4e4e7; }
+      }
+      @media (prefers-color-scheme: dark) {
+        .bg { fill: #09090b; }
+        .box-fill { fill: #111113; }
+        .box-stroke { stroke: #27272a; }
+        .box-accent-stroke { stroke: #06b6d4; }
+        .text-primary { fill: #fafafa; }
+        .text-secondary { fill: #a1a1aa; }
+        .text-accent { fill: #06b6d4; }
+        .text-muted { fill: #52525b; }
+        .arrow-line { stroke: #3f3f46; }
+        .arrow-head { fill: #3f3f46; }
+        .arrow-accent-line { stroke: #06b6d4; }
+        .arrow-accent-head { fill: #06b6d4; }
+        .group-stroke { stroke: #1c1c1f; }
+      }
+      /* Default to dark (matches site default) */
+      .bg { fill: #09090b; }
+      .box-fill { fill: #111113; }
+      .box-stroke { stroke: #27272a; }
+      .box-accent-stroke { stroke: #06b6d4; }
+      .text-primary { fill: #fafafa; }
+      .text-secondary { fill: #a1a1aa; }
+      .text-accent { fill: #06b6d4; }
+      .text-muted { fill: #52525b; }
+      .arrow-line { stroke: #3f3f46; }
+      .arrow-head { fill: #3f3f46; }
+      .arrow-accent-line { stroke: #06b6d4; }
+      .arrow-accent-head { fill: #06b6d4; }
+      .group-stroke { stroke: #1c1c1f; }
+
+      text { font-family: 'Geist Sans', system-ui, -apple-system, sans-serif; }
+      .label { font-size: 13px; font-weight: 500; }
+      .label-sm { font-size: 11px; font-weight: 400; }
+      .label-accent { font-size: 13px; font-weight: 600; }
+      .title { font-size: 15px; font-weight: 700; }
+      .layer-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" class="arrow-head"/>
+    </marker>
+    <marker id="ah-a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" class="arrow-accent-head"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="620" class="bg" rx="0"/>
+
+  <!-- Layer 1: Engines -->
+  <text x="30" y="30" class="layer-label text-muted">INFERENCE ENGINES</text>
+  <rect x="30" y="40" width="740" height="70" fill="none" class="group-stroke" stroke-width="1" stroke-dasharray="6 3" rx="12"/>
+
+  <rect x="50" y="52" width="90" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="95" y="78" class="label text-primary" text-anchor="middle">Ollama</text>
+
+  <rect x="160" y="52" width="90" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="205" y="78" class="label text-primary" text-anchor="middle">LM Studio</text>
+
+  <rect x="270" y="52" width="90" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="315" y="78" class="label text-primary" text-anchor="middle">mlx-lm</text>
+
+  <rect x="380" y="52" width="90" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="425" y="78" class="label text-primary" text-anchor="middle">llama.cpp</text>
+
+  <rect x="490" y="52" width="90" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="535" y="78" class="label text-primary" text-anchor="middle">oMLX</text>
+
+  <rect x="600" y="52" width="90" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="645" y="78" class="label text-primary" text-anchor="middle">vllm-mlx</text>
+
+  <rect x="710" y="52" width="50" height="44" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="735" y="78" class="label text-primary" text-anchor="middle">Exo</text>
+
+  <!-- HTTP arrows down -->
+  <text x="400" y="134" class="label-sm text-secondary" text-anchor="middle">HTTP (auto-detected ports)</text>
+  <line x1="400" y1="110" x2="400" y2="150" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- Layer 2: asiai core -->
+  <text x="30" y="168" class="layer-label text-muted">ASIAI CORE</text>
+  <rect x="30" y="178" width="740" height="100" fill="none" class="group-stroke" stroke-width="1" stroke-dasharray="6 3" rx="12"/>
+
+  <rect x="50" y="192" width="160" height="70" class="box-fill box-accent-stroke" stroke-width="1.5" rx="8"/>
+  <text x="130" y="218" class="label-accent text-accent" text-anchor="middle">Engine Adapters</text>
+  <text x="130" y="236" class="label-sm text-secondary" text-anchor="middle">7 engines · ABC · detect</text>
+  <text x="130" y="250" class="label-sm text-secondary" text-anchor="middle">openai_compat base</text>
+
+  <rect x="230" y="192" width="170" height="70" class="box-fill box-accent-stroke" stroke-width="1.5" rx="8"/>
+  <text x="315" y="218" class="label-accent text-accent" text-anchor="middle">Collectors</text>
+  <text x="315" y="236" class="label-sm text-secondary" text-anchor="middle">GPU · CPU · thermal · memory</text>
+  <text x="315" y="250" class="label-sm text-secondary" text-anchor="middle">power (IOReport) · inference</text>
+
+  <rect x="420" y="192" width="160" height="70" class="box-fill box-accent-stroke" stroke-width="1.5" rx="8"/>
+  <text x="500" y="218" class="label-accent text-accent" text-anchor="middle">Benchmark</text>
+  <text x="500" y="236" class="label-sm text-secondary" text-anchor="middle">warmup · N runs · median</text>
+  <text x="500" y="250" class="label-sm text-secondary" text-anchor="middle">CI95 · card · regression</text>
+
+  <rect x="600" y="192" width="160" height="70" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="680" y="218" class="label text-primary" text-anchor="middle">Advisor</text>
+  <text x="680" y="236" class="label-sm text-secondary" text-anchor="middle">recommend model</text>
+  <text x="680" y="250" class="label-sm text-secondary" text-anchor="middle">engine · quantization</text>
+
+  <!-- Arrows to storage -->
+  <line x1="130" y1="262" x2="400" y2="320" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="315" y1="262" x2="400" y2="320" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="500" y1="262" x2="400" y2="320" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- Layer 3: Storage -->
+  <text x="30" y="310" class="layer-label text-muted">STORAGE</text>
+  <rect x="200" y="318" width="400" height="60" class="box-fill box-accent-stroke" stroke-width="1.5" rx="8"/>
+  <text x="400" y="342" class="label-accent text-accent" text-anchor="middle">SQLite WAL</text>
+  <text x="400" y="360" class="label-sm text-secondary" text-anchor="middle">metrics · models · benchmarks · engine_status · alerts · community</text>
+
+  <!-- Arrows to outputs -->
+  <line x1="280" y1="378" x2="100" y2="430" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="340" y1="378" x2="260" y2="430" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="400" y1="378" x2="400" y2="430" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="460" y1="378" x2="540" y2="430" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="520" y1="378" x2="680" y2="430" class="arrow-line" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- Layer 4: Outputs -->
+  <text x="30" y="428" class="layer-label text-muted">OUTPUTS</text>
+
+  <rect x="45" y="438" width="110" height="50" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="100" y="458" class="label text-primary" text-anchor="middle">CLI</text>
+  <text x="100" y="474" class="label-sm text-secondary" text-anchor="middle">ANSI · --json</text>
+
+  <rect x="185" y="438" width="110" height="50" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="240" y="458" class="label text-primary" text-anchor="middle">TUI</text>
+  <text x="240" y="474" class="label-sm text-secondary" text-anchor="middle">Textual</text>
+
+  <rect x="325" y="438" width="110" height="50" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="380" y="458" class="label text-primary" text-anchor="middle">Web</text>
+  <text x="380" y="474" class="label-sm text-secondary" text-anchor="middle">htmx · SSE · charts</text>
+
+  <rect x="465" y="438" width="110" height="50" class="box-fill box-accent-stroke" stroke-width="1.5" rx="8"/>
+  <text x="520" y="458" class="label-accent text-accent" text-anchor="middle">MCP Server</text>
+  <text x="520" y="474" class="label-sm text-secondary" text-anchor="middle">11 tools · 3 resources</text>
+
+  <rect x="605" y="438" width="140" height="50" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="675" y="458" class="label text-primary" text-anchor="middle">Prometheus</text>
+  <text x="675" y="474" class="label-sm text-secondary" text-anchor="middle">/metrics · 20+ gauges</text>
+
+  <!-- Arrows to clients -->
+  <line x1="520" y1="488" x2="400" y2="545" class="arrow-accent-line" stroke-width="1.5" marker-end="url(#ah-a)"/>
+  <text x="400" y="530" class="label-sm text-secondary" text-anchor="middle">MCP / HTTP</text>
+
+  <!-- Layer 5: Clients -->
+  <text x="30" y="556" class="layer-label text-muted">CLIENTS</text>
+
+  <rect x="200" y="564" width="120" height="40" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="260" y="589" class="label text-primary" text-anchor="middle">Claude Code</text>
+
+  <rect x="340" y="564" width="120" height="40" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="400" y="589" class="label text-primary" text-anchor="middle">Cursor</text>
+
+  <rect x="480" y="564" width="120" height="40" class="box-fill box-stroke" stroke-width="1" rx="8"/>
+  <text x="540" y="589" class="label text-primary" text-anchor="middle">AI Agents</text>
+</svg>

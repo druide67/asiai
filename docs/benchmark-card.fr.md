@@ -33,28 +33,14 @@ Le format est conçu pour une lisibilité maximale lorsqu'il est partagé en min
 
 ## Comment ça fonctionne
 
-```
-asiai bench --card --share
-        │
-        ▼
-  ┌──────────┐     ┌──────────────┐     ┌──────────────┐
-  │ Benchmark │────▶│ Générer SVG  │────▶│  Sauvegarder  │
-  │  (normal) │     │  (zéro-dep)  │     │ ~/.local/     │
-  └──────────┘     └──────┬───────┘     │ share/asiai/  │
-                          │             │ cards/         │
-                          ▼             └──────────────┘
-                   ┌──────────────┐
-                   │ --share ?    │
-                   │ Soumettre    │
-                   │ bench + PNG  │
-                   └──────┬───────┘
-                          │
-                          ▼
-                   ┌──────────────┐
-                   │ URL parta-   │
-                   │ geable + PNG │
-                   │ téléchargé   │
-                   └──────────────┘
+``` mermaid
+graph LR
+    cmd["asiai bench --card --share"] --> bench["Benchmark<br/>(normal)"]
+    bench --> svg["Generate SVG<br/>(zero-dep)"]
+    svg --> save["Save local<br/>~/.local/share/asiai/cards/"]
+    svg --> share{"--share ?"}
+    share -->|Yes| submit["Submit bench<br/>+ get PNG"]
+    submit --> url["Shareable URL<br/>+ PNG downloaded"]
 ```
 
 ### Mode local (par défaut)

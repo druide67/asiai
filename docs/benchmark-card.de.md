@@ -33,28 +33,14 @@ Das Format ist für maximale Lesbarkeit als Thumbnail auf Reddit, X oder Discord
 
 ## Wie es funktioniert
 
-```
-asiai bench --card --share
-        │
-        ▼
-  ┌──────────┐     ┌──────────────┐     ┌──────────────┐
-  │ Benchmark │────▶│ SVG erzeugen │────▶│ Lokal spei-   │
-  │  (normal) │     │  (Zero-Dep)  │     │ chern         │
-  └──────────┘     └──────┬───────┘     │ ~/.local/     │
-                          │             │ share/asiai/  │
-                          ▼             │ cards/         │
-                   ┌──────────────┐     └──────────────┘
-                   │ --share ?    │
-                   │ Bench ein-   │
-                   │ reichen +PNG │
-                   └──────┬───────┘
-                          │
-                          ▼
-                   ┌──────────────┐
-                   │ Teilbare URL │
-                   │ + PNG herun- │
-                   │ tergeladen   │
-                   └──────────────┘
+``` mermaid
+graph LR
+    cmd["asiai bench --card --share"] --> bench["Benchmark<br/>(normal)"]
+    bench --> svg["Generate SVG<br/>(zero-dep)"]
+    svg --> save["Save local<br/>~/.local/share/asiai/cards/"]
+    svg --> share{"--share ?"}
+    share -->|Yes| submit["Submit bench<br/>+ get PNG"]
+    submit --> url["Shareable URL<br/>+ PNG downloaded"]
 ```
 
 ### Lokaler Modus (Standard)

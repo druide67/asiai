@@ -422,53 +422,59 @@ Historique d'activité par moteur. Utile pour détecter les schémas d'inférenc
 
 ### Génération lente (tok/s faible)
 
-```
-tok/s en dessous des attentes ?
-├── Vérifier memory_pressure
-│   ├── "critical" → Les modèles swappent sur disque. Décharger des modèles ou ajouter de la RAM.
-│   └── "normal" → Continuer
-├── Vérifier thermal_state
-│   ├── "serious"/"critical" → Throttling thermique. Refroidir, vérifier la ventilation.
-│   └── "nominal" → Continuer
-├── Vérifier gpu_utilization_percent
-│   ├── < 10% → GPU non utilisé. Vérifier la config du moteur (couches num_gpu).
-│   ├── > 90% → GPU saturé. Réduire les requêtes simultanées.
-│   └── 20-80% → Normal. Vérifier la quantification et la taille du contexte.
-└── Vérifier swap_used_gb
-    ├── > 0 → Modèle trop grand pour la RAM. Utiliser une quantification plus petite.
-    └── 0 → Vérifier la version du moteur, essayer un autre moteur.
+``` mermaid
+graph TD
+    A["tok/s below expected?"] --> B["Check memory_pressure"]
+    A --> C["Check thermal_state"]
+    A --> D["Check gpu_utilization_percent"]
+    A --> E["Check swap_used_gb"]
+
+    B -->|critical| B1["Models swapping to disk.<br/>Unload models or add RAM."]
+    B -->|normal| B2["Continue"]
+
+    C -->|"serious / critical"| C1["Thermal throttling.<br/>Cool down, check airflow."]
+    C -->|nominal| C2["Continue"]
+
+    D -->|"< 10%"| D1["GPU not being used.<br/>Check engine config (num_gpu layers)."]
+    D -->|"> 90%"| D2["GPU saturated.<br/>Reduce concurrent requests."]
+    D -->|"20-80%"| D3["Normal. Check model<br/>quantization and context size."]
+
+    E -->|"> 0"| E1["Model too large for RAM.<br/>Use smaller quantization."]
+    E -->|"0"| E2["Check engine version,<br/>try different engine."]
 ```
 
 ### Moteur ne répond pas
 
-```
-engine.running == false ?
-├── Vérifier si le processus existe : lsof -i :<port>
-│   ├── Pas de processus → Le moteur a planté. Le redémarrer.
-│   └── Le processus existe mais ne répond pas → Moteur bloqué.
-├── Vérifier memory_pressure
-│   ├── "critical" → Tué par OOM. Décharger d'autres modèles d'abord.
-│   └── "normal" → Vérifier les logs du moteur.
-└── Essayer : asiai doctor (diagnostic complet)
+``` mermaid
+graph TD
+    A["engine.running == false?"] --> B["Check process: lsof -i :port"]
+    A --> C["Check memory_pressure"]
+    A --> D["Try: asiai doctor"]
+
+    B -->|No process| B1["Engine crashed. Restart it."]
+    B -->|Process exists| B2["Engine hung."]
+
+    C -->|critical| C1["OOM killed.<br/>Unload other models first."]
+    C -->|normal| C2["Check engine logs."]
+
+    D --> D1["Comprehensive diagnostics"]
 ```
 
 ### Pression mémoire élevée / Débordement VRAM
 
-```
-memory_pressure == "warn" ou "critical" ?
-├── Vérifier swap_used_gb
-│   ├── > 2 Go → Débordement VRAM. Les modèles ne tiennent pas en mémoire unifiée.
-│   │   ├── La latence sera 5–50× pire (swap disque).
-│   │   ├── Décharger des modèles : ollama rm <model>, lms unload
-│   │   └── Ou utiliser une quantification plus petite (Q4_K_M → Q3_K_S).
-│   └── < 2 Go → Gérable mais à surveiller de près.
-├── Vérifier les modèles chargés sur tous les moteurs
-│   ├── Plusieurs grands modèles → Décharger les modèles inutilisés
-│   │   ├── Ollama : ollama rm <model> ou attendre le déchargement automatique
-│   │   └── LM Studio : décharger via l'UI ou lms unload
-│   └── Un seul modèle > 80% de la RAM → Utiliser une quantification plus petite
-└── Vérifier gpu_memory_allocated_bytes
-    └── Comparer à ram_total_gb. Si > 80%, le prochain chargement de modèle déclenchera du swap.
+``` mermaid
+graph TD
+    A["memory_pressure == warn/critical?"] --> B["Check swap_used_gb"]
+    A --> C["Check models loaded"]
+    A --> D["Check gpu_memory_allocated_bytes"]
+
+    B -->|"> 2 GB"| B1["VRAM overflow.<br/>Latency 5-50x worse (disk swap).<br/>Unload models or use Q3_K_S."]
+    B -->|"< 2 GB"| B2["Manageable.<br/>Monitor closely."]
+
+    C -->|"Multiple large models"| C1["Unload unused models.<br/>ollama rm / lms unload"]
+    C -->|"Single model > 80% RAM"| C2["Use smaller quantization."]
+
+    D --> D1["If > 80% of RAM,<br/>next model load triggers swap."]
 ```
 
 ## Signaux d'activité d'inférence

@@ -422,53 +422,59 @@ Engine-spezifischer Aktivitätsverlauf. Nützlich zur Erkennung von Inferenzmust
 
 ### Langsame Generierung (niedriger tok/s)
 
-```
-tok/s unter Erwartung?
-├── memory_pressure prüfen
-│   ├── "critical" → Modelle swappen auf Festplatte. Modelle entladen oder RAM hinzufügen.
-│   └── "normal" → Weiter
-├── thermal_state prüfen
-│   ├── "serious"/"critical" → Thermisches Throttling. Abkühlen, Belüftung prüfen.
-│   └── "nominal" → Weiter
-├── gpu_utilization_percent prüfen
-│   ├── < 10% → GPU wird nicht genutzt. Engine-Konfiguration prüfen (num_gpu-Schichten).
-│   ├── > 90% → GPU gesättigt. Gleichzeitige Anfragen reduzieren.
-│   └── 20-80% → Normal. Quantisierung und Kontextgröße prüfen.
-└── swap_used_gb prüfen
-    ├── > 0 → Modell zu groß für RAM. Kleinere Quantisierung verwenden.
-    └── 0 → Engine-Version prüfen, andere Engine versuchen.
+``` mermaid
+graph TD
+    A["tok/s below expected?"] --> B["Check memory_pressure"]
+    A --> C["Check thermal_state"]
+    A --> D["Check gpu_utilization_percent"]
+    A --> E["Check swap_used_gb"]
+
+    B -->|critical| B1["Models swapping to disk.<br/>Unload models or add RAM."]
+    B -->|normal| B2["Continue"]
+
+    C -->|"serious / critical"| C1["Thermal throttling.<br/>Cool down, check airflow."]
+    C -->|nominal| C2["Continue"]
+
+    D -->|"< 10%"| D1["GPU not being used.<br/>Check engine config (num_gpu layers)."]
+    D -->|"> 90%"| D2["GPU saturated.<br/>Reduce concurrent requests."]
+    D -->|"20-80%"| D3["Normal. Check model<br/>quantization and context size."]
+
+    E -->|"> 0"| E1["Model too large for RAM.<br/>Use smaller quantization."]
+    E -->|"0"| E2["Check engine version,<br/>try different engine."]
 ```
 
 ### Engine antwortet nicht
 
-```
-engine.running == false?
-├── Prüfen ob Prozess existiert: lsof -i :<port>
-│   ├── Kein Prozess → Engine abgestürzt. Neu starten.
-│   └── Prozess existiert aber antwortet nicht → Engine hängt.
-├── memory_pressure prüfen
-│   ├── "critical" → OOM-Kill. Erst andere Modelle entladen.
-│   └── "normal" → Engine-Logs prüfen.
-└── Versuchen: asiai doctor (umfassende Diagnose)
+``` mermaid
+graph TD
+    A["engine.running == false?"] --> B["Check process: lsof -i :port"]
+    A --> C["Check memory_pressure"]
+    A --> D["Try: asiai doctor"]
+
+    B -->|No process| B1["Engine crashed. Restart it."]
+    B -->|Process exists| B2["Engine hung."]
+
+    C -->|critical| C1["OOM killed.<br/>Unload other models first."]
+    C -->|normal| C2["Check engine logs."]
+
+    D --> D1["Comprehensive diagnostics"]
 ```
 
 ### Hoher Speicherdruck / VRAM-Überlauf
 
-```
-memory_pressure == "warn" oder "critical"?
-├── swap_used_gb prüfen
-│   ├── > 2 GB → VRAM-Überlauf. Modelle passen nicht in Unified Memory.
-│   │   ├── Latenz wird 5–50× schlechter (Festplatten-Swap).
-│   │   ├── Modelle entladen: ollama rm <model>, lms unload
-│   │   └── Oder kleinere Quantisierung verwenden (Q4_K_M → Q3_K_S).
-│   └── < 2 GB → Handhabbar, aber genau beobachten.
-├── Geladene Modelle über alle Engines prüfen
-│   ├── Mehrere große Modelle → Unbenutzte Modelle entladen
-│   │   ├── Ollama: ollama rm <model> oder auf Auto-Entladung warten
-│   │   └── LM Studio: über UI entladen oder lms unload
-│   └── Einzelnes Modell > 80% RAM → Kleinere Quantisierung verwenden
-└── gpu_memory_allocated_bytes prüfen
-    └── Mit ram_total_gb vergleichen. Wenn > 80%, wird das nächste Modell-Laden Swap auslösen.
+``` mermaid
+graph TD
+    A["memory_pressure == warn/critical?"] --> B["Check swap_used_gb"]
+    A --> C["Check models loaded"]
+    A --> D["Check gpu_memory_allocated_bytes"]
+
+    B -->|"> 2 GB"| B1["VRAM overflow.<br/>Latency 5-50x worse (disk swap).<br/>Unload models or use Q3_K_S."]
+    B -->|"< 2 GB"| B2["Manageable.<br/>Monitor closely."]
+
+    C -->|"Multiple large models"| C1["Unload unused models.<br/>ollama rm / lms unload"]
+    C -->|"Single model > 80% RAM"| C2["Use smaller quantization."]
+
+    D --> D1["If > 80% of RAM,<br/>next model load triggers swap."]
 ```
 
 ## Inferenzaktivitätssignale

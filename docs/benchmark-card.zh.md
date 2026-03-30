@@ -33,28 +33,14 @@ asiai bench --card                    # SVG + PNG 本地保存
 
 ## 工作原理
 
-```
-asiai bench --card --share
-        │
-        ▼
-  ┌──────────┐     ┌──────────────┐     ┌──────────────┐
-  │ Benchmark │────▶│ Generate SVG │────▶│  Save local   │
-  │  (normal) │     │  (zero-dep)  │     │ ~/.local/     │
-  └──────────┘     └──────┬───────┘     │ share/asiai/  │
-                          │             │ cards/         │
-                          ▼             └──────────────┘
-                   ┌──────────────┐
-                   │ --share ?    │
-                   │ Submit bench │
-                   │ + get PNG    │
-                   └──────┬───────┘
-                          │
-                          ▼
-                   ┌──────────────┐
-                   │ Shareable    │
-                   │ URL + PNG    │
-                   │ downloaded   │
-                   └──────────────┘
+``` mermaid
+graph LR
+    cmd["asiai bench --card --share"] --> bench["Benchmark<br/>(normal)"]
+    bench --> svg["Generate SVG<br/>(zero-dep)"]
+    svg --> save["Save local<br/>~/.local/share/asiai/cards/"]
+    svg --> share{"--share ?"}
+    share -->|Yes| submit["Submit bench<br/>+ get PNG"]
+    submit --> url["Shareable URL<br/>+ PNG downloaded"]
 ```
 
 ### 本地模式（默认）

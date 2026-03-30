@@ -33,28 +33,14 @@ The format is designed for maximum readability when shared as a thumbnail on Red
 
 ## How it works
 
-```
-asiai bench --card --share
-        │
-        ▼
-  ┌──────────┐     ┌──────────────┐     ┌──────────────┐
-  │ Benchmark │────▶│ Generate SVG │────▶│  Save local   │
-  │  (normal) │     │  (zero-dep)  │     │ ~/.local/     │
-  └──────────┘     └──────┬───────┘     │ share/asiai/  │
-                          │             │ cards/         │
-                          ▼             └──────────────┘
-                   ┌──────────────┐
-                   │ --share ?    │
-                   │ Submit bench │
-                   │ + get PNG    │
-                   └──────┬───────┘
-                          │
-                          ▼
-                   ┌──────────────┐
-                   │ Shareable    │
-                   │ URL + PNG    │
-                   │ downloaded   │
-                   └──────────────┘
+``` mermaid
+graph LR
+    cmd["asiai bench --card --share"] --> bench["Benchmark<br/>(normal)"]
+    bench --> svg["Generate SVG<br/>(zero-dep)"]
+    svg --> save["Save local<br/>~/.local/share/asiai/cards/"]
+    svg --> share{"--share ?"}
+    share -->|Yes| submit["Submit bench<br/>+ get PNG"]
+    submit --> url["Shareable URL<br/>+ PNG downloaded"]
 ```
 
 ### Local mode (default)

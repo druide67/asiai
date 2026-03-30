@@ -422,53 +422,59 @@ Storico dello stato dei motori. Utile per rilevare pattern di inferenza.
 
 ### Generazione lenta (tok/s basso)
 
-```
-tok/s sotto le aspettative?
-├── Controlla memory_pressure
-│   ├── "critical" → I modelli stanno facendo swap su disco. Scarica modelli o aggiungi RAM.
-│   └── "normal" → Continua
-├── Controlla thermal_state
-│   ├── "serious"/"critical" → Throttling termico. Raffredda, controlla il flusso d'aria.
-│   └── "nominal" → Continua
-├── Controlla gpu_utilization_percent
-│   ├── < 10% → GPU non utilizzata. Controlla la config del motore (num_gpu layers).
-│   ├── > 90% → GPU satura. Riduci le richieste concorrenti.
-│   └── 20-80% → Normale. Controlla quantizzazione e dimensione contesto.
-└── Controlla swap_used_gb
-    ├── > 0 → Modello troppo grande per la RAM. Usa quantizzazione inferiore.
-    └── 0 → Controlla versione motore, prova un motore diverso.
+``` mermaid
+graph TD
+    A["tok/s below expected?"] --> B["Check memory_pressure"]
+    A --> C["Check thermal_state"]
+    A --> D["Check gpu_utilization_percent"]
+    A --> E["Check swap_used_gb"]
+
+    B -->|critical| B1["Models swapping to disk.<br/>Unload models or add RAM."]
+    B -->|normal| B2["Continue"]
+
+    C -->|"serious / critical"| C1["Thermal throttling.<br/>Cool down, check airflow."]
+    C -->|nominal| C2["Continue"]
+
+    D -->|"< 10%"| D1["GPU not being used.<br/>Check engine config (num_gpu layers)."]
+    D -->|"> 90%"| D2["GPU saturated.<br/>Reduce concurrent requests."]
+    D -->|"20-80%"| D3["Normal. Check model<br/>quantization and context size."]
+
+    E -->|"> 0"| E1["Model too large for RAM.<br/>Use smaller quantization."]
+    E -->|"0"| E2["Check engine version,<br/>try different engine."]
 ```
 
 ### Motore non risponde
 
-```
-engine.running == false?
-├── Controlla se il processo esiste: lsof -i :<port>
-│   ├── Nessun processo → Il motore è crashato. Riavvialo.
-│   └── Processo esiste ma non risponde → Il motore è bloccato.
-├── Controlla memory_pressure
-│   ├── "critical" → Terminato per OOM. Prima scarica gli altri modelli.
-│   └── "normal" → Controlla i log del motore.
-└── Prova: asiai doctor (diagnostica completa)
+``` mermaid
+graph TD
+    A["engine.running == false?"] --> B["Check process: lsof -i :port"]
+    A --> C["Check memory_pressure"]
+    A --> D["Try: asiai doctor"]
+
+    B -->|No process| B1["Engine crashed. Restart it."]
+    B -->|Process exists| B2["Engine hung."]
+
+    C -->|critical| C1["OOM killed.<br/>Unload other models first."]
+    C -->|normal| C2["Check engine logs."]
+
+    D --> D1["Comprehensive diagnostics"]
 ```
 
 ### Pressione di memoria elevata / Overflow VRAM
 
-```
-memory_pressure == "warn" o "critical"?
-├── Controlla swap_used_gb
-│   ├── > 2 GB → Overflow VRAM. I modelli non entrano nella memoria unificata.
-│   │   ├── La latenza sarà 5–50x peggiore (swap su disco).
-│   │   ├── Scarica modelli: ollama rm <model>, lms unload
-│   │   └── Oppure usa quantizzazione inferiore (Q4_K_M → Q3_K_S).
-│   └── < 2 GB → Gestibile ma monitora attentamente.
-├── Controlla modelli caricati su tutti i motori
-│   ├── Più modelli grandi → Scarica i modelli non utilizzati
-│   │   ├── Ollama: ollama rm <model> o attendi lo scaricamento automatico
-│   │   └── LM Studio: scarica tramite UI o lms unload
-│   └── Singolo modello > 80% RAM → Usa quantizzazione inferiore
-└── Controlla gpu_memory_allocated_bytes
-    └── Confronta con ram_total_gb. Se > 80%, il prossimo caricamento causerà swap.
+``` mermaid
+graph TD
+    A["memory_pressure == warn/critical?"] --> B["Check swap_used_gb"]
+    A --> C["Check models loaded"]
+    A --> D["Check gpu_memory_allocated_bytes"]
+
+    B -->|"> 2 GB"| B1["VRAM overflow.<br/>Latency 5-50x worse (disk swap).<br/>Unload models or use Q3_K_S."]
+    B -->|"< 2 GB"| B2["Manageable.<br/>Monitor closely."]
+
+    C -->|"Multiple large models"| C1["Unload unused models.<br/>ollama rm / lms unload"]
+    C -->|"Single model > 80% RAM"| C2["Use smaller quantization."]
+
+    D --> D1["If > 80% of RAM,<br/>next model load triggers swap."]
 ```
 
 ## Segnali di attività di inferenza

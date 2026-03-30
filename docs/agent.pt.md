@@ -422,53 +422,59 @@ Histórico de atividade específico por engine. Útil para detectar padrões de 
 
 ### Geração Lenta (tok/s baixo)
 
-```
-tok/s abaixo do esperado?
-├── Verificar memory_pressure
-│   ├── "critical" → Modelos sendo trocados para disco. Descarregue modelos ou adicione RAM.
-│   └── "normal" → Continuar
-├── Verificar thermal_state
-│   ├── "serious"/"critical" → Throttling térmico. Resfrie, verifique a ventilação.
-│   └── "nominal" → Continuar
-├── Verificar gpu_utilization_percent
-│   ├── < 10% → GPU não está sendo usada. Verifique a config da engine (camadas num_gpu).
-│   ├── > 90% → GPU saturada. Reduza requisições concorrentes.
-│   └── 20-80% → Normal. Verifique a quantização do modelo e o tamanho do contexto.
-└── Verificar swap_used_gb
-    ├── > 0 → Modelo grande demais para a RAM. Use quantização menor.
-    └── 0 → Verifique a versão da engine, tente uma engine diferente.
+``` mermaid
+graph TD
+    A["tok/s below expected?"] --> B["Check memory_pressure"]
+    A --> C["Check thermal_state"]
+    A --> D["Check gpu_utilization_percent"]
+    A --> E["Check swap_used_gb"]
+
+    B -->|critical| B1["Models swapping to disk.<br/>Unload models or add RAM."]
+    B -->|normal| B2["Continue"]
+
+    C -->|"serious / critical"| C1["Thermal throttling.<br/>Cool down, check airflow."]
+    C -->|nominal| C2["Continue"]
+
+    D -->|"< 10%"| D1["GPU not being used.<br/>Check engine config (num_gpu layers)."]
+    D -->|"> 90%"| D2["GPU saturated.<br/>Reduce concurrent requests."]
+    D -->|"20-80%"| D3["Normal. Check model<br/>quantization and context size."]
+
+    E -->|"> 0"| E1["Model too large for RAM.<br/>Use smaller quantization."]
+    E -->|"0"| E2["Check engine version,<br/>try different engine."]
 ```
 
 ### Engine Não Responde
 
-```
-engine.running == false?
-├── Verificar se o processo existe: lsof -i :<port>
-│   ├── Sem processo → Engine travou. Reinicie.
-│   └── Processo existe mas não responde → Engine travada.
-├── Verificar memory_pressure
-│   ├── "critical" → Eliminada por OOM. Descarregue outros modelos primeiro.
-│   └── "normal" → Verifique os logs da engine.
-└── Tente: asiai doctor (diagnóstico completo)
+``` mermaid
+graph TD
+    A["engine.running == false?"] --> B["Check process: lsof -i :port"]
+    A --> C["Check memory_pressure"]
+    A --> D["Try: asiai doctor"]
+
+    B -->|No process| B1["Engine crashed. Restart it."]
+    B -->|Process exists| B2["Engine hung."]
+
+    C -->|critical| C1["OOM killed.<br/>Unload other models first."]
+    C -->|normal| C2["Check engine logs."]
+
+    D --> D1["Comprehensive diagnostics"]
 ```
 
 ### Alta Pressão de Memória / Estouro de VRAM
 
-```
-memory_pressure == "warn" ou "critical"?
-├── Verificar swap_used_gb
-│   ├── > 2 GB → Estouro de VRAM. Modelos não cabem na memória unificada.
-│   │   ├── A latência será 5–50× pior (swap em disco).
-│   │   ├── Descarregue modelos: ollama rm <model>, lms unload
-│   │   └── Ou use quantização menor (Q4_K_M → Q3_K_S).
-│   └── < 2 GB → Gerenciável, mas monitore de perto.
-├── Verificar modelos carregados em todas as engines
-│   ├── Múltiplos modelos grandes → Descarregue modelos não usados
-│   │   ├── Ollama: ollama rm <model> ou aguarde o descarregamento automático
-│   │   └── LM Studio: descarregue pela UI ou lms unload
-│   └── Modelo único > 80% RAM → Use quantização menor
-└── Verificar gpu_memory_allocated_bytes
-    └── Compare com ram_total_gb. Se > 80%, o próximo modelo carregado ativará swap.
+``` mermaid
+graph TD
+    A["memory_pressure == warn/critical?"] --> B["Check swap_used_gb"]
+    A --> C["Check models loaded"]
+    A --> D["Check gpu_memory_allocated_bytes"]
+
+    B -->|"> 2 GB"| B1["VRAM overflow.<br/>Latency 5-50x worse (disk swap).<br/>Unload models or use Q3_K_S."]
+    B -->|"< 2 GB"| B2["Manageable.<br/>Monitor closely."]
+
+    C -->|"Multiple large models"| C1["Unload unused models.<br/>ollama rm / lms unload"]
+    C -->|"Single model > 80% RAM"| C2["Use smaller quantization."]
+
+    D --> D1["If > 80% of RAM,<br/>next model load triggers swap."]
 ```
 
 ## Sinais de Atividade de Inferência

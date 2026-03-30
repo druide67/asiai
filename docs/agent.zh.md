@@ -422,53 +422,59 @@ SQLite 历史系统指标。默认：`hours=24`。最大：`hours=2160`（90 天
 
 ### 生成速度慢（低 tok/s）
 
-```
-tok/s 低于预期？
-├── 检查 memory_pressure
-│   ├── "critical" → 模型换页到磁盘。卸载模型或增加内存。
-│   └── "normal" → 继续
-├── 检查 thermal_state
-│   ├── "serious"/"critical" → 温控降频。降温，检查散热。
-│   └── "nominal" → 继续
-├── 检查 gpu_utilization_percent
-│   ├── < 10% → GPU 未被使用。检查引擎配置（num_gpu layers）。
-│   ├── > 90% → GPU 已饱和。减少并发请求。
-│   └── 20-80% → 正常。检查模型量化和上下文大小。
-└── 检查 swap_used_gb
-    ├── > 0 → 模型超出内存。使用更小的量化。
-    └── 0 → 检查引擎版本，尝试其他引擎。
+``` mermaid
+graph TD
+    A["tok/s below expected?"] --> B["Check memory_pressure"]
+    A --> C["Check thermal_state"]
+    A --> D["Check gpu_utilization_percent"]
+    A --> E["Check swap_used_gb"]
+
+    B -->|critical| B1["Models swapping to disk.<br/>Unload models or add RAM."]
+    B -->|normal| B2["Continue"]
+
+    C -->|"serious / critical"| C1["Thermal throttling.<br/>Cool down, check airflow."]
+    C -->|nominal| C2["Continue"]
+
+    D -->|"< 10%"| D1["GPU not being used.<br/>Check engine config (num_gpu layers)."]
+    D -->|"> 90%"| D2["GPU saturated.<br/>Reduce concurrent requests."]
+    D -->|"20-80%"| D3["Normal. Check model<br/>quantization and context size."]
+
+    E -->|"> 0"| E1["Model too large for RAM.<br/>Use smaller quantization."]
+    E -->|"0"| E2["Check engine version,<br/>try different engine."]
 ```
 
 ### 引擎无响应
 
-```
-engine.running == false？
-├── 检查进程是否存在：lsof -i :<port>
-│   ├── 无进程 → 引擎崩溃。重启引擎。
-│   └── 进程存在但无响应 → 引擎卡住。
-├── 检查 memory_pressure
-│   ├── "critical" → OOM 被杀。先卸载其他模型。
-│   └── "normal" → 检查引擎日志。
-└── 尝试：asiai doctor（全面诊断）
+``` mermaid
+graph TD
+    A["engine.running == false?"] --> B["Check process: lsof -i :port"]
+    A --> C["Check memory_pressure"]
+    A --> D["Try: asiai doctor"]
+
+    B -->|No process| B1["Engine crashed. Restart it."]
+    B -->|Process exists| B2["Engine hung."]
+
+    C -->|critical| C1["OOM killed.<br/>Unload other models first."]
+    C -->|normal| C2["Check engine logs."]
+
+    D --> D1["Comprehensive diagnostics"]
 ```
 
 ### 高内存压力 / VRAM 溢出
 
-```
-memory_pressure == "warn" 或 "critical"？
-├── 检查 swap_used_gb
-│   ├── > 2 GB → VRAM 溢出。模型无法全部装入统一内存。
-│   │   ├── 延迟将恶化 5-50 倍（磁盘交换）。
-│   │   ├── 卸载模型：ollama rm <model>，lms unload
-│   │   └── 或使用更小的量化（Q4_K_M → Q3_K_S）。
-│   └── < 2 GB → 可控，但需密切监控。
-├── 检查所有引擎上已加载的模型
-│   ├── 多个大模型 → 卸载未使用的模型
-│   │   ├── Ollama：ollama rm <model> 或等待自动卸载
-│   │   └── LM Studio：通过 UI 或 lms unload 卸载
-│   └── 单模型 > 80% RAM → 使用更小的量化
-└── 检查 gpu_memory_allocated_bytes
-    └── 与 ram_total_gb 比较。如果 > 80%，下次模型加载将触发交换。
+``` mermaid
+graph TD
+    A["memory_pressure == warn/critical?"] --> B["Check swap_used_gb"]
+    A --> C["Check models loaded"]
+    A --> D["Check gpu_memory_allocated_bytes"]
+
+    B -->|"> 2 GB"| B1["VRAM overflow.<br/>Latency 5-50x worse (disk swap).<br/>Unload models or use Q3_K_S."]
+    B -->|"< 2 GB"| B2["Manageable.<br/>Monitor closely."]
+
+    C -->|"Multiple large models"| C1["Unload unused models.<br/>ollama rm / lms unload"]
+    C -->|"Single model > 80% RAM"| C2["Use smaller quantization."]
+
+    D --> D1["If > 80% of RAM,<br/>next model load triggers swap."]
 ```
 
 ## 推理活动信号

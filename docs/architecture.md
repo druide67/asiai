@@ -8,62 +8,14 @@ How data flows through asiai — from hardware sensors to your terminal, browser
 
 ## Overview
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         Your Mac (Apple Silicon)                     │
-│                                                                      │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐               │
-│  │   Ollama     │   │  LM Studio  │   │   mlx-lm    │  ...engines   │
-│  └──────┬───────┘   └──────┬──────┘   └──────┬──────┘               │
-│         │ HTTP              │ HTTP            │ HTTP                  │
-│         └──────────┬────────┴────────────────┘                       │
-│                    ▼                                                  │
-│  ┌─────────────────────────────────────────────────────────────┐     │
-│  │                      asiai core                              │     │
-│  │                                                              │     │
-│  │  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐      │     │
-│  │  │ Engines  │  │  Collectors  │  │    Benchmark     │      │     │
-│  │  │ adapters │  │  (GPU, CPU,  │  │  (warmup, runs,  │      │     │
-│  │  │ (6 ABC   │  │   thermal,   │  │   median, CI95)  │      │     │
-│  │  │  impls)  │  │   memory)    │  │                  │      │     │
-│  │  └────┬─────┘  └──────┬───────┘  └────────┬─────────┘      │     │
-│  │       │               │                    │                 │     │
-│  │       └───────┬───────┴────────────────────┘                 │     │
-│  │               ▼                                              │     │
-│  │  ┌──────────────────────────────────┐                       │     │
-│  │  │       Storage (SQLite WAL)       │                       │     │
-│  │  │  metrics · models · benchmarks   │                       │     │
-│  │  │  engine_status · alerts          │                       │     │
-│  │  │  community_submissions           │                       │     │
-│  │  └──────────────┬───────────────────┘                       │     │
-│  │                 │                                            │     │
-│  └─────────────────┼────────────────────────────────────────────┘     │
-│                    │                                                  │
-│         ┌──────────┼──────────┬─────────────┐                        │
-│         ▼          ▼          ▼             ▼                         │
-│  ┌───────────┐ ┌────────┐ ┌──────────┐ ┌──────────┐                │
-│  │    CLI    │ │  Web   │ │   MCP    │ │Prometheus│                │
-│  │  (ANSI,  │ │(htmx,  │ │ (stdio,  │ │ /metrics │                │
-│  │  --json) │ │ SSE,   │ │  SSE,    │ │          │                │
-│  │          │ │ charts)│ │  HTTP)   │ │          │                │
-│  └───────────┘ └────────┘ └──────────┘ └──────────┘                │
-│                                │                                     │
-└────────────────────────────────┼─────────────────────────────────────┘
-                                 │
-                    ┌────────────┼────────────┐
-                    ▼            ▼            ▼
-             ┌───────────┐ ┌─────────┐ ┌───────────┐
-             │Claude Code│ │ Cursor  │ │ AI agents │
-             │  (MCP)    │ │  (MCP)  │ │  (HTTP)   │
-             └───────────┘ └─────────┘ └───────────┘
-```
+![asiai architecture overview](assets/architecture.svg)
 
 ## Key files
 
 | Layer | Files | Role |
 |-------|-------|------|
 | **Engines** | `src/asiai/engines/` | ABC `InferenceEngine` + 7 adapters (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo). `OpenAICompatEngine` base class for OpenAI-compatible engines. |
-| **Collectors** | `src/asiai/collectors/` | System metrics: `gpu.py` (ioreg), `system.py` (CPU, memory, thermal), `processes.py` (inference activity via lsof). |
+| **Collectors** | `src/asiai/collectors/` | System metrics: `gpu.py` (ioreg), `system.py` (CPU, memory, thermal), `power.py` + `ioreport.py` (GPU/CPU/ANE watts via IOReport), `inference.py` (TCP connections, Prometheus scrape), `snapshot.py` (full system snapshot). |
 | **Benchmark** | `src/asiai/benchmark/` | `runner.py` (warmup + N runs, median, stddev, CI95), `prompts.py` (test prompts), `card.py` (SVG card generation). |
 | **Storage** | `src/asiai/storage/` | `db.py` (SQLite WAL, all CRUD), `schema.py` (tables + migrations). |
 | **CLI** | `src/asiai/cli.py` | Argparse entry point, all 12 commands. |

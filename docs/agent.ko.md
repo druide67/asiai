@@ -422,53 +422,59 @@ SQLite에서 과거 시스템 메트릭. 기본: `hours=24`. 최대: `hours=2160
 
 ### 느린 생성 (낮은 tok/s)
 
-```
-tok/s가 기대치보다 낮습니까?
-├── memory_pressure 확인
-│   ├── "critical" → 모델이 디스크로 스왑 중. 모델을 언로드하거나 RAM을 추가하세요.
-│   └── "normal" → 계속
-├── thermal_state 확인
-│   ├── "serious"/"critical" → 서멀 쓰로틀링. 냉각하고 통풍을 확인하세요.
-│   └── "nominal" → 계속
-├── gpu_utilization_percent 확인
-│   ├── 10% 미만 → GPU가 사용되지 않음. 엔진 설정(num_gpu 레이어)을 확인하세요.
-│   ├── 90% 초과 → GPU 포화. 동시 요청을 줄이세요.
-│   └── 20-80% → 정상. 모델 양자화와 컨텍스트 크기를 확인하세요.
-└── swap_used_gb 확인
-    ├── 0 초과 → 모델이 RAM에 맞지 않음. 더 작은 양자화를 사용하세요.
-    └── 0 → 엔진 버전을 확인하고, 다른 엔진을 시도하세요.
+``` mermaid
+graph TD
+    A["tok/s below expected?"] --> B["Check memory_pressure"]
+    A --> C["Check thermal_state"]
+    A --> D["Check gpu_utilization_percent"]
+    A --> E["Check swap_used_gb"]
+
+    B -->|critical| B1["Models swapping to disk.<br/>Unload models or add RAM."]
+    B -->|normal| B2["Continue"]
+
+    C -->|"serious / critical"| C1["Thermal throttling.<br/>Cool down, check airflow."]
+    C -->|nominal| C2["Continue"]
+
+    D -->|"< 10%"| D1["GPU not being used.<br/>Check engine config (num_gpu layers)."]
+    D -->|"> 90%"| D2["GPU saturated.<br/>Reduce concurrent requests."]
+    D -->|"20-80%"| D3["Normal. Check model<br/>quantization and context size."]
+
+    E -->|"> 0"| E1["Model too large for RAM.<br/>Use smaller quantization."]
+    E -->|"0"| E2["Check engine version,<br/>try different engine."]
 ```
 
 ### 엔진 무응답
 
-```
-engine.running == false?
-├── 프로세스 존재 확인: lsof -i :<port>
-│   ├── 프로세스 없음 → 엔진이 크래시됨. 재시작하세요.
-│   └── 프로세스 존재하지만 응답 없음 → 엔진 행.
-├── memory_pressure 확인
-│   ├── "critical" → OOM 킬됨. 먼저 다른 모델을 언로드하세요.
-│   └── "normal" → 엔진 로그를 확인하세요.
-└── 시도: asiai doctor (종합 진단)
+``` mermaid
+graph TD
+    A["engine.running == false?"] --> B["Check process: lsof -i :port"]
+    A --> C["Check memory_pressure"]
+    A --> D["Try: asiai doctor"]
+
+    B -->|No process| B1["Engine crashed. Restart it."]
+    B -->|Process exists| B2["Engine hung."]
+
+    C -->|critical| C1["OOM killed.<br/>Unload other models first."]
+    C -->|normal| C2["Check engine logs."]
+
+    D --> D1["Comprehensive diagnostics"]
 ```
 
 ### 높은 메모리 프레셔 / VRAM 오버플로
 
-```
-memory_pressure == "warn" 또는 "critical"?
-├── swap_used_gb 확인
-│   ├── 2 GB 초과 → VRAM 오버플로. 모델이 유니파이드 메모리에 맞지 않음.
-│   │   ├── 레이턴시가 5-50배 악화됩니다 (디스크 스왑).
-│   │   ├── 모델 언로드: ollama rm <model>, lms unload
-│   │   └── 또는 더 작은 양자화 사용 (Q4_K_M → Q3_K_S).
-│   └── 2 GB 미만 → 관리 가능하지만 주의 깊게 모니터링하세요.
-├── 모든 엔진에 로드된 모델 확인
-│   ├── 여러 대형 모델 → 미사용 모델 언로드
-│   │   ├── Ollama: ollama rm <model> 또는 자동 언로드 대기
-│   │   └── LM Studio: UI 또는 lms unload로 언로드
-│   └── 단일 모델이 RAM의 80% 초과 → 더 작은 양자화 사용
-└── gpu_memory_allocated_bytes 확인
-    └── ram_total_gb와 비교. 80% 초과 시, 다음 모델 로드에서 스왑이 발생합니다.
+``` mermaid
+graph TD
+    A["memory_pressure == warn/critical?"] --> B["Check swap_used_gb"]
+    A --> C["Check models loaded"]
+    A --> D["Check gpu_memory_allocated_bytes"]
+
+    B -->|"> 2 GB"| B1["VRAM overflow.<br/>Latency 5-50x worse (disk swap).<br/>Unload models or use Q3_K_S."]
+    B -->|"< 2 GB"| B2["Manageable.<br/>Monitor closely."]
+
+    C -->|"Multiple large models"| C1["Unload unused models.<br/>ollama rm / lms unload"]
+    C -->|"Single model > 80% RAM"| C2["Use smaller quantization."]
+
+    D --> D1["If > 80% of RAM,<br/>next model load triggers swap."]
 ```
 
 ## 추론 활동 신호

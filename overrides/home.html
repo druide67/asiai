@@ -3,6 +3,8 @@
 {% block tabs %}
 {{ super() }}
 
+<a href="#asiai-content" class="md-skip" tabindex="0">Skip to content</a>
+
 <style>
   /* ── Accent color (changes with mode) ── */
   :root { --accent: #06b6d4; --accent-rgb: 6, 182, 212; }
@@ -148,6 +150,9 @@
   .pain-card .pain-icon {
     font-size: 2rem;
     margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
   .pain-card h3 {
     font-size: 1.15rem;
@@ -179,6 +184,13 @@
   .feature-card .feature-icon {
     font-size: 1.5rem;
     margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    height: 36px;
+  }
+  .feature-card .feature-icon svg {
+    width: 32px;
+    height: 32px;
   }
   .feature-card h3 {
     font-size: 1.05rem;
@@ -212,9 +224,15 @@
   .usecase-item .usecase-icon {
     font-size: 1.25rem;
     flex-shrink: 0;
-    margin-top: 0.1rem;
+    margin-top: 0.2rem;
+    display: flex;
+    align-items: flex-start;
   }
-  .usecase-item h4 {
+  .usecase-item .usecase-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+  .usecase-item h3.uc-title {
     font-size: 0.95rem;
     font-weight: 600;
     margin: 0 0 0.25rem;
@@ -342,8 +360,11 @@
   .metric-card .metric-icon {
     font-size: 1.5rem;
     margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
-  .metric-card h4 {
+  .metric-card h3.uc-title {
     font-size: 0.95rem;
     font-weight: 700;
     margin: 0 0 0.25rem;
@@ -492,7 +513,6 @@
 
   /* ── Agent Feature Card ── */
   .feature-card-agent {
-    grid-column: 1 / -1;
     border-color: var(--accent);
     display: flex;
     gap: 1rem;
@@ -1142,7 +1162,7 @@
 {# Helper macro to get translation with fallback to English #}
 {% macro tr(key) %}{{ t[key][lang] | default(t[key]["en"]) }}{% endmacro %}
 
-<div class="asiai-home">
+<div class="asiai-home" id="asiai-content" role="main">
 
   <!-- ── Hero ── -->
   <section class="asiai-hero">
@@ -1289,12 +1309,10 @@
           <h3>{{ tr("feat14_t") }}</h3>
           <p>{{ tr("feat14_d") }}</p>
         </div>
-        <div class="feature-card feature-card-agent" id="feature-agent">
+        <div class="feature-card" id="feature-agent">
           <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5" fill="var(--accent)"/><circle cx="15" cy="10" r="1.5" fill="var(--accent)"/><path d="M9 15h6"/><path d="M12 2v2"/><path d="M12 20v2"/></svg></div>
-          <div class="feature-card-text">
-            <h3>{{ tr("feat13_t") }}</h3>
-            <p>{{ tr("feat13_d") }}</p>
-          </div>
+          <h3>{{ tr("feat13_t") }}</h3>
+          <p>{{ tr("feat13_d") }}</p>
         </div>
         <!-- Hidden features (revealed by "See all") -->
         <div class="feature-card feature-extra" style="display:none;">
@@ -1354,51 +1372,51 @@
       <div class="usecase-grid">
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg></div>
-          <div><h4>"{{ tr("uc1_t") }}"</h4><p>{{ tr("uc1_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc1_t") }}"</h3><p>{{ tr("uc1_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5" fill="var(--accent)"/><circle cx="15" cy="10" r="1.5" fill="var(--accent)"/><path d="M9 15h6"/></svg></div>
-          <div><h4>"{{ tr("uc2_t") }}"</h4><p>{{ tr("uc2_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc2_t") }}"</h3><p>{{ tr("uc2_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-          <div><h4>"{{ tr("uc3_t") }}"</h4><p>{{ tr("uc3_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc3_t") }}"</h3><p>{{ tr("uc3_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-          <div><h4>"{{ tr("uc4_t") }}"</h4><p>{{ tr("uc4_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc4_t") }}"</h3><p>{{ tr("uc4_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-          <div><h4>"{{ tr("uc5_t") }}"</h4><p>{{ tr("uc5_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc5_t") }}"</h3><p>{{ tr("uc5_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg></div>
-          <div><h4>"{{ tr("uc6_t") }}"</h4><p>{{ tr("uc6_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc6_t") }}"</h3><p>{{ tr("uc6_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1"/><polyline points="13 15 9 19 13 23"/></svg></div>
-          <div><h4>"{{ tr("uc7_t") }}"</h4><p>{{ tr("uc7_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc7_t") }}"</h3><p>{{ tr("uc7_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div><h4>"{{ tr("uc8_t") }}"</h4><p>{{ tr("uc8_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc8_t") }}"</h3><p>{{ tr("uc8_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-          <div><h4>"{{ tr("uc9_t") }}"</h4><p>{{ tr("uc9_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc9_t") }}"</h3><p>{{ tr("uc9_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-          <div><h4>"{{ tr("uc10_t") }}"</h4><p>{{ tr("uc10_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc10_t") }}"</h3><p>{{ tr("uc10_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
-          <div><h4>"{{ tr("uc11_t") }}"</h4><p>{{ tr("uc11_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc11_t") }}"</h3><p>{{ tr("uc11_d") }}</p></div>
         </div>
         <div class="usecase-item">
           <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2a7 7 0 017 7c0 3-2 5-3 7h-8c-1-2-3-4-3-7a7 7 0 017-7z"/><path d="M9 22h6"/><path d="M10 18h4"/></svg></div>
-          <div><h4>"{{ tr("uc12_t") }}"</h4><p>{{ tr("uc12_d") }}</p></div>
+          <div><h3 class="uc-title">"{{ tr("uc12_t") }}"</h3><p>{{ tr("uc12_d") }}</p></div>
         </div>
       </div>
     </div>
@@ -1540,42 +1558,42 @@ mlx-lm     30.1   38ms</code>
       <div class="metrics-grid">
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-          <h4>tok/s</h4>
+          <h3 class="uc-title">tok/s</h3>
           <p>{{ tr("m_toks") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-          <h4>TTFT</h4>
+          <h3 class="uc-title">TTFT</h3>
           <p>{{ tr("m_ttft") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-          <h4>Power (W)</h4>
+          <h3 class="uc-title">Power (W)</h3>
           <p>{{ tr("m_power") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <h4>tok/s/W</h4>
+          <h3 class="uc-title">tok/s/W</h3>
           <p>{{ tr("m_eff") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-          <h4>Stability</h4>
+          <h3 class="uc-title">Stability</h3>
           <p>{{ tr("m_stab") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h4"/></svg></div>
-          <h4>VRAM</h4>
+          <h3 class="uc-title">VRAM</h3>
           <p>{{ tr("m_vram") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M14 4v10.54a4 4 0 11-4 0V4a2 2 0 014 0z"/></svg></div>
-          <h4>Thermal</h4>
+          <h3 class="uc-title">Thermal</h3>
           <p>{{ tr("m_therm") }}</p>
         </div>
         <div class="metric-card">
           <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-          <h4>Context</h4>
+          <h3 class="uc-title">Context</h3>
           <p>{{ tr("m_ctx") }}</p>
         </div>
       </div>

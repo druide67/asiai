@@ -82,8 +82,8 @@ body {
   --md-default-bg-color--lighter: #18181b;
   --md-default-bg-color--lightest: #1f1f23;
 
-  /* Code & surfaces */
-  --md-code-bg-color: #111113;
+  /* Code & surfaces — enough contrast vs #09090b bg */
+  --md-code-bg-color: #161618;
 
   /* Accent — Cyan */
   --md-primary-fg-color: #06b6d4;
@@ -106,8 +106,9 @@ body {
   /* Typeset links */
   --md-typeset-a-color: #06b6d4;
 
-  /* Header */
-  --md-header-bg-color: #09090b;
+  /* Header — dark bg, not accent-colored */
+  --md-header-bg-color: #0d0d0f;
+  --md-header-fg-color: #fafafa;
 
   /* Footer */
   --md-footer-bg-color: #09090b;
@@ -117,10 +118,39 @@ body {
   --md-sidebar-bg-color: #09090b;
 }
 
-/* Header bar — solid dark with subtle border */
+/* Header bar — solid dark, all elements white */
 [data-md-color-scheme="slate"] .md-header {
-  background-color: #09090b;
+  background-color: #0d0d0f;
   border-bottom: 1px solid #1c1c1f;
+  color: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-header .md-header__button,
+[data-md-color-scheme="slate"] .md-header .md-header__button img,
+[data-md-color-scheme="slate"] .md-header .md-search__icon,
+[data-md-color-scheme="slate"] .md-header .md-icon {
+  color: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-header .md-header__topic {
+  color: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-header .md-search__form {
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+[data-md-color-scheme="slate"] .md-header .md-search__input {
+  color: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-header .md-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+[data-md-color-scheme="slate"] .md-header .md-source {
+  color: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-header .md-source__icon svg {
+  fill: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-header .md-select__link {
+  color: #fafafa;
 }
 
 /* Tabs bar */
@@ -129,13 +159,28 @@ body {
   border-bottom: 1px solid #1c1c1f;
 }
 
-/* Code blocks — darker surface */
+/* Inline code — visible against page bg */
 [data-md-color-scheme="slate"] .md-typeset code {
-  background-color: #111113;
+  background-color: #1a1a1e;
+  border: 1px solid #27272a;
 }
 
+/* Code blocks — distinct surface */
 [data-md-color-scheme="slate"] .md-typeset pre > code {
-  background-color: #0d0d0f;
+  background-color: #0f0f12;
+  border: 1px solid #1c1c1f;
+}
+
+/* Nav sidebar — ensure text contrast */
+[data-md-color-scheme="slate"] .md-nav__link {
+  color: #a1a1aa;
+}
+[data-md-color-scheme="slate"] .md-nav__link:hover,
+[data-md-color-scheme="slate"] .md-nav__link--active {
+  color: #fafafa;
+}
+[data-md-color-scheme="slate"] .md-nav__item--active > .md-nav__link {
+  color: #06b6d4;
 }
 
 /* Tables — subtle borders */
@@ -148,7 +193,7 @@ body {
   border-bottom: 1px solid #1c1c1f;
 }
 
-/* Admonitions — darker backgrounds */
+/* Admonitions — darker backgrounds + ARIA role */
 [data-md-color-scheme="slate"] .md-typeset .admonition,
 [data-md-color-scheme="slate"] .md-typeset details {
   background-color: #111113;
@@ -175,6 +220,39 @@ body {
 }
 
 /* --- Subtle refinements --- */
+
+/* Language selector — click instead of hover (WCAG 4.1.2) */
+.md-select .md-select__inner {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.md-select:focus-within .md-select__inner,
+.md-select.md-select--open .md-select__inner {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Override hover behavior — only show on focus-within or JS toggle */
+.md-select:hover .md-select__inner {
+  opacity: 0;
+  pointer-events: none;
+}
+.md-select:hover:focus-within .md-select__inner,
+.md-select:hover.md-select--open .md-select__inner {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Links in tables — underline for accessibility (WCAG 1.4.1) */
+[data-md-color-scheme="slate"] .md-typeset table a,
+[data-md-color-scheme="default"] .md-typeset table a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+[data-md-color-scheme="slate"] .md-typeset table a:hover {
+  color: #06b6d4;
+}
 
 /* Smoother scrollbar (dark mode) */
 [data-md-color-scheme="slate"] ::-webkit-scrollbar {
