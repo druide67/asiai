@@ -287,4 +287,12 @@ MIGRATIONS = [
             "ALTER TABLE metrics ADD COLUMN power_source TEXT DEFAULT ''",
         ],
     },
+    # v1.5: TurboQuant KV cache metadata
+    {
+        "table": "benchmarks",
+        "columns": ["kv_cache_type"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN kv_cache_type TEXT DEFAULT ''",
+        ],
+    },
 ]

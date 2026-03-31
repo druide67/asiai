@@ -632,6 +632,12 @@ def cmd_bench(args: argparse.Namespace) -> int:
             progress_cb=lambda msg: print(f"  {msg}"),
         )
 
+    # Inject kv_cache metadata if specified
+    kv_cache_type = getattr(args, "kv_cache", None) or ""
+    if kv_cache_type:
+        for r in bench_run.results:
+            r["kv_cache_type"] = kv_cache_type
+
     # Store results
     if bench_run.results:
         store_benchmark(db_path, bench_run.results)
@@ -1318,6 +1324,14 @@ def main(argv: list[str] | None = None) -> int:
         "--card",
         action="store_true",
         help="Generate a shareable benchmark card (SVG locally, PNG with --share)",
+    )
+    bench_parser.add_argument(
+        "--kv-cache",
+        metavar="TYPE",
+        help=(
+            "KV cache type (turbo2, turbo3, turbo4, q8_0, f16). "
+            "Records the cache type used by the target engine."
+        ),
     )
 
     # leaderboard

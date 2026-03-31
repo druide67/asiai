@@ -34,6 +34,39 @@ _PORT_PROCESS_MAP: dict[str, str] = {
     "ollama": "ollama",
 }
 
+_TURBO_CACHE_PATTERNS = ["turbo2", "turbo3", "turbo4"]
+
+
+def detect_kv_cache_type(port: int = 0) -> str:
+    """Detect TurboQuant KV cache type from running process arguments.
+
+    Scans ``ps aux`` for llama-server processes and checks for
+    ``--cache-type-k`` or ``--cache-type-v`` arguments containing
+    turbo2/turbo3/turbo4.
+
+    Returns the most compressed turbo type found, or empty string.
+    """
+    try:
+        ps_out = subprocess.run(
+            ["ps", "axo", "pid,command"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+    for line in ps_out.splitlines():
+        if "llama-server" not in line and "llama_server" not in line:
+            continue
+        if port and f"--port {port}" not in line and f"--port={port}" not in line:
+            continue
+        for pat in _TURBO_CACHE_PATTERNS:
+            if pat in line:
+                return pat
+    return ""
+
+
 # Default ports to scan when no explicit URL is given.
 DEFAULT_URLS = [
     "http://localhost:11434",  # Ollama default

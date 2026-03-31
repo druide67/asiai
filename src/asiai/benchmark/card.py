@@ -35,6 +35,7 @@ def generate_card_svg(
     engine_versions: dict[str, str] | None = None,
     power_data: dict[str, dict] | None = None,
     engine_quants: dict[str, str] | None = None,
+    kv_cache_type: str = "",
 ) -> str:
     """Generate an SVG benchmark card (1200x630) from aggregated results.
 
@@ -139,6 +140,9 @@ def generate_card_svg(
             specs_parts.append(f"{context_size // 1024}K ctx")
         else:
             specs_parts.append(f"{context_size} ctx")
+    # KV cache type (TurboQuant)
+    if kv_cache_type:
+        specs_parts.append(f"KV:{kv_cache_type}")
 
     # Specs chips inline with model name (right of it) — no separate banner line
     specs_svg = ""
