@@ -306,6 +306,7 @@ class ProcessInfo:
 # More accurate than RSS: includes Metal/GPU allocations that are resident.
 # ---------------------------------------------------------------------------
 
+
 def _get_phys_footprint(pid: int) -> int:
     """Get physical footprint (bytes) for a process via proc_pid_rusage.
 

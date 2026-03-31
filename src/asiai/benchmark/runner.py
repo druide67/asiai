@@ -421,9 +421,17 @@ def _run_single(
         run.errors.append(f"{engine.name}/{prompt.name}: invalid tok/s ({gen.tok_per_sec})")
         return
     if gen.tok_per_sec > 500:
-        logger.warning("Suspicious tok/s: %.1f on %s — possible measurement error", gen.tok_per_sec, engine.name)
+        logger.warning(
+            "Suspicious tok/s: %.1f on %s — possible measurement error",
+            gen.tok_per_sec,
+            engine.name,
+        )
     if gen.ttft_ms > 60000:
-        logger.warning("TTFT >60s (%.0fms) on %s — likely memory swapping", gen.ttft_ms, engine.name)
+        logger.warning(
+            "TTFT >60s (%.0fms) on %s — likely memory swapping",
+            gen.ttft_ms,
+            engine.name,
+        )
 
     run.results.append(
         {
