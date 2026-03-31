@@ -349,6 +349,9 @@ def generate_card_svg(
         eng_key = bar.get("engine", name_raw)
         if engine_versions and eng_key in engine_versions and engine_versions[eng_key]:
             name_raw = f"{name_raw} v{engine_versions[eng_key]}"
+        # TurboQuant branding in engine name
+        if kv_cache_type and kv_cache_type.startswith("turbo"):
+            name_raw = f"{name_raw} + TurboQuant"
         name_text = _escape(name_raw)
         name_w = int(len(name_text) * 7.5) + 16
         all_chip_elements.append(

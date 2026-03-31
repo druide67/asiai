@@ -695,6 +695,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             engine_versions=eng_vers,
             power_data=pw_data,
             engine_quants=eng_quants,
+            kv_cache_type=kv_cache_type,
         )
         svg_path = save_card(card_svg, fmt="svg")
         print(f"  {green('✓')} Card saved: {svg_path}")
