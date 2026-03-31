@@ -55,3 +55,6 @@ site/
 # Claude Code (private project instructions)
 CLAUDE.md
 .claude/
+*.gif
+nohup.out
+.serena/
