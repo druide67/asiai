@@ -66,6 +66,7 @@ nav:
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md
   - Benchmark Best Practices: benchmark-best-practices.md
+  - TurboQuant on Apple Silicon: turboquant.md
   - FAQ: faq.md
 
 plugins:
