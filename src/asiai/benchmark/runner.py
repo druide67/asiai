@@ -20,7 +20,7 @@ from asiai.engines.base import InferenceEngine
 logger = logging.getLogger("asiai.benchmark.runner")
 
 
-def _detect_ollama_runner_type() -> str:
+def detect_ollama_runner_type() -> str:
     """Detect if Ollama is using MLX or llama.cpp runner.
 
     Checks ``ps aux`` for ``--mlx-engine`` or ``--ollama-engine`` flags
@@ -198,9 +198,8 @@ def run_benchmark(
         prompts = get_prompts(prompt_names)
     ts = int(time.time())
 
-    # For BenchmarkRun.model: use the model if all slots share it, else first slot's
-    all_models = {s.model for s in slots}
-    run_model = slots[0].model if len(all_models) == 1 else slots[0].model
+    # For BenchmarkRun.model: first slot's model (used for display)
+    run_model = slots[0].model
     run = BenchmarkRun(ts=ts, model=run_model)
 
     # Collect machine info once per run (stable during session)
@@ -247,6 +246,11 @@ def run_benchmark(
 
     # Environment check: detect duplicate engine processes (P0 audit fix)
     _check_duplicate_engines(run, slots)
+
+    # Cache Ollama runner type once per benchmark session (not per result)
+    ollama_runner_type = ""
+    if any(s.engine.name == "ollama" for s in slots):
+        ollama_runner_type = detect_ollama_runner_type()
 
     slots_run = 0
     prev_model = ""
@@ -380,6 +384,7 @@ def run_benchmark(
                     gpu_cores=gpu_cores,
                     ram_gb=ram_gb,
                     vram_estimated=vram_estimated,
+                    ollama_runner_type=ollama_runner_type,
                 )
 
         # Stop per-engine power monitoring and annotate this engine's results
@@ -476,6 +481,7 @@ def _run_single(
     gpu_cores: int = 0,
     ram_gb: int = 0,
     vram_estimated: bool = False,
+    ollama_runner_type: str = "",
 ) -> None:
     """Run a single engine+prompt benchmark and append to run."""
     mem = collect_memory()
@@ -531,7 +537,7 @@ def _run_single(
             "run_index": run_index,
             "load_time_ms": load_time_ms,
             "engine_version": engine_version,
-            "engine_runner": (_detect_ollama_runner_type() if engine.name == "ollama" else ""),
+            "engine_runner": ollama_runner_type,
             "model_format": model_format,
             "model_quantization": model_quantization,
             "hw_chip": hw_chip,

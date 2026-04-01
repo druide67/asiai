@@ -188,9 +188,9 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     generation_duration_ms, hw_chip, os_version,
                     context_size, gpu_cores, ram_gb,
                     power_watts_ioreport, power_watts_powermetrics,
-                    power_source)
+                    power_source, kv_cache_type)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
                     r["engine"],
@@ -221,6 +221,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("power_watts_ioreport", 0.0),
                     r.get("power_watts_powermetrics", 0.0),
                     r.get("power_source", ""),
+                    r.get("kv_cache_type", ""),
                 ),
             )
         conn.commit()

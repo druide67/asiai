@@ -566,9 +566,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
             print(f"  {dim('●')} {eng.name} @ {eng.base_url}")
         # Show Ollama runner type
         if eng.name == "ollama":
-            from asiai.benchmark.runner import _detect_ollama_runner_type
+            from asiai.benchmark.runner import detect_ollama_runner_type
 
-            runner = _detect_ollama_runner_type()
+            runner = detect_ollama_runner_type()
             if runner:
                 print(f"    {dim('runner:')} {runner}")
     print()

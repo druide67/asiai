@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """Cross-validate asiai benchmark measurements against reference methods.
 
-Runs the same prompt on the same model using 4 different measurement methods:
-1. asiai bench (OllamaEngine.generate via /api/generate)
-2. Ollama native API (/api/generate stream=false, internal timings)
-3. OpenAI-compatible streaming (/v1/chat/completions stream=true)
-4. ollama CLI (ollama run --verbose)
+Runs the same prompt on the same model using 3 measurement methods:
+1. Ollama native API (/api/generate stream=false, internal timings)
+2. OpenAI-compatible streaming (/v1/chat/completions stream=true)
+3. asiai OllamaEngine.generate() (same as bench command)
 
 Outputs a comparison table showing delta between methods.
 
 Usage:
-    python scripts/cross-validate-bench.py [--model MODEL]
+    python scripts/cross-validate-bench.py [MODEL]
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import time
 from urllib.error import URLError
@@ -30,19 +28,24 @@ BASE_URL = "http://localhost:11434"
 
 def method_ollama_native() -> dict:
     """Method 1: Ollama /api/generate stream=false (internal GPU timings)."""
-    payload = json.dumps({
-        "model": MODEL,
-        "prompt": PROMPT,
-        "stream": False,
-        "options": {"temperature": 0.0, "num_predict": MAX_TOKENS},
-    }).encode()
+    payload = json.dumps(
+        {
+            "model": MODEL,
+            "prompt": PROMPT,
+            "stream": False,
+            "options": {"temperature": 0.0, "num_predict": MAX_TOKENS},
+        }
+    ).encode()
 
-    t0 = time.monotonic()
-    req = Request(f"{BASE_URL}/api/generate", data=payload)
-    req.add_header("Content-Type", "application/json")
-    with urlopen(req, timeout=300) as resp:
-        result = json.loads(resp.read())
-    wall = time.monotonic() - t0
+    try:
+        t0 = time.monotonic()
+        req = Request(f"{BASE_URL}/api/generate", data=payload)
+        req.add_header("Content-Type", "application/json")
+        with urlopen(req, timeout=300) as resp:
+            result = json.loads(resp.read())
+        wall = time.monotonic() - t0
+    except (URLError, OSError, TimeoutError) as e:
+        return {"method": "Ollama native (/api/generate)", "error": str(e)}
 
     ec = result.get("eval_count", 0)
     ed = result.get("eval_duration", 1) / 1e9
@@ -60,13 +63,15 @@ def method_ollama_native() -> dict:
 
 def method_openai_streaming() -> dict:
     """Method 2: OpenAI-compatible /v1/chat/completions streaming."""
-    payload = json.dumps({
-        "model": MODEL,
-        "messages": [{"role": "user", "content": PROMPT}],
-        "max_tokens": MAX_TOKENS,
-        "stream": True,
-        "temperature": 0.0,
-    }).encode()
+    payload = json.dumps(
+        {
+            "model": MODEL,
+            "messages": [{"role": "user", "content": PROMPT}],
+            "max_tokens": MAX_TOKENS,
+            "stream": True,
+            "temperature": 0.0,
+        }
+    ).encode()
 
     t0 = time.monotonic()
     req = Request(f"{BASE_URL}/v1/chat/completions", data=payload)
@@ -111,7 +116,9 @@ def method_openai_streaming() -> dict:
         "ttft_ms": round(ttft * 1000),
         "ttft_source": "client",
         "wall_s": round(wall, 2),
-        "note": f"comp_tok={comp_tok}, chunks={chunks}, fallback={'yes' if comp_tok == 0 else 'no'}",
+        "note": (
+            f"comp_tok={comp_tok}, chunks={chunks}, fallback={'yes' if comp_tok == 0 else 'no'}"
+        ),
     }
 
 
