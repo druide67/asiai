@@ -236,9 +236,7 @@ def render_snapshot(snap: dict) -> None:
             if kv_comp > 0 and kv_orig > 0:
                 ratio = kv_orig / kv_comp
                 comp_mb = kv_comp / (1024 * 1024)
-                parts.append(
-                    green(f"TQ {comp_mb:.0f}MB ({ratio:.1f}x)")
-                )
+                parts.append(green(f"TQ {comp_mb:.0f}MB ({ratio:.1f}x)"))
             if tok_total > 0:
                 if tok_total >= 1_000_000:
                     parts.append(f"{tok_total / 1_000_000:.1f}M tokens")
