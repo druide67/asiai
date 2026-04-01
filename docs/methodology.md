@@ -25,20 +25,44 @@ asiai follows established benchmarking standards ([MLPerf](https://mlcommons.org
 
 Tokens per second of **generation time only**, excluding prompt processing (TTFT).
 
+**Ollama** (native API, `/api/generate`):
 ```
-generation_s = total_duration_s - ttft_s
-tok_per_sec  = tokens_generated / generation_s
+tok_per_sec = eval_count / (eval_duration_ns / 1e9)
 ```
+Source: internal GPU timing reported by Ollama. No network overhead. This is the most accurate measurement.
+
+**OpenAI-compatible engines** (LM Studio, llama.cpp, mlx-lm, vllm-mlx):
+```
+generation_s = wall_clock_s - ttft_s
+tok_per_sec  = completion_tokens / generation_s
+```
+Source: client-side wall clock via streaming SSE. Includes HTTP overhead per chunk (~1% slower than server-side timing, validated by cross-validation).
+
+**Token count**: from `usage.completion_tokens` in the server response. If the server does not report this field, asiai falls back to `len(text) // 4` and logs a warning. This fallback can be ~25% off.
+
+**Cross-validation** (April 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB):
+
+| Method | tok/s | Delta vs reference |
+|--------|-------|--------------------|
+| Ollama native (internal GPU) | 66.6 | reference |
+| OpenAI streaming (client) | 66.1 | -0.8% |
 
 At large context sizes (e.g., 64k tokens), TTFT can dominate total duration. Excluding it from tok/s prevents fast generators from appearing slow.
 
 ### TTFT — Time to First Token
 
-Time between sending the request and receiving the first output token, in milliseconds. Measured server-side (Ollama) or client-side at the first SSE content chunk (OpenAI-compatible engines).
+Time between sending the request and receiving the first output token, in milliseconds.
+
+**Ollama**: measured server-side via `prompt_eval_duration` (internal timing). This is pure prompt processing time with no network overhead. Reported as `ttft_source: server`.
+
+**OpenAI-compatible engines**: measured client-side at the first SSE content chunk. Includes HTTP setup, request transmission, and server processing. Typically 10-100ms higher than server-side. Reported as `ttft_source: client`.
+
+!!! warning "TTFT comparison"
+    Do not compare Ollama server-side TTFT with OpenAI-compat client-side TTFT without accounting for the difference. The `ttft_source` field in benchmark results indicates which method was used.
 
 ### Power — GPU Watts
 
-Average GPU power during execution of each specific engine, measured via `sudo powermetrics`. One `PowerMonitor` per engine — no session-wide averaging.
+Average GPU power during execution, measured via Apple's IOReport Energy Model framework (no sudo required). One measurement per engine — not session-wide averaging.
 
 ### tok/s/W — Energy Efficiency
 
@@ -48,7 +72,7 @@ tok_per_sec_per_watt = tok_per_sec / power_watts
 
 ### Variance — Pooled Stddev
 
-Pooled intra-prompt standard deviation captures run-to-run noise **without** mixing in inter-prompt variance.
+Pooled intra-prompt standard deviation captures run-to-run noise **without** mixing in inter-prompt variance. Uses Bessel's correction (N-1 denominator) for unbiased sample variance.
 
 Stability classification:
 
@@ -58,27 +82,47 @@ Stability classification:
 
 Where CV = `(std_dev / mean) * 100`.
 
+### VRAM — Memory Usage
+
+**Primary**: engine-native API (Ollama `/api/ps`, LM Studio `/v1/models`).
+**Fallback**: `ri_phys_footprint` via ctypes (same as Activity Monitor). Marked "(est.)" in the UI.
+
+## Environment Safety
+
+asiai performs pre-benchmark checks:
+
+1. **Memory pressure**: refuses to start if critical
+2. **Thermal throttling**: warns if speed limit < 80%
+3. **Duplicate processes**: warns if multiple instances of the same engine are running (e.g., two `ollama serve` processes on the same port)
+4. **Engine runner type**: for Ollama, detects whether `--mlx-engine` or `--ollama-engine` runner is active
+
+These checks prevent measurement errors caused by resource contention or incorrect routing.
+
 ## Conformance
 
 | Practice | Status |
 |----------|--------|
 | Pre-flight gate check (memory pressure + thermal) | Implemented |
+| Duplicate process detection | Implemented (v1.5.0) |
+| Ollama runner type detection (MLX vs llama.cpp) | Implemented (v1.5.0) |
 | TTFT separated from tok/s | Implemented |
+| TTFT source labeling (server vs client) | Implemented (v1.5.0) |
 | Deterministic sampling (temperature=0) | Implemented |
-| Token count from server API (not SSE chunks) | Implemented |
+| Token count from server API (not SSE chunks) | Implemented (warning on fallback) |
 | Per-engine power monitoring (IOReport, no sudo) | Implemented |
 | 1 warmup generation per engine | Implemented |
 | Default 3 runs (SPEC minimum) | Implemented |
 | Median as primary metric (SPEC standard) | Implemented |
-| Pooled intra-prompt stddev | Implemented |
+| Pooled intra-prompt stddev (Bessel N-1) | Implemented (corrected v1.5.0) |
 | Model unloading between engines | Implemented |
 | Adaptive cooldown (memory pressure-aware) | Implemented |
 | Sanity checks (tok/s, TTFT bounds) | Implemented |
 | Thermal throttling detection + warning | Implemented |
 | Thermal drift detection (monotone decrease) | Implemented |
-| Engine version + model metadata stored | Implemented |
+| Engine version + runner type stored per result | Implemented (v1.5.0) |
 | Universal VRAM via ri_phys_footprint | Implemented |
 | Historical regression detection | Implemented |
+| Cross-validation script (3 methods compared) | Available (scripts/cross-validate-bench.py) |
 
 ## Apple Silicon Considerations
 
