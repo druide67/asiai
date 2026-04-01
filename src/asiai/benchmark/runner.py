@@ -517,6 +517,7 @@ def _run_single(
             "tokens_generated": gen.tokens_generated,
             "tok_per_sec": gen.tok_per_sec,
             "ttft_ms": gen.ttft_ms,
+            "ttft_source": "server" if gen.prompt_eval_duration_ms > 0 else "client",
             "total_duration_ms": gen.total_duration_ms,
             "generation_duration_ms": gen.generation_duration_ms,
             "vram_bytes": vram_bytes,

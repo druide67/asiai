@@ -557,6 +557,22 @@ def cmd_bench(args: argparse.Namespace) -> int:
         print(dim("  Try: brew install ollama && ollama serve"), file=sys.stderr)
         return 1
 
+    # Pre-bench environment validation
+    for eng in engines:
+        ver = eng.version()
+        if ver:
+            print(f"  {dim('●')} {eng.name} v{ver} @ {eng.base_url}")
+        else:
+            print(f"  {dim('●')} {eng.name} @ {eng.base_url}")
+        # Show Ollama runner type
+        if eng.name == "ollama":
+            from asiai.benchmark.runner import _detect_ollama_runner_type
+
+            runner = _detect_ollama_runner_type()
+            if runner:
+                print(f"    {dim('runner:')} {runner}")
+    print()
+
     compare_mode = getattr(args, "compare", None)
 
     # Quick mode: 1 prompt (code), 1 run
