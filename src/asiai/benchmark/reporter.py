@@ -57,11 +57,11 @@ def aggregate_results(results: list[dict]) -> dict:
 
 
 def _stddev(values: list[float]) -> float:
-    """Compute population standard deviation."""
+    """Compute sample standard deviation (Bessel's correction, N-1)."""
     if len(values) < 2:
         return 0.0
     mean = sum(values) / len(values)
-    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
     return round(math.sqrt(variance), 2)
 
 
@@ -84,7 +84,7 @@ def _pooled_stddev(results: list[dict]) -> float:
         if len(values) < 2:
             continue
         mean = sum(values) / len(values)
-        var = sum((v - mean) ** 2 for v in values) / len(values)
+        var = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
         variances.append(var)
 
     if not variances:

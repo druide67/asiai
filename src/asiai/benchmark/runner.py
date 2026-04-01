@@ -20,6 +20,78 @@ from asiai.engines.base import InferenceEngine
 logger = logging.getLogger("asiai.benchmark.runner")
 
 
+def _detect_ollama_runner_type() -> str:
+    """Detect if Ollama is using MLX or llama.cpp runner.
+
+    Checks ``ps aux`` for ``--mlx-engine`` or ``--ollama-engine`` flags
+    in Ollama runner processes.
+
+    Returns 'mlx', 'llamacpp', or '' if unknown.
+    """
+    import subprocess
+
+    try:
+        ps_out = subprocess.run(
+            ["ps", "axo", "command"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+    for line in ps_out.splitlines():
+        if "ollama runner" not in line:
+            continue
+        if "--mlx-engine" in line:
+            return "mlx"
+        if "--ollama-engine" in line:
+            return "llamacpp"
+    return ""
+
+
+def _check_duplicate_engines(run: BenchmarkRun, slots: list) -> None:
+    """Detect duplicate engine processes that could cause wrong measurements.
+
+    Checks ``ps aux`` for multiple instances of the same engine binary
+    (e.g., two ``ollama serve`` processes). Adds a warning to the run if found.
+    """
+    import subprocess
+
+    try:
+        ps_out = subprocess.run(
+            ["ps", "axo", "pid,command"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return
+
+    engine_names = {s.engine.name for s in slots}
+    process_map = {
+        "ollama": "ollama serve",
+        "llamacpp": "llama-server",
+        "lmstudio": "LM Studio",
+    }
+
+    for ename in engine_names:
+        pattern = process_map.get(ename, ename)
+        pids = []
+        for line in ps_out.splitlines()[1:]:
+            if pattern in line:
+                parts = line.split(None, 1)
+                if parts:
+                    pids.append(parts[0])
+        if len(pids) > 1:
+            run.errors.append(
+                f"WARNING: {len(pids)} '{pattern}' processes detected "
+                f"(PIDs: {', '.join(pids)}). Results may be unreliable — "
+                f"kill duplicate processes before benchmarking."
+            )
+            logger.warning("Duplicate %s processes: %s", pattern, pids)
+
+
 @dataclass
 class BenchmarkSlot:
     """A single (engine, model) pair to benchmark."""
@@ -172,6 +244,9 @@ def run_benchmark(
             "System throttled to %d%% at benchmark start — results may be degraded",
             pre_thermal.speed_limit,
         )
+
+    # Environment check: detect duplicate engine processes (P0 audit fix)
+    _check_duplicate_engines(run, slots)
 
     slots_run = 0
     prev_model = ""
@@ -455,6 +530,7 @@ def _run_single(
             "run_index": run_index,
             "load_time_ms": load_time_ms,
             "engine_version": engine_version,
+            "engine_runner": (_detect_ollama_runner_type() if engine.name == "ollama" else ""),
             "model_format": model_format,
             "model_quantization": model_quantization,
             "hw_chip": hw_chip,

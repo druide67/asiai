@@ -135,6 +135,12 @@ class OpenAICompatEngine(InferenceEngine):
         text = "".join(text_parts)
         if completion_tokens == 0:
             completion_tokens = max(1, len(text) // 4)
+            logger.warning(
+                "Engine did not report completion_tokens — using estimate "
+                "len(text)//4 = %d (may be ~25%% off). Model: %s",
+                completion_tokens,
+                model,
+            )
 
         ttft_s = ttft_ms / 1000.0
         generation_s = max(0.0, elapsed_s - ttft_s)

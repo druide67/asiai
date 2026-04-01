@@ -756,8 +756,8 @@ class TestStddev:
         assert _stddev([10, 10, 10]) == 0.0
 
     def test_stddev_spread(self):
-        # [10, 20] -> mean=15, var=25, stddev=5
-        assert _stddev([10, 20]) == 5.0
+        # [10, 20] -> mean=15, var=50/(2-1)=50, stddev=sqrt(50)=7.07 (Bessel's N-1)
+        assert _stddev([10, 20]) == 7.07
 
     def test_stddev_single_value(self):
         assert _stddev([42.0]) == 0.0
@@ -852,8 +852,8 @@ class TestPooledStddev:
             {"prompt_type": "reasoning", "tok_per_sec": 27.0, "run_index": 2},
         ]
         pooled = _pooled_stddev(results)
-        # Intra-prompt stddev for each group is ~0.82
-        assert pooled < 1.0
+        # Intra-prompt stddev for each group is 1.0 (Bessel's N-1)
+        assert pooled <= 1.0
         # The old _stddev would give ~10.8 (mixing inter-prompt variance)
         all_tok = [r["tok_per_sec"] for r in results]
         old_stddev = _stddev(all_tok)
