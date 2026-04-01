@@ -14,9 +14,9 @@ asiai 遵循既定的基准测试标准（[MLPerf](https://mlcommons.org/benchma
 4. **采样**：`temperature=0`（贪心）确保确定性输出
 5. **模型卸载**：每个引擎基准测试后卸载模型释放统一内存，然后再开始下一个引擎。防止比较多引擎大模型时的内存累积和交换
 6. **自适应冷却**：卸载后等待 macOS 内存压力恢复"正常"（最长 30 秒），再加最短 5 秒温控冷却
-7. **健全性检查**：tok/s <= 0 的结果被丢弃。TTFT > 60s 或 tok/s > 500 触发警告（可能是交换或测量错误）
-8. **报告**：中位数 tok/s 作为主要指标（SPEC 标准），均值 +/- 标准差作为次要指标
-9. **降频**：任何运行期间 `thermal_speed_limit < 100%` 时发出警告。温控漂移（运行间 tok/s 单调下降，>= 5% 下降）被检测和报告
+7. **健全性检查**：tok/s ≤ 0 的结果被丢弃。TTFT > 60s 或 tok/s > 500 触发警告（可能是交换或测量错误）
+8. **报告**：中位数 tok/s 作为主要指标（SPEC 标准），均值 ± 标准差作为次要指标
+9. **降频**：任何运行期间 `thermal_speed_limit < 100%` 时发出警告。温控漂移（运行间 tok/s 单调下降，≥ 5% 下降）被检测和报告
 10. **元数据**：引擎版本、模型格式、量化、硬件芯片、macOS 版本按结果存储
 
 ## 指标
@@ -25,20 +25,44 @@ asiai 遵循既定的基准测试标准（[MLPerf](https://mlcommons.org/benchma
 
 每秒**仅生成时间**产生的 token 数，不含 prompt 处理（TTFT）。
 
+**Ollama**（原生 API，`/api/generate`）：
 ```
-generation_s = total_duration_s - ttft_s
-tok_per_sec  = tokens_generated / generation_s
+tok_per_sec = eval_count / (eval_duration_ns / 1e9)
 ```
+来源：Ollama 报告的内部 GPU 计时。无网络开销。这是最精确的测量。
+
+**OpenAI 兼容引擎**（LM Studio、llama.cpp、mlx-lm、vllm-mlx）：
+```
+generation_s = wall_clock_s - ttft_s
+tok_per_sec  = completion_tokens / generation_s
+```
+来源：客户端通过 streaming SSE 的墙上时钟。包含每个 chunk 的 HTTP 开销（比服务端计时慢约 1%，已通过交叉验证确认）。
+
+**Token 计数**：来自服务器响应中的 `usage.completion_tokens`。如果服务器不报告此字段，asiai 回退到 `len(text) // 4` 并记录警告。此回退可能偏差约 25%。
+
+**交叉验证**（2026 年 4 月，Qwen3.5-35B NVFP4，M4 Pro 64GB）：
+
+| 方法 | tok/s | 与参考的差异 |
+|------|-------|--------------------|
+| Ollama 原生（内部 GPU） | 66.6 | 参考值 |
+| OpenAI streaming（客户端） | 66.1 | -0.8% |
 
 大上下文（如 64k token）时 TTFT 可能占据总时长。将其从 tok/s 中排除可防止快速生成器看起来很慢。
 
 ### TTFT — 首 Token 延迟
 
-从发送请求到收到第一个输出 token 的时间，单位毫秒。Ollama 在服务端测量，OpenAI 兼容引擎在客户端第一个 SSE 内容 chunk 处测量。
+从发送请求到收到第一个输出 token 的时间，单位毫秒。
+
+**Ollama**：通过 `prompt_eval_duration`（内部计时）在服务端测量。这是纯 prompt 处理时间，无网络开销。报告为 `ttft_source: server`。
+
+**OpenAI 兼容引擎**：在客户端第一个 SSE 内容 chunk 处测量。包含 HTTP 建立、请求传输和服务器处理。通常比服务端高 10-100ms。报告为 `ttft_source: client`。
+
+!!! warning "TTFT 比较"
+    不要在不考虑差异的情况下将 Ollama 的服务端 TTFT 与 OpenAI 兼容引擎的客户端 TTFT 进行比较。基准测试结果中的 `ttft_source` 字段指示使用了哪种方法。
 
 ### Power — GPU 功耗
 
-每个特定引擎执行期间的平均 GPU 功耗，通过 `sudo powermetrics` 测量。每引擎一个 `PowerMonitor`——无整个会话的平均。
+执行期间的平均 GPU 功耗，通过 Apple IOReport Energy Model 框架测量（无需 sudo）。每引擎一次测量——非整个会话平均。
 
 ### tok/s/W — 能效
 
@@ -48,7 +72,7 @@ tok_per_sec_per_watt = tok_per_sec / power_watts
 
 ### 方差 — Pooled 标准差
 
-Pooled 提示词内标准差捕获运行间噪声，**不**混入提示词间方差。
+Pooled 提示词内标准差捕获运行间噪声，**不**混入提示词间方差。使用 Bessel 校正（N-1 分母）获得无偏样本方差。
 
 稳定性分类：
 
@@ -58,27 +82,47 @@ Pooled 提示词内标准差捕获运行间噪声，**不**混入提示词间方
 
 其中 CV = `(std_dev / mean) * 100`。
 
+### VRAM — 内存使用
+
+**主要**：引擎原生 API（Ollama `/api/ps`，LM Studio `/v1/models`）。
+**回退**：通过 ctypes 的 `ri_phys_footprint`（与活动监视器相同）。在 UI 中标记为"(est.)"。
+
+## 环境安全
+
+asiai 执行基准测试前检查：
+
+1. **内存压力**：如为严重则拒绝启动
+2. **温控降频**：速度限制 < 80% 时发出警告
+3. **重复进程**：如同一引擎的多个实例在运行（如同一端口上的两个 `ollama serve` 进程）则发出警告
+4. **引擎 runner 类型**：对于 Ollama，检测 `--mlx-engine` 或 `--ollama-engine` runner 是否活跃
+
+这些检查可防止因资源争用或路由错误导致的测量错误。
+
 ## 合规性
 
 | 实践 | 状态 |
 |------|------|
 | 预检门控（内存压力 + 温控） | 已实现 |
+| 重复进程检测 | 已实现 (v1.5.0) |
+| Ollama runner 类型检测（MLX vs llama.cpp） | 已实现 (v1.5.0) |
 | TTFT 与 tok/s 分离 | 已实现 |
+| TTFT 来源标记（server vs client） | 已实现 (v1.5.0) |
 | 确定性采样（temperature=0） | 已实现 |
-| Token 计数来自服务器 API（非 SSE chunk） | 已实现 |
+| Token 计数来自服务器 API（非 SSE chunk） | 已实现（回退时有警告） |
 | 按引擎功耗监控（IOReport，无 sudo） | 已实现 |
 | 每引擎 1 次预热生成 | 已实现 |
 | 默认 3 次运行（SPEC 最低要求） | 已实现 |
 | 中位数作为主要指标（SPEC 标准） | 已实现 |
-| Pooled 提示词内标准差 | 已实现 |
+| Pooled 提示词内标准差（Bessel N-1） | 已实现（v1.5.0 修正） |
 | 引擎间模型卸载 | 已实现 |
 | 自适应冷却（感知内存压力） | 已实现 |
 | 健全性检查（tok/s、TTFT 边界） | 已实现 |
 | 温控降频检测 + 警告 | 已实现 |
 | 温控漂移检测（单调下降） | 已实现 |
-| 引擎版本 + 模型元数据存储 | 已实现 |
+| 引擎版本 + runner 类型按结果存储 | 已实现 (v1.5.0) |
 | 通用 VRAM（ri_phys_footprint） | 已实现 |
 | 历史回归检测 | 已实现 |
+| 交叉验证脚本（3 种方法比较） | 可用 (scripts/cross-validate-bench.py) |
 
 ## Apple Silicon 注意事项
 

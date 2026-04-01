@@ -14,9 +14,9 @@ asiai suit les standards de benchmarking établis ([MLPerf](https://mlcommons.or
 4. **Échantillonnage** : `temperature=0` (greedy) pour une sortie déterministe
 5. **Déchargement du modèle** : Après le benchmark de chaque moteur, le modèle est déchargé pour libérer la mémoire unifiée avant le prochain moteur. Cela empêche l'accumulation mémoire et le swapping lors de la comparaison de plusieurs moteurs sur de grands modèles
 6. **Refroidissement adaptatif** : Après le déchargement, asiai attend que la pression mémoire macOS revienne à « normal » (max 30s), puis ajoute un minimum de 5s de refroidissement thermique
-7. **Contrôles de cohérence** : Les résultats avec tok/s <= 0 sont rejetés. Un TTFT > 60s ou tok/s > 500 déclenche des avertissements (swapping probable ou erreurs de mesure)
-8. **Reporting** : Médiane tok/s comme métrique principale (standard SPEC), moyenne +/- stddev en secondaire
-9. **Throttling** : Avertissement émis si `thermal_speed_limit < 100%` pendant une exécution. La dérive thermique (diminution monotone des tok/s entre les exécutions, baisse >= 5%) est détectée et signalée
+7. **Contrôles de cohérence** : Les résultats avec tok/s ≤ 0 sont rejetés. Un TTFT > 60s ou tok/s > 500 déclenche des avertissements (swapping probable ou erreurs de mesure)
+8. **Reporting** : Médiane tok/s comme métrique principale (standard SPEC), moyenne ± stddev en secondaire
+9. **Throttling** : Avertissement émis si `thermal_speed_limit < 100%` pendant une exécution. La dérive thermique (diminution monotone des tok/s entre les exécutions, baisse ≥ 5%) est détectée et signalée
 10. **Métadonnées** : Version du moteur, format du modèle, quantification, puce matérielle, version macOS stockés par résultat
 
 ## Métriques
@@ -25,20 +25,44 @@ asiai suit les standards de benchmarking établis ([MLPerf](https://mlcommons.or
 
 Tokens par seconde du **temps de génération uniquement**, hors traitement du prompt (TTFT).
 
+**Ollama** (API native, `/api/generate`) :
 ```
-generation_s = total_duration_s - ttft_s
-tok_per_sec  = tokens_generated / generation_s
+tok_per_sec = eval_count / (eval_duration_ns / 1e9)
 ```
+Source : timing GPU interne rapporté par Ollama. Pas de surcharge réseau. C'est la mesure la plus précise.
+
+**Moteurs compatibles OpenAI** (LM Studio, llama.cpp, mlx-lm, vllm-mlx) :
+```
+generation_s = wall_clock_s - ttft_s
+tok_per_sec  = completion_tokens / generation_s
+```
+Source : horloge murale côté client via streaming SSE. Inclut la surcharge HTTP par chunk (~1% plus lent que le timing côté serveur, validé par validation croisée).
+
+**Comptage de tokens** : depuis `usage.completion_tokens` dans la réponse du serveur. Si le serveur ne rapporte pas ce champ, asiai revient à `len(text) // 4` et enregistre un avertissement. Ce repli peut être décalé d'environ 25%.
+
+**Validation croisée** (avril 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB) :
+
+| Méthode | tok/s | Écart vs référence |
+|---------|-------|--------------------|
+| Ollama native (GPU interne) | 66.6 | référence |
+| OpenAI streaming (client) | 66.1 | -0.8% |
 
 Pour les grandes tailles de contexte (ex. 64k tokens), le TTFT peut dominer la durée totale. L'exclure du tok/s empêche les générateurs rapides de paraître lents.
 
 ### TTFT — Time to First Token
 
-Temps entre l'envoi de la requête et la réception du premier token de sortie, en millisecondes. Mesuré côté serveur (Ollama) ou côté client au premier chunk SSE de contenu (moteurs compatibles OpenAI).
+Temps entre l'envoi de la requête et la réception du premier token de sortie, en millisecondes.
+
+**Ollama** : mesuré côté serveur via `prompt_eval_duration` (timing interne). C'est le temps pur de traitement du prompt, sans surcharge réseau. Rapporté comme `ttft_source: server`.
+
+**Moteurs compatibles OpenAI** : mesuré côté client au premier chunk SSE de contenu. Inclut la configuration HTTP, la transmission de la requête et le traitement serveur. Typiquement 10-100ms plus élevé que côté serveur. Rapporté comme `ttft_source: client`.
+
+!!! warning "Comparaison TTFT"
+    Ne comparez pas le TTFT côté serveur d'Ollama avec le TTFT côté client des moteurs compatibles OpenAI sans tenir compte de la différence. Le champ `ttft_source` dans les résultats de benchmark indique quelle méthode a été utilisée.
 
 ### Puissance — Watts GPU
 
-Puissance GPU moyenne pendant l'exécution de chaque moteur spécifique, mesurée via `sudo powermetrics`. Un `PowerMonitor` par moteur — pas de moyenne sur la session entière.
+Puissance GPU moyenne pendant l'exécution, mesurée via le framework Apple IOReport Energy Model (sans sudo requis). Une mesure par moteur — pas de moyenne sur la session entière.
 
 ### tok/s/W — Efficacité énergétique
 
@@ -48,7 +72,7 @@ tok_per_sec_per_watt = tok_per_sec / power_watts
 
 ### Variance — Stddev poolée
 
-Écart-type intra-prompt poolé qui capture le bruit inter-exécutions **sans** mélanger la variance inter-prompts.
+Écart-type intra-prompt poolé qui capture le bruit inter-exécutions **sans** mélanger la variance inter-prompts. Utilise la correction de Bessel (dénominateur N-1) pour une variance d'échantillon non biaisée.
 
 Classification de stabilité :
 
@@ -58,27 +82,47 @@ Classification de stabilité :
 
 Où CV = `(std_dev / mean) * 100`.
 
+### VRAM — Utilisation mémoire
+
+**Primaire** : API native du moteur (Ollama `/api/ps`, LM Studio `/v1/models`).
+**Repli** : `ri_phys_footprint` via ctypes (identique au Moniteur d'activité). Marqué « (est.) » dans l'interface.
+
+## Sécurité de l'environnement
+
+asiai effectue des vérifications pré-benchmark :
+
+1. **Pression mémoire** : refuse de démarrer si critique
+2. **Throttling thermique** : avertit si la limite de vitesse < 80%
+3. **Processus dupliqués** : avertit si plusieurs instances du même moteur sont en cours (ex. deux processus `ollama serve` sur le même port)
+4. **Type de runner du moteur** : pour Ollama, détecte si le runner `--mlx-engine` ou `--ollama-engine` est actif
+
+Ces vérifications préviennent les erreurs de mesure causées par la contention de ressources ou le routage incorrect.
+
 ## Conformité
 
 | Pratique | Statut |
 |----------|--------|
 | Vérification pré-vol (pression mémoire + thermique) | Implémenté |
+| Détection de processus dupliqués | Implémenté (v1.5.0) |
+| Détection du type de runner Ollama (MLX vs llama.cpp) | Implémenté (v1.5.0) |
 | TTFT séparé du tok/s | Implémenté |
+| Étiquetage de la source TTFT (server vs client) | Implémenté (v1.5.0) |
 | Échantillonnage déterministe (temperature=0) | Implémenté |
-| Comptage de tokens via l'API serveur (pas les chunks SSE) | Implémenté |
+| Comptage de tokens via l'API serveur (pas les chunks SSE) | Implémenté (avertissement en repli) |
 | Monitoring de puissance par moteur (IOReport, sans sudo) | Implémenté |
 | 1 génération de warmup par moteur | Implémenté |
 | 3 exécutions par défaut (minimum SPEC) | Implémenté |
 | Médiane comme métrique principale (standard SPEC) | Implémenté |
-| Stddev intra-prompt poolée | Implémenté |
+| Stddev intra-prompt poolée (Bessel N-1) | Implémenté (corrigé v1.5.0) |
 | Déchargement du modèle entre les moteurs | Implémenté |
 | Refroidissement adaptatif (sensible à la pression mémoire) | Implémenté |
 | Contrôles de cohérence (tok/s, bornes TTFT) | Implémenté |
 | Détection du throttling thermique + avertissement | Implémenté |
 | Détection de la dérive thermique (diminution monotone) | Implémenté |
-| Version du moteur + métadonnées du modèle stockées | Implémenté |
+| Version du moteur + type de runner stockés par résultat | Implémenté (v1.5.0) |
 | VRAM universelle via ri_phys_footprint | Implémenté |
 | Détection de régression historique | Implémenté |
+| Script de validation croisée (3 méthodes comparées) | Disponible (scripts/cross-validate-bench.py) |
 
 ## Considérations Apple Silicon
 
@@ -100,7 +144,7 @@ Les grandes tailles de contexte (32k+) peuvent causer de l'instabilité sur les 
 
 ## Mesure de puissance
 
-asiai mesure la consommation GPU, CPU, ANE et DRAM via le framework Energy Model d'Apple IOReport — **sans sudo requis**. La puissance est mesurée automatiquement dans chaque benchmark et chaque snapshot de monitoring.
+asiai mesure la consommation GPU, CPU, ANE et DRAM via le framework Apple IOReport Energy Model — **sans sudo requis**. La puissance est mesurée automatiquement dans chaque benchmark et chaque snapshot de monitoring.
 
 IOReport lit les mêmes compteurs d'énergie matériels que `sudo powermetrics`, mais via une API en espace utilisateur (`libIOReport.dylib` via ctypes). Cela élimine le besoin de configuration sudo sans mot de passe.
 

@@ -14,9 +14,9 @@ asiai folgt etablierten Benchmarking-Standards ([MLPerf](https://mlcommons.org/b
 4. **Sampling**: `temperature=0` (greedy) für deterministische Ausgabe
 5. **Modell-Entladung**: Nach dem Benchmarking jeder Engine wird das Modell entladen, um Unified Memory freizugeben, bevor die nächste Engine startet. Dies verhindert Speicherakkumulation und Swapping beim Vergleich mehrerer Engines mit großen Modellen
 6. **Adaptives Abkühlen**: Nach dem Entladen wartet asiai, bis der macOS-Speicherdruck auf „normal" zurückkehrt (max 30s), dann folgen mindestens 5s thermische Abkühlung
-7. **Plausibilitätsprüfungen**: Ergebnisse mit tok/s <= 0 werden verworfen. TTFT > 60s oder tok/s > 500 lösen Warnungen aus (wahrscheinlich Swapping oder Messfehler)
-8. **Reporting**: Median tok/s als primäre Metrik (SPEC-Standard), Mittelwert +/- Stddev als sekundär
-9. **Drosselung**: Warnung, wenn `thermal_speed_limit < 100%` während eines Durchlaufs. Thermische Drift (monotoner tok/s-Rückgang über Durchläufe, >= 5% Abfall) wird erkannt und gemeldet
+7. **Plausibilitätsprüfungen**: Ergebnisse mit tok/s ≤ 0 werden verworfen. TTFT > 60s oder tok/s > 500 lösen Warnungen aus (wahrscheinlich Swapping oder Messfehler)
+8. **Reporting**: Median tok/s als primäre Metrik (SPEC-Standard), Mittelwert ± Stddev als sekundär
+9. **Drosselung**: Warnung, wenn `thermal_speed_limit < 100%` während eines Durchlaufs. Thermische Drift (monotoner tok/s-Rückgang über Durchläufe, ≥ 5% Abfall) wird erkannt und gemeldet
 10. **Metadaten**: Engine-Version, Modellformat, Quantisierung, Hardware-Chip, macOS-Version pro Ergebnis gespeichert
 
 ## Metriken
@@ -25,20 +25,44 @@ asiai folgt etablierten Benchmarking-Standards ([MLPerf](https://mlcommons.org/b
 
 Tokens pro Sekunde der **reinen Generierungszeit**, ohne Prompt-Verarbeitung (TTFT).
 
+**Ollama** (native API, `/api/generate`):
 ```
-generation_s = total_duration_s - ttft_s
-tok_per_sec  = tokens_generated / generation_s
+tok_per_sec = eval_count / (eval_duration_ns / 1e9)
 ```
+Quelle: internes GPU-Timing, berichtet von Ollama. Kein Netzwerk-Overhead. Dies ist die genaueste Messung.
+
+**OpenAI-kompatible Engines** (LM Studio, llama.cpp, mlx-lm, vllm-mlx):
+```
+generation_s = wall_clock_s - ttft_s
+tok_per_sec  = completion_tokens / generation_s
+```
+Quelle: clientseitige Wanduhr über streaming SSE. Beinhaltet HTTP-Overhead pro Chunk (~1% langsamer als serverseitiges Timing, durch Kreuzvalidierung bestätigt).
+
+**Token-Zählung**: aus `usage.completion_tokens` in der Server-Antwort. Falls der Server dieses Feld nicht liefert, fällt asiai auf `len(text) // 4` zurück und protokolliert eine Warnung. Dieser Fallback kann ~25% abweichen.
+
+**Kreuzvalidierung** (April 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB):
+
+| Methode | tok/s | Delta vs Referenz |
+|---------|-------|--------------------|
+| Ollama native (internes GPU) | 66.6 | Referenz |
+| OpenAI streaming (Client) | 66.1 | -0.8% |
 
 Bei großen Kontextgrößen (z.B. 64k Tokens) kann die TTFT die Gesamtdauer dominieren. Sie aus tok/s auszuschließen verhindert, dass schnelle Generatoren langsam erscheinen.
 
 ### TTFT — Time to First Token
 
-Zeit zwischen dem Senden der Anfrage und dem Empfang des ersten Ausgabe-Tokens, in Millisekunden. Serverseitig gemessen (Ollama) oder clientseitig beim ersten SSE-Content-Chunk (OpenAI-kompatible Engines).
+Zeit zwischen dem Senden der Anfrage und dem Empfang des ersten Ausgabe-Tokens, in Millisekunden.
+
+**Ollama**: serverseitig gemessen über `prompt_eval_duration` (internes Timing). Dies ist reine Prompt-Verarbeitungszeit ohne Netzwerk-Overhead. Berichtet als `ttft_source: server`.
+
+**OpenAI-kompatible Engines**: clientseitig gemessen beim ersten SSE-Content-Chunk. Beinhaltet HTTP-Setup, Anfragenübertragung und Serververarbeitung. Typischerweise 10-100ms höher als serverseitig. Berichtet als `ttft_source: client`.
+
+!!! warning "TTFT-Vergleich"
+    Vergleichen Sie nicht das serverseitige Ollama-TTFT mit dem clientseitigen OpenAI-kompatiblen TTFT, ohne den Unterschied zu berücksichtigen. Das Feld `ttft_source` in den Benchmark-Ergebnissen zeigt an, welche Methode verwendet wurde.
 
 ### Leistung — GPU Watt
 
-Durchschnittliche GPU-Leistung während der Ausführung jeder spezifischen Engine, gemessen über `sudo powermetrics`. Ein `PowerMonitor` pro Engine — kein sitzungsweiter Durchschnitt.
+Durchschnittliche GPU-Leistung während der Ausführung, gemessen über Apples IOReport Energy Model Framework (kein sudo erforderlich). Eine Messung pro Engine — kein sitzungsweiter Durchschnitt.
 
 ### tok/s/W — Energieeffizienz
 
@@ -48,7 +72,7 @@ tok_per_sec_per_watt = tok_per_sec / power_watts
 
 ### Varianz — Gepoolte Stddev
 
-Gepoolte Intra-Prompt-Standardabweichung erfasst das Rauschen zwischen Durchläufen **ohne** Inter-Prompt-Varianz einzumischen.
+Gepoolte Intra-Prompt-Standardabweichung erfasst das Rauschen zwischen Durchläufen **ohne** Inter-Prompt-Varianz einzumischen. Verwendet Bessels Korrektur (N-1-Nenner) für unverzerrte Stichprobenvarianz.
 
 Stabilitätsklassifikation:
 
@@ -58,27 +82,47 @@ Stabilitätsklassifikation:
 
 Wobei CV = `(std_dev / mean) * 100`.
 
+### VRAM — Speichernutzung
+
+**Primär**: engine-native API (Ollama `/api/ps`, LM Studio `/v1/models`).
+**Fallback**: `ri_phys_footprint` über ctypes (identisch mit der Aktivitätsanzeige). Mit „(est.)" in der Oberfläche gekennzeichnet.
+
+## Umgebungssicherheit
+
+asiai führt Pre-Benchmark-Prüfungen durch:
+
+1. **Speicherdruck**: Start verweigern bei kritischem Zustand
+2. **Thermische Drosselung**: Warnung bei Geschwindigkeitslimit < 80%
+3. **Doppelte Prozesse**: Warnung, wenn mehrere Instanzen derselben Engine laufen (z.B. zwei `ollama serve`-Prozesse auf demselben Port)
+4. **Engine-Runner-Typ**: erkennt bei Ollama, ob der `--mlx-engine`- oder `--ollama-engine`-Runner aktiv ist
+
+Diese Prüfungen verhindern Messfehler durch Ressourcenkonflikte oder fehlerhaftes Routing.
+
 ## Konformität
 
 | Praxis | Status |
 |--------|--------|
 | Pre-Flight-Prüfung (Speicherdruck + Thermal) | Implementiert |
+| Erkennung doppelter Prozesse | Implementiert (v1.5.0) |
+| Ollama-Runner-Typ-Erkennung (MLX vs llama.cpp) | Implementiert (v1.5.0) |
 | TTFT getrennt von tok/s | Implementiert |
+| TTFT-Quellenkennzeichnung (server vs client) | Implementiert (v1.5.0) |
 | Deterministisches Sampling (temperature=0) | Implementiert |
-| Token-Zählung über Server-API (nicht SSE-Chunks) | Implementiert |
+| Token-Zählung über Server-API (nicht SSE-Chunks) | Implementiert (Warnung bei Fallback) |
 | Leistungsüberwachung pro Engine (IOReport, ohne sudo) | Implementiert |
 | 1 Warmup-Generierung pro Engine | Implementiert |
 | Standard 3 Durchläufe (SPEC-Minimum) | Implementiert |
 | Median als primäre Metrik (SPEC-Standard) | Implementiert |
-| Gepoolte Intra-Prompt-Stddev | Implementiert |
+| Gepoolte Intra-Prompt-Stddev (Bessel N-1) | Implementiert (korrigiert v1.5.0) |
 | Modell-Entladung zwischen Engines | Implementiert |
 | Adaptives Abkühlen (speicherdruckbewusst) | Implementiert |
 | Plausibilitätsprüfungen (tok/s, TTFT-Grenzen) | Implementiert |
 | Thermische Drosselungserkennung + Warnung | Implementiert |
 | Thermische Drift-Erkennung (monotone Abnahme) | Implementiert |
-| Engine-Version + Modell-Metadaten gespeichert | Implementiert |
+| Engine-Version + Runner-Typ pro Ergebnis gespeichert | Implementiert (v1.5.0) |
 | Universelles VRAM über ri_phys_footprint | Implementiert |
 | Historische Regressionserkennung | Implementiert |
+| Kreuzvalidierungsskript (3 Methoden verglichen) | Verfügbar (scripts/cross-validate-bench.py) |
 
 ## Apple-Silicon-Aspekte
 
@@ -110,10 +154,10 @@ Wir haben IOReport gegen `sudo powermetrics` unter LLM-Inferenzlast auf M4 Pro 6
 
 | Engine | IOReport Durchschn. | powermetrics Durchschn. | Mittlere Abweichung | Max. Abweichung |
 |--------|---------------------|------------------------|---------------------|-----------------|
-| LM Studio (MLX) | 12,6 W | 12,6 W | 0,9% | 2,1% |
-| Ollama (llama.cpp) | 15,6 W | 15,4 W | 1,3% | 4,1% |
+| LM Studio (MLX) | 12.6 W | 12.6 W | 0.9% | 2.1% |
+| Ollama (llama.cpp) | 15.6 W | 15.4 W | 1.3% | 4.1% |
 
-Beide Engines bestätigen <1,5% durchschnittliche Abweichung mit 10/10 gepaarten Proben. Die ANE-Leistung betrug 0,000W über alle 20 Proben, was bestätigt, dass keine LLM-Engine derzeit die Neural Engine nutzt.
+Beide Engines bestätigen <1,5% durchschnittliche Abweichung mit 10/10 gepaarten Proben. Die ANE-Leistung betrug 0.000W über alle 20 Proben, was bestätigt, dass keine LLM-Engine derzeit die Neural Engine nutzt.
 
 Das `--power`-Flag aktiviert zusätzliche Kreuzvalidierung, indem IOReport und `sudo powermetrics` gleichzeitig ausgeführt werden und beide Messwerte zum Vergleich gespeichert werden.
 

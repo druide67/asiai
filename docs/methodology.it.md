@@ -16,7 +16,7 @@ asiai segue standard di benchmarking consolidati ([MLPerf](https://mlcommons.org
 6. **Raffreddamento adattativo**: Dopo lo scaricamento, asiai attende che la pressione di memoria di macOS torni a "normal" (max 30s), poi aggiunge un minimo di 5s di raffreddamento termico
 7. **Controlli di coerenza**: I risultati con tok/s ≤ 0 vengono scartati. TTFT > 60s o tok/s > 500 generano avvertimenti (probabile swapping o errori di misurazione)
 8. **Report**: Mediana tok/s come metrica primaria (standard SPEC), media ± deviazione standard come secondaria
-9. **Throttling**: Avvertimento emesso se `thermal_speed_limit < 100%` durante qualsiasi esecuzione. La deriva termica (diminuzione monotona dei tok/s tra le esecuzioni, calo ≥5%) viene rilevata e segnalata
+9. **Throttling**: Avvertimento emesso se `thermal_speed_limit < 100%` durante qualsiasi esecuzione. La deriva termica (diminuzione monotona dei tok/s tra le esecuzioni, calo ≥ 5%) viene rilevata e segnalata
 10. **Metadati**: Versione motore, formato modello, quantizzazione, chip hardware, versione macOS salvati per risultato
 
 ## Metriche
@@ -25,20 +25,44 @@ asiai segue standard di benchmarking consolidati ([MLPerf](https://mlcommons.org
 
 Token al secondo di **tempo di generazione**, escludendo l'elaborazione del prompt (TTFT).
 
+**Ollama** (API nativa, `/api/generate`):
 ```
-generation_s = total_duration_s - ttft_s
-tok_per_sec  = tokens_generated / generation_s
+tok_per_sec = eval_count / (eval_duration_ns / 1e9)
 ```
+Fonte: timing GPU interno riportato da Ollama. Nessun overhead di rete. Questa è la misurazione più precisa.
+
+**Motori compatibili OpenAI** (LM Studio, llama.cpp, mlx-lm, vllm-mlx):
+```
+generation_s = wall_clock_s - ttft_s
+tok_per_sec  = completion_tokens / generation_s
+```
+Fonte: orologio di parete lato client via streaming SSE. Include l'overhead HTTP per chunk (~1% più lento del timing lato server, validato dalla validazione incrociata).
+
+**Conteggio token**: da `usage.completion_tokens` nella risposta del server. Se il server non riporta questo campo, asiai ricorre a `len(text) // 4` e registra un avvertimento. Questo fallback può deviare di ~25%.
+
+**Validazione incrociata** (aprile 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB):
+
+| Metodo | tok/s | Delta vs riferimento |
+|--------|-------|--------------------|
+| Ollama nativo (GPU interno) | 66.6 | riferimento |
+| OpenAI streaming (client) | 66.1 | -0.8% |
 
 Con dimensioni di contesto grandi (es. 64k token), il TTFT può dominare la durata totale. Escluderlo dai tok/s evita che generatori veloci appaiano lenti.
 
 ### TTFT — Tempo al primo token
 
-Tempo tra l'invio della richiesta e la ricezione del primo token di output, in millisecondi. Misurato lato server (Ollama) o lato client al primo chunk SSE con contenuto (motori compatibili con OpenAI).
+Tempo tra l'invio della richiesta e la ricezione del primo token di output, in millisecondi.
+
+**Ollama**: misurato lato server via `prompt_eval_duration` (timing interno). È il tempo puro di elaborazione del prompt senza overhead di rete. Riportato come `ttft_source: server`.
+
+**Motori compatibili OpenAI**: misurato lato client al primo chunk SSE con contenuto. Include setup HTTP, trasmissione della richiesta ed elaborazione del server. Tipicamente 10-100ms più alto rispetto al lato server. Riportato come `ttft_source: client`.
+
+!!! warning "Confronto TTFT"
+    Non confrontare il TTFT lato server di Ollama con il TTFT lato client dei motori compatibili OpenAI senza tenere conto della differenza. Il campo `ttft_source` nei risultati di benchmark indica quale metodo è stato utilizzato.
 
 ### Power — Watt GPU
 
-Potenza media GPU durante l'esecuzione di ciascun motore specifico, misurata tramite `sudo powermetrics`. Un `PowerMonitor` per motore — nessuna media a livello di sessione.
+Potenza media GPU durante l'esecuzione, misurata tramite il framework Apple IOReport Energy Model (senza necessità di sudo). Una misurazione per motore — nessuna media a livello di sessione.
 
 ### tok/s/W — Efficienza energetica
 
@@ -48,7 +72,7 @@ tok_per_sec_per_watt = tok_per_sec / power_watts
 
 ### Varianza — Deviazione standard combinata
 
-Deviazione standard combinata intra-prompt che cattura il rumore tra esecuzioni **senza** mescolare la varianza tra prompt.
+Deviazione standard combinata intra-prompt che cattura il rumore tra esecuzioni **senza** mescolare la varianza tra prompt. Utilizza la correzione di Bessel (denominatore N-1) per una varianza campionaria non distorta.
 
 Classificazione di stabilità:
 
@@ -58,27 +82,47 @@ Classificazione di stabilità:
 
 Dove CV = `(std_dev / mean) * 100`.
 
+### VRAM — Utilizzo memoria
+
+**Primario**: API nativa del motore (Ollama `/api/ps`, LM Studio `/v1/models`).
+**Fallback**: `ri_phys_footprint` via ctypes (uguale a Monitor Attività). Contrassegnato "(est.)" nell'interfaccia.
+
+## Sicurezza dell'ambiente
+
+asiai esegue controlli pre-benchmark:
+
+1. **Pressione di memoria**: rifiuta di avviarsi se critica
+2. **Throttling termico**: avverte se il limite di velocità < 80%
+3. **Processi duplicati**: avverte se più istanze dello stesso motore sono in esecuzione (es. due processi `ollama serve` sulla stessa porta)
+4. **Tipo di runner del motore**: per Ollama, rileva se il runner `--mlx-engine` o `--ollama-engine` è attivo
+
+Questi controlli prevengono errori di misurazione causati da contesa di risorse o routing errato.
+
 ## Conformità
 
 | Pratica | Stato |
 |----------|--------|
 | Verifica preliminare (pressione memoria + termica) | Implementato |
+| Rilevamento processi duplicati | Implementato (v1.5.0) |
+| Rilevamento tipo runner Ollama (MLX vs llama.cpp) | Implementato (v1.5.0) |
 | TTFT separato da tok/s | Implementato |
+| Etichettatura sorgente TTFT (server vs client) | Implementato (v1.5.0) |
 | Campionamento deterministico (temperature=0) | Implementato |
-| Conteggio token da API server (non chunk SSE) | Implementato |
+| Conteggio token da API server (non chunk SSE) | Implementato (avvertimento su fallback) |
 | Monitoraggio energetico per motore (IOReport, senza sudo) | Implementato |
 | 1 generazione di warmup per motore | Implementato |
 | 3 esecuzioni di default (minimo SPEC) | Implementato |
 | Mediana come metrica primaria (standard SPEC) | Implementato |
-| Deviazione standard combinata intra-prompt | Implementato |
+| Deviazione standard combinata intra-prompt (Bessel N-1) | Implementato (corretto v1.5.0) |
 | Scaricamento modello tra motori | Implementato |
 | Raffreddamento adattativo (sensibile a pressione memoria) | Implementato |
 | Controlli di coerenza (tok/s, limiti TTFT) | Implementato |
 | Rilevamento throttling termico + avvertimento | Implementato |
 | Rilevamento deriva termica (diminuzione monotona) | Implementato |
-| Versione motore + metadati modello salvati | Implementato |
+| Versione motore + tipo runner salvati per risultato | Implementato (v1.5.0) |
 | VRAM universale tramite ri_phys_footprint | Implementato |
 | Rilevamento regressione storica | Implementato |
+| Script di validazione incrociata (3 metodi confrontati) | Disponibile (scripts/cross-validate-bench.py) |
 
 ## Considerazioni su Apple Silicon
 
@@ -110,10 +154,10 @@ Abbiamo validato IOReport contro `sudo powermetrics` sotto carico di inferenza L
 
 | Motore | Media IOReport | Media powermetrics | Delta medio | Delta massimo |
 |--------|-------------|-----------------|------------|-----------|
-| LM Studio (MLX) | 12,6 W | 12,6 W | 0,9% | 2,1% |
-| Ollama (llama.cpp) | 15,6 W | 15,4 W | 1,3% | 4,1% |
+| LM Studio (MLX) | 12.6 W | 12.6 W | 0.9% | 2.1% |
+| Ollama (llama.cpp) | 15.6 W | 15.4 W | 1.3% | 4.1% |
 
-Entrambi i motori hanno confermato un delta medio <1,5% con 10/10 campioni accoppiati. La potenza ANE era 0,000W su tutti i 20 campioni, confermando che nessun motore LLM utilizza attualmente il Neural Engine.
+Entrambi i motori hanno confermato un delta medio <1,5% con 10/10 campioni accoppiati. La potenza ANE era 0.000W su tutti i 20 campioni, confermando che nessun motore LLM utilizza attualmente il Neural Engine.
 
 Il flag `--power` abilita la validazione incrociata aggiuntiva eseguendo simultaneamente IOReport e `sudo powermetrics`, salvando entrambe le letture per il confronto.
 
