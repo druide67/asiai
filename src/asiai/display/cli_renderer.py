@@ -230,6 +230,15 @@ def render_snapshot(snap: dict) -> None:
                 elif kv_pct > 80:
                     kv_str = yellow(kv_str)
                 parts.append(kv_str)
+            # TurboQuant KV compression info
+            kv_comp = act.get("kv_cache_compressed_bytes", 0)
+            kv_orig = act.get("kv_cache_original_bytes", 0)
+            if kv_comp > 0 and kv_orig > 0:
+                ratio = kv_orig / kv_comp
+                comp_mb = kv_comp / (1024 * 1024)
+                parts.append(
+                    green(f"TQ {comp_mb:.0f}MB ({ratio:.1f}x)")
+                )
             if tok_total > 0:
                 if tok_total >= 1_000_000:
                     parts.append(f"{tok_total / 1_000_000:.1f}M tokens")

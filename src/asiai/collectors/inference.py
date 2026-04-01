@@ -93,6 +93,10 @@ def parse_prometheus_text(text: str) -> dict:
         "llamacpp_kv_cache_usage_ratio": ("kv_cache_usage_ratio", float),
         "vllm_num_requests_running": ("requests_processing", int),
         "vllm_generation_tokens_total": ("tokens_predicted_total", int),
+        # TurboQuant KV cache metrics (llama.cpp fork)
+        "llamacpp_kv_cache_tokens_count": ("kv_cache_tokens", int),
+        "llamacpp_kv_cache_compressed_bytes": ("kv_cache_compressed_bytes", int),
+        "llamacpp_kv_cache_original_bytes": ("kv_cache_original_bytes", int),
     }
 
     for line in text.splitlines():

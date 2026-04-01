@@ -121,6 +121,9 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
             "requests_processing": 0,
             "tokens_predicted_total": 0,
             "kv_cache_usage_ratio": -1.0,
+            "kv_cache_compressed_bytes": 0,
+            "kv_cache_original_bytes": 0,
+            "kv_cache_tokens": 0,
         }
         try:
             entry["reachable"] = engine.is_reachable()
@@ -148,6 +151,10 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                 entry["requests_processing"] = scraped.get("requests_processing", 0)
                 entry["tokens_predicted_total"] = scraped.get("tokens_predicted_total", 0)
                 entry["kv_cache_usage_ratio"] = scraped.get("kv_cache_usage_ratio", -1.0)
+                # TurboQuant KV cache compression metrics
+                entry["kv_cache_compressed_bytes"] = scraped.get("kv_cache_compressed_bytes", 0)
+                entry["kv_cache_original_bytes"] = scraped.get("kv_cache_original_bytes", 0)
+                entry["kv_cache_tokens"] = scraped.get("kv_cache_tokens", 0)
         except Exception as e:
             logger.warning("Engine %s status error: %s", engine.name, e)
         statuses.append(entry)
