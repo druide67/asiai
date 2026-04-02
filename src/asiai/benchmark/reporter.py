@@ -156,6 +156,7 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     pr = prompt_results
     tok_values = [p["tok_per_sec"] for p in pr if p["tok_per_sec"] > 0]
     ttft_values = [p["ttft_ms"] for p in pr if p["ttft_ms"] > 0]
+    ttft_client_values = [p["ttft_client_ms"] for p in pr if p.get("ttft_client_ms", 0) > 0]
     cpu_values = [p["proc_cpu_pct"] for p in pr if p.get("proc_cpu_pct", 0) > 0]
     rss_values = [p["proc_rss_bytes"] for p in pr if p.get("proc_rss_bytes", 0) > 0]
 
@@ -163,6 +164,8 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     data["median_tok_s"] = round(statistics.median(tok_values), 1) if tok_values else 0.0
     data["avg_ttft_ms"] = round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
     data["median_ttft_ms"] = round(statistics.median(ttft_values), 1) if ttft_values else 0.0
+    data["avg_ttft_client_ms"] = round(sum(ttft_client_values) / len(ttft_client_values), 1) if ttft_client_values else 0.0
+    data["median_ttft_client_ms"] = round(statistics.median(ttft_client_values), 1) if ttft_client_values else 0.0
     data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
     data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
 
@@ -194,6 +197,7 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     data["p50_ttft_ms"] = data["median_ttft_ms"]
     data["p90_ttft_ms"] = round(_percentile(ttft_values, 90), 1) if ttft_values else 0.0
     data["p99_ttft_ms"] = round(_percentile(ttft_values, 99), 1) if ttft_values else 0.0
+    data["p90_ttft_client_ms"] = round(_percentile(ttft_client_values, 90), 1) if ttft_client_values else 0.0
     data["outliers"] = _detect_outliers(tok_values) if tok_values else []
 
     return data
@@ -278,10 +282,14 @@ def export_benchmark(
                 "p99": data.get("p99_tok_s", 0.0),
             },
             "median_ttft_ms": data.get("median_ttft_ms", 0.0),
+            "median_ttft_client_ms": data.get("median_ttft_client_ms", 0.0),
             "percentiles_ttft_ms": {
                 "p50": data.get("p50_ttft_ms", 0.0),
                 "p90": data.get("p90_ttft_ms", 0.0),
                 "p99": data.get("p99_ttft_ms", 0.0),
+            },
+            "percentiles_ttft_client_ms": {
+                "p90": data.get("p90_ttft_client_ms", 0.0),
             },
             "vram_bytes": data.get("vram_bytes", 0),
         }

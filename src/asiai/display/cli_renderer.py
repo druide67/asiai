@@ -534,7 +534,11 @@ def render_bench(report: dict, context_size: int = 0) -> None:
             if p90 > 0:
                 stat_parts.append(f"P90: {p90:.1f} tok/s")
             if p90_ttft > 0:
-                stat_parts.append(f"P90 TTFT: {p90_ttft / 1000:.2f}s")
+                ttft_str = f"P90 TTFT: {p90_ttft / 1000:.2f}s"
+                p90_ttft_client = data.get("p90_ttft_client_ms", 0)
+                if p90_ttft_client > 0 and abs(p90_ttft_client - p90_ttft) > 10:
+                    ttft_str += f" (client: {p90_ttft_client / 1000:.2f}s)"
+                stat_parts.append(ttft_str)
             outliers = data.get("outliers", [])
             if outliers:
                 stat_parts.append(yellow(f"{len(outliers)} outlier(s)"))

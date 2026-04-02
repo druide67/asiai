@@ -151,6 +151,7 @@ class OpenAICompatEngine(InferenceEngine):
             tokens_generated=completion_tokens,
             tok_per_sec=round(tok_s, 2),
             ttft_ms=ttft_ms,
+            ttft_client_ms=ttft_ms,  # Already client-side
             total_duration_ms=round(elapsed_s * 1000, 1),
             prompt_eval_duration_ms=ttft_ms,
             generation_duration_ms=round(generation_s * 1000, 1),

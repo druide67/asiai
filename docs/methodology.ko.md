@@ -53,12 +53,27 @@ tok_per_sec  = completion_tokens / generation_s
 
 요청 전송부터 첫 번째 출력 토큰 수신까지의 시간(밀리초).
 
-**Ollama**: `prompt_eval_duration`(내부 타이밍)을 통해 서버사이드에서 측정. 네트워크 오버헤드 없는 순수 프롬프트 처리 시간입니다. `ttft_source: server`로 보고됩니다.
+v1.6.0부터 asiai는 Ollama에 대해 **두 가지 TTFT 값**을 측정하고, 다른 모든 엔진에 대해서는 하나를 측정합니다:
 
-**OpenAI 호환 엔진**: 첫 SSE 콘텐츠 청크에서 클라이언트사이드로 측정. HTTP 설정, 요청 전송, 서버 처리를 포함합니다. 일반적으로 서버사이드보다 10-100ms 높습니다. `ttft_source: client`로 보고됩니다.
+**Ollama** (이중 측정):
 
-!!! warning "TTFT 비교"
-    차이를 고려하지 않고 Ollama의 서버사이드 TTFT와 OpenAI 호환 엔진의 클라이언트사이드 TTFT를 비교하지 마세요. 벤치마크 결과의 `ttft_source` 필드가 어떤 방법이 사용되었는지를 나타냅니다.
+- **서버사이드 TTFT** (`ttft_ms`): Ollama 응답의 `prompt_eval_duration`에서 추출. 네트워크 오버헤드가 전혀 없는 순수 GPU 프롬프트 처리 시간 — 가능한 가장 정확한 측정입니다. `ttft_source: server`로 보고됩니다.
+- **클라이언트사이드 TTFT** (`ttft_client_ms`): 첫 번째 SSE 콘텐츠 청크 도착 시 측정. HTTP 설정, 요청 전송, 서버 처리를 포함합니다. 다른 모든 엔진에 사용되는 것과 동일한 방법입니다.
+
+**OpenAI 호환 엔진** (LM Studio, llama.cpp, mlx-lm, vllm-mlx):
+
+- **클라이언트사이드 TTFT** (`ttft_client_ms`): 첫 번째 SSE 콘텐츠 청크에서 측정. 이러한 엔진은 내부 프롬프트 처리 타이밍을 노출하지 않으므로 사용 가능한 유일한 측정 방법입니다. `ttft_ms`와 `ttft_client_ms`는 동일한 값을 포함합니다.
+
+**비교 가능한 메트릭**: `ttft_client_ms`는 **엔진 간 비교 가능한** 메트릭입니다 — 엔진에 관계없이 동일한 측정 방법을 사용합니다. 서로 다른 엔진 간에 TTFT를 비교할 때 이것을 사용하세요. Ollama의 서버사이드 `ttft_ms`는 절대적인 프롬프트 처리 시간으로는 더 정확하지만 다른 엔진과 직접 비교할 수는 없습니다.
+
+**교차 검증** (2026년 4월, Qwen3.5-35B NVFP4, M4 Pro 64GB):
+
+| 방법 | TTFT | 차이 |
+|------|------|------|
+| Ollama 서버사이드 (`ttft_ms`) | 27 ms | 레퍼런스 |
+| Ollama 클라이언트사이드 (`ttft_client_ms`) | 51 ms | +24 ms |
+
+24ms 차이는 localhost에서의 HTTP 오버헤드를 나타냅니다. 이 오버헤드는 일관되고 예측 가능하지만 엔진 간 비교 시 중요할 만큼 큰 차이입니다.
 
 ### Power — GPU 전력 (와트)
 
@@ -107,6 +122,7 @@ asiai는 벤치마크 전 검사를 수행합니다:
 | Ollama runner 타입 감지 (MLX vs llama.cpp) | 구현됨 (v1.5.0) |
 | TTFT를 tok/s에서 분리 | 구현됨 |
 | TTFT 소스 라벨링 (server vs client) | 구현됨 (v1.5.0) |
+| 이중 TTFT 측정 (server + client) | 구현됨 (v1.6.0) |
 | 결정론적 샘플링 (temperature=0) | 구현됨 |
 | 서버 API의 토큰 카운트 (SSE 청크가 아님) | 구현됨 (폴백 시 경고) |
 | 엔진별 전력 모니터링 (IOReport, sudo 불필요) | 구현됨 |

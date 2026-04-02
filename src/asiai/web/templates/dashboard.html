@@ -37,6 +37,7 @@
                     <th class="text-left">Engine</th>
                     <th class="text-right">tok/s</th>
                     <th class="text-right">TTFT</th>
+                    <th class="text-right">TTFT Client</th>
                     <th class="text-right">VRAM</th>
                     <th class="text-right">Stability</th>
                 </tr>
@@ -47,6 +48,13 @@
                     <td class="font-medium" style="font-family: var(--font-sans);">{{ name }}</td>
                     <td class="text-right">{{ data.avg_tok_s | format_number }}</td>
                     <td class="text-right">{{ data.avg_ttft_ms | format_number(0) }} ms</td>
+                    <td class="text-right">
+                        {% if data.avg_ttft_client_ms is defined and data.avg_ttft_client_ms > 0 and (data.avg_ttft_client_ms - data.avg_ttft_ms) | abs > 10 %}
+                        {{ data.avg_ttft_client_ms | format_number(0) }} ms
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
                     <td class="text-right">{{ data.vram_bytes | format_bytes }}</td>
                     <td class="text-right">
                         {% if data.stability == 'stable' %}

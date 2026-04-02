@@ -180,7 +180,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
             conn.execute(
                 """INSERT INTO benchmarks
                    (ts, engine, model, prompt_type,
-                    tokens_generated, tok_per_sec, ttft_ms, total_duration_ms,
+                    tokens_generated, tok_per_sec, ttft_ms, ttft_client_ms, total_duration_ms,
                     vram_bytes, mem_used, thermal_level, thermal_speed_limit,
                     run_index, power_watts, tok_per_sec_per_watt, load_time_ms,
                     metrics_version,
@@ -189,7 +189,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     context_size, gpu_cores, ram_gb,
                     power_watts_ioreport, power_watts_powermetrics,
                     power_source, kv_cache_type)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
@@ -199,6 +199,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("tokens_generated", 0),
                     r.get("tok_per_sec", 0.0),
                     r.get("ttft_ms", 0.0),
+                    r.get("ttft_client_ms", 0.0),
                     r.get("total_duration_ms", 0.0),
                     r.get("vram_bytes", 0),
                     r.get("mem_used", 0),

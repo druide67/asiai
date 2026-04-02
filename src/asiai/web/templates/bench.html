@@ -442,10 +442,14 @@
                 var engines = {};
                 rows.forEach(function(r) {
                     if (!engines[r.engine]) {
-                        engines[r.engine] = { tok_s_sum: 0, ttft_sum: 0, count: 0, vram: r.vram_bytes };
+                        engines[r.engine] = { tok_s_sum: 0, ttft_sum: 0, ttft_client_sum: 0, ttft_client_count: 0, count: 0, vram: r.vram_bytes };
                     }
                     engines[r.engine].tok_s_sum += r.tok_per_sec;
                     engines[r.engine].ttft_sum += r.ttft_ms;
+                    if (r.ttft_client_ms && r.ttft_client_ms > 0) {
+                        engines[r.engine].ttft_client_sum += r.ttft_client_ms;
+                        engines[r.engine].ttft_client_count++;
+                    }
                     engines[r.engine].count++;
                 });
 
@@ -475,7 +479,7 @@
         // Header
         var thead = document.createElement('thead');
         var headerRow = document.createElement('tr');
-        ['Engine', 'Avg tok/s', 'Avg TTFT', 'VRAM'].forEach(function(text) {
+        ['Engine', 'Avg tok/s', 'Avg TTFT', 'Avg TTFT Client', 'VRAM'].forEach(function(text) {
             var th = document.createElement('th');
             th.textContent = text;
             th.className = text === 'Engine' ? 'text-left' : 'text-right';
@@ -520,6 +524,20 @@
             tdTtft.textContent = avgTtft.toFixed(0) + ' ms';
             tr.appendChild(tdTtft);
 
+            var tdTtftClient = document.createElement('td');
+            tdTtftClient.className = 'text-right font-mono';
+            if (e.ttft_client_count > 0) {
+                var avgTtftClient = e.ttft_client_sum / e.ttft_client_count;
+                if (Math.abs(avgTtftClient - avgTtft) > 10) {
+                    tdTtftClient.textContent = avgTtftClient.toFixed(0) + ' ms';
+                } else {
+                    tdTtftClient.textContent = '\u2014';
+                }
+            } else {
+                tdTtftClient.textContent = '\u2014';
+            }
+            tr.appendChild(tdTtftClient);
+
             var tdVram = document.createElement('td');
             tdVram.className = 'text-right font-mono';
             var vramText = formatBytes(e.vram);
@@ -548,6 +566,13 @@
         var ttftValues = names.map(function(n) {
             return parseFloat((engines[n].ttft_sum / engines[n].count).toFixed(0));
         });
+        var ttftClientValues = names.map(function(n) {
+            if (engines[n].ttft_client_count > 0) {
+                return parseFloat((engines[n].ttft_client_sum / engines[n].ttft_client_count).toFixed(0));
+            }
+            return 0;
+        });
+        var hasClientTtft = ttftClientValues.some(function(v) { return v > 0; });
 
         document.getElementById('bench-charts-row').style.display = '';
 
@@ -557,9 +582,16 @@
         benchTokChart = createBarChart('bench-tok-chart', names, tokValues, {
             label: 'Throughput', unit: 'tok/s', height: 200,
         });
-        benchTtftChart = createBarChart('bench-ttft-chart', names, ttftValues, {
-            label: 'TTFT', unit: 'ms', height: 200,
-        });
+        if (hasClientTtft) {
+            benchTtftChart = createBarChart('bench-ttft-chart', names, ttftValues, {
+                label: 'TTFT', unit: 'ms', height: 200,
+                extraSeries: [{ name: 'TTFT Client', data: ttftClientValues }],
+            });
+        } else {
+            benchTtftChart = createBarChart('bench-ttft-chart', names, ttftValues, {
+                label: 'TTFT', unit: 'ms', height: 200,
+            });
+        }
     }
 
     function showError(msg) {

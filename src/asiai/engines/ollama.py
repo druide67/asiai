@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+from urllib.request import Request, urlopen
 
 from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
 from asiai.engines.detect import http_get_json, http_post_json
@@ -116,35 +119,81 @@ class OllamaEngine(InferenceEngine):
             return False
 
     def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
-        """Generate text using Ollama /api/generate endpoint."""
-        data, _ = http_post_json(
-            f"{self.base_url}/api/generate",
-            {
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"num_predict": max_tokens, "temperature": 0},
-            },
-            timeout=300,
+        """Generate text using Ollama /api/generate with streaming.
+
+        Streams to measure client-side TTFT (comparable across engines)
+        while also capturing server-side timings from the final chunk.
+        """
+        payload = json.dumps({
+            "model": model,
+            "prompt": prompt,
+            "stream": True,
+            "options": {"num_predict": max_tokens, "temperature": 0},
+        }).encode()
+
+        t0 = time.monotonic()
+        ttft_client_ms = 0.0
+        text_parts: list[str] = []
+        final_data: dict = {}
+
+        try:
+            req = Request(
+                f"{self.base_url}/api/generate",
+                data=payload,
+                method="POST",
+            )
+            req.add_header("Content-Type", "application/json")
+
+            with urlopen(req, timeout=300) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    # Measure client TTFT at first chunk (any content)
+                    if ttft_client_ms == 0.0:
+                        ttft_client_ms = round(
+                            (time.monotonic() - t0) * 1000, 1
+                        )
+
+                    token = chunk.get("response", "")
+                    if token:
+                        text_parts.append(token)
+
+                    if chunk.get("done"):
+                        final_data = chunk
+                        break
+
+        except (TimeoutError, ConnectionRefusedError, OSError, ValueError) as e:
+            logger.debug("Ollama streaming generate failed: %s", e)
+            return GenerateResult(engine=self.name, model=model, error=str(e))
+
+        if not final_data:
+            return GenerateResult(
+                engine=self.name, model=model, error="no final chunk received"
+            )
+
+        eval_count = final_data.get("eval_count", 0)
+        eval_duration_ns = final_data.get("eval_duration", 0)
+        prompt_eval_ns = final_data.get("prompt_eval_duration", 0)
+        total_ns = final_data.get("total_duration", 0)
+
+        tok_s = (
+            (eval_count / (eval_duration_ns / 1e9))
+            if eval_duration_ns > 0
+            else 0.0
         )
-        if data is None:
-            return GenerateResult(engine=self.name, model=model, error="request failed")
-
-        if "error" in data:
-            return GenerateResult(engine=self.name, model=model, error=data["error"])
-
-        eval_count = data.get("eval_count", 0)
-        eval_duration_ns = data.get("eval_duration", 0)
-        prompt_eval_ns = data.get("prompt_eval_duration", 0)
-        total_ns = data.get("total_duration", 0)
-
-        tok_s = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else 0.0
 
         return GenerateResult(
-            text=data.get("response", ""),
+            text="".join(text_parts),
             tokens_generated=eval_count,
             tok_per_sec=round(tok_s, 2),
             ttft_ms=round(prompt_eval_ns / 1e6, 1),
+            ttft_client_ms=ttft_client_ms,
             total_duration_ms=round(total_ns / 1e6, 1),
             prompt_eval_duration_ms=round(prompt_eval_ns / 1e6, 1),
             generation_duration_ms=round(eval_duration_ns / 1e6, 1),

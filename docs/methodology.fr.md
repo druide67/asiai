@@ -53,12 +53,27 @@ Pour les grandes tailles de contexte (ex. 64k tokens), le TTFT peut dominer la d
 
 Temps entre l'envoi de la requête et la réception du premier token de sortie, en millisecondes.
 
-**Ollama** : mesuré côté serveur via `prompt_eval_duration` (timing interne). C'est le temps pur de traitement du prompt, sans surcharge réseau. Rapporté comme `ttft_source: server`.
+Depuis la v1.6.0, asiai mesure **deux valeurs TTFT** pour Ollama, et une seule pour tous les autres moteurs :
 
-**Moteurs compatibles OpenAI** : mesuré côté client au premier chunk SSE de contenu. Inclut la configuration HTTP, la transmission de la requête et le traitement serveur. Typiquement 10-100ms plus élevé que côté serveur. Rapporté comme `ttft_source: client`.
+**Ollama** (double mesure) :
 
-!!! warning "Comparaison TTFT"
-    Ne comparez pas le TTFT côté serveur d'Ollama avec le TTFT côté client des moteurs compatibles OpenAI sans tenir compte de la différence. Le champ `ttft_source` dans les résultats de benchmark indique quelle méthode a été utilisée.
+- **TTFT côté serveur** (`ttft_ms`) : extrait de `prompt_eval_duration` dans la réponse Ollama. C'est le temps pur de traitement GPU du prompt, sans aucune surcharge réseau — la mesure la plus précise possible. Rapporté comme `ttft_source: server`.
+- **TTFT côté client** (`ttft_client_ms`) : mesuré à l'arrivée du premier chunk SSE de contenu. Inclut la configuration HTTP, la transmission de la requête et le traitement serveur. C'est la même méthode utilisée pour tous les autres moteurs.
+
+**Moteurs compatibles OpenAI** (LM Studio, llama.cpp, mlx-lm, vllm-mlx) :
+
+- **TTFT côté client** (`ttft_client_ms`) : mesuré au premier chunk SSE de contenu. C'est la seule mesure disponible car ces moteurs n'exposent pas le timing interne de traitement du prompt. `ttft_ms` et `ttft_client_ms` contiennent la même valeur.
+
+**Métrique comparable** : `ttft_client_ms` est la métrique **comparable entre moteurs** — elle utilise la même méthode de mesure quel que soit le moteur. Utilisez-la pour comparer le TTFT entre différents moteurs. Le `ttft_ms` côté serveur d'Ollama est plus précis pour le temps absolu de traitement du prompt, mais n'est pas directement comparable avec les autres moteurs.
+
+**Validation croisée** (avril 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB) :
+
+| Méthode | TTFT | Écart |
+|---------|------|-------|
+| Ollama côté serveur (`ttft_ms`) | 27 ms | référence |
+| Ollama côté client (`ttft_client_ms`) | 51 ms | +24 ms |
+
+L'écart de 24ms représente la surcharge HTTP sur localhost. Cette surcharge est constante et prévisible, mais suffisamment significative pour compter lors de la comparaison entre moteurs.
 
 ### Puissance — Watts GPU
 
@@ -107,6 +122,7 @@ Ces vérifications préviennent les erreurs de mesure causées par la contention
 | Détection du type de runner Ollama (MLX vs llama.cpp) | Implémenté (v1.5.0) |
 | TTFT séparé du tok/s | Implémenté |
 | Étiquetage de la source TTFT (server vs client) | Implémenté (v1.5.0) |
+| Double mesure TTFT (server + client) | Implémenté (v1.6.0) |
 | Échantillonnage déterministe (temperature=0) | Implémenté |
 | Comptage de tokens via l'API serveur (pas les chunks SSE) | Implémenté (avertissement en repli) |
 | Monitoring de puissance par moteur (IOReport, sans sudo) | Implémenté |

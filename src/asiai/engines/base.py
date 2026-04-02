@@ -26,6 +26,7 @@ class GenerateResult:
     tokens_generated: int = 0
     tok_per_sec: float = 0.0
     ttft_ms: float = 0.0
+    ttft_client_ms: float = 0.0  # Client-side TTFT (comparable across engines)
     total_duration_ms: float = 0.0
     prompt_eval_duration_ms: float = 0.0
     generation_duration_ms: float = 0.0

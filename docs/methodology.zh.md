@@ -53,12 +53,27 @@ tok_per_sec  = completion_tokens / generation_s
 
 从发送请求到收到第一个输出 token 的时间，单位毫秒。
 
-**Ollama**：通过 `prompt_eval_duration`（内部计时）在服务端测量。这是纯 prompt 处理时间，无网络开销。报告为 `ttft_source: server`。
+自 v1.6.0 起，asiai 为 Ollama 测量**两个 TTFT 值**，为其他所有引擎测量一个：
 
-**OpenAI 兼容引擎**：在客户端第一个 SSE 内容 chunk 处测量。包含 HTTP 建立、请求传输和服务器处理。通常比服务端高 10-100ms。报告为 `ttft_source: client`。
+**Ollama**（双重测量）：
 
-!!! warning "TTFT 比较"
-    不要在不考虑差异的情况下将 Ollama 的服务端 TTFT 与 OpenAI 兼容引擎的客户端 TTFT 进行比较。基准测试结果中的 `ttft_source` 字段指示使用了哪种方法。
+- **服务端 TTFT**（`ttft_ms`）：从 Ollama 响应中的 `prompt_eval_duration` 提取。这是纯 GPU prompt 处理时间，零网络开销——最精确的测量方式。报告为 `ttft_source: server`。
+- **客户端 TTFT**（`ttft_client_ms`）：在第一个 SSE 内容 chunk 到达时测量。包含 HTTP 建立、请求传输和服务器处理。与所有其他引擎使用相同的方法。
+
+**OpenAI 兼容引擎**（LM Studio、llama.cpp、mlx-lm、vllm-mlx）：
+
+- **客户端 TTFT**（`ttft_client_ms`）：在第一个 SSE 内容 chunk 处测量。这是唯一可用的测量方式，因为这些引擎不暴露内部 prompt 处理计时。`ttft_ms` 和 `ttft_client_ms` 包含相同的值。
+
+**可比较指标**：`ttft_client_ms` 是**跨引擎可比较**的指标——无论引擎如何，都使用相同的测量方法。比较不同引擎的 TTFT 时请使用此指标。Ollama 的服务端 `ttft_ms` 对于绝对 prompt 处理时间更准确，但无法与其他引擎直接比较。
+
+**交叉验证**（2026 年 4 月，Qwen3.5-35B NVFP4，M4 Pro 64GB）：
+
+| 方法 | TTFT | Delta |
+|------|------|-------|
+| Ollama 服务端（`ttft_ms`） | 27 ms | 参考值 |
+| Ollama 客户端（`ttft_client_ms`） | 51 ms | +24 ms |
+
+24ms 的差异代表 localhost 上的 HTTP 开销。此开销一致且可预测，但在比较引擎时足够显著，不容忽视。
 
 ### Power — GPU 功耗
 
@@ -107,6 +122,7 @@ asiai 执行基准测试前检查：
 | Ollama runner 类型检测（MLX vs llama.cpp） | 已实现 (v1.5.0) |
 | TTFT 与 tok/s 分离 | 已实现 |
 | TTFT 来源标记（server vs client） | 已实现 (v1.5.0) |
+| 双重 TTFT 测量（server + client） | 已实现 (v1.6.0) |
 | 确定性采样（temperature=0） | 已实现 |
 | Token 计数来自服务器 API（非 SSE chunk） | 已实现（回退时有警告） |
 | 按引擎功耗监控（IOReport，无 sudo） | 已实现 |

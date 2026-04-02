@@ -130,6 +130,7 @@ def _build_slot_entry(
         "avg_tok_s": slot_data.get("avg_tok_s", 0.0),
         "ci95": [slot_data.get("ci95_lower", 0.0), slot_data.get("ci95_upper", 0.0)],
         "median_ttft_ms": slot_data.get("median_ttft_ms", 0.0),
+        "median_ttft_client_ms": slot_data.get("median_ttft_client_ms", 0.0),
         "vram_bytes": slot_data.get("vram_bytes", 0),
         "engine_version": er.get("engine_version", ""),
         "model_format": er.get("model_format", ""),
@@ -139,6 +140,7 @@ def _build_slot_entry(
         "p90_tok_s": slot_data.get("p90_tok_s", 0.0),
         "p99_tok_s": slot_data.get("p99_tok_s", 0.0),
         "p90_ttft_ms": slot_data.get("p90_ttft_ms", 0.0),
+        "p90_ttft_client_ms": slot_data.get("p90_ttft_client_ms", 0.0),
     }
     if power_vals:
         entry["avg_power_watts"] = round(sum(power_vals) / len(power_vals), 1)

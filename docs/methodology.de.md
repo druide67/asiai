@@ -53,12 +53,27 @@ Bei großen Kontextgrößen (z.B. 64k Tokens) kann die TTFT die Gesamtdauer domi
 
 Zeit zwischen dem Senden der Anfrage und dem Empfang des ersten Ausgabe-Tokens, in Millisekunden.
 
-**Ollama**: serverseitig gemessen über `prompt_eval_duration` (internes Timing). Dies ist reine Prompt-Verarbeitungszeit ohne Netzwerk-Overhead. Berichtet als `ttft_source: server`.
+Seit v1.6.0 misst asiai **zwei TTFT-Werte** für Ollama und einen für alle anderen Engines:
 
-**OpenAI-kompatible Engines**: clientseitig gemessen beim ersten SSE-Content-Chunk. Beinhaltet HTTP-Setup, Anfragenübertragung und Serververarbeitung. Typischerweise 10-100ms höher als serverseitig. Berichtet als `ttft_source: client`.
+**Ollama** (duale Messung):
 
-!!! warning "TTFT-Vergleich"
-    Vergleichen Sie nicht das serverseitige Ollama-TTFT mit dem clientseitigen OpenAI-kompatiblen TTFT, ohne den Unterschied zu berücksichtigen. Das Feld `ttft_source` in den Benchmark-Ergebnissen zeigt an, welche Methode verwendet wurde.
+- **Serverseitiges TTFT** (`ttft_ms`): extrahiert aus `prompt_eval_duration` in der Ollama-Antwort. Dies ist reine GPU-Prompt-Verarbeitungszeit ohne Netzwerk-Overhead — die genaueste mögliche Messung. Berichtet als `ttft_source: server`.
+- **Clientseitiges TTFT** (`ttft_client_ms`): gemessen beim Eintreffen des ersten SSE-Content-Chunks. Beinhaltet HTTP-Setup, Anfragenübertragung und Serververarbeitung. Dies ist dieselbe Methode, die für alle anderen Engines verwendet wird.
+
+**OpenAI-kompatible Engines** (LM Studio, llama.cpp, mlx-lm, vllm-mlx):
+
+- **Clientseitiges TTFT** (`ttft_client_ms`): gemessen beim ersten SSE-Content-Chunk. Dies ist die einzige verfügbare Messung, da diese Engines kein internes Prompt-Verarbeitungs-Timing bereitstellen. Sowohl `ttft_ms` als auch `ttft_client_ms` enthalten denselben Wert.
+
+**Vergleichbare Metrik**: `ttft_client_ms` ist die **engine-übergreifend vergleichbare** Metrik — sie verwendet unabhängig von der Engine dieselbe Messmethode. Verwenden Sie diese zum Vergleich von TTFT über verschiedene Engines hinweg. Das serverseitige `ttft_ms` von Ollama ist genauer für die absolute Prompt-Verarbeitungszeit, aber nicht direkt mit anderen Engines vergleichbar.
+
+**Kreuzvalidierung** (April 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB):
+
+| Methode | TTFT | Delta |
+|---------|------|-------|
+| Ollama serverseitig (`ttft_ms`) | 27 ms | Referenz |
+| Ollama clientseitig (`ttft_client_ms`) | 51 ms | +24 ms |
+
+Das Delta von 24ms entspricht dem HTTP-Overhead auf localhost. Dieser Overhead ist konsistent und vorhersehbar, aber signifikant genug, um beim Vergleich von Engines relevant zu sein.
 
 ### Leistung — GPU Watt
 
@@ -107,6 +122,7 @@ Diese Prüfungen verhindern Messfehler durch Ressourcenkonflikte oder fehlerhaft
 | Ollama-Runner-Typ-Erkennung (MLX vs llama.cpp) | Implementiert (v1.5.0) |
 | TTFT getrennt von tok/s | Implementiert |
 | TTFT-Quellenkennzeichnung (server vs client) | Implementiert (v1.5.0) |
+| Duale TTFT-Messung (server + client) | Implementiert (v1.6.0) |
 | Deterministisches Sampling (temperature=0) | Implementiert |
 | Token-Zählung über Server-API (nicht SSE-Chunks) | Implementiert (Warnung bei Fallback) |
 | Leistungsüberwachung pro Engine (IOReport, ohne sudo) | Implementiert |

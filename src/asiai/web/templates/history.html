@@ -113,6 +113,7 @@
                         <th class="text-left">Prompt</th>
                         <th class="text-right">tok/s</th>
                         <th class="text-right">TTFT</th>
+                        <th class="text-right">TTFT Client</th>
                         <th class="text-right">Duration</th>
                     </tr>
                 </thead>
@@ -342,10 +343,13 @@
         var engineData = {};
         rows.forEach(function(r) {
             if (!engineData[r.engine]) {
-                engineData[r.engine] = { tok_s: [], ttft: [] };
+                engineData[r.engine] = { tok_s: [], ttft: [], ttft_client: [] };
             }
             engineData[r.engine].tok_s.push([r.ts * 1000, r.tok_per_sec]);
             engineData[r.engine].ttft.push([r.ts * 1000, r.ttft_ms]);
+            if (r.ttft_client_ms && r.ttft_client_ms > 0) {
+                engineData[r.engine].ttft_client.push([r.ts * 1000, r.ttft_client_ms]);
+            }
         });
 
         var tokSeries = Object.keys(engineData).map(function(name) {
@@ -353,6 +357,12 @@
         });
         var ttftSeries = Object.keys(engineData).map(function(name) {
             return { name: name, data: engineData[name].ttft };
+        });
+        // Add client TTFT as lighter series
+        Object.keys(engineData).forEach(function(name) {
+            if (engineData[name].ttft_client.length > 0) {
+                ttftSeries.push({ name: name + ' (client)', data: engineData[name].ttft_client });
+            }
         });
 
         // Destroy existing charts
@@ -438,6 +448,15 @@
             tdTtft.className = 'text-right';
             tdTtft.textContent = r.ttft_ms.toFixed(0) + ' ms';
             tr.appendChild(tdTtft);
+
+            var tdTtftClient = document.createElement('td');
+            tdTtftClient.className = 'text-right';
+            if (r.ttft_client_ms && r.ttft_client_ms > 0 && Math.abs(r.ttft_client_ms - r.ttft_ms) > 10) {
+                tdTtftClient.textContent = r.ttft_client_ms.toFixed(0) + ' ms';
+            } else {
+                tdTtftClient.textContent = '\u2014';
+            }
+            tr.appendChild(tdTtftClient);
 
             var tdDur = document.createElement('td');
             tdDur.className = 'text-right';

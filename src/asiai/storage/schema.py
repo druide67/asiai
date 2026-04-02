@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS benchmarks (
     tokens_generated INTEGER,
     tok_per_sec REAL,
     ttft_ms REAL,
+    ttft_client_ms REAL DEFAULT 0,
     total_duration_ms REAL,
     vram_bytes INTEGER,
     mem_used INTEGER,
@@ -293,6 +294,14 @@ MIGRATIONS = [
         "columns": ["kv_cache_type"],
         "sql": [
             "ALTER TABLE benchmarks ADD COLUMN kv_cache_type TEXT DEFAULT ''",
+        ],
+    },
+    # v1.6: Client-side TTFT for cross-engine comparison
+    {
+        "table": "benchmarks",
+        "columns": ["ttft_client_ms"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN ttft_client_ms REAL DEFAULT 0",
         ],
     },
 ]

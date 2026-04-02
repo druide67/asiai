@@ -53,12 +53,27 @@ At large context sizes (e.g., 64k tokens), TTFT can dominate total duration. Exc
 
 Time between sending the request and receiving the first output token, in milliseconds.
 
-**Ollama**: measured server-side via `prompt_eval_duration` (internal timing). This is pure prompt processing time with no network overhead. Reported as `ttft_source: server`.
+Since v1.6.0, asiai measures **two TTFT values** for Ollama, and one for all other engines:
 
-**OpenAI-compatible engines**: measured client-side at the first SSE content chunk. Includes HTTP setup, request transmission, and server processing. Typically 10-100ms higher than server-side. Reported as `ttft_source: client`.
+**Ollama** (dual measurement):
 
-!!! warning "TTFT comparison"
-    Do not compare Ollama server-side TTFT with OpenAI-compat client-side TTFT without accounting for the difference. The `ttft_source` field in benchmark results indicates which method was used.
+- **Server-side TTFT** (`ttft_ms`): extracted from `prompt_eval_duration` in the Ollama response. This is pure GPU prompt processing time with zero network overhead — the most accurate measurement possible. Reported as `ttft_source: server`.
+- **Client-side TTFT** (`ttft_client_ms`): measured at the arrival of the first SSE content chunk. Includes HTTP setup, request transmission, and server processing. This is the same method used for all other engines.
+
+**OpenAI-compatible engines** (LM Studio, llama.cpp, mlx-lm, vllm-mlx):
+
+- **Client-side TTFT** (`ttft_client_ms`): measured at the first SSE content chunk. This is the only measurement available since these engines do not expose internal prompt processing timing. Both `ttft_ms` and `ttft_client_ms` contain the same value.
+
+**Comparable metric**: `ttft_client_ms` is the **cross-engine comparable** metric — it uses the same measurement method regardless of the engine. Use this when comparing TTFT across different engines. The server-side `ttft_ms` from Ollama is more accurate for absolute prompt processing time, but not directly comparable with other engines.
+
+**Cross-validation** (April 2026, Qwen3.5-35B NVFP4, M4 Pro 64GB):
+
+| Method | TTFT | Delta |
+|--------|------|-------|
+| Ollama server-side (`ttft_ms`) | 27 ms | reference |
+| Ollama client-side (`ttft_client_ms`) | 51 ms | +24 ms |
+
+The 24ms delta represents HTTP overhead on localhost. This overhead is consistent and predictable but significant enough to matter when comparing engines.
 
 ### Power — GPU Watts
 
@@ -122,6 +137,7 @@ These checks prevent measurement errors caused by resource contention or incorre
 | Engine version + runner type stored per result | Implemented (v1.5.0) |
 | Universal VRAM via ri_phys_footprint | Implemented |
 | Historical regression detection | Implemented |
+| Dual TTFT measurement (server + client) | Implemented (v1.6.0) |
 | Cross-validation script (3 methods compared) | Available (scripts/cross-validate-bench.py) |
 
 ## Apple Silicon Considerations

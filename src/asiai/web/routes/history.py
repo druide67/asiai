@@ -89,6 +89,7 @@ async def api_benchmarks(
                 "prompt_type": r.get("prompt_type", ""),
                 "tok_per_sec": r.get("tok_per_sec", 0),
                 "ttft_ms": r.get("ttft_ms", 0),
+                "ttft_client_ms": r.get("ttft_client_ms", 0),
                 "total_duration_ms": r.get("total_duration_ms", 0),
                 "vram_bytes": r.get("vram_bytes", 0),
                 "power_watts": r.get("power_watts", 0),

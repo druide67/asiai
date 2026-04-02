@@ -242,6 +242,10 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             "# HELP asiai_bench_ttft_seconds Last benchmark time to first token",
             "# TYPE asiai_bench_ttft_seconds gauge",
         ]
+        ttft_client_lines = [
+            "# HELP asiai_bench_ttft_client_seconds Last benchmark client-side time to first token",
+            "# TYPE asiai_bench_ttft_client_seconds gauge",
+        ]
         power_lines = [
             "# HELP asiai_bench_power_watts Last benchmark power consumption",
             "# TYPE asiai_bench_power_watts gauge",
@@ -257,6 +261,11 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             ttft = b.get("ttft_ms", 0)
             if ttft:
                 ttft_lines.append(f"asiai_bench_ttft_seconds{{{labels}}} {ttft / 1000.0}")
+            ttft_client = b.get("ttft_client_ms", 0)
+            if ttft_client:
+                ttft_client_lines.append(
+                    f"asiai_bench_ttft_client_seconds{{{labels}}} {ttft_client / 1000.0}"
+                )
             power = b.get("power_watts", 0)
             if power:
                 power_lines.append(f"asiai_bench_power_watts{{{labels}}} {power}")
@@ -265,6 +274,8 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
             sections.append("\n".join(tok_lines))
         if len(ttft_lines) > 2:
             sections.append("\n".join(ttft_lines))
+        if len(ttft_client_lines) > 2:
+            sections.append("\n".join(ttft_client_lines))
         if len(power_lines) > 2:
             sections.append("\n".join(power_lines))
 

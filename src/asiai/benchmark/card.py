@@ -63,6 +63,7 @@ def generate_card_svg(
     for s in slots:
         tok_s = s.get("median_tok_s", 0.0) or s.get("avg_tok_s", 0.0)
         ttft = s.get("median_ttft_ms", 0.0)
+        ttft_client = s.get("median_ttft_client_ms", 0.0)
         stability = s.get("stability", "")
         vram = s.get("vram_bytes", 0)
         runs = s.get("runs_count", 0)
@@ -85,6 +86,7 @@ def generate_card_svg(
                 "engine": eng_name,  # Keep for engine_versions/power_data lookup
                 "tok_s": tok_s,
                 "ttft_ms": ttft,
+                "ttft_client_ms": ttft_client,
                 "stability": stability,
                 "vram_bytes": vram,
                 "runs_count": runs,
@@ -250,14 +252,19 @@ def generate_card_svg(
     if len(bars) >= 2:
         insights = []
         best, second = bars[0], bars[1]
-        # TTFT comparison
-        if best["ttft_ms"] > 0 and second["ttft_ms"] > 0:
-            if second["ttft_ms"] < best["ttft_ms"]:
-                pct = int((best["ttft_ms"] - second["ttft_ms"]) / best["ttft_ms"] * 100)
+        # TTFT comparison — prefer client-measured TTFT for fair cross-engine comparison
+        best_ttft = best["ttft_ms"]
+        second_ttft = second["ttft_ms"]
+        if best["ttft_client_ms"] > 0 and second["ttft_client_ms"] > 0:
+            best_ttft = best["ttft_client_ms"]
+            second_ttft = second["ttft_client_ms"]
+        if best_ttft > 0 and second_ttft > 0:
+            if second_ttft < best_ttft:
+                pct = int((best_ttft - second_ttft) / best_ttft * 100)
                 if pct >= 10:
                     insights.append(f"{second['name']} {pct}% faster TTFT")
-            elif best["ttft_ms"] < second["ttft_ms"]:
-                pct = int((second["ttft_ms"] - best["ttft_ms"]) / second["ttft_ms"] * 100)
+            elif best_ttft < second_ttft:
+                pct = int((second_ttft - best_ttft) / second_ttft * 100)
                 if pct >= 10:
                     insights.append(f"{best['name']} {pct}% faster TTFT")
         # VRAM comparison
@@ -290,9 +297,11 @@ def generate_card_svg(
     metric_winners: dict[str, str] = {}  # metric_key → engine_name
     if len(bars) >= 2:
         b0, b1 = bars[0], bars[1]
-        # TTFT: lower is better
-        if b0["ttft_ms"] > 0 and b1["ttft_ms"] > 0:
-            metric_winners["ttft"] = b0["name"] if b0["ttft_ms"] <= b1["ttft_ms"] else b1["name"]
+        # TTFT: lower is better — prefer client-measured TTFT for fair comparison
+        b0_ttft = b0["ttft_client_ms"] if (b0["ttft_client_ms"] > 0 and b1["ttft_client_ms"] > 0) else b0["ttft_ms"]
+        b1_ttft = b1["ttft_client_ms"] if (b0["ttft_client_ms"] > 0 and b1["ttft_client_ms"] > 0) else b1["ttft_ms"]
+        if b0_ttft > 0 and b1_ttft > 0:
+            metric_winners["ttft"] = b0["name"] if b0_ttft <= b1_ttft else b1["name"]
         # VRAM: lower is better
         if b0["vram_bytes"] > 0 and b1["vram_bytes"] > 0:
             metric_winners["vram"] = (

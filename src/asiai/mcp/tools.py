@@ -750,8 +750,7 @@ async def compare_engines(
         else:
             label = f"{slot.get('model', '')} / {slot.get('engine', '')}"
 
-        comparison.append(
-            {
+        entry = {
                 "rank": rank,
                 "label": label,
                 "engine": slot.get("engine", ""),
@@ -765,7 +764,10 @@ async def compare_engines(
                 "stability": slot.get("stability", "unknown"),
                 "runs_count": slot.get("runs_count", 0),
             }
-        )
+        median_ttft_client = slot.get("median_ttft_client_ms", 0)
+        if median_ttft_client:
+            entry["median_ttft_client_ms"] = round(median_ttft_client, 1)
+        comparison.append(entry)
 
     # Verdict
     best = slots[0]
