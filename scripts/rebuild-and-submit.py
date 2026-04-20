@@ -20,8 +20,18 @@ from statistics import median
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-BULK_IMPORT_URL = "https://api.asiai.dev/bulk-import.php"
-SECRET_KEY = "74a8e8b748b4f59dafed24b39d508aeb3a5ffcafd121761debdfe8cf28b93761"
+BULK_IMPORT_URL = os.environ.get(
+    "ASIAI_BULK_IMPORT_URL", "https://api.asiai.dev/bulk-import.php"
+)
+try:
+    SECRET_KEY = os.environ["ASIAI_SEED_KEY"]
+except KeyError:
+    sys.stderr.write(
+        "ERROR: ASIAI_SEED_KEY env var not set. "
+        "Run via: op run --env-file=asiai-api/.env.template -- python3 "
+        "scripts/rebuild-and-submit.py <db>\n"
+    )
+    sys.exit(2)
 
 # Sessions from tonight (after 2026-03-14 21:00 local = 1773529200 UTC approx)
 MIN_TS = 1773529200
