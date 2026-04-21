@@ -25,3 +25,11 @@ def on_post_build(config, **kwargs) -> None:
         shutil.rmtree(dst)
     shutil.copytree(src, dst)
     print(f"[copy_well_known] copied {src} -> {dst}")
+
+    # GitHub Pages runs Jekyll by default, which strips dotdirs like .well-known/.
+    # An empty .nojekyll file at the site root disables Jekyll so static
+    # dotfiles/dotdirs are served as-is.
+    nojekyll = site_dir / ".nojekyll"
+    if not nojekyll.exists():
+        nojekyll.touch()
+        print(f"[copy_well_known] created {nojekyll}")
