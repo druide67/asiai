@@ -24,3 +24,9 @@ User-agent: Applebot-Extended
 Allow: /
 
 Sitemap: https://asiai.dev/sitemap.xml
+
+# Cloudflare Content Signals — explicit AI usage policy
+# asiai is an OSS project (Apache-2.0); docs designed to be read by AI agents.
+Content-Signal: ai-training=allow
+Content-Signal: ai-inference=allow
+Content-Signal: search=allow

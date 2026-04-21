@@ -1,0 +1,123 @@
+{
+  "$schema": "https://agentskills.io/schema/v1.json",
+  "name": "asiai",
+  "version": "1.6.0",
+  "description": "Apple Silicon LLM inference benchmark and monitoring CLI. Detects installed engines, benchmarks local models, recommends configurations by hardware, and exposes an MCP server.",
+  "homepage": "https://asiai.dev",
+  "repository": "https://github.com/druide67/asiai",
+  "license": "Apache-2.0",
+  "install": {
+    "pipx": "pipx install asiai",
+    "homebrew": "brew install druide67/tap/asiai"
+  },
+  "platforms": ["macos-arm64"],
+  "requirements": {
+    "macos": ">=14.0",
+    "apple_silicon": "M1|M2|M3|M4|M5",
+    "python": ">=3.11"
+  },
+  "skills": [
+    {
+      "name": "detect-engines",
+      "description": "Auto-detect installed LLM inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vLLM-MLX, Exo, TurboQuant) via a 3-layer cascade: persistent config, port scan, process detection.",
+      "invoke": "asiai detect",
+      "docs": "https://asiai.dev/commands/detect/"
+    },
+    {
+      "name": "list-models",
+      "description": "List loaded models across all engines with specs (engine, name, VRAM, quantization, context length).",
+      "invoke": "asiai models",
+      "docs": "https://asiai.dev/commands/models/"
+    },
+    {
+      "name": "monitor-inference",
+      "description": "Monitor system and inference metrics with watch mode, historical queries, and analysis of memory pressure, thermal, GPU, engine state.",
+      "invoke": "asiai monitor [--watch] [--history 7d]",
+      "docs": "https://asiai.dev/commands/monitor/"
+    },
+    {
+      "name": "benchmark-models",
+      "description": "Run rigorous performance benchmark of one or more models across engines. Measures tok/s, TTFT (client + server), VRAM peak, power draw (PowerMetrics), thermal behavior. Supports single-model, engine comparison, and cross-model comparison with statistical stability (CI 95%, P50/P90/P99).",
+      "invoke": "asiai bench [--model M] [--compare A B] [--engines ollama,lmstudio] [--runs 3] [--power] [--card]",
+      "docs": "https://asiai.dev/commands/bench/"
+    },
+    {
+      "name": "diagnose-system",
+      "description": "Run comprehensive diagnostics on asiai installation and system (Apple Silicon compat, engines reachability, storage DB integrity, daemon state, alerting config).",
+      "invoke": "asiai doctor",
+      "docs": "https://asiai.dev/commands/doctor/"
+    },
+    {
+      "name": "manage-daemon",
+      "description": "Install, start, stop, and inspect background services (metrics collector, web dashboard) as macOS LaunchAgents.",
+      "invoke": "asiai daemon {install|start|stop|status|logs|uninstall}",
+      "docs": "https://asiai.dev/commands/daemon/"
+    },
+    {
+      "name": "tui-dashboard",
+      "description": "Interactive text user interface dashboard (Textual) for real-time inference monitoring.",
+      "invoke": "asiai tui",
+      "docs": "https://asiai.dev/commands/tui/"
+    },
+    {
+      "name": "web-dashboard",
+      "description": "Launch a local web dashboard (FastAPI + htmx) to monitor inference in real time at http://localhost:8642.",
+      "invoke": "asiai web [--host 0.0.0.0] [--port 8642]",
+      "docs": "https://asiai.dev/commands/web/"
+    },
+    {
+      "name": "run-mcp-server",
+      "description": "Start the MCP server exposing 11 read-only tools and 3 resources to AI agents (Claude Code, Claude Desktop, etc.) over stdio/SSE/streamable-HTTP. See mcp-server.json for the server card.",
+      "invoke": "asiai mcp [--transport stdio|sse|streamable-http] [--host HOST] [--port PORT]",
+      "docs": "https://asiai.dev/commands/mcp/"
+    },
+    {
+      "name": "community-leaderboard",
+      "description": "Display the community benchmark leaderboard (shared benchmarks from other Apple Silicon Macs). Filter by chip and model.",
+      "invoke": "asiai leaderboard [--chip 'Apple M4 Pro'] [--model qwen3.6:35b-a3b-nvfp4]",
+      "docs": "https://asiai.dev/commands/leaderboard/"
+    },
+    {
+      "name": "compare-to-community",
+      "description": "Compare your local benchmarks against the community database (median, P90, outliers per chip+model+engine tuple).",
+      "invoke": "asiai compare [--chip C] [--model M]",
+      "docs": "https://asiai.dev/commands/compare/"
+    },
+    {
+      "name": "recommend-config",
+      "description": "Hardware-aware engine and model recommendations for this Mac. Optimizes for throughput, latency, or efficiency (tok/s/W). Uses scoring matrix across 8 engines.",
+      "invoke": "asiai recommend [--goal throughput|latency|efficiency]",
+      "docs": "https://asiai.dev/commands/recommend/"
+    },
+    {
+      "name": "setup-wizard",
+      "description": "Interactive first-launch setup wizard: detects engines, configures persistent settings, optionally registers as an agent.",
+      "invoke": "asiai setup",
+      "docs": "https://asiai.dev/commands/setup/"
+    },
+    {
+      "name": "manage-config",
+      "description": "Manage persistent engine configuration (add, remove, show, reset). Persisted under ~/.config/asiai/engines.json.",
+      "invoke": "asiai config {add|remove|show|reset} [engine_name]",
+      "docs": "https://asiai.dev/commands/config/"
+    },
+    {
+      "name": "show-version",
+      "description": "Show asiai version, hardware context (chip, RAM), detected engines, daemon status.",
+      "invoke": "asiai version",
+      "docs": "https://asiai.dev/commands/version/"
+    },
+    {
+      "name": "unregister-agent",
+      "description": "Remove the local agent registration (delete stored X-Agent-Id and X-Agent-Token credentials). Used to opt out of community agent registry.",
+      "invoke": "asiai unregister",
+      "docs": "https://asiai.dev/agent/"
+    }
+  ],
+  "related": {
+    "mcpServerCard": "https://asiai.dev/mcp-server.json",
+    "apiCatalog": "https://asiai.dev/.well-known/api-catalog",
+    "openapi": "https://asiai.dev/openapi.json",
+    "llmsTxt": "https://asiai.dev/llms.txt"
+  }
+}

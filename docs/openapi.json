@@ -1,0 +1,443 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "asiai Community Benchmark API",
+    "version": "1.6.0",
+    "description": "Public REST API for community-submitted benchmarks of Apple Silicon LLM inference. Used by the asiai CLI (opt-in `--share`) to publish results and query the leaderboard. Zero-dependency PHP 8 + MySQL backend on OVH.",
+    "termsOfService": "https://asiai.dev/privacy/",
+    "contact": {
+      "name": "asiai",
+      "url": "https://asiai.dev",
+      "email": "druide67@free.fr"
+    },
+    "license": {
+      "name": "Apache-2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.asiai.dev/api/v1",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {"name": "benchmarks", "description": "Submit and query community benchmark results"},
+    {"name": "leaderboard", "description": "Aggregated performance rankings"},
+    {"name": "agents", "description": "AI agent registry (opt-in, ADR-001)"},
+    {"name": "badges", "description": "SVG shields for README embedding"},
+    {"name": "health", "description": "Service liveness"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Liveness probe",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Service is up",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HealthStatus"},
+                "example": {"status": "ok"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/benchmarks": {
+      "post": {
+        "tags": ["benchmarks"],
+        "summary": "Submit a benchmark result",
+        "description": "Submits a benchmark run from the asiai CLI (`asiai bench --share`). Supports schema v2 (engine-keyed) and v3 (slots-array for cross-model comparisons). Payload includes hardware context, model, engine, stats, optional card PNG. Deduped by SHA-256 payload hash. Rate-limited per IP; bypass with X-Seed-Key header (admin bulk-import).",
+        "operationId": "submitBenchmark",
+        "security": [{}, {"XSeedKey": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/BenchmarkSubmission"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted and stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {"type": "string", "enum": ["ok"]},
+                    "id": {"type": "string", "format": "uuid"},
+                    "card_url": {"type": "string", "format": "uri"}
+                  }
+                }
+              }
+            }
+          },
+          "409": {"$ref": "#/components/responses/Duplicate"},
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "422": {"$ref": "#/components/responses/Validation"},
+          "429": {"$ref": "#/components/responses/RateLimit"}
+        }
+      }
+    },
+    "/leaderboard": {
+      "get": {
+        "tags": ["leaderboard"],
+        "summary": "Community leaderboard",
+        "description": "Aggregated performance by hardware chip + model + engine. Median, P90, sample count per tuple. Cached 60s. Optional filters by chip and model.",
+        "operationId": "getLeaderboard",
+        "parameters": [
+          {
+            "name": "chip",
+            "in": "query",
+            "description": "Filter by Apple Silicon chip (e.g. 'Apple M4 Pro', 'Apple M5 Max')",
+            "required": false,
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by model name (substring match, case-insensitive)",
+            "required": false,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated leaderboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/LeaderboardEntry"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compare": {
+      "get": {
+        "tags": ["leaderboard"],
+        "summary": "Compare engines for a specific hardware+model combo",
+        "description": "Side-by-side comparison of available engines for a given chip+model. Both parameters required.",
+        "operationId": "getCompare",
+        "parameters": [
+          {"name": "chip", "in": "query", "required": true, "schema": {"type": "string"}},
+          {"name": "model", "in": "query", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Comparison result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chip": {"type": "string"},
+                    "model": {"type": "string"},
+                    "engines": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/CompareEntry"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/Validation"}
+        }
+      }
+    },
+    "/agent-register": {
+      "post": {
+        "tags": ["agents"],
+        "summary": "Register an AI agent",
+        "description": "Opt-in agent registration (ADR-001). Stores chip, RAM, installed engines, returns an agent_id + agent_token to be sent on heartbeats. Rate-limited: max 5 registrations/hour per IP.",
+        "operationId": "registerAgent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/AgentRegistration"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {"type": "string", "enum": ["ok"]},
+                    "agent_id": {"type": "string"},
+                    "agent_token": {"type": "string"}
+                  }
+                }
+              }
+            }
+          },
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "422": {"$ref": "#/components/responses/Validation"},
+          "429": {"$ref": "#/components/responses/RateLimit"}
+        }
+      }
+    },
+    "/agent-heartbeat": {
+      "post": {
+        "tags": ["agents"],
+        "summary": "Agent keep-alive",
+        "description": "Updates last_seen timestamp. Rate-limited per agent (configurable minimum interval).",
+        "operationId": "agentHeartbeat",
+        "security": [{"AgentAuth": []}],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {"type": "string"},
+                  "loaded_models": {"type": "array", "items": {"type": "string"}}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Heartbeat accepted",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StatusOk"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "429": {"$ref": "#/components/responses/RateLimit"}
+        }
+      }
+    },
+    "/agent-count": {
+      "get": {
+        "tags": ["agents"],
+        "summary": "Aggregate agent count",
+        "description": "Number of registered AI agents active in the last 24h / 7d.",
+        "operationId": "getAgentCount",
+        "responses": {
+          "200": {
+            "description": "Counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "registered": {"type": "integer"},
+                    "active_24h": {"type": "integer"},
+                    "active_7d": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-badge": {
+      "get": {
+        "tags": ["badges"],
+        "summary": "SVG badge — active AI agents count",
+        "operationId": "getAgentBadge",
+        "responses": {
+          "200": {
+            "description": "SVG badge",
+            "content": {"image/svg+xml": {"schema": {"type": "string"}}}
+          }
+        }
+      }
+    },
+    "/badge/benchmarks": {
+      "get": {
+        "tags": ["badges"],
+        "summary": "SVG badge — total community benchmarks",
+        "operationId": "getBadgeBenchmarks",
+        "responses": {
+          "200": {
+            "description": "SVG badge",
+            "content": {"image/svg+xml": {"schema": {"type": "string"}}}
+          }
+        }
+      }
+    },
+    "/badge/top-speed": {
+      "get": {
+        "tags": ["badges"],
+        "summary": "SVG badge — fastest engine/model combo on the leaderboard",
+        "operationId": "getBadgeTopSpeed",
+        "responses": {
+          "200": {
+            "description": "SVG badge",
+            "content": {"image/svg+xml": {"schema": {"type": "string"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "XSeedKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Seed-Key",
+        "description": "Admin seed key for rate-limit bypass on /benchmarks (bulk-import)."
+      },
+      "AgentAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Agent-Id",
+        "description": "Agent identifier issued at /agent-register. Must be sent together with the X-Agent-Token header (not expressible as a single OpenAPI apiKey, token check is server-side)."
+      }
+    },
+    "schemas": {
+      "HealthStatus": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "enum": ["ok"]}
+        }
+      },
+      "StatusOk": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "enum": ["ok"]}
+        }
+      },
+      "BenchmarkSubmission": {
+        "type": "object",
+        "description": "Schema v3 (slots-array, cross-model comparison). Schema v2 (engine-keyed, single model) also accepted — see server source for v2 shape.",
+        "required": ["id", "ts", "schema_version", "hw_chip", "hw_ram_gb", "asiai_version", "payload_hash"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid", "description": "Unique submission id, deduped server-side"},
+          "ts": {"type": "integer", "description": "Unix timestamp (seconds)"},
+          "schema_version": {"type": "integer", "enum": [2, 3]},
+          "session_type": {"type": "string", "enum": ["engine", "cross-model"], "default": "engine"},
+          "hw_chip": {"type": "string", "example": "Apple M4 Pro"},
+          "hw_ram_gb": {"type": "integer", "minimum": 8, "maximum": 512},
+          "asiai_version": {"type": "string", "example": "1.6.0"},
+          "payload_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of canonical payload for dedup"},
+          "slots": {
+            "type": "array",
+            "description": "For schema v3: array of engine×model benchmark slots",
+            "items": {
+              "type": "object",
+              "properties": {
+                "engine": {"type": "string", "example": "ollama"},
+                "model": {"type": "string", "example": "qwen3.6:35b-a3b-nvfp4"},
+                "median_tok_s": {"type": "number"},
+                "p90_tok_s": {"type": "number"},
+                "median_ttft_ms": {"type": "number"},
+                "vram_gb": {"type": "number"},
+                "power_w": {"type": "number"},
+                "context_size": {"type": "integer"}
+              }
+            }
+          },
+          "benchmark": {
+            "type": "object",
+            "description": "For schema v2: single-engine benchmark object (model, engine, stats)"
+          },
+          "card_png_b64": {
+            "type": "string",
+            "format": "byte",
+            "description": "Optional PNG bench card base64-encoded (max ~500 KB)"
+          }
+        }
+      },
+      "LeaderboardEntry": {
+        "type": "object",
+        "properties": {
+          "hw_chip": {"type": "string", "example": "Apple M4 Pro"},
+          "hw_ram_gb": {"type": "integer", "example": 64},
+          "model": {"type": "string", "example": "qwen3.6:35b-a3b-nvfp4"},
+          "engine": {"type": "string", "example": "ollama"},
+          "median_tok_s": {"type": "number", "example": 68.5},
+          "median_ttft_ms": {"type": "number", "example": 90},
+          "samples": {"type": "integer", "example": 14}
+        }
+      },
+      "CompareEntry": {
+        "type": "object",
+        "properties": {
+          "engine": {"type": "string"},
+          "median_tok_s": {"type": "number"},
+          "p90_tok_s": {"type": "number"},
+          "median_ttft_ms": {"type": "number"},
+          "samples": {"type": "integer"}
+        }
+      },
+      "AgentRegistration": {
+        "type": "object",
+        "required": ["chip", "ram_gb", "engines"],
+        "properties": {
+          "chip": {"type": "string", "pattern": "^Apple M[0-9]+( (Pro|Max|Ultra))?$", "example": "Apple M5 Max"},
+          "ram_gb": {"type": "integer", "minimum": 8, "maximum": 512},
+          "engines": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "version": {"type": "string"}
+              }
+            }
+          },
+          "asiai_version": {"type": "string"}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {"type": "string"}
+        }
+      }
+    },
+    "responses": {
+      "Duplicate": {
+        "description": "Duplicate submission (same payload_hash or id)",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      },
+      "PayloadTooLarge": {
+        "description": "Payload exceeds endpoint limit (3 MB for /benchmarks, 4 KB for /agent-*)",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      },
+      "Validation": {
+        "description": "Validation error (missing or malformed fields)",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      },
+      "RateLimit": {
+        "description": "Rate limit exceeded — retry after cooldown or use X-Seed-Key bypass (admin)",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      },
+      "Unauthorized": {
+        "description": "Missing X-Agent-Id / X-Agent-Token headers",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      },
+      "Forbidden": {
+        "description": "Invalid agent_id or agent_token",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      }
+    }
+  }
+}

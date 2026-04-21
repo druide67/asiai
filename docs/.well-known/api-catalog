@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ietf-wg-httpapi/api-catalog/main/schema.json",
+  "linkset": [
+    {
+      "anchor": "https://asiai.dev",
+      "service-desc": [
+        {
+          "href": "https://asiai.dev/openapi.json",
+          "type": "application/openapi+json;version=3.1",
+          "title": "asiai Community Benchmark API — OpenAPI 3.1"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://asiai.dev/commands/leaderboard/",
+          "type": "text/html",
+          "title": "Leaderboard CLI usage"
+        }
+      ]
+    }
+  ],
+  "apis": [
+    {
+      "name": "asiai Community Benchmark API",
+      "description": "Public community-submitted benchmarks for Apple Silicon LLM inference. Read access open, write access rate-limited per IP.",
+      "baseUrl": "https://api.asiai.dev/api/v1",
+      "openapi": "https://asiai.dev/openapi.json",
+      "docs": "https://asiai.dev/commands/leaderboard/",
+      "status": "stable"
+    }
+  ],
+  "related": {
+    "mcpServerCard": "https://asiai.dev/mcp-server.json",
+    "agentSkills": "https://asiai.dev/.well-known/agent-skills.json",
+    "llmsTxt": "https://asiai.dev/llms.txt"
+  }
+}
