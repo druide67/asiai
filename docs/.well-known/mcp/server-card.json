@@ -1,0 +1,119 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/specification/main/schema/server-card.json",
+  "name": "asiai",
+  "version": "1.6.0",
+  "description": "Apple Silicon LLM inference benchmark and monitoring — exposes 11 read-only tools and 3 resources to query local inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vLLM-MLX, Exo, TurboQuant) on Mac M1–M5.",
+  "homepage": "https://asiai.dev",
+  "repository": "https://github.com/druide67/asiai",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Jean-Marc Nahlovsky",
+    "url": "https://github.com/druide67"
+  },
+  "protocolVersion": "1.12",
+  "transports": ["stdio", "sse", "streamable-http"],
+  "install": {
+    "pipx": "pipx install asiai",
+    "homebrew": "brew install druide67/tap/asiai"
+  },
+  "invocation": {
+    "stdio": "asiai mcp",
+    "sse": "asiai mcp --transport sse --host 127.0.0.1 --port 8765",
+    "streamable-http": "asiai mcp --transport streamable-http --host 127.0.0.1 --port 8765"
+  },
+  "tools": [
+    {
+      "name": "check_inference_health",
+      "title": "Check Inference Health",
+      "description": "Quick health check of all local LLM inference engines. Returns status (ok/degraded/error), engines reachable, memory pressure, thermal state, GPU utilization. Responds in <500ms. Use this FIRST to check if inference is available.",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "get_inference_snapshot",
+      "title": "Full Inference Snapshot",
+      "description": "Get complete system + inference state: CPU load, memory, thermal, GPU, engines status, loaded models, recent activity.",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "list_models",
+      "title": "List Loaded Models",
+      "description": "List all models currently loaded across all inference engines (engine, name, VRAM, quantization, context length).",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "detect_engines",
+      "title": "Detect Inference Engines",
+      "description": "Auto-detect running LLM inference engines on this Mac via 3-layer cascade (persistent config → port scan → process detection).",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "run_benchmark",
+      "title": "Run Inference Benchmark",
+      "description": "Run a performance benchmark on local LLM inference engines. Measures tok/s, TTFT, VRAM, power. Supports single-engine, multi-engine comparison, and cross-model comparison. Runs 30–120s and is rate-limited (60s cooldown).",
+      "annotations": {"readOnlyHint": false, "openWorldHint": false}
+    },
+    {
+      "name": "get_recommendations",
+      "title": "Get Engine Recommendations",
+      "description": "Hardware-aware engine and model recommendations for this Mac. Optimized by throughput, latency, or efficiency depending on intent.",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "diagnose",
+      "title": "Run Diagnostics",
+      "description": "Comprehensive diagnostic checks: Apple Silicon compat, engines health, local DB integrity, daemon status, alerting config.",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "get_metrics_history",
+      "title": "Get System Metrics History",
+      "description": "Query historical system metrics (CPU, RAM, thermal, GPU) from the local SQLite database.",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "get_benchmark_history",
+      "title": "Get Benchmark History",
+      "description": "Query past benchmark results from the local database (filter by engine, model, date range).",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "refresh_engines",
+      "title": "Refresh Engine Detection",
+      "description": "Re-detect inference engines without restarting the MCP server. Useful after starting/stopping an engine.",
+      "annotations": {"readOnlyHint": false, "openWorldHint": false}
+    },
+    {
+      "name": "compare_engines",
+      "title": "Compare Engines or Models",
+      "description": "Side-by-side comparison of inference engines or models from local benchmark history.",
+      "annotations": {"readOnlyHint": true, "openWorldHint": false}
+    }
+  ],
+  "resources": [
+    {
+      "uri": "asiai://status",
+      "name": "Inference health status",
+      "description": "Current inference health: memory pressure, thermal state, GPU utilization.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "asiai://models",
+      "name": "Loaded models",
+      "description": "List of all currently loaded models across engines with engine name, VRAM, quantization, context length.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "asiai://system",
+      "name": "System hardware information",
+      "description": "Hardware context relevant for LLM inference: chip, RAM total/used, CPU cores, OS version, uptime.",
+      "mimeType": "application/json"
+    }
+  ],
+  "documentation": "https://asiai.dev/commands/mcp/",
+  "related": {
+    "agentSkills": "https://asiai.dev/.well-known/agent-skills.json",
+    "apiCatalog": "https://asiai.dev/.well-known/api-catalog",
+    "openapi": "https://asiai.dev/openapi.json",
+    "llmsTxt": "https://asiai.dev/llms.txt"
+  }
+}

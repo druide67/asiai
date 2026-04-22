@@ -41,10 +41,24 @@ jobs:
       - name: Build docs
         run: mkdocs build
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+      - name: Ensure .nojekyll and verify dotdirs
+        run: |
+          touch site/.nojekyll
+          ls -la site/ | head -20
+          ls -la site/.well-known/ 2>&1 | head -20 || echo "no .well-known dir"
+
+      # actions/upload-pages-artifact@v4 excludes dotfiles by default.
+      # Manually tar the site/ directory so .well-known/ and .nojekyll survive,
+      # then upload via the generic artifact uploader (which deploy-pages reads).
+      - name: Create Pages artifact tar (preserves dotfiles)
+        run: tar --dereference --hard-dereference -cf artifact.tar -C site .
+
+      - name: Upload Pages artifact
+        uses: actions/upload-artifact@v4
         with:
-          path: site
+          name: github-pages
+          path: artifact.tar
+          retention-days: 1
 
       - name: Deploy to GitHub Pages
         id: deployment
