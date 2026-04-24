@@ -304,4 +304,56 @@
   <!-- GoatCounter analytics (privacy-friendly, no cookies) -->
   <script data-goatcounter="https://asiai.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
+
+  <!-- WebMCP: register an in-page tool so AI browsers can query the community
+       leaderboard directly from this page without leaving asiai.dev.
+       Spec: https://webmcp.org/ — feature-detected, no-op if unsupported. -->
+  <script>
+  (function() {
+    if (!('modelContext' in navigator) || !navigator.modelContext) return;
+
+    async function queryLeaderboard(args) {
+      const params = new URLSearchParams();
+      if (args && args.chip) params.set('chip', args.chip);
+      if (args && args.model) params.set('model', args.model);
+      const url = 'https://api.asiai.dev/api/v1/leaderboard' +
+                  (params.toString() ? '?' + params.toString() : '');
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) {
+        return { error: 'Leaderboard fetch failed', status: res.status };
+      }
+      return await res.json();
+    }
+
+    const tool = {
+      name: 'query_asiai_leaderboard',
+      description: 'Query the asiai community benchmark leaderboard for Apple ' +
+                   'Silicon LLM inference. Returns aggregated tok/s, TTFT, VRAM ' +
+                   'and sample counts grouped by hardware chip + model + engine. ' +
+                   'Optional filters: chip (e.g. "Apple M4 Pro") and model ' +
+                   '(substring match).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          chip: {
+            type: 'string',
+            description: 'Apple Silicon chip name, e.g. "Apple M4 Pro", "Apple M5 Max".'
+          },
+          model: {
+            type: 'string',
+            description: 'Model name or substring, e.g. "qwen3.6", "gemma4:31b".'
+          }
+        }
+      },
+      execute: queryLeaderboard,
+      annotations: { readOnlyHint: true, openWorldHint: true }
+    };
+
+    try {
+      navigator.modelContext.registerTool(tool);
+    } catch (e) {
+      // unsupported shape, ignore
+    }
+  })();
+  </script>
 {% endblock %}
