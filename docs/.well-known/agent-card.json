@@ -1,0 +1,85 @@
+{
+  "name": "asiai",
+  "description": "Apple Silicon LLM inference benchmark and monitoring agent. Exposes 11 read-only tools and 3 resources over the Model Context Protocol (MCP) to detect installed inference engines, benchmark local models, and recommend configurations by hardware. Runs locally (stdio) or over SSE/streamable-HTTP.",
+  "url": "https://asiai.dev",
+  "version": "1.6.0",
+  "documentationUrl": "https://asiai.dev/commands/mcp/",
+  "provider": {
+    "organization": "asiai (Jean-Marc Nahlovsky / druide67)",
+    "url": "https://asiai.dev"
+  },
+  "protocols": ["mcp"],
+  "mcpServerCard": "https://asiai.dev/mcp-server.json",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text", "application/json"],
+  "skills": [
+    {
+      "id": "check-inference-health",
+      "name": "Check Inference Health",
+      "description": "Quick health check of all local LLM inference engines. Returns ok/degraded/error, memory pressure, thermal state, GPU. Responds in <500ms.",
+      "tags": ["health", "monitoring", "apple-silicon"],
+      "examples": ["Is local LLM inference available right now?"]
+    },
+    {
+      "id": "list-models",
+      "name": "List Loaded Models",
+      "description": "List all models currently loaded across inference engines (VRAM, quantization, context length).",
+      "tags": ["models", "inventory", "inference"],
+      "examples": ["What models are loaded right now?"]
+    },
+    {
+      "id": "detect-engines",
+      "name": "Detect Inference Engines",
+      "description": "Auto-detect running LLM inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vLLM-MLX, Exo, TurboQuant).",
+      "tags": ["discovery", "engines", "apple-silicon"],
+      "examples": ["Which inference engines are installed on this Mac?"]
+    },
+    {
+      "id": "run-benchmark",
+      "name": "Run Inference Benchmark",
+      "description": "Benchmark a local model's performance (tok/s, TTFT, VRAM, power) with statistical rigour (CI 95%, P50/P90/P99). Supports multi-engine and cross-model comparison.",
+      "tags": ["benchmark", "performance", "inference"],
+      "examples": ["Benchmark Qwen 3.6 on Ollama NVFP4", "Compare Qwen 3.5 vs 3.6 on this Mac"]
+    },
+    {
+      "id": "recommend-engine",
+      "name": "Recommend Engine and Model",
+      "description": "Hardware-aware engine+model recommendations optimized for throughput, latency, or power efficiency.",
+      "tags": ["recommendation", "hardware", "inference"],
+      "examples": ["What's the fastest engine for my Mac?", "Which model fits my RAM?"]
+    },
+    {
+      "id": "compare-engines",
+      "name": "Compare Engines",
+      "description": "Side-by-side comparison of inference engines or models from benchmark history.",
+      "tags": ["comparison", "benchmark", "analysis"],
+      "examples": ["Compare Ollama MLX vs LM Studio for Qwen 3.6"]
+    },
+    {
+      "id": "get-inference-snapshot",
+      "name": "Full Inference Snapshot",
+      "description": "Complete system + inference state: CPU load, memory, thermal, GPU, engines status, loaded models, recent activity.",
+      "tags": ["snapshot", "monitoring", "system"],
+      "examples": ["Give me a full status report of local inference"]
+    },
+    {
+      "id": "diagnose",
+      "name": "Run Diagnostics",
+      "description": "Comprehensive diagnostic checks: Apple Silicon compat, engines health, DB integrity, daemon status, alerting config.",
+      "tags": ["diagnostics", "troubleshooting"],
+      "examples": ["Diagnose why inference is failing"]
+    }
+  ],
+  "related": {
+    "mcpServerCard": "https://asiai.dev/mcp-server.json",
+    "agentSkills": "https://asiai.dev/.well-known/agent-skills.json",
+    "apiCatalog": "https://asiai.dev/.well-known/api-catalog",
+    "openapi": "https://asiai.dev/openapi.json",
+    "llmsTxt": "https://asiai.dev/llms.txt"
+  }
+}
