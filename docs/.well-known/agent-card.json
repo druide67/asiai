@@ -10,6 +10,31 @@
   },
   "protocols": ["mcp"],
   "mcpServerCard": "https://asiai.dev/mcp-server.json",
+  "preferredTransport": "stdio",
+  "supportedInterfaces": [
+    {
+      "url": "local://asiai-mcp",
+      "transport": "stdio",
+      "description": "MCP server over stdio — invoke via `asiai mcp`"
+    },
+    {
+      "url": "http://127.0.0.1:8765/sse",
+      "transport": "sse",
+      "description": "MCP server over Server-Sent Events — invoke via `asiai mcp --transport sse`"
+    },
+    {
+      "url": "http://127.0.0.1:8765/mcp",
+      "transport": "streamable-http",
+      "description": "MCP server over streamable HTTP — invoke via `asiai mcp --transport streamable-http`"
+    }
+  ],
+  "additionalInterfaces": [
+    {
+      "url": "https://asiai.dev/mcp-server.json",
+      "transport": "http+mcp-card",
+      "description": "MCP Server Card (static discovery manifest)"
+    }
+  ],
   "capabilities": {
     "streaming": true,
     "pushNotifications": false,
