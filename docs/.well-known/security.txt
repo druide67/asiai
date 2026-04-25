@@ -1,0 +1,7 @@
+Contact: mailto:druide67@free.fr
+Contact: https://github.com/druide67/asiai/security/advisories/new
+Expires: 2027-04-25T00:00:00.000Z
+Preferred-Languages: fr, en
+Canonical: https://asiai.dev/.well-known/security.txt
+Policy: https://github.com/druide67/asiai/security/policy
+Acknowledgments: https://github.com/druide67/asiai/security/advisories

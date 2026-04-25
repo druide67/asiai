@@ -1,25 +1,42 @@
 # asiai
-# Version: 1.4.0
-# Last-updated: 2026-03-29
+# Version: 1.6.0
+# Last-updated: 2026-04-25
 
-> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs. It auto-detects 7 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
+> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). It auto-detects 8 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo, TurboQuant), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
 
 asiai is designed for both human operators and AI agents managing local LLM infrastructure. If you are an AI agent with MCP support, configure `asiai mcp` as an MCP server for native tool access. Otherwise, start with the Agent Integration Guide and use `GET /api/status` for a quick health check.
+
+## Agent discovery manifests
+
+- [/mcp-server.json](https://asiai.dev/mcp-server.json): MCP Server Card — 11 tools, 3 resources, transports stdio/SSE/streamable-http
+- [/.well-known/agent-card.json](https://asiai.dev/.well-known/agent-card.json): A2A Agent Card with `supportedInterfaces` (3 MCP transports)
+- [/.well-known/agent-skills.json](https://asiai.dev/.well-known/agent-skills.json): Agent Skills manifest mapping all 16 CLI subcommands
+- [/openapi.json](https://asiai.dev/openapi.json): OpenAPI 3.1 spec for the public Community API at api.asiai.dev/api/v1
+- [/.well-known/api-catalog](https://asiai.dev/.well-known/api-catalog): IETF API Catalog linkset
+- [/llms-full.txt](https://asiai.dev/llms-full.txt): Concatenated English documentation (one-shot agent context)
+- [/markdown/](https://asiai.dev/markdown/): Raw Markdown sources of every doc page (for parser-friendly fetching)
+- [/funding.json](https://asiai.dev/funding.json): Project funding manifest (GitHub Sponsors)
+- [/.well-known/security.txt](https://asiai.dev/.well-known/security.txt): Security disclosure contact (RFC 9116)
 
 ## Docs
 
 - [Getting Started](https://asiai.dev/getting-started/): Installation, first benchmark, basic usage
 - [Agent Integration Guide](https://asiai.dev/agent/): API reference, metric thresholds, decision trees, and example code for AI agents
-- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, config, bench, models, monitor, doctor, daemon, setup, version, web, tui, mcp, leaderboard, compare, recommend)
+- [Commands Reference](https://asiai.dev/commands/detect/): All CLI commands (detect, config, bench, models, monitor, doctor, daemon, setup, version, web, tui, mcp, leaderboard, compare, recommend, unregister)
 - [Metrics Specification](https://asiai.dev/metrics-spec/): Detailed definitions of all 8 benchmark metrics (tok/s, TTFT, power, efficiency, stability, VRAM, thermal, context)
 - [Methodology](https://asiai.dev/methodology/): MLPerf/SPEC-inspired methodology (warmup, median, greedy decoding, cooldown, CI 95%)
 - [Benchmark Best Practices](https://asiai.dev/benchmark-best-practices/): How to get reproducible results
 
 ## MCP Server
 
-asiai implements a Model Context Protocol (MCP) server with 11 tools and 3 resources. Install with `pip install "asiai[mcp]"` and configure as `asiai mcp` in your MCP client. Tools: check_inference_health, get_inference_snapshot, list_models, detect_engines, run_benchmark, get_recommendations, diagnose, get_metrics_history, get_benchmark_history, refresh_engines, compare_engines. Resources: asiai://status, asiai://models, asiai://system.
+asiai implements a Model Context Protocol server (FastMCP, protocol ≥ 1.12) with **11 read-only tools** and **3 resources**. Install with `pipx install asiai` (MCP support included in core, no extras) and configure as `asiai mcp` in your MCP client. Transports: stdio (default), SSE, streamable-HTTP.
 
-## REST API
+Tools: check_inference_health, get_inference_snapshot, list_models, detect_engines, run_benchmark, get_recommendations, diagnose, get_metrics_history, get_benchmark_history, refresh_engines, compare_engines.
+Resources: asiai://status, asiai://models, asiai://system.
+
+Full machine-readable card: https://asiai.dev/mcp-server.json
+
+## REST API (local web dashboard)
 
 - `GET /api/status`: Quick health check with engine availability and system summary (cached 10s, < 500ms)
 - `GET /api/snapshot`: Full system state — CPU, RAM, swap, thermal, GPU utilization, all engines with loaded models and VRAM
@@ -27,15 +44,26 @@ asiai implements a Model Context Protocol (MCP) server with 11 tools and 3 resou
 - `GET /api/history?hours=N`: Historical system metrics (CPU, RAM, GPU, thermal) from SQLite
 - `GET /api/engine-history?engine=X&hours=N`: Engine-specific history (TCP connections, requests processing, KV cache usage)
 
+## Community API (api.asiai.dev)
+
+Public REST API for community-shared benchmarks. Full OpenAPI 3.1 spec: https://asiai.dev/openapi.json
+
+- `GET /api/v1/leaderboard`: Aggregated leaderboard by chip + model + engine
+- `GET /api/v1/compare?chip=X&model=Y`: Engine comparison for a hardware/model tuple
+- `POST /api/v1/benchmarks`: Submit a benchmark (rate-limited; X-Seed-Key bypass for admin bulk-import)
+- `POST /api/v1/agent-register`, `POST /api/v1/agent-heartbeat`: Opt-in AI agent registry (ADR-001)
+- `GET /api/v1/health`, `GET /api/v1/agent-count`, `GET /api/v1/badge/{benchmarks,top-speed}`: liveness + stats + SVG badges
+
 ## Engines
 
-- [Ollama](https://asiai.dev/engines/ollama/): Port 11434, native API + OpenAI-compatible, VRAM reporting
+- [Ollama](https://asiai.dev/engines/ollama/): Port 11434, native API + OpenAI-compatible, VRAM reporting, MLX backend supported (NVFP4/mxfp4/mxfp8)
 - [LM Studio](https://asiai.dev/engines/lmstudio/): Port 1234, OpenAI-compatible, VRAM via `lms ps --json`
 - [mlx-lm](https://asiai.dev/engines/mlxlm/): Port 8080, OpenAI-compatible, optimized for Apple Silicon MoE models
 - [llama.cpp](https://asiai.dev/engines/llamacpp/): Port 8080, OpenAI-compatible, /metrics endpoint for KV cache
 - [oMLX](https://asiai.dev/engines/omlx/): Port 8000, OpenAI-compatible, SSD KV caching, continuous batching
 - [vllm-mlx](https://asiai.dev/engines/vllm-mlx/): Port 8000, OpenAI-compatible, /metrics endpoint
 - [Exo](https://asiai.dev/engines/exo/): Port 52415, OpenAI-compatible, distributed inference across multiple Macs
+- [TurboQuant](https://asiai.dev/turboquant/): Specialized KV-cache quantization engine for very-large-context inference
 
 ## Optional
 

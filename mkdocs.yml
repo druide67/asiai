@@ -71,6 +71,7 @@ nav:
 
 hooks:
   - hooks/copy_well_known.py
+  - hooks/copy_markdown_sources.py
 
 plugins:
   - search

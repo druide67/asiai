@@ -1,0 +1,75 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Jean-Marc Nahlovsky",
+    "email": "druide67@free.fr",
+    "phone": "",
+    "description": "Maintainer of asiai — Apple Silicon LLM inference benchmark and monitoring CLI.",
+    "webpageUrl": {
+      "url": "https://asiai.dev",
+      "wellKnown": "https://asiai.dev/.well-known/security.txt"
+    }
+  },
+  "projects": [
+    {
+      "guid": "asiai",
+      "name": "asiai",
+      "description": "Multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). Auto-detects 8 inference engines, runs reproducible benchmarks, exposes an MCP server with 11 tools, publishes a community leaderboard.",
+      "webpageUrl": {
+        "url": "https://asiai.dev",
+        "wellKnown": "https://asiai.dev/llms.txt"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/druide67/asiai",
+        "wellKnown": "https://github.com/druide67/asiai/raw/main/.github/FUNDING.yml"
+      },
+      "licenses": ["spdx:Apache-2.0"],
+      "tags": [
+        "llm",
+        "apple-silicon",
+        "benchmark",
+        "monitoring",
+        "mcp",
+        "ollama",
+        "mlx",
+        "developer-tools",
+        "cli"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/druide67",
+        "description": "GitHub Sponsors — recurring or one-time support for the maintainer."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "any-amount",
+        "status": "active",
+        "name": "Any-amount one-time support",
+        "description": "Pay-what-you-want one-time donation via GitHub Sponsors. Helps cover hardware costs (Mac M-series test devices) and time spent on benchmarks/community DB.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "monthly-tier",
+        "status": "active",
+        "name": "Monthly recurring support",
+        "description": "Recurring monthly support via GitHub Sponsors. Direct sustain of asiai maintenance, new engine integrations, and the community leaderboard backend.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      }
+    ],
+    "history": []
+  }
+}
