@@ -7,8 +7,33 @@ import json
 import subprocess
 import sys
 import time
+from importlib.metadata import entry_points
 
 from asiai import __version__
+
+PLUGIN_API_VERSION: int = 1
+"""Major version of the asiai sub-CLI plugin contract offered by this release."""
+
+
+def _load_subcommand_plugins(
+    subparsers: argparse._SubParsersAction,
+    plugin_commands: dict,
+) -> None:
+    """Discover and register sub-CLI plugins from the asiai.subcommands entry-point group.
+
+    Each plugin exposes a ``register(subparsers, commands)`` callable that adds its
+    own argparse subparsers and populates *plugin_commands* with its handlers.
+    Failures are non-fatal: a broken plugin is logged to stderr but never crashes asiai.
+    """
+    for ep in entry_points(group="asiai.subcommands"):
+        try:
+            register_fn = ep.load()
+            register_fn(subparsers, plugin_commands)
+        except Exception as exc:  # pragma: no cover
+            print(
+                f"[asiai] sub-CLI plugin {ep.name!r} failed to register: {exc}",
+                file=sys.stderr,
+            )
 
 
 def _discover_engines(urls: list[str] | None = None) -> list:
@@ -1425,6 +1450,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Include community data in recommendations",
     )
 
+    # Discover sub-CLI plugins (skip for --version / --help to preserve cold-start).
+    _fast_path = argv is not None and bool(
+        set(argv[:2]) & {"--version", "--help", "-h", "version"}
+    )
+    plugin_commands: dict = {}
+    if not _fast_path:
+        _load_subcommand_plugins(subparsers, plugin_commands)
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -1482,7 +1515,7 @@ def main(argv: list[str] | None = None) -> int:
         "config": cmd_config,
     }
 
-    handler = commands.get(args.command)
+    handler = commands.get(args.command) or plugin_commands.get(args.command)
     if handler:
         return handler(args)
 

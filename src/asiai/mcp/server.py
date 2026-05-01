@@ -102,6 +102,18 @@ def serve(
     import asiai.mcp.resources  # noqa: F401
     import asiai.mcp.tools  # noqa: F401
 
+    # Discover external MCP write-tool plugins (e.g. asiai-inference-server v1.0+)
+    try:
+        from importlib.metadata import entry_points
+
+        for ep in entry_points(group="asiai.mcp.tools"):
+            try:
+                ep.load()(mcp)
+            except Exception as exc:
+                logger.warning("MCP plugin %r failed to register: %s", ep.name, exc)
+    except Exception:  # pragma: no cover
+        pass
+
     # Agent registration (non-blocking, best-effort)
     if register:
         from asiai.cli import _discover_engines
