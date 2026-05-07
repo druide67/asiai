@@ -749,24 +749,40 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.community import build_submission, submit_benchmark
         from asiai.display.formatters import dim, green
 
-        payload = build_submission(bench_run.results, report)
-        # Include locally-rendered PNG for server-side card (macOS sips rendering)
-        if card_svg and "svg_path" in dir() and svg_path:
-            from asiai.benchmark.card import convert_svg_to_png
-
-            local_png = convert_svg_to_png(svg_path)
-            if local_png:
-                try:
-                    with open(local_png, "rb") as f:
-                        payload["card_png_b64"] = base64.b64encode(f.read()).decode("ascii")
-                except OSError:
-                    pass
-        result = submit_benchmark(payload, db_path=db_path)
-        if result.success:
-            submission_id = result.submission_id
-            print(f"  {green('✓')} Shared to community ({result.submission_id[:8]}...)")
+        # US-013 (BMAD asiai 2026-05-07): refuse to share results when every
+        # measurable run failed. The public leaderboard was 89% polluted with
+        # median_tok_s=0 entries before this guard. ``--share-on-error`` opts
+        # back in for users who want full diagnostic transparency.
+        successful_runs = sum(
+            1 for r in bench_run.results if r.get("tok_per_sec", 0) > 0
+        )
+        if successful_runs == 0 and not getattr(args, "share_on_error", False):
+            n_total = len(bench_run.results)
+            print(
+                f"  {dim(f'⚠ Skipping share: 0/{n_total} runs succeeded.')}"
+            )
+            print(
+                f"  {dim('Use --share-on-error to share zero-value results anyway.')}"
+            )
         else:
-            print(f"  {dim('⚠ Share failed: ' + result.error)}")
+            payload = build_submission(bench_run.results, report)
+            # Include locally-rendered PNG for server-side card (macOS sips rendering)
+            if card_svg and "svg_path" in dir() and svg_path:
+                from asiai.benchmark.card import convert_svg_to_png
+
+                local_png = convert_svg_to_png(svg_path)
+                if local_png:
+                    try:
+                        with open(local_png, "rb") as f:
+                            payload["card_png_b64"] = base64.b64encode(f.read()).decode("ascii")
+                    except OSError:
+                        pass
+            result = submit_benchmark(payload, db_path=db_path)
+            if result.success:
+                submission_id = result.submission_id
+                print(f"  {green('✓')} Shared to community ({result.submission_id[:8]}...)")
+            else:
+                print(f"  {dim('⚠ Share failed: ' + result.error)}")
 
     # Card share URL + PNG download
     if card_svg and getattr(args, "card", False):
@@ -1355,6 +1371,15 @@ def main(argv: list[str] | None = None) -> int:
         "--share",
         action="store_true",
         help="Share results to community benchmark database",
+    )
+    bench_parser.add_argument(
+        "--share-on-error",
+        action="store_true",
+        help=(
+            "Share even when all runs failed (median tok/s = 0). "
+            "Off by default to avoid polluting the public leaderboard with "
+            "useless 0-value entries (US-013, BMAD asiai 2026-05-07)."
+        ),
     )
     bench_parser.add_argument(
         "--quick",

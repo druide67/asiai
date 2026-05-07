@@ -481,6 +481,79 @@ def test_bench_share_flag(capsys, tmp_path):
     mock_submit.assert_called_once()
 
 
+def test_bench_share_skips_when_all_runs_failed(capsys, tmp_path):
+    """US-013: bench --share without --share-on-error skips when 0 successes."""
+    model = ModelInfo(name="gemma2:9b", size_vram=8_000_000_000, format="gguf")
+    engine = _make_mock_engine("ollama", models=[model])
+    engine.version.return_value = "0.17.4"
+    db_path = str(tmp_path / "test.db")
+
+    mock_run = MagicMock()
+    # All 3 runs failed (tok_per_sec=0)
+    mock_run.results = [
+        {"engine": "ollama", "model": "gemma2:9b", "prompt_type": "code",
+         "tok_per_sec": 0, "ttft_ms": 0, "total_duration_ms": 0,
+         "tokens_generated": 0, "vram_bytes": 0, "power_watts": 0,
+         "tok_per_sec_per_watt": 0, "run_index": i, "ts": 1709700000,
+         "thermal_level": "nominal", "error": "timeout"}
+        for i in range(3)
+    ]
+
+    with (
+        patch("asiai.cli._discover_engines", return_value=[engine]),
+        patch("asiai.benchmark.runner.find_common_model", return_value="gemma2:9b"),
+        patch("asiai.benchmark.runner.run_benchmark", return_value=mock_run),
+        patch("asiai.storage.db.init_db"),
+        patch("asiai.storage.db.store_benchmark"),
+        patch("asiai.community.submit_benchmark") as mock_submit,
+        patch("asiai.storage.db.store_community_submission"),
+    ):
+        ret = main(["bench", "--db", db_path, "--share"])
+
+    assert ret == 0
+    mock_submit.assert_not_called()
+    out = capsys.readouterr().out
+    assert "Skipping share" in out
+    assert "0/3 runs succeeded" in out
+
+
+def test_bench_share_on_error_forces_submit(capsys, tmp_path):
+    """US-013: --share-on-error opts back into submitting zero-value sessions."""
+    model = ModelInfo(name="gemma2:9b", size_vram=8_000_000_000, format="gguf")
+    engine = _make_mock_engine("ollama", models=[model])
+    engine.version.return_value = "0.17.4"
+    db_path = str(tmp_path / "test.db")
+
+    mock_run = MagicMock()
+    mock_run.results = [
+        {"engine": "ollama", "model": "gemma2:9b", "prompt_type": "code",
+         "tok_per_sec": 0, "ttft_ms": 0, "total_duration_ms": 0,
+         "tokens_generated": 0, "vram_bytes": 0, "power_watts": 0,
+         "tok_per_sec_per_watt": 0, "run_index": 0, "ts": 1709700000,
+         "thermal_level": "nominal", "error": "timeout"}
+    ]
+
+    with (
+        patch("asiai.cli._discover_engines", return_value=[engine]),
+        patch("asiai.benchmark.runner.find_common_model", return_value="gemma2:9b"),
+        patch("asiai.benchmark.runner.run_benchmark", return_value=mock_run),
+        patch("asiai.storage.db.init_db"),
+        patch("asiai.storage.db.store_benchmark"),
+        patch("asiai.community.build_submission",
+              return_value={"id": "abc", "benchmark": {}}),
+        patch("asiai.community.submit_benchmark") as mock_submit,
+        patch("asiai.storage.db.store_community_submission"),
+    ):
+        from asiai.community import SubmitResult
+        mock_submit.return_value = SubmitResult(
+            success=True, submission_id="x", http_status=201,
+        )
+        ret = main(["bench", "--db", db_path, "--share", "--share-on-error"])
+
+    assert ret == 0
+    mock_submit.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # --compare argument parsing
 # ---------------------------------------------------------------------------
