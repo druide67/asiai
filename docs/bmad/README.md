@@ -2,25 +2,44 @@
 
 **Statut** : activé 2026-05-07 par JMN, format allégé conforme [ADR BMAD pilote](../../../claude-shared-wiki/wiki/decisions/bmad-pilot-mon-impot-v2.md).
 
-**Périmètre BMAD (software build)** : 3 projets liés mais découplés
+**Périmètre BMAD étendu** (décision JMN 2026-05-07 14:08, override partiel claude-config Q4) :
+
+**Pile build (sprints classiques)** : 3 projets liés mais découplés
 - `asiai` (CLI principal v1.5.0, monitoring/bench)
 - `asiai-inference-server` (fleet manager v0.1, sub-CLI `asiai engine`)
 - `asiai-api` (PHP, leaderboard public)
 
-**Hors scope BMAD** (claude-config Q4 du 2026-05-07) :
-- Bench M5/M4 (R&D exploratoire, format libre — `~/projets/asiai/docs/research/bench-m5/`)
-- Choix Qwen 3.6 dense vs A3B (idem R&D)
-- BMAD est conçu pour le build (livrables mesurables), pas pour la R&D exploratoire.
+**Pile R&D bench** (sprints custom Bench-X parallèles) :
+- Bench M5/M4/M1 (cascade hardware)
+- Choix Qwen 3.6 dense vs A3B (modèles/moteurs)
+- Optimisations futures (thermal, KV cache, etc.)
 
-## Format allégé (héritage ADR mon-impot V2 + retex claude-config 2026-05-07)
+**Trade-off conscient** : extension du canon BMAD, à valider/affiner dans le retex final.
+
+## Format allégé (héritage ADR mon-impot V2 + retex claude-config 2026-05-07 + extension R&D bench 2026-05-07 14:08)
+
+### Pile build (séquentielle)
 
 | Sprint | Rôle | Livrables |
 |---|---|---|
 | **0** | analyst seul | Cartographie 3 backlogs, dépendances cross-projets, user stories candidates, audit dette (.env legacy, désynchros, bugs prod) |
 | **0.5** | PM court (1 sprint) | Validation roadmap consolidée avec JMN — escalade décisions ouvertes Sprint 0 |
-| **1** | architect seul | Décisions transverses (cascade M4/M5, fleet design, integration asiai↔aisrv↔api, secrets process) |
+| **1** | architect software | Décisions transverses build (cascade fleet, integration asiai↔aisrv↔api, secrets process) |
 | **2-3** | dev (instance asiai) | Implémentation user stories priorisées par sprint |
 | **4** | QA | Critères acceptation cross-projets + retex format BMAD allégé |
+
+### Pile R&D bench (parallèle, sprints Bench-X)
+
+| Sprint | Rôle | Livrables |
+|---|---|---|
+| **Bench-0** | **Architect bench/LLM** (dépositaire constant, transverse à toutes campagnes) | Protocole méthodologique : prompts standards, métriques, conditions (warmup, thermal, cool-down), critères qualité, anti-biais |
+| **Bench-1** | Benchmarker(s) | Matrice campagne X (modèles × moteurs × hardware) appliquant protocole Bench-0 |
+| **Bench-1.5** | PM (JMN) | Validation explicite matrice + protocole AVANT exécution |
+| **Bench-2** | Benchmarker(s) // par hardware | Exécution + données brutes + logs |
+| **Bench-3** | **Architect bench/LLM** (validation méthode) | Audit méthodologique : protocole respecté ? biais ? variance ? prompts représentatifs ? — pas audit des résultats |
+| **Bench-4** | Benchmarker | Rapport final + recommandations |
+
+**Architect bench/LLM = constant**, supervise plusieurs campagnes (Phase 1 M5, Phase 2 thermal, etc.). Multi-benchmarkers parallélisables (1 par hardware).
 
 **Règles** :
 - **SM banni** (1 dev = moi, vélocité/cérémonies/facilitation sans valeur)
