@@ -182,6 +182,43 @@
 - État : **résolue** (1.5.0/1.5.0 sur M5, mémoire signalait 0.2.0-dev mais c'était périmé)
 - Priorité : **closed**
 
+#### US-021 — PAT OVH dédié `asiai-deploy` (principe moindre privilège)
+- Type : ops sécurité
+- Projet : asiai-api / claude-config
+- Effort : 30 min (création OVH + 1Password + ~/.ovh.asiai.conf via op inject)
+- Priorité : **P1**
+- Dépendances : aucune (JMN crée le PAT sur OVH manager)
+- Décision JMN 2026-05-08 02:59 : option C (workaround lftp + 5 min cache OPcache) pour cette session, **+ création PAT dédié** dans la suite (pas urgent, mais à faire avant le prochain deploy nécessitant OPcache toggle ou DB API)
+- Critère :
+  - PAT créé sur https://eu.api.ovh.com/createToken/ avec scopes minimum :
+    - `GET /hosting/web/asiai.dev/*`
+    - `POST /hosting/web/asiai.dev/ovhConfig/*`
+    - `POST /hosting/web/asiai.dev/ovhConfigRefresh`
+  - Item 1P "OVH API asiai-deploy" vault Private (séparé du PAT perso JMN)
+  - Fichier `~/.ovh.asiai.conf` généré via `op inject` (pas écrasement de `~/.ovh.conf` perso JMN)
+  - Test fonctionnel : `~/.venvs/ovh/bin/python -c "import ovh; c=ovh.Client(config_file='~/.ovh.asiai.conf'); print(c.get('/hosting/web/asiai.dev/ovhConfig'))"` retourne la liste IDs sans `NotGrantedCall`
+- Source : whisper claude-config 2026-05-07 (msg-1778167459) thread `secrets-ovh-validation`. Recommandation explicite "PAT dédié séparé > extension PAT perso", cohérent règle 1 RULES security by design + EP-006 Roadmap secrets niveaux 3-5.
+
+#### US-022 — Automatisme qualité leaderboard public (validation post-publish)
+- Type : feature ops
+- Projet : asiai-api / nouveau service automation
+- Effort : 1-2j (selon outil retenu — n8n / cron + script Python / GitHub Actions)
+- Priorité : **P2**
+- Dépendances : US-001 + US-002 (leaderboard sain en prérequis), idéalement post-Bench-1 livré (avoir une référence "bench propre" pour calibrer les seuils)
+- Décision JMN 2026-05-08 02:59 : Architect bench/LLM **n'audite PAS** manuellement le leaderboard tier-user (manuel = pas scalable). À automatiser via outil dédié.
+- Critère :
+  - Automatisme déclenché à chaque nouvelle soumission `bulk-import.php` (webhook ou polling DB)
+  - Vérifie qualité du payload :
+    - `samples >= 5` (mode production) sinon flag `unverified`
+    - Variance tok_s computable et `<= 25%` sinon flag `unstable`
+    - `error_rate <= 20%`
+    - Métadonnées hardware/OS/engine version présentes
+    - Anti-biais auto-détectables (ex: tous les samples ts identiques = bench cassé, tok_s négatif = bug)
+  - Action sur flag : ajouter colonne `verified: true|false|flagged` au schema, le leaderboard public ne montre par défaut que `verified: true` (filtre côté `handle_leaderboard`)
+  - Notification (Slack/email/whisper claude-config) si nouveau bench `flagged`
+- Choix outil à arbitrer Sprint 1 Architect software : n8n (workflow visuel, déjà installé openclaw ?), cron + script Python stdlib (cohérent asiai zéro-dep), GitHub Actions scheduled workflow, ou autre.
+- Note : l'objectif n'est pas de "bloquer" les soumissions tier-user (community-friendly), mais de séparer "publié vérifié" de "publié brut" dans la vue publique.
+
 ## Pile R&D bench (parallèle, sprints Bench-X)
 
 #### US-R&D-001 — Bench-0 Architect bench/LLM : protocole méthodologique général

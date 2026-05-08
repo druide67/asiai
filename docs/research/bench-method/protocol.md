@@ -199,11 +199,14 @@ Tout run d'une session doit être **précédé** d'un warmup :
 ## 8. Critères qualité campagne
 
 Une session Bench-X est **valide** ssi :
-- ≥5 runs (non-warmup) collectés
+- ≥5 runs (non-warmup) en mode `quality: production` (par défaut)
+- ≥3 runs (non-warmup) en mode `quality: draft` (validé PM JMN 2026-05-08, pour explorations rapides)
 - Variance tok_s ≤ 25 % (sinon flag `unstable` et investigate)
 - Aucun run thermal-throttled (sinon écarter ou signaler)
 - `error_rate` ≤ 20 % (au-delà, la session est compromise)
 - Métadonnées hardware/OS/engine version logguées
+
+**Mode draft** : explicite via metadata `quality: draft`, exclut la session du leaderboard public, garde la trace pour exploration interne. Mode production = défaut, publiable.
 
 Une **campagne** est valide ssi :
 - ≥3 sessions valides par tuple `(hardware, modèle, moteur)`
@@ -254,7 +257,8 @@ Toute évolution du protocole doit :
 - **Date** : 2026-05-08
 - **Version** : v1.0
 - **À valider** : PM (JMN) au Sprint Bench-1.5 avant exécution première campagne
-- **Question(s) ouverte(s) PM** :
-  1. Critère qualité ≥5 runs/session : trop strict pour une exploration rapide ? Acceptes-tu un mode "draft" avec ≥3 runs si flag `quality: draft` ?
-  2. Tool-calling success rate côté agent : on a besoin d'un harness agent dédié pour mesurer (probablement code aisai bench --quality évoqué dans `idea-asiai-quality-suite.md`). Veux-tu qu'on intègre ça dans v0.5+ asiai bench OU on fait du sub-script bench-tool-calling.py ad-hoc pour Bench-1 ?
-  3. Architect bench/LLM doit-il auditer aussi les bench non-asiai (ex: tier user M5 Pro 48 GB qwen3.6) qui apparaissent sur le leaderboard public ? À quel niveau de validation on les laisse passer ?
+- **Validation PM** : ✅ JMN 2026-05-08 02:59 CEST
+- **Réponses aux 3 questions ouvertes** :
+  1. ✅ Mode "draft" ≥3 runs accepté (cf. §8). Production reste à ≥5 runs.
+  2. ✅ Tool-call success rate intégré dans US-007 `asiai bench --quality v0.5+` (pas de sub-script ad-hoc). Bench-1 M5 Phase 1 ne mesurera donc pas tool-call (différé v0.5+) — la matrice se concentre sur perf raw + workloads agent non-tool-call.
+  3. ✅ Architect bench/LLM **n'audite PAS** les bench tier-user du leaderboard. Décision JMN : créer un automatisme dédié (n8n ou autre) qui check les nouveaux benchs publiés et vérifie la qualité (samples, variance, anti-biais détectables). Tracé en **US-022 nouvelle** (cf. user-stories-candidates.md).
