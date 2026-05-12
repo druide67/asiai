@@ -298,8 +298,16 @@ def generate_card_svg(
     if len(bars) >= 2:
         b0, b1 = bars[0], bars[1]
         # TTFT: lower is better — prefer client-measured TTFT for fair comparison
-        b0_ttft = b0["ttft_client_ms"] if (b0["ttft_client_ms"] > 0 and b1["ttft_client_ms"] > 0) else b0["ttft_ms"]
-        b1_ttft = b1["ttft_client_ms"] if (b0["ttft_client_ms"] > 0 and b1["ttft_client_ms"] > 0) else b1["ttft_ms"]
+        b0_ttft = (
+            b0["ttft_client_ms"]
+            if (b0["ttft_client_ms"] > 0 and b1["ttft_client_ms"] > 0)
+            else b0["ttft_ms"]
+        )
+        b1_ttft = (
+            b1["ttft_client_ms"]
+            if (b0["ttft_client_ms"] > 0 and b1["ttft_client_ms"] > 0)
+            else b1["ttft_ms"]
+        )
         if b0_ttft > 0 and b1_ttft > 0:
             metric_winners["ttft"] = b0["name"] if b0_ttft <= b1_ttft else b1["name"]
         # VRAM: lower is better

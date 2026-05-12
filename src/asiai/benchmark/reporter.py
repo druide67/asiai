@@ -164,8 +164,12 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     data["median_tok_s"] = round(statistics.median(tok_values), 1) if tok_values else 0.0
     data["avg_ttft_ms"] = round(sum(ttft_values) / len(ttft_values), 1) if ttft_values else 0.0
     data["median_ttft_ms"] = round(statistics.median(ttft_values), 1) if ttft_values else 0.0
-    data["avg_ttft_client_ms"] = round(sum(ttft_client_values) / len(ttft_client_values), 1) if ttft_client_values else 0.0
-    data["median_ttft_client_ms"] = round(statistics.median(ttft_client_values), 1) if ttft_client_values else 0.0
+    data["avg_ttft_client_ms"] = (
+        round(sum(ttft_client_values) / len(ttft_client_values), 1) if ttft_client_values else 0.0
+    )
+    data["median_ttft_client_ms"] = (
+        round(statistics.median(ttft_client_values), 1) if ttft_client_values else 0.0
+    )
     data["avg_proc_cpu"] = round(sum(cpu_values) / len(cpu_values), 1) if cpu_values else 0.0
     data["proc_rss_bytes"] = max(rss_values) if rss_values else 0
 
@@ -197,7 +201,9 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     data["p50_ttft_ms"] = data["median_ttft_ms"]
     data["p90_ttft_ms"] = round(_percentile(ttft_values, 90), 1) if ttft_values else 0.0
     data["p99_ttft_ms"] = round(_percentile(ttft_values, 99), 1) if ttft_values else 0.0
-    data["p90_ttft_client_ms"] = round(_percentile(ttft_client_values, 90), 1) if ttft_client_values else 0.0
+    data["p90_ttft_client_ms"] = (
+        round(_percentile(ttft_client_values, 90), 1) if ttft_client_values else 0.0
+    )
     data["outliers"] = _detect_outliers(tok_values) if tok_values else []
 
     return data

@@ -753,17 +753,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
         # measurable run failed. The public leaderboard was 89% polluted with
         # median_tok_s=0 entries before this guard. ``--share-on-error`` opts
         # back in for users who want full diagnostic transparency.
-        successful_runs = sum(
-            1 for r in bench_run.results if r.get("tok_per_sec", 0) > 0
-        )
+        successful_runs = sum(1 for r in bench_run.results if r.get("tok_per_sec", 0) > 0)
         if successful_runs == 0 and not getattr(args, "share_on_error", False):
             n_total = len(bench_run.results)
-            print(
-                f"  {dim(f'⚠ Skipping share: 0/{n_total} runs succeeded.')}"
-            )
-            print(
-                f"  {dim('Use --share-on-error to share zero-value results anyway.')}"
-            )
+            print(f"  {dim(f'⚠ Skipping share: 0/{n_total} runs succeeded.')}")
+            print(f"  {dim('Use --share-on-error to share zero-value results anyway.')}")
         else:
             payload = build_submission(bench_run.results, report)
             # Include locally-rendered PNG for server-side card (macOS sips rendering)
@@ -1476,9 +1470,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # Discover sub-CLI plugins (skip for --version / --help to preserve cold-start).
-    _fast_path = argv is not None and bool(
-        set(argv[:2]) & {"--version", "--help", "-h", "version"}
-    )
+    _fast_path = argv is not None and bool(set(argv[:2]) & {"--version", "--help", "-h", "version"})
     plugin_commands: dict = {}
     if not _fast_path:
         _load_subcommand_plugins(subparsers, plugin_commands)

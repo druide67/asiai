@@ -751,19 +751,17 @@ async def compare_engines(
             label = f"{slot.get('model', '')} / {slot.get('engine', '')}"
 
         entry = {
-                "rank": rank,
-                "label": label,
-                "engine": slot.get("engine", ""),
-                "model": slot.get("model", ""),
-                "median_tok_s": round(slot.get("median_tok_s", 0), 1),
-                "avg_tok_s": round(slot.get("avg_tok_s", 0), 1),
-                "avg_ttft_ms": round(
-                    slot.get("avg_ttft_ms", 0) or slot.get("median_ttft_ms", 0), 1
-                ),
-                "vram_bytes": slot.get("vram_bytes", 0),
-                "stability": slot.get("stability", "unknown"),
-                "runs_count": slot.get("runs_count", 0),
-            }
+            "rank": rank,
+            "label": label,
+            "engine": slot.get("engine", ""),
+            "model": slot.get("model", ""),
+            "median_tok_s": round(slot.get("median_tok_s", 0), 1),
+            "avg_tok_s": round(slot.get("avg_tok_s", 0), 1),
+            "avg_ttft_ms": round(slot.get("avg_ttft_ms", 0) or slot.get("median_ttft_ms", 0), 1),
+            "vram_bytes": slot.get("vram_bytes", 0),
+            "stability": slot.get("stability", "unknown"),
+            "runs_count": slot.get("runs_count", 0),
+        }
         median_ttft_client = slot.get("median_ttft_client_ms", 0)
         if median_ttft_client:
             entry["median_ttft_client_ms"] = round(median_ttft_client, 1)

@@ -124,12 +124,14 @@ class OllamaEngine(InferenceEngine):
         Streams to measure client-side TTFT (comparable across engines)
         while also capturing server-side timings from the final chunk.
         """
-        payload = json.dumps({
-            "model": model,
-            "prompt": prompt,
-            "stream": True,
-            "options": {"num_predict": max_tokens, "temperature": 0},
-        }).encode()
+        payload = json.dumps(
+            {
+                "model": model,
+                "prompt": prompt,
+                "stream": True,
+                "options": {"num_predict": max_tokens, "temperature": 0},
+            }
+        ).encode()
 
         t0 = time.monotonic()
         ttft_client_ms = 0.0
@@ -156,9 +158,7 @@ class OllamaEngine(InferenceEngine):
 
                     # Measure client TTFT at first chunk (any content)
                     if ttft_client_ms == 0.0:
-                        ttft_client_ms = round(
-                            (time.monotonic() - t0) * 1000, 1
-                        )
+                        ttft_client_ms = round((time.monotonic() - t0) * 1000, 1)
 
                     token = chunk.get("response", "")
                     if token:
@@ -173,20 +173,14 @@ class OllamaEngine(InferenceEngine):
             return GenerateResult(engine=self.name, model=model, error=str(e))
 
         if not final_data:
-            return GenerateResult(
-                engine=self.name, model=model, error="no final chunk received"
-            )
+            return GenerateResult(engine=self.name, model=model, error="no final chunk received")
 
         eval_count = final_data.get("eval_count", 0)
         eval_duration_ns = final_data.get("eval_duration", 0)
         prompt_eval_ns = final_data.get("prompt_eval_duration", 0)
         total_ns = final_data.get("total_duration", 0)
 
-        tok_s = (
-            (eval_count / (eval_duration_ns / 1e9))
-            if eval_duration_ns > 0
-            else 0.0
-        )
+        tok_s = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else 0.0
 
         return GenerateResult(
             text="".join(text_parts),
