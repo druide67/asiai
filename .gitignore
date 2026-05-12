@@ -58,3 +58,12 @@ CLAUDE.md
 *.gif
 nohup.out
 .serena/
+
+# Internal strategy / private project docs — kept in Obsidian vault, never tracked
+docs/bmad/
+docs/research/bench-method/
+docs/research/bench-m5/
+RULES.md
+RULES-global.md
+.whisper-peer
+.playwright-cli/
