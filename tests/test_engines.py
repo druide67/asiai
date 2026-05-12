@@ -193,46 +193,73 @@ class TestHttpPostJson:
         assert headers == {}
 
 
+def _ollama_stream_response(chunks: list[dict]):
+    """Build a mock urlopen response yielding NDJSON lines (Ollama /api/generate stream)."""
+    lines = [json.dumps(c).encode() + b"\n" for c in chunks]
+
+    class MockResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def __iter__(self):
+            return iter(lines)
+
+    return MockResp()
+
+
 class TestOllamaGenerate:
     def test_generate_success(self):
-        gen_response = {
-            "response": "class BST:\n    pass",
-            "eval_count": 150,
-            "eval_duration": 3_000_000_000,
-            "prompt_eval_duration": 800_000_000,
-            "total_duration": 4_000_000_000,
-        }
+        chunks = [
+            {"response": "class BST:"},
+            {"response": "\n    pass"},
+            {
+                "done": True,
+                "eval_count": 150,
+                "eval_duration": 3_000_000_000,
+                "prompt_eval_duration": 800_000_000,
+                "total_duration": 4_000_000_000,
+            },
+        ]
 
-        def mock_post(url, data, timeout=300):
-            if "/api/generate" in url:
-                return gen_response, {}
-            return None, {}
-
-        with patch("asiai.engines.ollama.http_post_json", side_effect=mock_post):
+        with patch(
+            "asiai.engines.ollama.urlopen",
+            return_value=_ollama_stream_response(chunks),
+        ):
             engine = OllamaEngine("http://localhost:11434")
             result = engine.generate("test-model", "Write a BST", 512)
 
         assert result.tokens_generated == 150
         assert result.tok_per_sec == 50.0
         assert result.ttft_ms == 800.0
+        assert result.text == "class BST:\n    pass"
         assert result.error == ""
 
     def test_generate_error(self):
-        def mock_post(url, data, timeout=300):
-            return {"error": "model not found"}, {}
+        # Streaming server returns an error chunk without `done=True` —
+        # the engine never sees a final chunk and reports the truncation.
+        chunks = [{"error": "model not found"}]
 
-        with patch("asiai.engines.ollama.http_post_json", side_effect=mock_post):
+        with patch(
+            "asiai.engines.ollama.urlopen",
+            return_value=_ollama_stream_response(chunks),
+        ):
             engine = OllamaEngine("http://localhost:11434")
             result = engine.generate("bad-model", "hello", 512)
 
-        assert result.error == "model not found"
+        assert "no final chunk" in result.error
 
     def test_generate_connection_failed(self):
-        with patch("asiai.engines.ollama.http_post_json", return_value=(None, {})):
+        with patch(
+            "asiai.engines.ollama.urlopen",
+            side_effect=ConnectionRefusedError("Connection refused"),
+        ):
             engine = OllamaEngine("http://localhost:11434")
             result = engine.generate("model", "hello", 512)
 
-        assert result.error == "request failed"
+        assert "Connection refused" in result.error
 
 
 def _sse_response(chunks: list[dict]):
