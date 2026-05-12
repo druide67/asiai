@@ -491,11 +491,22 @@ def test_bench_share_skips_when_all_runs_failed(capsys, tmp_path):
     mock_run = MagicMock()
     # All 3 runs failed (tok_per_sec=0)
     mock_run.results = [
-        {"engine": "ollama", "model": "gemma2:9b", "prompt_type": "code",
-         "tok_per_sec": 0, "ttft_ms": 0, "total_duration_ms": 0,
-         "tokens_generated": 0, "vram_bytes": 0, "power_watts": 0,
-         "tok_per_sec_per_watt": 0, "run_index": i, "ts": 1709700000,
-         "thermal_level": "nominal", "error": "timeout"}
+        {
+            "engine": "ollama",
+            "model": "gemma2:9b",
+            "prompt_type": "code",
+            "tok_per_sec": 0,
+            "ttft_ms": 0,
+            "total_duration_ms": 0,
+            "tokens_generated": 0,
+            "vram_bytes": 0,
+            "power_watts": 0,
+            "tok_per_sec_per_watt": 0,
+            "run_index": i,
+            "ts": 1709700000,
+            "thermal_level": "nominal",
+            "error": "timeout",
+        }
         for i in range(3)
     ]
 
@@ -526,11 +537,22 @@ def test_bench_share_on_error_forces_submit(capsys, tmp_path):
 
     mock_run = MagicMock()
     mock_run.results = [
-        {"engine": "ollama", "model": "gemma2:9b", "prompt_type": "code",
-         "tok_per_sec": 0, "ttft_ms": 0, "total_duration_ms": 0,
-         "tokens_generated": 0, "vram_bytes": 0, "power_watts": 0,
-         "tok_per_sec_per_watt": 0, "run_index": 0, "ts": 1709700000,
-         "thermal_level": "nominal", "error": "timeout"}
+        {
+            "engine": "ollama",
+            "model": "gemma2:9b",
+            "prompt_type": "code",
+            "tok_per_sec": 0,
+            "ttft_ms": 0,
+            "total_duration_ms": 0,
+            "tokens_generated": 0,
+            "vram_bytes": 0,
+            "power_watts": 0,
+            "tok_per_sec_per_watt": 0,
+            "run_index": 0,
+            "ts": 1709700000,
+            "thermal_level": "nominal",
+            "error": "timeout",
+        }
     ]
 
     with (
@@ -539,14 +561,16 @@ def test_bench_share_on_error_forces_submit(capsys, tmp_path):
         patch("asiai.benchmark.runner.run_benchmark", return_value=mock_run),
         patch("asiai.storage.db.init_db"),
         patch("asiai.storage.db.store_benchmark"),
-        patch("asiai.community.build_submission",
-              return_value={"id": "abc", "benchmark": {}}),
+        patch("asiai.community.build_submission", return_value={"id": "abc", "benchmark": {}}),
         patch("asiai.community.submit_benchmark") as mock_submit,
         patch("asiai.storage.db.store_community_submission"),
     ):
         from asiai.community import SubmitResult
+
         mock_submit.return_value = SubmitResult(
-            success=True, submission_id="x", http_status=201,
+            success=True,
+            submission_id="x",
+            http_status=201,
         )
         ret = main(["bench", "--db", db_path, "--share", "--share-on-error"])
 

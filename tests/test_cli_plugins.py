@@ -92,7 +92,7 @@ def test_main_dispatches_to_plugin_command() -> None:
 
     def fake_register(subs, cmds):
         subs.add_parser("myplug", help="test plugin")
-        cmds["myplug"] = lambda args: (handler_called.append(True) or 0)
+        cmds["myplug"] = lambda args: handler_called.append(True) or 0
 
     fake_ep = MagicMock(spec=EntryPoint)
     fake_ep.name = "my-plugin"
