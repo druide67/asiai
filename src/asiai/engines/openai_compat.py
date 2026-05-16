@@ -89,6 +89,7 @@ class OpenAICompatEngine(InferenceEngine):
         url = f"{self.base_url}{self._generate_endpoint}"
         ttft_ms = 0.0
         text_parts: list[str] = []
+        reasoning_parts: list[str] = []
         completion_tokens = 0
 
         try:
@@ -114,14 +115,22 @@ class OpenAICompatEngine(InferenceEngine):
                         continue
 
                     if self._generate_mode == "chat":
-                        content = choices[0].get("delta", {}).get("content", "")
+                        delta = choices[0].get("delta", {}) or {}
+                        content = delta.get("content") or ""
+                        # Qwen3/3.5/3.6 thinking mode (Jinja chat template) emits
+                        # reasoning tokens in delta.reasoning_content. Counted in
+                        # throughput, excluded from `text` (clean user output).
+                        reasoning = delta.get("reasoning_content") or ""
                     else:
-                        content = choices[0].get("text", "")
+                        content = choices[0].get("text", "") or ""
+                        reasoning = ""
 
+                    if (content or reasoning) and not (text_parts or reasoning_parts):
+                        ttft_ms = round((time.monotonic() - t0) * 1000, 1)
                     if content:
-                        if not text_parts:
-                            ttft_ms = round((time.monotonic() - t0) * 1000, 1)
                         text_parts.append(content)
+                    if reasoning:
+                        reasoning_parts.append(reasoning)
 
                     usage = chunk.get("usage")
                     if usage and "completion_tokens" in usage:
@@ -133,11 +142,13 @@ class OpenAICompatEngine(InferenceEngine):
 
         elapsed_s = time.monotonic() - t0
         text = "".join(text_parts)
+        reasoning_text = "".join(reasoning_parts)
         if completion_tokens == 0:
-            completion_tokens = max(1, len(text) // 4)
+            total_chars = len(text) + len(reasoning_text)
+            completion_tokens = max(1, total_chars // 4)
             logger.warning(
                 "Engine did not report completion_tokens — using estimate "
-                "len(text)//4 = %d (may be ~25%% off). Model: %s",
+                "(content+reasoning chars)//4 = %d (may be ~25%% off). Model: %s",
                 completion_tokens,
                 model,
             )

@@ -588,6 +588,49 @@ class TestLlamaCppEngine:
         assert result.text == "hello"
         assert result.engine == "llamacpp"
 
+    def test_generate_reasoning_content_counted_in_throughput(self):
+        # Qwen3/3.5/3.6 with --jinja or preserve_thinking emits reasoning tokens
+        # in delta.reasoning_content. TTFT must fire on first reasoning chunk;
+        # text returned to user excludes reasoning; throughput counts both.
+        chunks = [
+            {"choices": [{"delta": {"reasoning_content": "Let me think..."}}]},
+            {"choices": [{"delta": {"reasoning_content": " more thinking."}}]},
+            {
+                "choices": [{"delta": {"content": "Final answer"}}],
+                "usage": {"completion_tokens": 50},
+            },
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 0.3, 1.1]
+            engine = LlamaCppEngine("http://localhost:8080")
+            result = engine.generate("qwen3.6", "hi", 512)
+
+        assert result.text == "Final answer"
+        assert result.ttft_ms == 100.0
+        assert result.tokens_generated == 50
+        assert result.tok_per_sec > 0
+
+    def test_generate_reasoning_only_no_usage_estimates_throughput(self):
+        # Edge case: model stops in thinking mode (no content), no usage block.
+        # Fallback estimate must include reasoning chars to produce non-zero tok/s.
+        chunks = [
+            {"choices": [{"delta": {"reasoning_content": "x" * 200}}]},
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1, 1.1]
+            engine = LlamaCppEngine("http://localhost:8080")
+            result = engine.generate("qwen3.6", "hi", 512)
+
+        assert result.text == ""
+        assert result.tokens_generated >= 1
+        assert result.tok_per_sec > 0
+
     def test_list_running(self):
         data = {"data": [{"id": "my-gguf-model"}]}
         props = {"default_generation_settings": {"n_ctx": 8192}}
