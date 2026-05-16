@@ -60,6 +60,7 @@ nohup.out
 .serena/
 
 # Internal strategy / private project docs — kept in Obsidian vault, never tracked
+docs/bmad
 docs/bmad/
 docs/research/bench-method/
 docs/research/bench-m5/
