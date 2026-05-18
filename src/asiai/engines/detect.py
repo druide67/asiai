@@ -29,6 +29,7 @@ _PORT_PROCESS_MAP: dict[str, str] = {
     "llama-server": "llamacpp",
     "llama_server": "llamacpp",
     "omlx": "omlx",
+    "vmlx": "vmlx",
     "vllm": "vllm_mlx",
     "exo": "exo",
     "ollama": "ollama",
@@ -273,15 +274,37 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
         except Exception:
             pass
 
-        # 2d. vllm-mlx: /version endpoint OR "owned_by":"vllm-mlx" in /v1/models
-        ver_resp, _ = http_get_json(f"{base_url}/version")
-        if ver_resp and isinstance(ver_resp, dict) and "version" in ver_resp:
-            return "vllm_mlx", ver_resp["version"]
-        # Check owned_by field in /v1/models response
+        # 2d. vMLX / vllm-mlx — both expose /version, discriminate by name/owned_by.
+        # Check /v1/models owned_by first (most reliable signal).
         if isinstance(data, dict):
             for model_entry in data.get("data", []):
-                if isinstance(model_entry, dict) and model_entry.get("owned_by") == "vllm-mlx":
-                    return "vllm_mlx", ""
+                if isinstance(model_entry, dict):
+                    if model_entry.get("owned_by") == "vmlx":
+                        ver_resp, _ = http_get_json(f"{base_url}/version")
+                        ver = ""
+                        if isinstance(ver_resp, dict):
+                            ver = ver_resp.get("version", "")
+                        return "vmlx", ver
+                    if model_entry.get("owned_by") == "vllm-mlx":
+                        return "vllm_mlx", ""
+
+        # Fallback: probe /version and discriminate by an explicit name/engine field.
+        ver_resp, _ = http_get_json(f"{base_url}/version")
+        if ver_resp and isinstance(ver_resp, dict):
+            engine_id = (
+                str(ver_resp.get("engine", ""))
+                + " "
+                + str(ver_resp.get("name", ""))
+                + " "
+                + str(ver_resp.get("server", ""))
+            ).lower()
+            if "vmlx" in engine_id:
+                return "vmlx", ver_resp.get("version", "")
+            if "vllm" in engine_id:
+                return "vllm_mlx", ver_resp.get("version", "")
+            if "version" in ver_resp:
+                # Plain /version with no discriminator — historical default to vllm-mlx
+                return "vllm_mlx", ver_resp["version"]
 
         # 2d. Process detection via lsof
         port = extract_port(base_url)

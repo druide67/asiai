@@ -46,6 +46,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.ollama import OllamaEngine
     from asiai.engines.omlx import OmlxEngine
     from asiai.engines.vllm_mlx import VllmMlxEngine
+    from asiai.engines.vmlx import VmlxEngine
 
     engine_map = {
         "ollama": OllamaEngine,
@@ -54,6 +55,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "llamacpp": LlamaCppEngine,
         "omlx": OmlxEngine,
         "vllm_mlx": VllmMlxEngine,
+        "vmlx": VmlxEngine,
         "exo": ExoEngine,
     }
 

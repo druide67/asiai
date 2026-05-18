@@ -18,6 +18,7 @@ from asiai.engines.lmstudio import LMStudioEngine
 from asiai.engines.mlxlm import MlxLmEngine
 from asiai.engines.ollama import OllamaEngine
 from asiai.engines.vllm_mlx import VllmMlxEngine
+from asiai.engines.vmlx import VmlxEngine
 
 
 class TestHttpGetJson:
@@ -717,6 +718,66 @@ class TestVllmMlxEngine:
         assert models[0].format == "MLX"
 
 
+class TestVmlxEngine:
+    def test_name(self):
+        engine = VmlxEngine("http://localhost:8000")
+        assert engine.name == "vmlx"
+
+    def test_version_via_endpoint(self):
+        with patch(
+            "asiai.engines.vmlx.http_get_json",
+            return_value=({"version": "1.5.38"}, {}),
+        ):
+            engine = VmlxEngine("http://localhost:8000")
+            assert engine.version() == "1.5.38"
+
+    def test_version_via_pip_fallback(self):
+        class _Out:
+            stdout = "Name: vmlx\nVersion: 1.5.38\nSummary: ...\n"
+
+        with (
+            patch("asiai.engines.vmlx.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.vmlx.subprocess.run", return_value=_Out()),
+        ):
+            engine = VmlxEngine("http://localhost:8000")
+            assert engine.version() == "1.5.38"
+
+    def test_version_unreachable(self):
+        class _Out:
+            stdout = ""
+
+        with (
+            patch("asiai.engines.vmlx.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.vmlx.subprocess.run", return_value=_Out()),
+        ):
+            engine = VmlxEngine("http://localhost:8000")
+            assert engine.version() == ""
+
+    def test_generate_uses_chat_mode(self):
+        chunks = [
+            {"choices": [{"delta": {"content": "vmlx"}}], "usage": {"completion_tokens": 100}},
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5]
+            engine = VmlxEngine("http://localhost:8000")
+            result = engine.generate("model", "hi", 256)
+
+        assert result.text == "vmlx"
+        assert result.tok_per_sec == 250.0  # 100 / (0.5 - 0.1) generation only
+        assert result.engine == "vmlx"
+
+    def test_list_running(self):
+        data = {"data": [{"id": "mlx-model", "owned_by": "vmlx"}]}
+        with patch("asiai.engines.openai_compat.http_get_json", return_value=(data, {})):
+            engine = VmlxEngine("http://localhost:8000")
+            models = engine.list_running()
+        assert len(models) == 1
+        assert models[0].format == "MLX"
+
+
 class TestDetectCascade:
     """Full cascade detection tests for all 5 engines."""
 
@@ -850,6 +911,50 @@ class TestDetectCascade:
 
         assert engine == "vllm_mlx"
         assert version == ""
+
+    def test_detect_vmlx_via_owned_by(self):
+        """vMLX: /v1/models with owned_by:'vmlx' takes precedence over /version."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model", "owned_by": "vmlx"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/version" in url:
+                return {"version": "1.5.38"}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8000")
+
+        assert engine == "vmlx"
+        assert version == "1.5.38"
+
+    def test_detect_vmlx_via_version_engine_field(self):
+        """vMLX: /version exposes {engine:'vmlx', version:'...'} as discriminator."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "model"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/version" in url:
+                return {"engine": "vmlx", "version": "1.5.38"}, {}
+            return None, {}
+
+        with patch("asiai.engines.detect.http_get_json", side_effect=mock_get):
+            engine, version = detect_engine_type("http://localhost:8000")
+
+        assert engine == "vmlx"
+        assert version == "1.5.38"
 
     def test_detect_mlxlm_fallback(self):
         """mlx-lm: /v1/models OK, no other markers -> fallback."""
