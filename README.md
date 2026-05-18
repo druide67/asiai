@@ -111,7 +111,25 @@ Options:
 -Q, --quick                Quick benchmark: 1 prompt, 1 run (~15 seconds)
     --card                 Generate shareable benchmark card (SVG + PNG with --share)
 -H, --history PERIOD       Show past benchmarks (e.g. 7d, 24h)
+    --agentic-mode         Run the 8-run agentic prefix-cache-reuse protocol
+    --agentic-output FILE  Save agentic-mode results as JSON
+    --agentic-skip-long    Skip phases 7-8 (50K context) to save ~10 min
+    --agentic-only LIST    Run only specified phases (cold,prefix-test-1,...)
 ```
+
+### Agentic mode — measuring prefix cache reuse
+
+```bash
+asiai bench --agentic-mode --url http://localhost:8080 --model my-model \
+    --agentic-output bench.json
+```
+
+Runs 8 sequential prompts with a fixed long system message and varying user
+messages to expose how the engine reuses cached prefix tokens. Reads
+`cached_tokens` from the streaming `usage` when the engine exposes it
+(llama.cpp, mlx-lm), falls back to the TTFT ratio otherwise. Outputs a
+verdict `prefix_cache_reuse: yes | partial | no`. The metric that matters
+when your workload is multi-turn agentic with shared system prompts.
 
 Cross-model comparison — benchmark multiple models in one run and get a ranked summary:
 

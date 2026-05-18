@@ -607,6 +607,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         skip_long=args.agentic_skip_long,
         only=only,
         out_path=args.agentic_output,
+        include_host=getattr(args, "agentic_include_host", False),
     )
 
     print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
@@ -1499,6 +1500,15 @@ def main(argv: list[str] | None = None) -> int:
         "--agentic-only",
         metavar="LIST",
         help="Comma-separated phase names to run (cold,warm,prefix-test-1,...).",
+    )
+    bench_parser.add_argument(
+        "--agentic-include-host",
+        action="store_true",
+        help=(
+            "Include the machine hostname under ``host`` in the agentic output "
+            "JSON. Off by default; turn on for personal records, leave off when "
+            "sharing results publicly."
+        ),
     )
 
     # leaderboard

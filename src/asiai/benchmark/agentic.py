@@ -70,12 +70,18 @@ def _grow_to(target_chars: int, seed_label: str) -> str:
     return "".join(chunks)[:target_chars]
 
 
-# Char targets calibrated against Qwen tokenizers (~5.3 chars/token English
-# with paragraphs containing punctuation and proper nouns).
-# Resulting token counts on Qwen3.6 tokenizer:
-#   SYS_A/SYS_B : ~6018-6084 tokens
+# Char targets calibrated against Qwen tokenizers (~5.3 chars/token on English
+# paragraphs containing punctuation and proper nouns).
+# Resulting token counts on the Qwen3.6 tokenizer:
+#   SYS_A/SYS_B   : ~6018-6084 tokens
 #   USER_X/USER_Y : ~1495-1497 tokens
-#   USER_L : ~49804 tokens
+#   USER_L        : ~49804 tokens
+# Caveat: other tokenizers compress differently. Llama-3 averages ~4.0
+# chars/token on the same prose; the long-context phase (USER_L) would
+# expand to ~66K tokens and may overflow a 32K context window. When
+# benchmarking non-Qwen architectures, either pass ``--agentic-skip-long``
+# or verify the engine's max context against the actual token counts
+# reported on the cold run.
 SYS_A = _grow_to(31500, "SYSTEM-A-canonical-eos-analyst")
 SYS_B = _grow_to(31500, "SYSTEM-B-orbital-radio-pulsar-timer")
 USER_X = _grow_to(8000, "USER-X-tidal-deformability-question")
@@ -122,12 +128,18 @@ class AgenticRun:
 def _do_single_run(
     base_url: str,
     model: str,
+    phase_name: str,
     sys_msg: str,
     user_msg: str,
     max_tokens: int,
     timeout: int = 900,
 ) -> AgenticRun:
-    """Send a single chat completion and parse SSE stream for usage."""
+    """Send a single chat completion and parse SSE stream for usage.
+
+    ``phase_name`` is recorded on the returned ``AgenticRun`` so error
+    branches stay traceable without relying on the caller to backfill
+    the field after the function returns.
+    """
     payload = {
         "model": model,
         "messages": [
@@ -152,7 +164,7 @@ def _do_single_run(
     last_usage: dict[str, Any] | None = None
 
     run = AgenticRun(
-        phase="",
+        phase=phase_name,
         sys_chars=len(sys_msg),
         user_chars=len(user_msg),
         max_tokens_requested=max_tokens,
@@ -277,6 +289,7 @@ def run_agentic_bench(
     timeout: int = 900,
     out_path: str | None = None,
     on_run: Any = None,
+    include_host: bool = False,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -290,6 +303,10 @@ def run_agentic_bench(
         timeout: Per-run HTTP timeout in seconds (default 900).
         out_path: If provided, write JSON results to this path.
         on_run: Optional callback ``on_run(AgenticRun)`` invoked after each run.
+        include_host: When True, record the machine hostname in the result
+            JSON under ``host``. Off by default since the JSON is often
+            shared publicly and the hostname is not relevant for engine
+            comparison.
 
     Returns the result dict with ``runs``, ``prefix_cache_reuse_verdict``,
     and engine metadata.
@@ -308,12 +325,12 @@ def run_agentic_bench(
         run = _do_single_run(
             base_url=base_url,
             model=model,
+            phase_name=phase.name,
             sys_msg=phase.sys_msg,
             user_msg=phase.user_msg,
             max_tokens=phase.max_tokens,
             timeout=timeout,
         )
-        run.phase = phase.name
         runs.append(run)
         if on_run:
             try:
@@ -329,10 +346,11 @@ def run_agentic_bench(
         "base_url": base_url,
         "started_at": started,
         "finished_at": int(time.time()),
-        "host": os.uname().nodename,
         "prefix_cache_reuse_verdict": verdict,
         "runs": [asdict(r) for r in runs],
     }
+    if include_host:
+        out["host"] = os.uname().nodename
     if out_path:
         with open(out_path, "w") as f:
             json.dump(out, f, indent=2)
