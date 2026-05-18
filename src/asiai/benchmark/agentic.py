@@ -235,11 +235,18 @@ def _compute_verdict(runs: list[AgenticRun]) -> str:
     if not cold_runs or not prefix_runs:
         return "unknown"
 
-    cached_vals = [r.cached_tokens for r in prefix_runs if r.cached_tokens is not None]
-    prompt_vals = [r.prompt_tokens for r in prefix_runs if r.prompt_tokens]
-    if cached_vals and prompt_vals:
-        avg_cached = sum(cached_vals) / len(cached_vals)
-        avg_prompt = sum(prompt_vals) / len(prompt_vals)
+    # Pair (cached, prompt) per run so the ratio is computed on matching
+    # samples — averaging cached_vals and prompt_vals independently would
+    # mix sample sets of different sizes if an engine reports cached_tokens
+    # on some runs but not others.
+    paired = [
+        (r.cached_tokens, r.prompt_tokens)
+        for r in prefix_runs
+        if r.cached_tokens is not None and r.prompt_tokens
+    ]
+    if paired:
+        avg_cached = sum(c for c, _ in paired) / len(paired)
+        avg_prompt = sum(p for _, p in paired) / len(paired)
         ratio = avg_cached / avg_prompt if avg_prompt else 0
         if ratio >= 0.5:
             return "yes"

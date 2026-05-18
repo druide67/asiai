@@ -823,10 +823,10 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.community import build_submission, submit_benchmark
         from asiai.display.formatters import dim, green
 
-        # US-013 (BMAD asiai 2026-05-07): refuse to share results when every
-        # measurable run failed. The public leaderboard was 89% polluted with
-        # median_tok_s=0 entries before this guard. ``--share-on-error`` opts
-        # back in for users who want full diagnostic transparency.
+        # Refuse to share results when every measurable run failed. The public
+        # leaderboard was previously polluted with median_tok_s=0 entries
+        # before this guard. ``--share-on-error`` opts back in for users who
+        # want full diagnostic transparency.
         successful_runs = sum(1 for r in bench_run.results if r.get("tok_per_sec", 0) > 0)
         if successful_runs == 0 and not getattr(args, "share_on_error", False):
             n_total = len(bench_run.results)
@@ -1446,7 +1446,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Share even when all runs failed (median tok/s = 0). "
             "Off by default to avoid polluting the public leaderboard with "
-            "useless 0-value entries (US-013, BMAD asiai 2026-05-07)."
+            "useless 0-value entries."
         ),
     )
     bench_parser.add_argument(

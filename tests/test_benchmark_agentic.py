@@ -101,6 +101,28 @@ def test_compute_verdict_unknown_no_runs():
     assert _compute_verdict([]) == "unknown"
 
 
+def test_compute_verdict_no_cold_returns_unknown():
+    """Only prefix-test runs without a cold reference => unknown."""
+    runs = [
+        AgenticRun(phase="prefix-test-1", prompt_tokens=7500, cached_tokens=6000),
+        AgenticRun(phase="prefix-test-3", prompt_tokens=7500, cached_tokens=6000),
+    ]
+    assert _compute_verdict(runs) == "unknown"
+
+
+def test_compute_verdict_pairs_cached_with_matching_prompt():
+    """Cached / prompt averages must come from the same run, not independent lists."""
+    runs = [
+        AgenticRun(phase="cold", prompt_tokens=7500, cached_tokens=0, ttft_ms=70000),
+        # Run with cached reported, prompt reported
+        AgenticRun(phase="prefix-test-1", prompt_tokens=7500, cached_tokens=6000),
+        # Run with prompt reported but cached missing — must NOT contribute to ratio
+        AgenticRun(phase="prefix-test-3", prompt_tokens=7500, cached_tokens=None),
+    ]
+    # Only the first prefix-test run is paired: 6000/7500 = 0.80 -> yes
+    assert _compute_verdict(runs) == "yes"
+
+
 class _FakeStreamResponse:
     """Mimic urlopen's iter-of-lines for SSE."""
 
