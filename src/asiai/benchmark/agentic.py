@@ -1,0 +1,345 @@
+"""Agentic-mode benchmark — 8-run protocol with explicit prefix cache reuse test.
+
+Validates how well an engine reuses cached prefix tokens across consecutive
+requests with shared system prompts but different user messages — the
+characteristic load pattern of multi-turn agent workflows (60-80 tool calls
+per task, each with the same long system prompt and a different user message).
+
+Protocol:
+
+    Run 1 (cold)          sys=SYS_A   user=USER_X   max=400
+    Run 2 (warm)          sys=SYS_A   user=USER_X   max=400   (re-uses cache)
+    Run 3 (prefix-test-1) sys=SYS_A   user=USER_Y   max=400   (sys hit, user new)
+    Run 4 (prefix-test-2) sys=SYS_A   user=USER_X   max=400   (full re-use)
+    Run 5 (prefix-test-3) sys=SYS_A   user=USER_Y   max=400   (sys hit, user new again)
+    Run 6 (cold-prefix)   sys=SYS_B   user=USER_X   max=400   (sys differs => cold)
+    Run 7 (long-context)  sys=SYS_A   user=USER_L   max=200
+    Run 8 (long-prefix)   sys=SYS_A   user=USER_L   max=200   (cache hit on USER_L)
+
+The protocol relies on cached_tokens reported by the engine's streaming
+``usage.prompt_tokens_details.cached_tokens`` field when available (llama.cpp
+and mlx-lm expose it; vllm-mlx, omlx, LM Studio do not — for those a TTFT
+ratio proxy is used).
+
+Verdict for prefix_cache_reuse:
+    yes     — average cached / prompt on prefix-test runs >= 0.5
+    partial — average cached / prompt on prefix-test runs >= 0.1
+    no      — neither (or no cached_tokens reported AND TTFT_prefix > TTFT_cold/2)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+import urllib.error
+import urllib.request
+from dataclasses import asdict, dataclass
+from typing import Any
+
+logger = logging.getLogger("asiai.benchmark.agentic")
+
+
+# Deterministic filler. Repeated unique paragraphs with sentinels per slot
+# to break naive cache lookups while keeping content semantically coherent.
+_BASE_PARAGRAPH = (
+    "The orbital dynamics of binary neutron star systems exhibit characteristic "
+    "gravitational wave signatures during the late inspiral phase. Tidal "
+    "deformability parameters constrain the equation of state of dense nuclear "
+    "matter at supra-saturation densities, where conventional perturbative QCD "
+    "approaches become inapplicable. Observational evidence from GW170817 and "
+    "subsequent multi-messenger campaigns has progressively refined the radius "
+    "estimates for canonical 1.4 solar mass configurations. "
+)
+
+
+def _grow_to(target_chars: int, seed_label: str) -> str:
+    """Return a deterministic string of approximately ``target_chars`` characters."""
+    prefix = f"[{seed_label}] "
+    sentinel_template = f" (segment-{seed_label}-{{i}}) "
+    chunks: list[str] = [prefix]
+    cur = len(prefix)
+    i = 0
+    while cur < target_chars:
+        chunks.append(_BASE_PARAGRAPH)
+        sentinel = sentinel_template.format(i=i)
+        chunks.append(sentinel)
+        cur += len(_BASE_PARAGRAPH) + len(sentinel)
+        i += 1
+    return "".join(chunks)[:target_chars]
+
+
+# Char targets calibrated against Qwen tokenizers (~5.3 chars/token English
+# with paragraphs containing punctuation and proper nouns).
+# Resulting token counts on Qwen3.6 tokenizer:
+#   SYS_A/SYS_B : ~6018-6084 tokens
+#   USER_X/USER_Y : ~1495-1497 tokens
+#   USER_L : ~49804 tokens
+SYS_A = _grow_to(31500, "SYSTEM-A-canonical-eos-analyst")
+SYS_B = _grow_to(31500, "SYSTEM-B-orbital-radio-pulsar-timer")
+USER_X = _grow_to(8000, "USER-X-tidal-deformability-question")
+USER_Y = _grow_to(8000, "USER-Y-mass-radius-degeneracy-question")
+USER_L = _grow_to(265000, "USER-L-long-context-multi-event-corpus")
+
+
+@dataclass(frozen=True)
+class AgenticPhase:
+    name: str
+    sys_msg: str
+    user_msg: str
+    max_tokens: int
+
+
+PHASES: tuple[AgenticPhase, ...] = (
+    AgenticPhase("cold", SYS_A, USER_X, 400),
+    AgenticPhase("warm", SYS_A, USER_X, 400),
+    AgenticPhase("prefix-test-1", SYS_A, USER_Y, 400),
+    AgenticPhase("prefix-test-2", SYS_A, USER_X, 400),
+    AgenticPhase("prefix-test-3", SYS_A, USER_Y, 400),
+    AgenticPhase("cold-prefix", SYS_B, USER_X, 400),
+    AgenticPhase("long-context", SYS_A, USER_L, 200),
+    AgenticPhase("long-prefix", SYS_A, USER_L, 200),
+)
+
+
+@dataclass
+class AgenticRun:
+    phase: str
+    ttft_ms: int | None = None
+    wall_total_ms: int = 0
+    completion_tokens: int = 0
+    prompt_tokens: int | None = None
+    cached_tokens: int | None = None
+    decode_tok_s: float | None = None
+    sys_chars: int = 0
+    user_chars: int = 0
+    max_tokens_requested: int = 0
+    error: str | None = None
+    error_body: str | None = None
+
+
+def _do_single_run(
+    base_url: str,
+    model: str,
+    sys_msg: str,
+    user_msg: str,
+    max_tokens: int,
+    timeout: int = 900,
+) -> AgenticRun:
+    """Send a single chat completion and parse SSE stream for usage."""
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.0,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}/v1/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json"},
+    )
+
+    t0 = time.perf_counter()
+    first_token_time: float | None = None
+    completion_chunks = 0
+    last_usage: dict[str, Any] | None = None
+
+    run = AgenticRun(
+        phase="",
+        sys_chars=len(sys_msg),
+        user_chars=len(user_msg),
+        max_tokens_requested=max_tokens,
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                payload_str = line[len("data:") :].strip()
+                if payload_str == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(payload_str)
+                except json.JSONDecodeError:
+                    continue
+                if chunk.get("usage"):
+                    last_usage = chunk["usage"]
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {}) or {}
+                # Qwen3.x thinking mode emits reasoning BEFORE content.
+                # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
+                # Both contribute to TTFT (first token emitted server-side).
+                content = (
+                    (delta.get("content") or "")
+                    + (delta.get("reasoning_content") or "")
+                    + (delta.get("reasoning") or "")
+                )
+                if content:
+                    if first_token_time is None:
+                        first_token_time = time.perf_counter() - t0
+                    completion_chunks += 1
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")[:500]
+        run.error = f"HTTP {e.code}"
+        run.error_body = body_text
+        return run
+    except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
+        run.error = type(e).__name__
+        run.error_body = str(e)[:300]
+        return run
+
+    t_end = time.perf_counter() - t0
+    run.wall_total_ms = int(t_end * 1000)
+    run.ttft_ms = int(first_token_time * 1000) if first_token_time else None
+
+    completion_tokens = (last_usage or {}).get("completion_tokens", completion_chunks)
+    run.completion_tokens = completion_tokens
+    run.prompt_tokens = (last_usage or {}).get("prompt_tokens")
+
+    cached: int | None = None
+    if last_usage:
+        details = last_usage.get("prompt_tokens_details") or {}
+        cached = details.get("cached_tokens")
+        if cached is None:
+            cached = last_usage.get("cached_tokens")
+    run.cached_tokens = cached
+
+    if (
+        first_token_time
+        and completion_tokens
+        and t_end > first_token_time
+        and completion_tokens > 1
+    ):
+        run.decode_tok_s = round((completion_tokens - 1) / (t_end - first_token_time), 2)
+
+    return run
+
+
+def _compute_verdict(runs: list[AgenticRun]) -> str:
+    """Decide prefix_cache_reuse verdict from completed runs."""
+    cold_runs = [r for r in runs if r.phase == "cold" and r.error is None]
+    prefix_runs = [
+        r for r in runs if r.phase in ("prefix-test-1", "prefix-test-3") and r.error is None
+    ]
+    if not cold_runs or not prefix_runs:
+        return "unknown"
+
+    cached_vals = [r.cached_tokens for r in prefix_runs if r.cached_tokens is not None]
+    prompt_vals = [r.prompt_tokens for r in prefix_runs if r.prompt_tokens]
+    if cached_vals and prompt_vals:
+        avg_cached = sum(cached_vals) / len(cached_vals)
+        avg_prompt = sum(prompt_vals) / len(prompt_vals)
+        ratio = avg_cached / avg_prompt if avg_prompt else 0
+        if ratio >= 0.5:
+            return "yes"
+        if ratio >= 0.1:
+            return "partial"
+        return "no"
+
+    ttft_cold = cold_runs[0].ttft_ms
+    ttft_prefix_vals = [r.ttft_ms for r in prefix_runs if r.ttft_ms is not None]
+    if ttft_cold and ttft_prefix_vals:
+        ttft_prefix = sum(ttft_prefix_vals) / len(ttft_prefix_vals)
+        if ttft_prefix < ttft_cold / 5:
+            return "yes"
+        if ttft_prefix < ttft_cold / 2:
+            return "partial"
+        return "no"
+
+    return "unknown"
+
+
+def run_agentic_bench(
+    base_url: str,
+    engine_name: str,
+    model: str,
+    pause: float = 2.0,
+    skip_long: bool = False,
+    only: list[str] | None = None,
+    timeout: int = 900,
+    out_path: str | None = None,
+    on_run: Any = None,
+) -> dict[str, Any]:
+    """Execute the 8-run agentic protocol against ``base_url``.
+
+    Args:
+        base_url: HTTP base URL of an OpenAI-compatible engine.
+        engine_name: Label written to results (e.g. ``llamacpp-b9200``).
+        model: Model identifier the engine accepts in ``messages.model``.
+        pause: Seconds between consecutive runs (default 2.0).
+        skip_long: Skip phases 7-8 (50K user) to shorten total runtime.
+        only: Optional list of phase names to run (default: all).
+        timeout: Per-run HTTP timeout in seconds (default 900).
+        out_path: If provided, write JSON results to this path.
+        on_run: Optional callback ``on_run(AgenticRun)`` invoked after each run.
+
+    Returns the result dict with ``runs``, ``prefix_cache_reuse_verdict``,
+    and engine metadata.
+    """
+    selected = list(PHASES)
+    if skip_long:
+        selected = [p for p in selected if "long" not in p.name]
+    if only:
+        allowed = set(only)
+        selected = [p for p in selected if p.name in allowed]
+
+    runs: list[AgenticRun] = []
+    started = int(time.time())
+    for phase in selected:
+        logger.info("[%s] starting", phase.name)
+        run = _do_single_run(
+            base_url=base_url,
+            model=model,
+            sys_msg=phase.sys_msg,
+            user_msg=phase.user_msg,
+            max_tokens=phase.max_tokens,
+            timeout=timeout,
+        )
+        run.phase = phase.name
+        runs.append(run)
+        if on_run:
+            try:
+                on_run(run)
+            except Exception:  # noqa: BLE001 — never let observer break bench
+                logger.exception("on_run callback failed")
+        time.sleep(pause)
+
+    verdict = _compute_verdict(runs)
+    out = {
+        "engine": engine_name,
+        "model": model,
+        "base_url": base_url,
+        "started_at": started,
+        "finished_at": int(time.time()),
+        "host": os.uname().nodename,
+        "prefix_cache_reuse_verdict": verdict,
+        "runs": [asdict(r) for r in runs],
+    }
+    if out_path:
+        with open(out_path, "w") as f:
+            json.dump(out, f, indent=2)
+    return out
+
+
+__all__ = [
+    "AgenticPhase",
+    "AgenticRun",
+    "PHASES",
+    "SYS_A",
+    "SYS_B",
+    "USER_X",
+    "USER_Y",
+    "USER_L",
+    "run_agentic_bench",
+]

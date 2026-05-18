@@ -547,6 +547,74 @@ def expand_compare_args(
     return slots
 
 
+def _run_agentic_bench(args: argparse.Namespace) -> int:
+    """Run the 8-run agentic prefix cache reuse benchmark (US-047)."""
+    from asiai.benchmark.agentic import run_agentic_bench
+    from asiai.display.formatters import dim, red
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    if not engines:
+        print(red("✗ No inference engines detected."), file=sys.stderr)
+        return 1
+    if len(engines) > 1 and not args.url:
+        print(
+            red("✗ --agentic-mode requires exactly one target. Specify --url to pick one."),
+            file=sys.stderr,
+        )
+        return 1
+    engine = engines[0]
+
+    model_id = args.model
+    if not model_id:
+        running = engine.list_running()
+        if not running:
+            print(
+                red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                file=sys.stderr,
+            )
+            return 1
+        model_id = running[0].name
+
+    only = None
+    if args.agentic_only:
+        only = [p.strip() for p in args.agentic_only.split(",") if p.strip()]
+
+    print(
+        f"  {dim('●')} agentic-mode bench {engine.name} @ {engine.base_url} "
+        f"model={model_id} pause={args.agentic_pause}s "
+        f"skip_long={'yes' if args.agentic_skip_long else 'no'}"
+    )
+
+    def _on_run(run):  # noqa: ANN001 — duck-typed AgenticRun
+        cached = run.cached_tokens if run.cached_tokens is not None else "-"
+        ttft = f"{run.ttft_ms}ms" if run.ttft_ms is not None else "?ms"
+        tps = f"{run.decode_tok_s:.2f}" if run.decode_tok_s is not None else "?"
+        if run.error:
+            print(f"  [{run.phase}] ERROR {run.error}: {run.error_body or ''}")
+        else:
+            print(
+                f"  [{run.phase}] TTFT={ttft} decode={tps} tok/s "
+                f"prompt={run.prompt_tokens} cached={cached} "
+                f"compl={run.completion_tokens}"
+            )
+
+    result = run_agentic_bench(
+        base_url=engine.base_url,
+        engine_name=engine.name,
+        model=model_id,
+        pause=args.agentic_pause,
+        skip_long=args.agentic_skip_long,
+        only=only,
+        out_path=args.agentic_output,
+    )
+
+    print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
+    if args.agentic_output:
+        print(f"Saved {args.agentic_output}")
+    return 0
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
     from asiai.benchmark.regression import detect_regressions
@@ -563,6 +631,10 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     db_path = args.db or DEFAULT_DB_PATH
     init_db(db_path)
+
+    # Agentic mode: 8-run prefix cache reuse protocol (US-047)
+    if getattr(args, "agentic_mode", False):
+        return _run_agentic_bench(args)
 
     # History mode
     if args.history:
@@ -1395,6 +1467,38 @@ def main(argv: list[str] | None = None) -> int:
             "KV cache type (turbo2, turbo3, turbo4, q8_0, f16). "
             "Records the cache type used by the target engine."
         ),
+    )
+    bench_parser.add_argument(
+        "--agentic-mode",
+        action="store_true",
+        help=(
+            "Run the 8-run agentic protocol with explicit prefix cache reuse test "
+            "(sys identical + user different). Reads cached_tokens from streaming "
+            "usage when the engine exposes it; falls back to TTFT ratio otherwise. "
+            "Disables --runs, --prompts, --quick, --compare, --share."
+        ),
+    )
+    bench_parser.add_argument(
+        "--agentic-output",
+        metavar="FILE",
+        help="Write agentic-mode results to JSON file (default: stdout summary only)",
+    )
+    bench_parser.add_argument(
+        "--agentic-pause",
+        type=float,
+        default=2.0,
+        metavar="SEC",
+        help="Seconds between agentic runs (default: 2.0)",
+    )
+    bench_parser.add_argument(
+        "--agentic-skip-long",
+        action="store_true",
+        help="Skip phases 7-8 (50K context). Saves ~10 min on slow engines.",
+    )
+    bench_parser.add_argument(
+        "--agentic-only",
+        metavar="LIST",
+        help="Comma-separated phase names to run (cold,warm,prefix-test-1,...).",
     )
 
     # leaderboard
