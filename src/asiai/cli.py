@@ -611,6 +611,21 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     )
 
     print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
+    qg = result.get("quality_gates") or {}
+    es = qg.get("early_stop") or {}
+    if es.get("detected"):
+        truncated = ", ".join(t["phase"] for t in es.get("truncated_runs", []))
+        print(red(f"  ⚠ Early-stop detected on: {truncated}"))
+    mp = qg.get("memory_pressure") or {}
+    if mp.get("alerted"):
+        print(red(f"  ⚠ Memory pressure during bench: {mp.get('alert_reason')}"))
+    dups = qg.get("duplicate_processes") or []
+    if dups:
+        pids = ", ".join(d["pid"] for d in dups)
+        print(red(
+            f"  ⚠ Duplicate {engine.name} processes (PIDs: {pids}) "
+            f"— bench may be unreliable"
+        ))
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
     return 0

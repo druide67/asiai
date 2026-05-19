@@ -68,3 +68,8 @@ RULES.md
 RULES-global.md
 .whisper-peer
 .playwright-cli/
+
+# Local bench result archives — may contain hostnames or hardware-specific
+# context. Run through an anonymization step before publishing as fixtures.
+data/bench-mtp-m4/
+data/bench-mtp-m5/

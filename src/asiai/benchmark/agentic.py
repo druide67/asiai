@@ -38,7 +38,15 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from asiai.benchmark.quality_gates import (
+    MemoryWatcher,
+    check_duplicate_processes,
+    detect_early_stop,
+)
+
 logger = logging.getLogger("asiai.benchmark.agentic")
+
+SCHEMA_VERSION = "agentic-v2"
 
 
 # Deterministic filler. Repeated unique paragraphs with sentinels per slot
@@ -290,6 +298,7 @@ def run_agentic_bench(
     out_path: str | None = None,
     on_run: Any = None,
     include_host: bool = False,
+    skip_quality_gates: bool = False,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -307,9 +316,12 @@ def run_agentic_bench(
             JSON under ``host``. Off by default since the JSON is often
             shared publicly and the hostname is not relevant for engine
             comparison.
+        skip_quality_gates: Disable early-stop / memory pressure / duplicate
+            process checks. Off by default. Useful for unit tests that mock
+            ``_do_single_run`` and don't want a real thread or ``ps`` call.
 
-    Returns the result dict with ``runs``, ``prefix_cache_reuse_verdict``,
-    and engine metadata.
+    Returns the result dict with ``schema_version``, ``runs``,
+    ``prefix_cache_reuse_verdict``, ``quality_gates``, and engine metadata.
     """
     selected = list(PHASES)
     if skip_long:
@@ -318,35 +330,66 @@ def run_agentic_bench(
         allowed = set(only)
         selected = [p for p in selected if p.name in allowed]
 
+    duplicates = [] if skip_quality_gates else check_duplicate_processes(engine_name)
+
     runs: list[AgenticRun] = []
     started = int(time.time())
-    for phase in selected:
-        logger.info("[%s] starting", phase.name)
-        run = _do_single_run(
-            base_url=base_url,
-            model=model,
-            phase_name=phase.name,
-            sys_msg=phase.sys_msg,
-            user_msg=phase.user_msg,
-            max_tokens=phase.max_tokens,
-            timeout=timeout,
-        )
-        runs.append(run)
-        if on_run:
-            try:
-                on_run(run)
-            except Exception:  # noqa: BLE001 — never let observer break bench
-                logger.exception("on_run callback failed")
-        time.sleep(pause)
+
+    watcher = None if skip_quality_gates else MemoryWatcher()
+    # Equivalent to ``with watcher`` but lets us skip cleanly when None.
+    if watcher is not None:
+        watcher.__enter__()
+    try:
+        for phase in selected:
+            logger.info("[%s] starting", phase.name)
+            run = _do_single_run(
+                base_url=base_url,
+                model=model,
+                phase_name=phase.name,
+                sys_msg=phase.sys_msg,
+                user_msg=phase.user_msg,
+                max_tokens=phase.max_tokens,
+                timeout=timeout,
+            )
+            runs.append(run)
+            if on_run:
+                try:
+                    on_run(run)
+                except Exception:  # noqa: BLE001 — never let observer break bench
+                    logger.exception("on_run callback failed")
+            time.sleep(pause)
+    finally:
+        if watcher is not None:
+            watcher.__exit__(None, None, None)
 
     verdict = _compute_verdict(runs)
+    quality_gates: dict[str, Any] = {
+        "early_stop": detect_early_stop(runs),
+        "duplicate_processes": duplicates,
+    }
+    if watcher is not None:
+        mw = watcher.result
+        quality_gates["memory_pressure"] = {
+            "baseline_swap_mb": mw.baseline_swap_mb,
+            "baseline_swapouts": mw.baseline_swapouts,
+            "max_swap_delta_mb": round(mw.max_swap_delta_mb, 2),
+            "max_swapouts_delta": mw.max_swapouts_delta,
+            "alerted": mw.alerted,
+            "alert_reason": mw.alert_reason,
+            "swap_delta_threshold_mb": mw.swap_delta_threshold_mb,
+            "swapouts_delta_threshold": mw.swapouts_delta_threshold,
+            "samples_count": len(mw.samples),
+        }
+
     out = {
+        "schema_version": SCHEMA_VERSION,
         "engine": engine_name,
         "model": model,
         "base_url": base_url,
         "started_at": started,
         "finished_at": int(time.time()),
         "prefix_cache_reuse_verdict": verdict,
+        "quality_gates": quality_gates,
         "runs": [asdict(r) for r in runs],
     }
     if include_host:
@@ -361,6 +404,7 @@ __all__ = [
     "AgenticPhase",
     "AgenticRun",
     "PHASES",
+    "SCHEMA_VERSION",
     "SYS_A",
     "SYS_B",
     "USER_X",
