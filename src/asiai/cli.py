@@ -550,7 +550,8 @@ def expand_compare_args(
 def _run_agentic_bench(args: argparse.Namespace) -> int:
     """Run the 8-run agentic prefix cache reuse benchmark (US-047)."""
     from asiai.benchmark.agentic import run_agentic_bench
-    from asiai.display.formatters import dim, red
+    from asiai.benchmark.auto_restart import auto_restart_engine
+    from asiai.display.formatters import dim, red, yellow
 
     urls = _parse_urls(args.url)
     engines = _discover_engines(urls)
@@ -564,6 +565,20 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         )
         return 1
     engine = engines[0]
+
+    if getattr(args, "agentic_auto_restart", False):
+        print(f"  {dim('●')} aisctl restart {engine.name}...")
+        ok, msg = auto_restart_engine(engine.name, engine.base_url)
+        if ok:
+            print(f"  {dim('●')} {msg}")
+        else:
+            print(yellow(f"  ⚠ auto-restart skipped: {msg}"))
+            if getattr(args, "agentic_auto_restart_required", False):
+                print(
+                    red("✗ --agentic-auto-restart-required set: aborting."),
+                    file=sys.stderr,
+                )
+                return 1
 
     model_id = args.model
     if not model_id:
@@ -1523,6 +1538,25 @@ def main(argv: list[str] | None = None) -> int:
             "Include the machine hostname under ``host`` in the agentic output "
             "JSON. Off by default; turn on for personal records, leave off when "
             "sharing results publicly."
+        ),
+    )
+    bench_parser.add_argument(
+        "--agentic-auto-restart",
+        action="store_true",
+        help=(
+            "Before the bench, call ``aisctl restart <engine>`` for a cold-start "
+            "baseline. Requires aisctl on PATH and the engine to be managed by "
+            "aisrv. Silently skipped (with a warning) otherwise. Useful for "
+            "reproducible cold-load measurements on engines without an unload API."
+        ),
+    )
+    bench_parser.add_argument(
+        "--agentic-auto-restart-required",
+        action="store_true",
+        help=(
+            "Pair with --agentic-auto-restart: abort the bench instead of "
+            "proceeding when aisctl is unavailable or the restart fails. "
+            "Use in CI to guarantee a clean cold start or fail fast."
         ),
     )
 
