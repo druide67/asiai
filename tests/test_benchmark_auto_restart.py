@@ -43,9 +43,10 @@ def test_auto_restart_skipped_when_aisctl_missing():
 
 
 def test_auto_restart_fails_on_subprocess_error():
-    with patch(
-        "asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"
-    ), patch("asiai.benchmark.auto_restart.subprocess.run", side_effect=OSError("boom")):
+    with (
+        patch("asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"),
+        patch("asiai.benchmark.auto_restart.subprocess.run", side_effect=OSError("boom")),
+    ):
         ok, msg = auto_restart_engine("llamacpp", "http://localhost:8080")
     assert ok is False
     assert "failed to launch" in msg
@@ -57,9 +58,10 @@ def test_auto_restart_fails_on_nonzero_returncode():
         stdout = ""
         stderr = "permission denied"
 
-    with patch(
-        "asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"
-    ), patch("asiai.benchmark.auto_restart.subprocess.run", return_value=_FakeProc()):
+    with (
+        patch("asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"),
+        patch("asiai.benchmark.auto_restart.subprocess.run", return_value=_FakeProc()),
+    ):
         ok, msg = auto_restart_engine("llamacpp", "http://localhost:8080")
     assert ok is False
     assert "returncode=1" in msg
@@ -72,11 +74,11 @@ def test_auto_restart_success_path():
         stdout = "{'engine': 'llamacpp', 'restarted': True}"
         stderr = ""
 
-    with patch(
-        "asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"
-    ), patch(
-        "asiai.benchmark.auto_restart.subprocess.run", return_value=_FakeProc()
-    ), patch("asiai.benchmark.auto_restart._wait_healthy", return_value=True):
+    with (
+        patch("asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"),
+        patch("asiai.benchmark.auto_restart.subprocess.run", return_value=_FakeProc()),
+        patch("asiai.benchmark.auto_restart._wait_healthy", return_value=True),
+    ):
         ok, msg = auto_restart_engine("llamacpp", "http://localhost:8080")
     assert ok is True
     assert "healthy" in msg
@@ -88,11 +90,11 @@ def test_auto_restart_fails_when_health_never_returns():
         stdout = ""
         stderr = ""
 
-    with patch(
-        "asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"
-    ), patch(
-        "asiai.benchmark.auto_restart.subprocess.run", return_value=_FakeProc()
-    ), patch("asiai.benchmark.auto_restart._wait_healthy", return_value=False):
+    with (
+        patch("asiai.benchmark.auto_restart.shutil.which", return_value="/usr/local/bin/aisctl"),
+        patch("asiai.benchmark.auto_restart.subprocess.run", return_value=_FakeProc()),
+        patch("asiai.benchmark.auto_restart._wait_healthy", return_value=False),
+    ):
         ok, msg = auto_restart_engine("llamacpp", "http://localhost:8080", healthcheck_timeout=5)
     assert ok is False
     assert "did not become healthy" in msg

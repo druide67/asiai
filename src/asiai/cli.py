@@ -637,10 +637,9 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     dups = qg.get("duplicate_processes") or []
     if dups:
         pids = ", ".join(d["pid"] for d in dups)
-        print(red(
-            f"  ⚠ Duplicate {engine.name} processes (PIDs: {pids}) "
-            f"— bench may be unreliable"
-        ))
+        print(
+            red(f"  ⚠ Duplicate {engine.name} processes (PIDs: {pids}) — bench may be unreliable")
+        )
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
     return 0

@@ -71,8 +71,7 @@ def test_llamacpp_mtp_completes_full_tokens(fixture: str):
     runs = _runs_from_fixture(data)
     es = detect_early_stop(runs)
     assert es["detected"] is False, (
-        f"{fixture}: unexpected early-stop "
-        f"({len(es['truncated_runs'])} truncated runs)"
+        f"{fixture}: unexpected early-stop ({len(es['truncated_runs'])} truncated runs)"
     )
 
 
@@ -92,9 +91,7 @@ def test_mlxlm_mtp_triggers_early_stop(fixture: str):
     data = _load(fixture)
     runs = _runs_from_fixture(data)
     es = detect_early_stop(runs)
-    assert es["detected"] is True, (
-        f"{fixture}: early-stop missed on a known-bad fixture"
-    )
+    assert es["detected"] is True, f"{fixture}: early-stop missed on a known-bad fixture"
     truncated_phases = {t["phase"] for t in es["truncated_runs"]}
     # At minimum the two prefix-test runs that pair sys=A with a fresh user
     # exhibit the truncation pattern.
