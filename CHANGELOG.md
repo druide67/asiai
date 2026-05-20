@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0](https://github.com/druide67/asiai/compare/v1.5.0...v1.6.0) — 2026-05-20
+
+### Added — Agentic Bench Mode
+
+`asiai bench --agentic-mode` introduces an 8-phase prefix cache reuse
+protocol that measures the dominant cost pattern of multi-turn agent
+workloads (long shared system prompt + per-turn user message). The
+verdict (`yes`/`partial`/`no`) uses `cached_tokens` from streaming usage
+where available and falls back to a TTFT cold/prefix-hit ratio for
+engines that don't expose it.
+
+Three independent quality gates run alongside the bench and emit their
+findings under `result["quality_gates"]`:
+
+- **`early_stop`** — flags phases where `completion_tokens` drops below
+  50% of the requested `max_tokens` on two or more runs. Catches engines
+  that accept a speculatively-drafted EOS token incorrectly under prefix
+  cache reuse (the response still parses as valid OpenAI-compat but
+  the engine silently returns truncated answers).
+- **`memory_pressure`** — a background thread polls `vm_stat` and
+  `vm.swapusage` every 15s. Alerts when swap usage grows >500 MB or
+  swapouts grow >1000 from baseline — both signs that the OS is paging
+  the model or KV cache to disk and the measured `tok/s` no longer
+  represents the engine itself.
+- **`duplicate_processes`** — a single `ps` snapshot before the bench
+  rejects runs where two instances of the same engine are bound.
+
+The JSON output bumps to `schema_version: agentic-v2` to carry the new
+`quality_gates` block.
+
+### Added — Reproducible cold starts via aisctl
+
+`--agentic-auto-restart` calls `aisctl restart <engine>` before the
+first phase and polls `/health` until ready. Useful for engines without
+a model-unload API (llama.cpp, oMLX, TurboQuant). Strictly opt-in;
+warns and proceeds when `aisctl` isn't available, or aborts when paired
+with `--agentic-auto-restart-required`. Supported managed engines:
+ollama, llamacpp, llamacpp-aux, lmstudio, omlx, turboquant, vmlx,
+mlx-lm.
+
+### Added — Methodology documentation
+
+`docs/methodology.md` and `docs/methodology.fr.md` gain a dedicated
+"Agentic Mode" section explaining the protocol, the verdict computation,
+each quality gate, and the opt-in `aisctl` integration. The other seven
+language editions will catch up in v1.6.1.
+
+### Added — Integration fixtures
+
+`tests/fixtures/agentic/` ships eight anonymized fixtures captured
+against Qwen3.6 MTP variants on M4 Pro 64 GB and M5 Max 128 GB
+(llama.cpp + mlx-lm × 27B + 35B-A3B). The integration test suite
+replays each fixture through the gate detectors and verifies the
+expected verdicts hold. The anonymization gate refuses fixtures
+containing absolute home paths, `.local` hostname suffixes, or LAN IP
+prefixes.
+
+### Changed
+
+- `agentic-mode` previously only printed the verdict line; now surfaces
+  the three quality gates underneath with red warning markers when any
+  trips.
+
+### Tests
+
+51 tests in the agentic suite (15 + 14 + 9 + 13). `ruff` clean.
+
 ## [1.0.1](https://github.com/druide67/asiai/compare/v1.0.0...v1.0.1) — 2026-03-13
 
 ### Added
