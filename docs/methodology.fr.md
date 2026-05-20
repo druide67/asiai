@@ -102,6 +102,106 @@ Où CV = `(std_dev / mean) * 100`.
 **Primaire** : API native du moteur (Ollama `/api/ps`, LM Studio `/v1/models`).
 **Repli** : `ri_phys_footprint` via ctypes (identique au Moniteur d'activité). Marqué « (est.) » dans l'interface.
 
+## Mode Agentique — Benchmark de réutilisation du préfixe en cache
+
+Les benchmarks single-shot classiques mesurent la vitesse de génération
+en isolation. Ils passent à côté du pattern de coût dominant des
+workloads agentiques multi-tour : un long prompt **système** partagé
+(outils, règles, persona — souvent 6K+ tokens) plus un message
+**utilisateur** court qui change à chaque tour. Un moteur qui ne
+réutilise pas le préfixe en cache re-traite ces 6K tokens à chaque
+appel, et le TTFT explose.
+
+`asiai bench --agentic-mode` exécute un protocole en 8 phases conçu
+pour exposer ce comportement de manière explicite.
+
+### Protocole
+
+| Phase | Système | Utilisateur | max_tokens | Objectif |
+|---|---|---|---|---|
+| `cold` | SYS_A | USER_X | 400 | Premier run, cache vide |
+| `warm` | SYS_A | USER_X | 400 | Même requête — full cache hit |
+| `prefix-test-1` | SYS_A | USER_Y | 400 | **Sys identique, user différent** — le vrai test |
+| `prefix-test-2` | SYS_A | USER_X | 400 | Retour à USER_X — cache hit attendu |
+| `prefix-test-3` | SYS_A | USER_Y | 400 | Répète le pattern cross-user |
+| `cold-prefix` | SYS_B | USER_X | 400 | Le sys change — cache miss attendu |
+| `long-context` | SYS_A | USER_L (~50K tok) | 200 | Saturer le decode sur contexte long |
+| `long-prefix` | SYS_A | USER_L | 200 | Même contexte long — cache hit |
+
+Les prompts sont générés de façon déterministe avec un pattern sentinelle
+qui casse les caches substring naïfs ; les tailles sont calibrées pour
+les tokenizers de la famille Qwen (~5.3 char/token sur prose anglaise).
+
+### Verdict
+
+`prefix_cache_reuse` est calculé sur les phases prefix-test :
+
+1. **Signal primaire** — si le moteur expose
+   `usage.prompt_tokens_details.cached_tokens` dans sa réponse streaming
+   (llama.cpp, mlx-lm), le ratio `cached / prompt` est moyenné sur les
+   phases prefix-test :
+   - `≥ 0.5` → `yes`
+   - `≥ 0.1` → `partial`
+   - sinon → `no`
+2. **Signal de repli** — si le moteur n'expose pas `cached_tokens`
+   (LM Studio, vllm-mlx, oMLX), le ratio TTFT est utilisé : TTFT
+   prefix-test rapporté au TTFT cold.
+   - `< cold/5` → `yes`
+   - `< cold/2` → `partial`
+   - sinon → `no`
+
+### Quality gates
+
+Trois gates tournent en parallèle du bench et apparaissent dans
+`result["quality_gates"]` :
+
+- **`early_stop`** — flagge les phases où `completion_tokens` chute
+  sous 50 % du `max_tokens` demandé sur au moins deux runs. Détecte
+  les bugs moteur où un token EOS spéculé est accepté à tort sous
+  réutilisation du préfixe — la réponse reste valide en OpenAI-compat
+  mais le moteur retourne silencieusement des réponses tronquées.
+- **`memory_pressure`** — un thread d'arrière-plan poll `vm_stat` et
+  `vm.swapusage` toutes les 15 s avec une baseline prise au démarrage.
+  Alerte quand le swap monte de plus de 500 MB ou les swapouts de plus
+  de 1000 depuis la baseline. Les deux indiquent que l'OS pagine le
+  modèle ou le KV cache sur disque, donc le `tok/s` mesuré ne
+  représente plus le moteur lui-même.
+- **`duplicate_processes`** — un snapshot `ps` unique avant le bench
+  rejette les runs où deux instances du même moteur tournent en
+  parallèle, l'une risquant de se battre avec le bench pour le GPU.
+
+Quand une gate déclenche, la CLI affiche un warning rouge sous la
+ligne de verdict et la sortie JSON garde tous les samples détaillés
+pour qu'un leaderboard ou un tracker de régression puisse refuser
+de publier le résultat.
+
+### Cold start reproductible (intégration `aisctl` opt-in)
+
+`asiai bench --agentic-mode --agentic-auto-restart` appelle
+`aisctl restart <engine>` avant la première phase et poll `/health`
+jusqu'à disponibilité. Utile pour les moteurs sans API d'unload
+(llama.cpp, oMLX, TurboQuant) où un restart du daemon est le seul
+moyen fiable de vider le KV cache. Ajouter
+`--agentic-auto-restart-required` pour abandonner au lieu de continuer
+si `aisctl` n'est pas disponible.
+
+Cette intégration nécessite
+[`asiai-inference-server`](https://github.com/druide67/asiai-inference-server)
+installé ; sinon le bench affiche un warning et continue contre l'état
+courant du moteur.
+
+### Pourquoi c'est important
+
+Un chiffre `tok/s` single-shot est peu informatif pour les workflows
+agentiques quand le moteur ne réutilise pas le préfixe système. Deux
+moteurs avec un throughput single-shot identique peuvent différer de
+**5 à 10×** sur la latence d'un tick agentique selon que le préfixe
+en cache tient ou non.
+
+`agentic-mode` expose cet écart explicitement pour que le leaderboard
+et les choix de moteur reflètent le workload dominant, pas un
+microbenchmark.
+
 ## Sécurité de l'environnement
 
 asiai effectue des vérifications pré-benchmark :

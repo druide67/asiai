@@ -102,6 +102,99 @@ Where CV = `(std_dev / mean) * 100`.
 **Primary**: engine-native API (Ollama `/api/ps`, LM Studio `/v1/models`).
 **Fallback**: `ri_phys_footprint` via ctypes (same as Activity Monitor). Marked "(est.)" in the UI.
 
+## Agentic Mode — Prefix Cache Reuse Benchmark
+
+Standard single-shot benchmarks measure how fast an engine generates tokens
+in isolation. They miss the dominant cost pattern of multi-turn agent
+workloads: a long shared **system** prompt (tools, rules, persona — often
+6K+ tokens) plus a short **user** message that changes every turn. An
+engine that does not reuse the cached prefix re-processes those 6K tokens
+on every call, and TTFT explodes.
+
+`asiai bench --agentic-mode` runs an 8-phase protocol designed to expose
+this behavior explicitly.
+
+### Protocol
+
+| Phase | System | User | max_tokens | Purpose |
+|---|---|---|---|---|
+| `cold` | SYS_A | USER_X | 400 | First run, no cache |
+| `warm` | SYS_A | USER_X | 400 | Same request — full cache hit |
+| `prefix-test-1` | SYS_A | USER_Y | 400 | **Sys identical, user different** — the real test |
+| `prefix-test-2` | SYS_A | USER_X | 400 | Back to USER_X — should be cache hit |
+| `prefix-test-3` | SYS_A | USER_Y | 400 | Repeat the cross-user pattern |
+| `cold-prefix` | SYS_B | USER_X | 400 | Sys changes — should miss cache |
+| `long-context` | SYS_A | USER_L (~50K tok) | 200 | Saturate decode at long context |
+| `long-prefix` | SYS_A | USER_L | 200 | Same long context — cache hit |
+
+Prompts are generated deterministically with a sentinel pattern that
+breaks naive substring caches; sizes are calibrated for Qwen-family
+tokenizers (~5.3 chars/token on English prose).
+
+### Verdict
+
+`prefix_cache_reuse` is computed from the prefix-test phases:
+
+1. **Primary signal** — if the engine reports `usage.prompt_tokens_details.cached_tokens`
+   in its streaming response (llama.cpp, mlx-lm), the ratio `cached / prompt`
+   is averaged across the prefix-test phases:
+   - `≥ 0.5` → `yes`
+   - `≥ 0.1` → `partial`
+   - otherwise → `no`
+2. **Fallback signal** — if the engine does not report `cached_tokens`
+   (LM Studio, vllm-mlx, oMLX), TTFT ratio is used: prefix-test TTFT
+   versus cold TTFT.
+   - `< cold/5` → `yes`
+   - `< cold/2` → `partial`
+   - otherwise → `no`
+
+### Quality gates
+
+Three gates run alongside the bench and surface in `result["quality_gates"]`:
+
+- **`early_stop`** — flags phases where `completion_tokens` drops below
+  50% of the requested `max_tokens` on two or more runs. Catches engine
+  bugs where a speculatively-drafted EOS token is accepted incorrectly
+  under prefix cache reuse — the result still parses as valid
+  OpenAI-compat but the engine silently returns truncated answers.
+- **`memory_pressure`** — a background thread polls `vm_stat` and
+  `vm.swapusage` every 15s with the baseline taken at bench start. Alerts
+  when swap usage grows >500 MB or swapouts grow >1000 from baseline.
+  Both indicate the OS is paging the model or KV cache to disk, so the
+  measured `tok/s` no longer represents the engine itself.
+- **`duplicate_processes`** — a single `ps` snapshot before the bench
+  rejects runs where two instances of the same engine are bound, since
+  one will compete with the bench for GPU and confuse process attribution.
+
+When a gate trips, the CLI prints a red warning under the verdict line
+and the JSON output keeps full per-sample detail so a leaderboard or
+regression tracker can refuse to publish the result.
+
+### Reproducible cold starts (opt-in `aisctl` integration)
+
+`asiai bench --agentic-mode --agentic-auto-restart` calls
+`aisctl restart <engine>` before the first phase and polls `/health`
+until ready. Useful for engines without a model-unload API (llama.cpp,
+oMLX, TurboQuant) where a daemon restart is the only reliable way to
+wipe the KV cache. Add `--agentic-auto-restart-required` to abort
+instead of proceeding when `aisctl` is unavailable.
+
+This integration requires
+[`asiai-inference-server`](https://github.com/druide67/asiai-inference-server)
+installed; otherwise the bench logs a warning and proceeds against
+whatever the engine state already is.
+
+### Why it matters
+
+A single-shot `tok/s` number is meaningless for agent workflows when the
+engine does not reuse the system prefix. Two engines with identical
+single-shot throughput can differ by **5-10× on agent tick latency**
+depending on whether the prefix cache holds.
+
+`agentic-mode` exposes that gap explicitly so the leaderboard and
+engine-selection decisions reflect the dominant workload, not a
+microbenchmark.
+
 ## Environment Safety
 
 asiai performs pre-benchmark checks:
