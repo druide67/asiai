@@ -38,6 +38,14 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from asiai.benchmark.prompts import (
+    SYS_A,
+    SYS_B,
+    USER_L,
+    USER_X,
+    USER_Y,
+    _grow_to,  # re-exported for backwards-compat with existing tests
+)
 from asiai.benchmark.quality_gates import (
     MemoryWatcher,
     check_duplicate_processes,
@@ -48,53 +56,12 @@ logger = logging.getLogger("asiai.benchmark.agentic")
 
 SCHEMA_VERSION = "agentic-v2"
 
-
-# Deterministic filler. Repeated unique paragraphs with sentinels per slot
-# to break naive cache lookups while keeping content semantically coherent.
-_BASE_PARAGRAPH = (
-    "The orbital dynamics of binary neutron star systems exhibit characteristic "
-    "gravitational wave signatures during the late inspiral phase. Tidal "
-    "deformability parameters constrain the equation of state of dense nuclear "
-    "matter at supra-saturation densities, where conventional perturbative QCD "
-    "approaches become inapplicable. Observational evidence from GW170817 and "
-    "subsequent multi-messenger campaigns has progressively refined the radius "
-    "estimates for canonical 1.4 solar mass configurations. "
-)
-
-
-def _grow_to(target_chars: int, seed_label: str) -> str:
-    """Return a deterministic string of approximately ``target_chars`` characters."""
-    prefix = f"[{seed_label}] "
-    sentinel_template = f" (segment-{seed_label}-{{i}}) "
-    chunks: list[str] = [prefix]
-    cur = len(prefix)
-    i = 0
-    while cur < target_chars:
-        chunks.append(_BASE_PARAGRAPH)
-        sentinel = sentinel_template.format(i=i)
-        chunks.append(sentinel)
-        cur += len(_BASE_PARAGRAPH) + len(sentinel)
-        i += 1
-    return "".join(chunks)[:target_chars]
-
-
-# Char targets calibrated against Qwen tokenizers (~5.3 chars/token on English
-# paragraphs containing punctuation and proper nouns).
-# Resulting token counts on the Qwen3.6 tokenizer:
-#   SYS_A/SYS_B   : ~6018-6084 tokens
-#   USER_X/USER_Y : ~1495-1497 tokens
-#   USER_L        : ~49804 tokens
-# Caveat: other tokenizers compress differently. Llama-3 averages ~4.0
-# chars/token on the same prose; the long-context phase (USER_L) would
-# expand to ~66K tokens and may overflow a 32K context window. When
-# benchmarking non-Qwen architectures, either pass ``--agentic-skip-long``
-# or verify the engine's max context against the actual token counts
-# reported on the cold run.
-SYS_A = _grow_to(31500, "SYSTEM-A-canonical-eos-analyst")
-SYS_B = _grow_to(31500, "SYSTEM-B-orbital-radio-pulsar-timer")
-USER_X = _grow_to(8000, "USER-X-tidal-deformability-question")
-USER_Y = _grow_to(8000, "USER-Y-mass-radius-degeneracy-question")
-USER_L = _grow_to(265000, "USER-L-long-context-multi-event-corpus")
+# Caveat on token counts: other tokenizers compress differently. Llama-3
+# averages ~4.0 chars/token on the same prose; the long-context phase
+# (USER_L) would expand to ~66K tokens and may overflow a 32K context
+# window. When benchmarking non-Qwen architectures, either pass
+# ``--agentic-skip-long`` or verify the engine's max context against the
+# actual token counts reported on the cold run.
 
 
 @dataclass(frozen=True)
@@ -141,14 +108,20 @@ def _do_single_run(
     user_msg: str,
     max_tokens: int,
     timeout: int = 900,
+    extra_body: dict[str, Any] | None = None,
 ) -> AgenticRun:
     """Send a single chat completion and parse SSE stream for usage.
 
     ``phase_name`` is recorded on the returned ``AgenticRun`` so error
     branches stay traceable without relying on the caller to backfill
     the field after the function returns.
+
+    ``extra_body`` is merged into the request payload (caller keys override
+    the defaults below). Use it for engine-specific kwargs like
+    ``chat_template_kwargs={"enable_thinking": False}`` on Qwen3 family,
+    which is mandatory to avoid the thinking-mode loop on Qwopus finetunes.
     """
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": [
             {"role": "system", "content": sys_msg},
@@ -159,6 +132,8 @@ def _do_single_run(
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    if extra_body:
+        payload.update(extra_body)
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{base_url.rstrip('/')}/v1/chat/completions",
@@ -299,6 +274,7 @@ def run_agentic_bench(
     on_run: Any = None,
     include_host: bool = False,
     skip_quality_gates: bool = False,
+    extra_body: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -350,6 +326,7 @@ def run_agentic_bench(
                 user_msg=phase.user_msg,
                 max_tokens=phase.max_tokens,
                 timeout=timeout,
+                extra_body=extra_body,
             )
             runs.append(run)
             if on_run:
@@ -390,6 +367,7 @@ def run_agentic_bench(
         "finished_at": int(time.time()),
         "prefix_cache_reuse_verdict": verdict,
         "quality_gates": quality_gates,
+        "extra_body": extra_body or {},
         "runs": [asdict(r) for r in runs],
     }
     if include_host:

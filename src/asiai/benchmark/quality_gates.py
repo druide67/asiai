@@ -98,6 +98,7 @@ _ENGINE_PROCESS_PATTERNS = {
     "vmlx": "vmlx serve",
     "turboquant": "turbo-server",
     "vllm-mlx": "vllm-mlx",
+    "rapidmlx": "rapid-mlx",
 }
 
 

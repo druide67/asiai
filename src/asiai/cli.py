@@ -45,6 +45,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.mlxlm import MlxLmEngine
     from asiai.engines.ollama import OllamaEngine
     from asiai.engines.omlx import OmlxEngine
+    from asiai.engines.rapidmlx import RapidMlxEngine
     from asiai.engines.vllm_mlx import VllmMlxEngine
     from asiai.engines.vmlx import VmlxEngine
 
@@ -54,6 +55,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "mlxlm": MlxLmEngine,
         "llamacpp": LlamaCppEngine,
         "omlx": OmlxEngine,
+        "rapidmlx": RapidMlxEngine,
         "vllm_mlx": VllmMlxEngine,
         "vmlx": VmlxEngine,
         "exo": ExoEngine,
@@ -595,11 +597,19 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     if args.agentic_only:
         only = [p.strip() for p in args.agentic_only.split(",") if p.strip()]
 
+    try:
+        extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
     print(
         f"  {dim('●')} agentic-mode bench {engine.name} @ {engine.base_url} "
         f"model={model_id} pause={args.agentic_pause}s "
         f"skip_long={'yes' if args.agentic_skip_long else 'no'}"
     )
+    if extra_body:
+        print(f"  {dim('●')} extra_body: {extra_body}")
 
     def _on_run(run):  # noqa: ANN001 — duck-typed AgenticRun
         cached = run.cached_tokens if run.cached_tokens is not None else "-"
@@ -623,6 +633,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         only=only,
         out_path=args.agentic_output,
         include_host=getattr(args, "agentic_include_host", False),
+        extra_body=extra_body,
     )
 
     print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
@@ -642,6 +653,141 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         )
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
+    return 0
+
+
+def _parse_extra_body(arg: str | None) -> dict | None:
+    """Parse the --extra-body JSON string into a dict, or return None."""
+    import json as _json
+
+    if not arg:
+        return None
+    try:
+        parsed = _json.loads(arg)
+    except _json.JSONDecodeError as e:
+        raise ValueError(f"--extra-body is not valid JSON: {e}") from e
+    if not isinstance(parsed, dict):
+        raise ValueError("--extra-body must be a JSON object")
+    return parsed
+
+
+def _run_burst_bench(args: argparse.Namespace) -> int:
+    """Run the burst-concurrent benchmark (US-METHOD-003)."""
+    import json as _json
+
+    from asiai.benchmark.burst import parse_burst_sizes, run_burst
+    from asiai.display.formatters import dim, red
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    if not engines:
+        print(red("✗ No inference engines detected."), file=sys.stderr)
+        return 1
+    if len(engines) > 1 and not args.url:
+        print(
+            red("✗ --burst-mode requires exactly one target. Specify --url to pick one."),
+            file=sys.stderr,
+        )
+        return 1
+    engine = engines[0]
+
+    try:
+        sizes = parse_burst_sizes(args.burst_sizes)
+    except ValueError as e:
+        print(red(f"✗ Invalid --burst-sizes: {e}"), file=sys.stderr)
+        return 1
+
+    try:
+        extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
+    model_id = args.model
+    if not model_id:
+        running = engine.list_running()
+        if not running:
+            print(
+                red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                file=sys.stderr,
+            )
+            return 1
+        model_id = running[0].name
+
+    print(
+        f"  {dim('●')} burst-mode bench {engine.name} @ {engine.base_url} "
+        f"model={model_id} sizes={list(sizes)} max_tokens={args.burst_max_tokens}"
+    )
+
+    result = run_burst(
+        base_url=engine.base_url,
+        engine=engine.name,
+        model=model_id,
+        burst_sizes=sizes,
+        pause_between_sizes=args.burst_pause,
+        max_tokens=args.burst_max_tokens,
+        extra_body=extra_body,
+        stream=not getattr(args, "burst_no_stream", False),
+        runs=getattr(args, "burst_runs", 1),
+    )
+
+    def _fmt(v, unit=""):
+        """Format a value that may be a scalar (runs=1) or {median,min,max} dict (runs>1)."""
+        if isinstance(v, dict) and "median" in v:
+            return f"{v['median']:.0f}{unit} [{v['min']:.0f}-{v['max']:.0f}]"
+        return f"{v:.0f}{unit}"
+
+    print()
+    for size_str, size_data in result["results"].items():
+        lat = size_data["latency_ms"]
+        tput = size_data["throughput_tokens_aggregate_per_s"]
+        wall = size_data["wall_time_s"]
+        errs = size_data["errors_count"]
+        n_passes = size_data.get("n_passes", 1)
+        passes_str = f" ({n_passes} passes)" if n_passes > 1 else ""
+
+        # Scalar formatting when runs=1, range formatting when runs>1.
+        if isinstance(lat["p50"], dict):
+            print(
+                f"  burst-{size_str:>3s}{passes_str}  wall={_fmt(wall, 's')}  "
+                f"p50={_fmt(lat['p50'], 'ms')}  "
+                f"p95={_fmt(lat['p95'], 'ms')}  "
+                f"p99={_fmt(lat['p99'], 'ms')}  "
+                f"max={_fmt(lat['max'], 'ms')}  "
+                f"agg={_fmt(tput, 't/s')}"
+            )
+        else:
+            err_str = f" errors={errs}" if errs else ""
+            print(
+                f"  burst-{size_str:>3s}  wall={wall:>5.1f}s  "
+                f"p50={lat['p50']:>6.0f}ms  p95={lat['p95']:>6.0f}ms  "
+                f"p99={lat['p99']:>6.0f}ms  max={lat['max']:>6.0f}ms  "
+                f"agg={tput:>6.1f}t/s{err_str}"
+            )
+        def _scalar_or_max(v):
+            return v["max"] if isinstance(v, dict) and "max" in v else v
+
+        swap_delta = _scalar_or_max(size_data.get("memory_pressure_swap_delta_mb", 0.0))
+        if swap_delta > 0:
+            print(red(f"             ⚠ swap delta +{swap_delta:.0f} MB during burst-{size_str}"))
+        swapouts_delta = _scalar_or_max(size_data.get("memory_pressure_swapouts_delta", 0))
+        if swapouts_delta > 1000:
+            print(red(f"             ⚠ swapouts delta +{swapouts_delta:.0f} during burst-{size_str}"))
+        dups = size_data.get("duplicate_processes") or []
+        if dups:
+            pids = ", ".join(d["pid"] for d in dups)
+            print(red(
+                f"             ⚠ duplicate {engine.name} processes (PIDs: {pids}) "
+                f"during burst-{size_str} — results may be unreliable"
+            ))
+        err_summary = size_data.get("error_summary") or []
+        for err_entry in err_summary:
+            print(red(f"             ⚠ {err_entry}"))
+
+    if args.burst_output:
+        with open(args.burst_output, "w") as f:
+            _json.dump(result, f, indent=2)
+        print(f"\nSaved {args.burst_output}")
     return 0
 
 
@@ -665,6 +811,10 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Agentic mode: 8-run prefix cache reuse protocol (US-047)
     if getattr(args, "agentic_mode", False):
         return _run_agentic_bench(args)
+
+    # Burst mode: N-parallel concurrent calls protocol (US-METHOD-003)
+    if getattr(args, "burst_mode", False):
+        return _run_burst_bench(args)
 
     # History mode
     if args.history:
@@ -1556,6 +1706,83 @@ def main(argv: list[str] | None = None) -> int:
             "Pair with --agentic-auto-restart: abort the bench instead of "
             "proceeding when aisctl is unavailable or the restart fails. "
             "Use in CI to guarantee a clean cold start or fail fast."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-mode",
+        action="store_true",
+        help=(
+            "Run the concurrent-burst protocol: fire N parallel "
+            "/v1/chat/completions calls with identical system prompt and "
+            "varied user messages. Measures latency p50/p95/p99/max, "
+            "aggregate throughput, error rate, and memory pressure under "
+            "load. Simulates agent loops dispatching 30-80 tool calls in "
+            "parallel. Mutually exclusive with --agentic-mode."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-sizes",
+        metavar="LIST",
+        default="30,60",
+        help=(
+            "Comma-separated burst sizes to test (default: 30,60). "
+            "Each size triggers a separate burst of N concurrent calls."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-pause",
+        type=float,
+        default=5.0,
+        metavar="SEC",
+        help="Cooldown between burst sizes (default: 5.0)",
+    )
+    bench_parser.add_argument(
+        "--burst-max-tokens",
+        type=int,
+        default=200,
+        metavar="N",
+        help=(
+            "Max output tokens per call (default: 200). Short responses "
+            "stress concurrency over throughput. Increase for completion-bound "
+            "measurements."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-output",
+        metavar="FILE",
+        help="Write burst-mode results to JSON file (default: stdout summary only)",
+    )
+    bench_parser.add_argument(
+        "--burst-no-stream",
+        action="store_true",
+        help=(
+            "Disable SSE streaming during burst calls. By default the bench "
+            "parses the stream to capture per-call TTFT (the metric that "
+            "distinguishes a single-slot FIFO from a multi-slot scheduler). "
+            "Use this only if the target engine's SSE implementation is "
+            "broken under high concurrency."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-runs",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Independent passes per burst size (default: 1). Use 3-5 for "
+            "production-grade measurements with variance reporting "
+            "(median/min/max across passes)."
+        ),
+    )
+    bench_parser.add_argument(
+        "--extra-body",
+        metavar="JSON",
+        help=(
+            "OpenAI-compat extra_body JSON merged into every request payload. "
+            "Useful for engine-specific kwargs, e.g. "
+            "'{\"chat_template_kwargs\":{\"enable_thinking\":false}}' to disable "
+            "Qwen3 thinking mode (recommended for tool-call workloads). "
+            "Applies to both --agentic-mode and --burst-mode."
         ),
     )
 

@@ -108,6 +108,49 @@ _FILL_BLOCK = (
 _CHARS_PER_TOKEN = 4.0
 
 
+# --- Long-form fixtures (shared between agentic-mode and burst-mode) ---
+
+# Deterministic filler. Repeated unique paragraphs with sentinels per slot
+# to break naive cache lookups while keeping content semantically coherent.
+_BASE_PARAGRAPH = (
+    "The orbital dynamics of binary neutron star systems exhibit characteristic "
+    "gravitational wave signatures during the late inspiral phase. Tidal "
+    "deformability parameters constrain the equation of state of dense nuclear "
+    "matter at supra-saturation densities, where conventional perturbative QCD "
+    "approaches become inapplicable. Observational evidence from GW170817 and "
+    "subsequent multi-messenger campaigns has progressively refined the radius "
+    "estimates for canonical 1.4 solar mass configurations. "
+)
+
+
+def _grow_to(target_chars: int, seed_label: str) -> str:
+    """Return a deterministic string of approximately ``target_chars`` characters."""
+    prefix = f"[{seed_label}] "
+    sentinel_template = f" (segment-{seed_label}-{{i}}) "
+    chunks: list[str] = [prefix]
+    cur = len(prefix)
+    i = 0
+    while cur < target_chars:
+        chunks.append(_BASE_PARAGRAPH)
+        sentinel = sentinel_template.format(i=i)
+        chunks.append(sentinel)
+        cur += len(_BASE_PARAGRAPH) + len(sentinel)
+        i += 1
+    return "".join(chunks)[:target_chars]
+
+
+# Char targets calibrated against Qwen tokenizers (~5.3 chars/token).
+# Resulting token counts on the Qwen3.6 tokenizer:
+#   SYS_A/SYS_B   : ~6018-6084 tokens
+#   USER_X/USER_Y : ~1495-1497 tokens
+#   USER_L        : ~49804 tokens
+SYS_A = _grow_to(31500, "SYSTEM-A-canonical-eos-analyst")
+SYS_B = _grow_to(31500, "SYSTEM-B-orbital-radio-pulsar-timer")
+USER_X = _grow_to(8000, "USER-X-tidal-deformability-question")
+USER_Y = _grow_to(8000, "USER-Y-mass-radius-degeneracy-question")
+USER_L = _grow_to(265000, "USER-L-long-context-multi-event-corpus")
+
+
 def parse_context_size(value: str) -> int:
     """Parse a context size string like '64k', '128k', '4096' into token count."""
     value = value.strip().lower()
