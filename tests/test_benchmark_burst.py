@@ -9,9 +9,9 @@ from unittest.mock import patch
 import pytest
 
 from asiai.benchmark.burst import (
-    BurstCallResult,
     MAX_BURST_SIZE,
     SCHEMA_VERSION,
+    BurstCallResult,
     _aggregate_size,
     _do_one_call,
     _make_user_prompt,
@@ -217,6 +217,7 @@ class TestDoOneCall:
             def read(self, size: int = -1) -> bytes:
                 # Return one byte more than the cap.
                 from asiai.benchmark.burst import _MAX_RESPONSE_BYTES
+
                 return b"x" * (_MAX_RESPONSE_BYTES + 1)
 
             def __enter__(self):

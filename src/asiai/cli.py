@@ -764,6 +764,7 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
                 f"p99={lat['p99']:>6.0f}ms  max={lat['max']:>6.0f}ms  "
                 f"agg={tput:>6.1f}t/s{err_str}"
             )
+
         def _scalar_or_max(v):
             return v["max"] if isinstance(v, dict) and "max" in v else v
 
@@ -772,14 +773,18 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
             print(red(f"             ⚠ swap delta +{swap_delta:.0f} MB during burst-{size_str}"))
         swapouts_delta = _scalar_or_max(size_data.get("memory_pressure_swapouts_delta", 0))
         if swapouts_delta > 1000:
-            print(red(f"             ⚠ swapouts delta +{swapouts_delta:.0f} during burst-{size_str}"))
+            print(
+                red(f"             ⚠ swapouts delta +{swapouts_delta:.0f} during burst-{size_str}")
+            )
         dups = size_data.get("duplicate_processes") or []
         if dups:
             pids = ", ".join(d["pid"] for d in dups)
-            print(red(
-                f"             ⚠ duplicate {engine.name} processes (PIDs: {pids}) "
-                f"during burst-{size_str} — results may be unreliable"
-            ))
+            print(
+                red(
+                    f"             ⚠ duplicate {engine.name} processes (PIDs: {pids}) "
+                    f"during burst-{size_str} — results may be unreliable"
+                )
+            )
         err_summary = size_data.get("error_summary") or []
         for err_entry in err_summary:
             print(red(f"             ⚠ {err_entry}"))
@@ -1780,7 +1785,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "OpenAI-compat extra_body JSON merged into every request payload. "
             "Useful for engine-specific kwargs, e.g. "
-            "'{\"chat_template_kwargs\":{\"enable_thinking\":false}}' to disable "
+            '\'{"chat_template_kwargs":{"enable_thinking":false}}\' to disable '
             "Qwen3 thinking mode (recommended for tool-call workloads). "
             "Applies to both --agentic-mode and --burst-mode."
         ),

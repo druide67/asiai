@@ -45,7 +45,6 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import logging
-import statistics
 import time
 import urllib.error
 import urllib.request
@@ -440,14 +439,11 @@ def _run_one_burst_pass(
             # future never-completing. Cap the wait at per-call timeout + 30s
             # margin so the bench never hangs indefinitely.
             try:
-                for fut in concurrent.futures.as_completed(
-                    futures, timeout=timeout + 30
-                ):
+                for fut in concurrent.futures.as_completed(futures, timeout=timeout + 30):
                     call_results.append(fut.result())
             except concurrent.futures.TimeoutError:
                 logger.warning(
-                    "burst size=%d: as_completed hit %.0fs timeout, "
-                    "collecting partial results",
+                    "burst size=%d: as_completed hit %.0fs timeout, collecting partial results",
                     size,
                     timeout + 30,
                 )
@@ -516,16 +512,10 @@ def _aggregate_passes(passes: list[dict[str, Any]]) -> dict[str, Any]:
             "p99": _agg(_extract(["ttft_ms", "p99"])),
         },
         "throughput_calls_per_s": _agg(_extract(["throughput_calls_per_s"])),
-        "throughput_tokens_aggregate_per_s": _agg(
-            _extract(["throughput_tokens_aggregate_per_s"])
-        ),
+        "throughput_tokens_aggregate_per_s": _agg(_extract(["throughput_tokens_aggregate_per_s"])),
         "errors_count": _agg(_extract(["errors_count"])),
-        "memory_pressure_swap_delta_mb": _agg(
-            _extract(["memory_pressure_swap_delta_mb"])
-        ),
-        "memory_pressure_swapouts_delta": _agg(
-            _extract(["memory_pressure_swapouts_delta"])
-        ),
+        "memory_pressure_swap_delta_mb": _agg(_extract(["memory_pressure_swap_delta_mb"])),
+        "memory_pressure_swapouts_delta": _agg(_extract(["memory_pressure_swapouts_delta"])),
         "passes": passes,
     }
 
