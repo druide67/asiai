@@ -15,9 +15,9 @@ from asiai.benchmark.agentic import (
     USER_Y,
     AgenticRun,
     _compute_verdict,
-    _grow_to,
     run_agentic_bench,
 )
+from asiai.benchmark.prompts import _grow_to
 
 
 def test_grow_to_targets_chars():

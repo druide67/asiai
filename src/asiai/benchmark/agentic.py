@@ -44,7 +44,6 @@ from asiai.benchmark.prompts import (
     USER_L,
     USER_X,
     USER_Y,
-    _grow_to,  # re-exported for backwards-compat with existing tests
 )
 from asiai.benchmark.quality_gates import (
     MemoryWatcher,
