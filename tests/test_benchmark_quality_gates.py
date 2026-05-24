@@ -180,6 +180,21 @@ def test_memory_watcher_baseline_captured_on_init():
     assert w.result.alerted is False
 
 
+def _wait_until(predicate, timeout: float = 5.0, poll: float = 0.005) -> bool:
+    """Wait until ``predicate()`` is truthy or ``timeout`` seconds elapse.
+
+    Returns the final predicate value (True if it became true within
+    timeout, False otherwise). Active polling avoids the GHA-runner
+    scheduling flake that fixed-duration sleeps suffer from.
+    """
+    deadline = time.perf_counter() + timeout
+    while time.perf_counter() < deadline:
+        if predicate():
+            return True
+        time.sleep(poll)
+    return predicate()
+
+
 def test_memory_watcher_alerts_on_swap_growth():
     samples = [
         (100.0, 5000),  # baseline
@@ -190,8 +205,8 @@ def test_memory_watcher_alerts_on_swap_growth():
         patch("asiai.benchmark.quality_gates._vm_stat_sample", side_effect=fake_vm_stat),
         patch("asiai.benchmark.quality_gates._swap_used_mb", side_effect=fake_swap_mb),
     ):
-        with MemoryWatcher(interval=0.05) as w:
-            time.sleep(0.15)  # let the loop sample at least once
+        with MemoryWatcher(interval=0.01) as w:
+            _wait_until(lambda: w.result.alerted, timeout=5.0)
     assert w.result.alerted is True
     assert "swap_delta" in (w.result.alert_reason or "")
     assert w.result.max_swap_delta_mb >= 600.0
@@ -207,22 +222,23 @@ def test_memory_watcher_alerts_on_swapouts_growth():
         patch("asiai.benchmark.quality_gates._vm_stat_sample", side_effect=fake_vm_stat),
         patch("asiai.benchmark.quality_gates._swap_used_mb", side_effect=fake_swap_mb),
     ):
-        with MemoryWatcher(interval=0.05) as w:
-            time.sleep(0.15)
+        with MemoryWatcher(interval=0.01) as w:
+            _wait_until(lambda: w.result.alerted, timeout=5.0)
     assert w.result.alerted is True
     assert w.result.max_swapouts_delta >= 2000
 
 
 def test_memory_watcher_no_alert_on_stable():
     # 4 samples all at baseline values, swap_delta and swapouts_delta stay 0.
+    # Wait for at least 2 samples beyond the baseline to confirm stability.
     samples = [(100.0, 5000)] * 4
     fake_vm_stat, fake_swap_mb = _patch_mem_samples(samples)
     with (
         patch("asiai.benchmark.quality_gates._vm_stat_sample", side_effect=fake_vm_stat),
         patch("asiai.benchmark.quality_gates._swap_used_mb", side_effect=fake_swap_mb),
     ):
-        with MemoryWatcher(interval=0.03) as w:
-            time.sleep(0.15)
+        with MemoryWatcher(interval=0.01) as w:
+            _wait_until(lambda: len(w.result.samples) >= 3, timeout=5.0)
     assert w.result.alerted is False
     assert w.result.max_swap_delta_mb == 0.0
     assert w.result.max_swapouts_delta == 0
