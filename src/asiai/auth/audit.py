@@ -24,6 +24,12 @@ logger = logging.getLogger("asiai.auth.audit")
 AUDIT_DIR = os.path.expanduser("~/.local/share/asiai")
 AUDIT_PATH = os.path.join(AUDIT_DIR, "fleet-audit.jsonl")
 ROTATE_BYTES = 10 * 1024 * 1024  # 10 MB
+# Number of rotated backups to keep (``.1`` is the most recent, ``.N`` the
+# oldest). Two backups makes the audit log ~30 MB worst case while
+# materially raising the cost of "spam to evict evidence" attacks: an
+# attacker needs to flood ~30 MB worth of audit lines, not 10 MB, before
+# their original intrusion line falls off the retained set.
+ROTATE_KEEP = 2
 
 _lock = threading.Lock()
 
@@ -33,10 +39,17 @@ def _ensure_dir() -> None:
 
 
 def _rotate_if_needed() -> None:
-    """Rename to ``.1`` once the file exceeds ROTATE_BYTES.
+    """Rotate the audit log once it exceeds ROTATE_BYTES.
 
-    Single backup only; older lines are discarded on the next rotation.
-    For long-term audit, ship the file off-host (rsyslog, fluent-bit, ...).
+    The most recent backup becomes ``.1``, the previous ``.1`` becomes
+    ``.2``, ..., and the ``.ROTATE_KEEP`` backup is discarded. This is a
+    Unix-style rolling rotation. The cost of an attacker who wants to
+    erase their tracks by spamming the log to evict it scales linearly
+    with ``ROTATE_KEEP`` — see :data:`ROTATE_KEEP` for the rationale.
+
+    For long-term audit, ship the file off-host (rsyslog, fluent-bit,
+    vector) — local rotation only buys you a window large enough for an
+    operator to notice + react.
     """
     try:
         size = os.path.getsize(AUDIT_PATH)
@@ -44,11 +57,25 @@ def _rotate_if_needed() -> None:
         return
     if size < ROTATE_BYTES:
         return
-    backup = AUDIT_PATH + ".1"
     try:
-        if os.path.exists(backup):
-            os.unlink(backup)
-        os.rename(AUDIT_PATH, backup)
+        # Shift existing backups down: .2 -> .3, .1 -> .2.
+        for i in range(ROTATE_KEEP, 0, -1):
+            src = AUDIT_PATH if i == 1 else f"{AUDIT_PATH}.{i - 1}"
+            dst = f"{AUDIT_PATH}.{i}"
+            if not os.path.exists(src):
+                continue
+            if os.path.exists(dst):
+                # Either we're at the cap and dropping the oldest, or we
+                # have a leftover from a previous run.
+                if i == ROTATE_KEEP:
+                    os.unlink(dst)
+                else:
+                    # An intermediate .N already exists — shouldn't
+                    # happen after a successful rotation but defend
+                    # against partial states by unlinking it before
+                    # renaming.
+                    os.unlink(dst)
+            os.rename(src, dst)
     except OSError as e:
         logger.warning("Audit log rotation failed: %s", e)
 

@@ -28,8 +28,6 @@ it ``null`` until then.
 
 from __future__ import annotations
 
-import contextlib
-import fcntl
 import json
 import logging
 import os
@@ -38,6 +36,8 @@ import tempfile
 import time
 from typing import Any
 from urllib.parse import urlparse
+
+from asiai._filelock import file_lock as _shared_file_lock
 
 logger = logging.getLogger("asiai.fleet.config")
 
@@ -75,45 +75,14 @@ def _empty() -> dict[str, Any]:
     return {"version": SCHEMA_VERSION, "nodes": []}
 
 
-@contextlib.contextmanager
 def _file_lock():
     """Cross-process exclusive lock around the fleet config file.
 
-    Prevents the read-modify-write race when two ``asiai fleet add`` (or
-    ``status``, which writes ``last_seen``) run concurrently. The lock
-    file lives next to fleet.json; ``fcntl.flock`` releases automatically
-    when the file descriptor closes.
-
-    On filesystems that do not support flock (rare on macOS/Linux local
-    disks; common on some NFS configurations), we fall back to a
-    best-effort no-lock — the worst case is the pre-existing race, not
-    a crash.
+    Thin wrapper around :func:`asiai._filelock.file_lock`; both
+    ``CONFIG_DIR`` and ``LOCK_PATH`` are resolved at call time so tests
+    that monkey-patch them keep working.
     """
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-    except OSError:
-        # If we cannot even create the dir, the caller's save will fail
-        # in a useful way — just yield without a lock here.
-        yield
-        return
-    try:
-        fd = os.open(LOCK_PATH, os.O_RDWR | os.O_CREAT, 0o600)
-    except OSError:
-        yield
-        return
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-        except OSError:
-            # Best-effort: continue unlocked if the FS rejects flock.
-            pass
-        yield
-    finally:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        except OSError:
-            pass
-        os.close(fd)
+    return _shared_file_lock(LOCK_PATH, parent_dir=CONFIG_DIR)
 
 
 def load_fleet() -> dict[str, Any]:

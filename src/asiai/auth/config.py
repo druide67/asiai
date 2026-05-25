@@ -16,7 +16,6 @@ managed by :mod:`asiai.auth.loopback`.
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import hashlib
 import hmac
 import json
@@ -27,6 +26,8 @@ import secrets
 import tempfile
 import time
 from typing import Any
+
+from asiai._filelock import file_lock as _shared_file_lock
 
 logger = logging.getLogger("asiai.auth.config")
 
@@ -51,31 +52,13 @@ def _empty() -> dict[str, Any]:
     return {"version": SCHEMA_VERSION, "tokens": []}
 
 
-@contextlib.contextmanager
 def _file_lock():
-    """Cross-process exclusive lock on the auth config."""
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-    except OSError:
-        yield
-        return
-    try:
-        fd = os.open(LOCK_PATH, os.O_RDWR | os.O_CREAT, 0o600)
-    except OSError:
-        yield
-        return
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-        except OSError:
-            pass
-        yield
-    finally:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        except OSError:
-            pass
-        os.close(fd)
+    """Cross-process exclusive lock on the auth config.
+
+    Thin wrapper around :func:`asiai._filelock.file_lock` so other modules
+    that monkey-patch ``CONFIG_DIR`` / ``LOCK_PATH`` (tests) keep working.
+    """
+    return _shared_file_lock(LOCK_PATH, parent_dir=CONFIG_DIR)
 
 
 def load_auth() -> dict[str, Any]:
@@ -288,38 +271,34 @@ def list_tokens() -> list[dict[str, Any]]:
 def verify_token(secret: str) -> str | None:
     """Return the token id if ``secret`` matches a live token, else None.
 
-    Constant-time over the secret comparison; the per-token loop is
-    short-circuit but only after the hash check. ``last_used_at`` is
-    updated best-effort outside the verification path.
+    The whole read/verify/touch sequence runs under ``_file_lock`` so a
+    concurrent ``rotate_token`` / ``revoke_token`` cannot invalidate the
+    token between the hash check and the ``last_used_at`` update — the
+    older two-phase implementation left a small TOCTOU window where the
+    touch would race the revocation. The lock is short-held (one hash
+    comparison + one save) so it does not bottleneck the request path.
     """
     if not isinstance(secret, str) or not secret:
         return None
     if not secret.startswith(TOKEN_PREFIX):
         return None
-    config = load_auth()
-    matched_id: str | None = None
-    for t in config.get("tokens", []):
-        if not isinstance(t, dict):
-            continue
-        if t.get("revoked_at") is not None:
-            continue
-        stored = t.get("secret_hash")
-        if not isinstance(stored, str):
-            continue
-        if _verify_hash(secret, stored):
-            matched_id = t.get("id") if isinstance(t.get("id"), str) else None
-            break
-    if matched_id:
-        _touch_last_used(matched_id)
-    return matched_id
-
-
-def _touch_last_used(token_id: str) -> None:
-    """Best-effort update of last_used_at for a token."""
     with _file_lock():
         config = load_auth()
-        for t in config["tokens"]:
-            if isinstance(t, dict) and t.get("id") == token_id:
-                t["last_used_at"] = int(time.time())
-                save_auth(config)
-                return
+        matched: dict[str, Any] | None = None
+        for t in config.get("tokens", []):
+            if not isinstance(t, dict):
+                continue
+            if t.get("revoked_at") is not None:
+                continue
+            stored = t.get("secret_hash")
+            if not isinstance(stored, str):
+                continue
+            if _verify_hash(secret, stored):
+                matched = t
+                break
+        if matched is None:
+            return None
+        matched["last_used_at"] = int(time.time())
+        save_auth(config)
+        tid = matched.get("id")
+        return tid if isinstance(tid, str) else None

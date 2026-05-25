@@ -121,9 +121,14 @@ async def api_metrics(request: Request) -> Response:
     except Exception:
         pass
 
+    from asiai.web.fleet_metrics import format_fleet_metrics
     from asiai.web.prometheus import format_prometheus
 
     body = format_prometheus(snapshot, benchmarks)
+    # Phase 2 fleet counters live in a separate module so the existing
+    # snapshot-based formatter stays unaware of write-command state.
+    fleet_section = format_fleet_metrics()
+    body = body + "\n" + fleet_section if fleet_section else body
     return Response(
         content=body,
         media_type="text/plain; version=0.0.4; charset=utf-8",

@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
+import os
 import re
 import time
 import urllib.error
@@ -54,6 +55,7 @@ from asiai.fleet.poll import (
     ERROR_UNSUPPORTED_SCHEME,
     poll_all,
 )
+from asiai.web import fleet_metrics
 
 logger = logging.getLogger("asiai.web.routes.fleet")
 
@@ -101,11 +103,13 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 # Phase 2 — write command surface
 # ---------------------------------------------------------------------------
 
-# Loopback endpoint where ``aisctl serve`` listens. The default port is
-# documented in ``asiai-inference-server`` and surfaced via the
-# ``ASIAI_AISCTL_SERVE_URL`` env var so a node operator can rebind the
-# loopback service to a non-default port (e.g. for testing).
-AISCTL_SERVE_URL = "http://127.0.0.1:8898"
+# Loopback endpoint where ``aisctl serve`` listens. The default targets
+# the port documented in ``asiai-inference-server``. A node operator can
+# rebind the loopback service to a non-default port (testing, port
+# conflict, multi-instance) by exporting ``ASIAI_AISCTL_SERVE_URL``
+# before launching ``asiai web`` — typically via the LaunchDaemon's
+# ``EnvironmentVariables`` dict.
+AISCTL_SERVE_URL = os.environ.get("ASIAI_AISCTL_SERVE_URL", "http://127.0.0.1:8898")
 
 # Commands the LAN-facing write endpoint will forward to ``aisctl serve``.
 # Each value is the upstream timeout in seconds for that command.
@@ -113,6 +117,7 @@ AISCTL_SERVE_URL = "http://127.0.0.1:8898"
 # they shell out to Homebrew + LaunchDaemon orchestration.
 COMMAND_TIMEOUTS: dict[str, float] = {
     "purge": 15.0,
+    "load": 180.0,
     "unload": 30.0,
     "stop": 30.0,
     "start": 60.0,
@@ -128,6 +133,13 @@ COMMAND_TIMEOUTS: dict[str, float] = {
 # ``mlx-lm``, ``rapidmlx``, etc.). Rejects anything that could inject
 # into a subprocess argv on the server side.
 _ENGINE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+# Nickname regex — same shape as ``fleet/config.py:_NICKNAME_RE`` so the
+# audit log never sees a string the fleet config wouldn't accept. The
+# nickname comes from the URL path and is otherwise uncontrolled by the
+# server: validating here keeps newlines / CR / control chars out of the
+# JSONL audit lines (defense against log injection / CRLF smuggling).
+_NICKNAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,63}$")
 
 # Model name regex — accepts HF naming (``meta-llama/Llama-3.2-3B``)
 # and bare tags (``llama3.2:3b``). Rejects shell metacharacters.
@@ -185,12 +197,21 @@ def _validate_command_payload(
     if isinstance(engine, str) and _ENGINE_RE.match(engine):
         args["engine"] = engine
 
-    if command == "unload":
+    if command in ("unload", "load"):
         model = raw_args.get("model")
+        if command == "load" and not model:
+            return (None, {}, "args.model is required for the 'load' command")
         if model is not None:
             if not isinstance(model, str) or not _MODEL_RE.match(model):
                 return (None, {}, "args.model must match [a-zA-Z0-9][a-zA-Z0-9_./:-]{0,127}")
             args["model"] = model
+
+    if command == "load":
+        keep_alive = raw_args.get("keep_alive")
+        if keep_alive is not None:
+            if not isinstance(keep_alive, str) or not re.match(r"^[0-9]+[smh]?$", keep_alive):
+                return (None, {}, "args.keep_alive must match [0-9]+[smh]? (e.g. '5m', '30s')")
+            args["keep_alive"] = keep_alive
 
     return (command, args, None)
 
@@ -253,8 +274,13 @@ def _proxy_to_aisctl(
             body = {"error": "upstream_http_error"}
         return (e.code, body)
     except urllib.error.URLError as e:
+        # Log the full reason locally (visible in asiai web logs) but
+        # never surface the raw exception text to the LAN client — it
+        # leaks the loopback host:port and the OS-level errno string,
+        # which a tcpdumper on the LAN could correlate with the node's
+        # internal topology. Public detail is coarse-grained.
         logger.warning("aisctl serve unreachable at %s: %s", AISCTL_SERVE_URL, e)
-        return (502, {"error": "aisctl_serve_unreachable", "detail": str(e.reason)})
+        return (502, {"error": "aisctl_serve_unreachable"})
     except TimeoutError:
         return (504, {"error": "aisctl_serve_timeout"})
     except OSError as e:
@@ -322,6 +348,28 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
     started = time.monotonic()
     ip = _client_ip(request)
 
+    if not _NICKNAME_RE.match(nickname):
+        # Reject before we even spend bytes reading the body — the
+        # nickname goes into the audit log, and a CRLF/ANSI-injected
+        # value could compromise a downstream log viewer.
+        audit.log_event(
+            source_ip=ip,
+            token_id=None,
+            nickname="<invalid>",
+            command=None,
+            status="denied",
+            http_status=400,
+            error="invalid_nickname",
+        )
+        fleet_metrics.record(command=None, status="denied", error="invalid_nickname")
+        return JSONResponse(
+            {
+                "error": "bad_nickname",
+                "detail": "nickname must match [a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}",
+            },
+            status_code=400,
+        )
+
     raw = await request.body()
     if len(raw) > _MAX_BODY_BYTES:
         audit.log_event(
@@ -333,6 +381,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=413,
             error="body_too_large",
         )
+        fleet_metrics.record(command=None, status="denied", error="body_too_large")
         return JSONResponse({"error": "body_too_large"}, status_code=413)
 
     secret = _extract_bearer(request)
@@ -346,6 +395,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=401,
             error="missing_bearer",
         )
+        fleet_metrics.record(command=None, status="denied", error="missing_bearer")
         return JSONResponse(
             {"error": "unauthorized", "detail": "missing Bearer token"},
             status_code=401,
@@ -366,6 +416,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=501,
             error="no_tokens_configured",
         )
+        fleet_metrics.record(command=None, status="denied", error="no_tokens_configured")
         return JSONResponse(
             {
                 "error": "not_initialized",
@@ -385,6 +436,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=401,
             error="invalid_token",
         )
+        fleet_metrics.record(command=None, status="denied", error="invalid_token")
         return JSONResponse(
             {"error": "unauthorized", "detail": "invalid Bearer token"},
             status_code=401,
@@ -401,6 +453,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=429,
             error="rate_limited",
         )
+        fleet_metrics.record(command=None, status="denied", error="rate_limited", token_id=token_id)
         resp = JSONResponse(
             {"error": "rate_limited", "retry_after": round(retry_after, 1)},
             status_code=429,
@@ -420,6 +473,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=400,
             error="invalid_json",
         )
+        fleet_metrics.record(command=None, status="error", error="invalid_json", token_id=token_id)
         return JSONResponse({"error": "invalid_json"}, status_code=400)
 
     command, args, err = _validate_command_payload(payload)
@@ -433,6 +487,12 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             status="error",
             http_status=400,
             error=err or "bad_payload",
+        )
+        fleet_metrics.record(
+            command=payload.get("command") if isinstance(payload, dict) else None,
+            status="error",
+            error="bad_payload",
+            token_id=token_id,
         )
         return JSONResponse({"error": "bad_payload", "detail": err}, status_code=400)
 
@@ -448,6 +508,12 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             http_status=503,
             error="aisctl_serve_not_running",
         )
+        fleet_metrics.record(
+            command=command,
+            status="error",
+            error="aisctl_serve_not_running",
+            token_id=token_id,
+        )
         return JSONResponse(
             {
                 "error": "aisctl_serve_unavailable",
@@ -460,7 +526,11 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
         )
 
     timeout = COMMAND_TIMEOUTS.get(command, 60.0)
-    status, body = await asyncio.to_thread(_proxy_to_aisctl, command, args, internal, timeout)
+    fleet_metrics.aisctl_inflight_inc()
+    try:
+        status, body = await asyncio.to_thread(_proxy_to_aisctl, command, args, internal, timeout)
+    finally:
+        fleet_metrics.aisctl_inflight_dec()
 
     duration_ms = int((time.monotonic() - started) * 1000)
     audit.log_event(
@@ -474,6 +544,13 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
         duration_ms=duration_ms,
         exit_code=body.get("exit_code") if isinstance(body, dict) else None,
         error=body.get("error") if isinstance(body, dict) and status >= 400 else None,
+    )
+    fleet_metrics.record(
+        command=command,
+        status="ok" if status < 400 else "error",
+        duration_ms=duration_ms,
+        error=(body.get("error") if isinstance(body, dict) and status >= 400 else None),
+        token_id=token_id,
     )
 
     response_body = {
