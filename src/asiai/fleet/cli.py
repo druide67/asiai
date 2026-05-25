@@ -48,8 +48,9 @@ def _cmd_add(args: argparse.Namespace) -> int:
     nickname = args.nickname
     url = args.url
     role = args.role or ""
+    auth_token = getattr(args, "auth_token", None) or None
     try:
-        entry = fleet_config.upsert_node(nickname, url, role=role)
+        entry = fleet_config.upsert_node(nickname, url, role=role, auth_token=auth_token)
     except ValueError as e:
         print(red(f"✗ {e}"), file=sys.stderr)
         return 1
@@ -57,6 +58,8 @@ def _cmd_add(args: argparse.Namespace) -> int:
     print(f"  url:  {entry['asiai_url']}")
     if entry["role"]:
         print(f"  role: {entry['role']}")
+    if auth_token:
+        print(dim("  auth: configured (writes enabled via 'aisctl fleet push')"))
     print(
         dim(
             "  remember to start `asiai web --host 0.0.0.0` on the remote "
@@ -217,6 +220,12 @@ def add_fleet_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--role",
         default="",
         help="Free-text role label (e.g. 'workstation', 'spare')",
+    )
+    p_add.add_argument(
+        "--auth-token",
+        default=None,
+        help="Bearer token for Phase 2 write commands (the remote node "
+        "must have a matching token registered via 'asiai auth init').",
     )
 
     p_remove = fleet_sub.add_parser("remove", help="Remove a node from the fleet")

@@ -120,17 +120,20 @@ class TestFleetSnapshotEndpoint:
         assert call_count["n"] == 1
 
 
-class TestFleetCommandStub:
-    def test_post_command_returns_501(self, client):
-        # The CSRF middleware requires a matching Origin header on POST.
+class TestFleetCommandSurface:
+    """Smoke tests for the Phase 2 write endpoint mounted by Phase 1.
+
+    Detailed behavior (auth, whitelist, rate limit, audit, proxy) lives
+    in ``test_fleet_command_route.py``; here we just verify the route
+    is registered and that the CSRF middleware still gates POSTs.
+    """
+
+    def test_post_command_without_bearer_returns_401(self, client):
         resp = client.post(
             "/api/v1/fleet/alpha/command",
             headers={"Origin": "http://testserver", "Host": "testserver"},
         )
-        assert resp.status_code == 501
-        body = resp.json()
-        assert body["error"] == "not_implemented"
-        assert body["nickname"] == "alpha"
+        assert resp.status_code == 401
 
     def test_post_command_without_origin_rejected(self, client):
         # Sanity: the CSRF middleware blocks POST without Origin.

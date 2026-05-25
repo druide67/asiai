@@ -1870,6 +1870,11 @@ def main(argv: list[str] | None = None) -> int:
 
     add_fleet_subparser(subparsers)
 
+    # auth (API tokens for fleet write commands, Phase 2)
+    from asiai.auth.cli import add_auth_subparser
+
+    add_auth_subparser(subparsers)
+
     # Discover sub-CLI plugins (skip for --version / --help to preserve cold-start).
     _fast_path = argv is not None and bool(set(argv[:2]) & {"--version", "--help", "-h", "version"})
     plugin_commands: dict = {}
@@ -1915,6 +1920,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0
 
+    from asiai.auth.cli import cmd_auth
     from asiai.fleet.cli import cmd_fleet
 
     commands = {
@@ -1934,6 +1940,7 @@ def main(argv: list[str] | None = None) -> int:
         "setup": cmd_setup,
         "config": cmd_config,
         "fleet": cmd_fleet,
+        "auth": cmd_auth,
     }
 
     handler = commands.get(args.command) or plugin_commands.get(args.command)
