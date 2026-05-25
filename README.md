@@ -241,6 +241,31 @@ asiai web --no-open          # Don't auto-open browser
 
 Features: system overview, engine status, live benchmark with SSE progress, history charts, doctor checks, dark/light theme.
 
+### `asiai fleet`
+
+Multi-host observability across several Macs (Phase 1: read-only). Each
+remote Mac runs `asiai web --host 0.0.0.0`; the orchestrator host then
+declares them in `~/.config/asiai/fleet.json` and polls each one's
+`/api/v1/snapshot` in parallel.
+
+```bash
+asiai fleet add studio --url http://192.0.2.10:8899 --role workstation
+asiai fleet add laptop --url http://192.0.2.11:8899
+asiai fleet list
+asiai fleet status               # parallel poll, aggregated table
+asiai fleet status --json | jq   # machine-readable form
+asiai fleet ping studio          # single-node check
+```
+
+A new `/fleet` page in `asiai web` shows a card per node with HTMX
+auto-refresh every 10 seconds. Phase 2 will add cross-host engine
+management (start/stop/install/purge); Phase 3 will add mDNS Bonjour
+auto-discovery. Full guide: [docs/fleet-mode.md](docs/fleet-mode.md).
+
+> ⚠️ Phase 1 has no authentication. Use it on a trusted LAN, or place
+> nodes behind a VPN (Tailscale/WireGuard). The `asiai_url` accepts any
+> hostname or IP.
+
 ### `asiai leaderboard`
 
 Browse community benchmarks. Filter by chip or model.
@@ -426,7 +451,8 @@ Optional extras:
 | **v1.0.1** | MCP server (11 tools), benchmark card, `--quick` mode, setup wizard, agent integration | **Done** |
 | **v1.2** | Web dashboard redesign, shareable cards, Share on X/Reddit, community API | **Done** |
 | **v1.3** | Dark theme, self-hosted fonts, universal VRAM (phys_footprint), power in Monitor/History | **Done** |
-| v1.4 | Fleet mode (multi-Mac), notifications macOS, MCP prompts, bench methodology improvements | Planned |
+| v1.7 | Fleet mode Phase 1 (multi-Mac read-only observability), `asiai fleet` CLI, `/fleet` web page | **Shipped** |
+| v1.8+ | Fleet Phase 2 (cross-host engine writes, auth), Phase 3 (mDNS auto-discovery, TLS), notifications macOS, MCP prompts | Planned |
 
 ## License
 
