@@ -1,14 +1,18 @@
-# Fleet mode — multi-host observability
+# Fleet mode — multi-host observability + cross-host writes
 
 `asiai` started as a single-host observability and benchmarking tool.
 **Fleet mode** lets you declare several hosts that all run `asiai web`
 and view their state side-by-side from one machine — without re-running
 `asiai monitor` on every Mac you own.
 
-Phase 1 (current) is **read-only**: list nodes, poll each one's
-snapshot in parallel, render a CLI table and an HTML grid. Phase 2 will
-add cross-host engine management commands; Phase 3 will add mDNS Bonjour
-auto-discovery and (optional) authentication for non-LAN deployments.
+- **Phase 1 — read-only** (shipped in `asiai`): list nodes, poll each
+  one's snapshot in parallel, render a CLI table and an HTML grid.
+- **Phase 2 — writes** (shipped in `asiai-inference-server` + Bearer
+  auth in `asiai`): execute `purge`, `stop/start/restart`, `unload`,
+  `install/uninstall`, `upgrade` on remote nodes via authenticated
+  HTTP. See the **Phase 2 — write commands** section below.
+- **Phase 3 — auto-discovery** (planned): mDNS Bonjour
+  `_asiai-fleet._tcp.local`, TUI fleet panel, TLS/mTLS for off-LAN.
 
 ## What you need
 
@@ -74,18 +78,107 @@ asiai web                          # main host on http://127.0.0.1:8899
 open http://127.0.0.1:8899/fleet
 ```
 
-## What is NOT in Phase 1
+## Phase 2 — write commands
 
-- **Cross-host writes** (start/stop/install/purge engines on remote
-  Macs) — Phase 2 will land this through `aisctl` with required
-  Bearer-token authentication.
+Phase 2 adds **authenticated cross-host writes**. From the orchestrator,
+`aisctl fleet push <nickname> <command>` POSTs a command to the
+remote node's `asiai web`, which validates the Bearer token, applies a
+per-token rate limit, writes an audit log line, and proxies to a
+loopback `aisctl serve` companion process that runs the actual command.
+
+Why two processes on the node? `asiai web` is the only LAN-facing
+surface, so the trust boundary stays in one place. `aisctl serve`
+listens on `127.0.0.1:8898` only and shares a per-startup loopback
+secret with `asiai web` (file `~/.local/state/asiai/aisctl-serve-token`,
+0o600). A LAN attacker who somehow bypasses `asiai web`'s auth still
+needs filesystem access to that loopback token to reach `aisctl serve`.
+
+### Whitelisted commands
+
+| Command | Args required | Upstream timeout | Notes |
+|---------|---------------|------------------|-------|
+| `purge` | — | 30 s | `sudo /usr/sbin/purge` (low risk) |
+| `unload <engine> [<model>]` | `engine` | 60 s | Native API unload, fallback restart |
+| `stop <engine>` | `engine` | 60 s | LaunchDaemon `bootout` |
+| `start <engine>` | `engine` | 120 s | LaunchDaemon `bootstrap` + health |
+| `restart <engine>` | `engine` | 120 s | stop + start |
+| `install <engine>` | `engine` | 300 s | Provision plist + sudoers |
+| `uninstall <engine>` | `engine` | 120 s | Remove plist + pf anchor |
+| `upgrade <engine>` | `engine` | 600 s | `brew upgrade` (formulas whitelisted) |
+
+Anything outside this whitelist is rejected at the LAN edge with HTTP
+400 before any subprocess is spawned. `upgrade` additionally enforces
+a per-engine Homebrew formula whitelist (`ollama`, `llama.cpp`,
+`lm-studio`, `rapid-mlx`, `turboquant`) to defend against argv
+injection even if the engine regex is bypassed.
+
+### Bootstrapping the auth surface on a node
+
+```sh
+# 1. On the node — initialize the auth file and copy the secret ONCE.
+asiai auth init
+# → prints token id + secret. Save the secret — asiai will never show it again.
+
+# 2. On the node — start the loopback companion (one-shot or LaunchDaemon).
+aisctl serve &
+# → listens on 127.0.0.1:8898, writes ~/.local/state/asiai/aisctl-serve-token
+
+# 3. On the orchestrator — register the node WITH the secret.
+asiai fleet add studio \
+  --url http://192.0.2.10:8899 \
+  --role workstation \
+  --auth-token <the-secret-from-step-1>
+```
+
+### Issuing a write
+
+```sh
+# Free unified memory on the studio.
+aisctl fleet push studio purge
+
+# Restart Ollama everywhere (loop in shell — no native broadcast yet).
+for n in studio laptop minihost; do
+  aisctl fleet push "$n" restart --engine ollama
+done
+
+# Unload a specific Ollama model without restarting the daemon.
+aisctl fleet push studio unload --engine ollama --model llama3.2
+```
+
+`aisctl fleet push --json` emits a single JSON object per call so
+agents and CI pipelines can parse the result.
+
+### Token lifecycle on the node
+
+```sh
+asiai auth list                       # list tokens (no secrets shown)
+asiai auth create --label laptop-2026  # add a new token
+asiai auth rotate tok_abc123def456     # revoke + replace (returns new secret)
+asiai auth revoke tok_abc123def456     # revoke without replacing
+```
+
+### Audit log
+
+Every write attempt (denied or executed) appends one JSON object to
+`~/.local/share/asiai/fleet-audit.jsonl` (0o600, rotated at 10 MB to
+`.1`). Fields: `ts`, `source_ip`, `token_id`, `nickname`, `command`,
+`args` (with secret-bearing keys redacted), `status`, `http_status`,
+`duration_ms`, `exit_code`, `error`. Useful both for forensics and
+for confirming that a command actually ran on the right host.
+
+### What is NOT in Phase 2
+
 - **Auto-discovery** (Bonjour/mDNS) — Phase 3.
 - **TLS** between the orchestrator and the nodes — Phase 3.
-- **TUI fleet panel** — likely Phase 3.
-- **Authentication required** — Phase 2. The `auth_token` field in the
-  schema is reserved but currently unused.
+- **TUI fleet panel** — Phase 3.
+- **Broadcast commands** ("purge everywhere in one call") — would land
+  before Phase 3 if the use case appears in practice; the shell loop
+  above is fine for small fleets.
+- **MCP write tools** — Phase 3.
 
-## Security notes for Phase 1
+## Security notes
+
+### Phase 1 (read-only) defences
 
 1. The Phase 1 dashboard is **read-only**: a compromised LAN peer can
    read your engine list and monitoring metrics but cannot trigger an
@@ -98,6 +191,34 @@ open http://127.0.0.1:8899/fleet
 4. If you need to expose nodes off-LAN, put them behind a VPN
    (Tailscale, WireGuard) rather than punching firewall holes. The
    `asiai_url` accepts the VPN hostname directly.
+
+### Phase 2 (writes) threat model
+
+| Threat | Defence |
+|--------|---------|
+| Unauthenticated LAN peer issues writes | `asiai web` requires `Authorization: Bearer <secret>`; missing → 401. |
+| Brute-force secret enumeration | `secrets.token_urlsafe(32)` = 256 bits of entropy; constant-time `hmac.compare_digest` comparison against salted SHA-256 hashes; per-token rate limit (30/min). |
+| Stolen secret used from elsewhere | `asiai auth rotate <id>` revokes + replaces in one step; audit log captures source IP per call. |
+| Command injection through engine/model args | LAN edge regex (`^[a-z][a-z0-9_-]{0,31}$` for engines, HF naming for models); `subprocess.run(list)` without `shell=True`; `upgrade` uses a per-engine Homebrew formula whitelist. |
+| Other local user POSTs directly to `aisctl serve` to bypass `asiai web`'s checks | `aisctl serve` binds 127.0.0.1 only AND requires a per-startup loopback Bearer secret stored at `~/.local/state/asiai/aisctl-serve-token` (0o600). |
+| Token leaked in CLI output / shell history | Plaintext secret is shown EXACTLY ONCE at create/rotate time; the on-disk hash cannot be reversed. |
+| Replay after a destructive command | Audit log JSONL keeps `ts`, `source_ip`, `token_id`, command, exit code per attempt (rotated at 10 MB). |
+| Body-size DoS on the auth endpoint | LAN edge caps the request body at 64 KB; oversize → 413. |
+| Symlink swap on auth.json or fleet.json | `save_*` refuses to write through a symlink. |
+| Concurrent token CRUD corrupting auth.json | `fcntl.flock` cross-process lock around every read-modify-write. |
+
+### Limits that are explicit non-goals for Phase 2
+
+- **No TLS** between orchestrator and nodes. Phase 2 is for trusted
+  LANs (or LANs glued together by a VPN). If you need confidentiality
+  on the wire, route through Tailscale / WireGuard / SSH tunnel.
+- **No mTLS.** Token-only auth.
+- **No multi-user RBAC.** Every token has the same capabilities — the
+  whole whitelist. Splitting into "read-only" vs "operator" tokens is
+  a Phase 3 candidate if the use case emerges.
+- **No off-host audit shipping.** The JSONL stays on the node; ship
+  it elsewhere with `fluent-bit`/`vector` if you need centralized
+  storage. Rotation discards the previous backup after 10 MB.
 
 ## Backup & restore
 
