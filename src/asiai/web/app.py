@@ -121,7 +121,9 @@ def create_app(state: AppState) -> FastAPI:
 
     from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-    _trusted = ["localhost", "127.0.0.1", "0.0.0.0", "*.local", "testserver"]
+    # NB: "0.0.0.0" intentionally omitted from the trusted-host allowlist —
+    # it's a bind interface, never a real Host header sent by a client.
+    _trusted = ["localhost", "127.0.0.1", "*.local", "testserver"]
     _extra = _os.environ.get("ASIAI_TRUSTED_HOSTS", "").strip()
     if _extra:
         _trusted.extend(h.strip() for h in _extra.split(",") if h.strip())
