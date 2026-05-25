@@ -57,6 +57,11 @@ class AppState:
     max_sse_connections: int = 10
     _snapshot_cache: dict | None = field(default=None, repr=False)
     _snapshot_ts: float = 0.0
+    _fleet_snapshot_cache: dict | None = field(default=None, repr=False)
+    _fleet_snapshot_ts: float = 0.0
+    # Serializes fan-out polls so two concurrent /api/v1/fleet/snapshot
+    # GETs after a cache expiry don't both fire N requests at every node.
+    _fleet_poll_lock: threading.Lock = field(default_factory=threading.Lock)
     ioreport_sampler: object | None = field(default=None, repr=False)
 
     def refresh_engines_if_stale(self, max_age: float = 30.0) -> list:
@@ -110,3 +115,16 @@ class AppState:
         with self._lock:
             self._snapshot_cache = dict(snapshot)
             self._snapshot_ts = time.time()
+
+    def get_fleet_cache(self, max_age: float = 10.0) -> dict | None:
+        """Return cached fleet snapshot if fresh enough, else None."""
+        with self._lock:
+            if self._fleet_snapshot_cache and (time.time() - self._fleet_snapshot_ts) < max_age:
+                return dict(self._fleet_snapshot_cache)
+        return None
+
+    def set_fleet_cache(self, snapshot: dict) -> None:
+        """Update the cached fleet snapshot (thread-safe)."""
+        with self._lock:
+            self._fleet_snapshot_cache = dict(snapshot)
+            self._fleet_snapshot_ts = time.time()

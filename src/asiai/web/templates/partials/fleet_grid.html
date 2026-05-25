@@ -1,0 +1,61 @@
+<div class="fleet-cards"
+     style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem;">
+    {% for poll in snapshot.nodes %}
+    <div class="card fleet-card" style="padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem;">
+            <h3 style="margin: 0;">{{ poll.nickname }}</h3>
+            {% if poll.ok %}
+            <span class="badge badge-ok">ok</span>
+            {% else %}
+            <span class="badge badge-error">DOWN</span>
+            {% endif %}
+        </div>
+        <div style="font-size: 0.75rem; opacity: 0.6; font-family: 'Geist Mono', monospace; margin-bottom: 0.75rem;">
+            {{ poll.url }}
+        </div>
+        {% if poll.ok and poll.snapshot %}
+            {# /api/v1/snapshot exposes engines under "engines_status" (see
+               asiai.collectors.snapshot.collect_full_snapshot). #}
+            {% set engines = poll.snapshot.engines_status or [] %}
+            {% if engines is iterable and engines is not string %}
+                {% if engines|length > 0 %}
+                {% set reachable_engines = engines | selectattr("reachable") | list %}
+                {% set total_models = [] %}
+                {% for e in engines %}
+                    {% for m in (e.models or []) %}
+                        {% set _ = total_models.append(m) %}
+                    {% endfor %}
+                {% endfor %}
+                <div style="font-size: 0.875rem;">
+                    <strong>{{ reachable_engines|length }}/{{ engines|length }} engines reachable</strong>
+                </div>
+                <ul style="list-style: none; padding: 0; margin: 0.5rem 0 0 0; font-size: 0.8125rem;">
+                {% for e in engines %}
+                    <li style="padding: 0.25rem 0; border-bottom: 1px solid var(--border, #2a2a2a);">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span><strong>{{ e.name or 'engine' }}</strong>{% if e.version %} <span style="opacity: 0.5;">{{ e.version }}</span>{% endif %}</span>
+                            <span style="opacity: 0.7;">{{ 'reachable' if e.reachable else 'unreachable' }}</span>
+                        </div>
+                        {% if e.models %}
+                        <div style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.125rem;">
+                            {{ e.models|length }} model(s) loaded{% if e.vram_total %} · {{ (e.vram_total / 1073741824)|round(1) }} GB VRAM{% endif %}
+                        </div>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+                {% else %}
+                <div style="font-size: 0.875rem; opacity: 0.6;">No engines reported.</div>
+                {% endif %}
+            {% endif %}
+        {% elif not poll.ok %}
+        <div style="font-size: 0.875rem; color: var(--color-error, #e54);">
+            Error: {{ poll.error }}
+        </div>
+        {% endif %}
+        <div style="margin-top: 0.75rem; font-size: 0.75rem; opacity: 0.6;">
+            Latency: {{ '%.0f'|format(poll.latency_ms) }}ms
+        </div>
+    </div>
+    {% endfor %}
+</div>

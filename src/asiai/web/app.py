@@ -112,6 +112,21 @@ def create_app(state: AppState) -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Trusted host filtering — reject requests with unexpected Host headers
+    # to defend against cache poisoning and host-header injection. The
+    # default allowlist covers loopback addresses and the local-network
+    # mDNS suffix; users binding to a real hostname can extend this via
+    # the ASIAI_TRUSTED_HOSTS env variable (comma-separated globs).
+    import os as _os
+
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+    _trusted = ["localhost", "127.0.0.1", "0.0.0.0", "*.local", "testserver"]
+    _extra = _os.environ.get("ASIAI_TRUSTED_HOSTS", "").strip()
+    if _extra:
+        _trusted.extend(h.strip() for h in _extra.split(",") if h.strip())
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted)
+
     # Security headers
     app.add_middleware(SecurityHeadersMiddleware)
 

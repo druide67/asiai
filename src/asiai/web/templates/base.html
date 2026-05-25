@@ -68,6 +68,12 @@
                         <span>Doctor</span>
                     </a>
                 </li>
+                <li>
+                    <a href="/fleet" class="{% if nav_active == 'fleet' %}active{% endif %}">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor" opacity="0.6"/><circle cx="4" cy="12" r="2" fill="currentColor" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.4"/><path d="M4 4 L12 4 M4 4 L4 12 M12 4 L4 12" stroke="currentColor" stroke-width="0.5" opacity="0.3"/></svg></span>
+                        <span>Fleet</span>
+                    </a>
+                </li>
             </ul>
             <div style="margin-top: auto; padding: 1rem 1.5rem; border-top: 1px solid var(--border);">
                 <button id="theme-toggle" class="btn" style="width: 100%; justify-content: center;" onclick="toggleTheme()" aria-label="Toggle dark/light theme">
