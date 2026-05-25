@@ -1865,6 +1865,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Include community data in recommendations",
     )
 
+    # fleet (multi-host observability, Phase 1 read-only)
+    from asiai.fleet.cli import add_fleet_subparser
+
+    add_fleet_subparser(subparsers)
+
     # Discover sub-CLI plugins (skip for --version / --help to preserve cold-start).
     _fast_path = argv is not None and bool(set(argv[:2]) & {"--version", "--help", "-h", "version"})
     plugin_commands: dict = {}
@@ -1910,6 +1915,8 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0
 
+    from asiai.fleet.cli import cmd_fleet
+
     commands = {
         "detect": cmd_detect,
         "models": cmd_models,
@@ -1926,6 +1933,7 @@ def main(argv: list[str] | None = None) -> int:
         "unregister": cmd_unregister,
         "setup": cmd_setup,
         "config": cmd_config,
+        "fleet": cmd_fleet,
     }
 
     handler = commands.get(args.command) or plugin_commands.get(args.command)
