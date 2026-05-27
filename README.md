@@ -241,30 +241,51 @@ asiai web --no-open          # Don't auto-open browser
 
 Features: system overview, engine status, live benchmark with SSE progress, history charts, doctor checks, dark/light theme.
 
-### `asiai fleet`
+### `asiai fleet` + `asiai auth` + `aisctl fleet`
 
-Multi-host observability across several Macs (Phase 1: read-only). Each
-remote Mac runs `asiai web --host 0.0.0.0`; the orchestrator host then
-declares them in `~/.config/asiai/fleet.json` and polls each one's
-`/api/v1/snapshot` in parallel.
+Multi-host management across several Macs. Two phases ship today:
+
+- **Phase 1 — read-only observability** (in `asiai`). Each remote Mac
+  runs `asiai web --host 0.0.0.0`; the orchestrator declares the nodes
+  in `~/.config/asiai/fleet.json` and polls each one's
+  `/api/v1/snapshot` in parallel.
+- **Phase 2 — authenticated writes** (Bearer auth in `asiai`,
+  `aisctl serve` + `aisctl fleet push` in
+  [`asiai-inference-server`](https://github.com/druide67/asiai-inference-server)).
+  Issue `purge`, `stop/start/restart`, `unload`, `install/uninstall`,
+  `upgrade` against remote nodes with rate-limited token auth and a
+  per-call audit log.
 
 ```bash
+# --- Read-only (Phase 1) -------------------------------------------
 asiai fleet add studio --url http://192.0.2.10:8899 --role workstation
-asiai fleet add laptop --url http://192.0.2.11:8899
 asiai fleet list
 asiai fleet status               # parallel poll, aggregated table
 asiai fleet status --json | jq   # machine-readable form
 asiai fleet ping studio          # single-node check
+
+# --- Writes (Phase 2) ----------------------------------------------
+# On the node: initialize the auth surface (prints secret ONCE).
+asiai auth init
+# On the node: start the loopback companion that runs the commands.
+aisctl serve &
+# On the orchestrator: register the node with its secret.
+asiai fleet add studio --url http://192.0.2.10:8899 --auth-token asai_...
+# Issue a write.
+aisctl fleet push studio purge
+aisctl fleet push studio restart --engine ollama
+aisctl fleet push studio unload --engine ollama --model llama3.2
 ```
 
-A new `/fleet` page in `asiai web` shows a card per node with HTMX
-auto-refresh every 10 seconds. Phase 2 will add cross-host engine
-management (start/stop/install/purge); Phase 3 will add mDNS Bonjour
-auto-discovery. Full guide: [docs/fleet-mode.md](docs/fleet-mode.md).
+The `/fleet` page in `asiai web` shows a card per node with HTMX
+auto-refresh every 10 seconds. Phase 3 will add mDNS Bonjour
+auto-discovery and TLS. Full guide:
+[docs/fleet-mode.md](docs/fleet-mode.md).
 
-> ⚠️ Phase 1 has no authentication. Use it on a trusted LAN, or place
-> nodes behind a VPN (Tailscale/WireGuard). The `asiai_url` accepts any
-> hostname or IP.
+> ⚠️ Phase 1 is unauthenticated read-only; Phase 2 requires Bearer
+> tokens. Both are designed for trusted LANs (or LANs glued together by
+> a VPN like Tailscale/WireGuard). No TLS is enforced between nodes in
+> v1.8 — that's a Phase 3 deliverable.
 
 ### `asiai leaderboard`
 
@@ -452,7 +473,8 @@ Optional extras:
 | **v1.2** | Web dashboard redesign, shareable cards, Share on X/Reddit, community API | **Done** |
 | **v1.3** | Dark theme, self-hosted fonts, universal VRAM (phys_footprint), power in Monitor/History | **Done** |
 | v1.7 | Fleet mode Phase 1 (multi-Mac read-only observability), `asiai fleet` CLI, `/fleet` web page | **Shipped** |
-| v1.8+ | Fleet Phase 2 (cross-host engine writes, auth), Phase 3 (mDNS auto-discovery, TLS), notifications macOS, MCP prompts | Planned |
+| v1.8 | Fleet Phase 2 (cross-host writes with Bearer auth, rate limit, audit log), `asiai auth` CLI, `aisctl serve` + `aisctl fleet push` companions | **Shipped** |
+| v1.9+ | Fleet Phase 3 (mDNS Bonjour auto-discovery, TLS/mTLS, TUI fleet panel, MCP write tools), notifications macOS | Planned |
 
 ## License
 

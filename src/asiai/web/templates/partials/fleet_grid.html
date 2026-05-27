@@ -56,6 +56,22 @@
         <div style="margin-top: 0.75rem; font-size: 0.75rem; opacity: 0.6;">
             Latency: {{ '%.0f'|format(poll.latency_ms) }}ms
         </div>
+
+        {# Phase 2 — command palette per card.
+           We deliberately don't expose live POST buttons here: a stored
+           XSS in any nickname/error field would otherwise let an attacker
+           steal the operator's Bearer token from localStorage and ride
+           the same /api/v1/fleet/{nickname}/command endpoint. Instead, we
+           render copy-pastable CLI snippets that the operator runs from
+           their shell — the token never leaves the CLI's environment. #}
+        <details style="margin-top: 0.5rem; font-size: 0.75rem;">
+            <summary style="cursor: pointer; opacity: 0.75;">CLI actions (copy-paste)</summary>
+            <pre style="background: var(--bg-soft, #1a1a1a); padding: 0.5rem; margin: 0.5rem 0 0 0; border-radius: 4px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 0.7rem; line-height: 1.5; white-space: pre-wrap;">aisctl fleet push {{ poll.nickname }} purge
+aisctl fleet push {{ poll.nickname }} restart --engine &lt;engine&gt;
+aisctl fleet push {{ poll.nickname }} unload --engine &lt;engine&gt; --model &lt;name&gt;
+aisctl fleet push {{ poll.nickname }} load --engine ollama --model &lt;name&gt;
+aisctl fleet push @all purge   # broadcast</pre>
+        </details>
     </div>
     {% endfor %}
 </div>
