@@ -42,3 +42,20 @@
     {% endfor %}
     </tbody>
 </table>
+
+{# Actionable engines: upgrade-available or running-stale. We deliberately
+   render copy-pastable CLI snippets rather than live POST buttons — the same
+   decision as the fleet grid. A live button would mean the operator's Bearer
+   token lives in localStorage, where a stored XSS in any version/notes field
+   could steal it and ride the authenticated upgrade endpoint. The token never
+   leaves the operator's shell this way. #}
+{% set actionable = snapshot.engines | selectattr("status", "in", ["upgrade-available", "running-stale"]) | list %}
+{% if actionable %}
+<details style="margin-top: 1rem; font-size: 0.8125rem;">
+    <summary style="cursor: pointer; opacity: 0.8;">Upgrade commands (copy-paste)</summary>
+    <pre style="background: var(--bg-soft, #1a1a1a); padding: 0.75rem; margin: 0.5rem 0 0 0; border-radius: 4px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 0.75rem; line-height: 1.6; white-space: pre-wrap;">{% for e in actionable %}{% if e.status == 'running-stale' %}aisctl restart {{ e.engine_name }}   # running process predates the installed binary
+{% else %}aisctl upgrade {{ e.engine_name }} --restart   # brew upgrade + restart (formula-whitelisted)
+{% endif %}{% endfor %}</pre>
+    <p style="opacity: 0.6; margin: 0.5rem 0 0 0;">Requires <code>asiai-inference-server</code> (aisctl). Only brew-whitelisted engines can be upgraded this way; others are pip/manual.</p>
+</details>
+{% endif %}

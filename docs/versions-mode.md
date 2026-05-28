@@ -104,20 +104,39 @@ provider that knows the brew formula but not the app-bundle path won't
 erase asiai's own fallback). Rows sourced from the provider are labelled
 accordingly in `--json` (`"source": "aisrv"`).
 
-## Upgrading (Phase 2)
+## Upgrading
 
 Reading versions is read-only by design. Triggering an upgrade is a
 **write** and lives in `asiai-inference-server`:
 
 ```sh
-aisctl upgrade llamacpp        # brew upgrade (formula-whitelisted) + restart
-aisctl upgrade llamacpp --dry-run
+aisctl upgrade llamacpp --restart   # brew upgrade (formula-whitelisted) + restart
+aisctl upgrade llamacpp --dry-run   # show the brew argv without running it
+aisctl upgrade llamacpp             # upgrade only; prints a hint to restart later
 ```
 
-Web-triggered upgrades (a button on the /versions page) ride the same
-authenticated `asiai web → aisctl serve` surface as the Phase 2 fleet
-write commands — Bearer token, per-token rate limit, audit log. See
-[fleet-mode.md](fleet-mode.md) for that security model.
+Without `--restart`, the binary is upgraded but the running daemon keeps
+executing the old build (the `running-stale` state) — useful when you don't
+want to interrupt an in-flight request. Restart on your own schedule with
+`aisctl restart llamacpp`.
+
+The `/versions` web page **does not** trigger upgrades itself. It renders
+copy-paste CLI snippets for the engines that need attention, mirroring the
+fleet dashboard's deliberate choice to keep write actions out of the
+browser: a live POST button would mean an operator's Bearer token lives in
+`localStorage`, where a stored XSS in any version/notes field could steal
+it and ride the authenticated upgrade endpoint. The snippet approach keeps
+the token in your shell only.
+
+For cross-host upgrades, the authenticated `asiai web → aisctl serve` fleet
+surface already supports `upgrade`:
+
+```sh
+aisctl fleet push studio upgrade --engine llamacpp
+```
+
+See [fleet-mode.md](fleet-mode.md) for that security model (Bearer token,
+per-token rate limit, audit log).
 
 ## Caveats
 
