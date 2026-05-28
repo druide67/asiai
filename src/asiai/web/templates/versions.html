@@ -28,7 +28,9 @@
 </div>
 
 <p style="margin-top: 1rem; font-size: 0.8125rem; opacity: 0.6;">
-    To upgrade an engine, use <code>aisctl upgrade &lt;engine&gt;</code> (brew-whitelisted, restarts the daemon).
-    Web-triggered upgrades arrive in Phase&nbsp;2 behind Bearer auth.
+    Upgrade commands are shown as copy-paste snippets above (expand “Upgrade
+    commands”) — run them from your shell with <code>aisctl upgrade &lt;engine&gt;</code>.
+    This page never POSTs an upgrade itself, so no Bearer token is ever held in
+    the browser.
 </p>
 {% endblock %}

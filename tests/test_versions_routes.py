@@ -101,3 +101,15 @@ def test_versions_grid_fragment(client):
     # Fragment only — no full-page chrome.
     assert "<table" in resp.text
     assert "<!DOCTYPE html>" not in resp.text
+
+
+def test_versions_page_has_copypaste_actions_not_post_buttons(client):
+    with mock.patch("asiai.web.routes.versions.collect_reports", return_value=_reports()):
+        resp = client.get("/versions")
+    text = resp.text
+    # running-stale llamacpp -> restart snippet; upgrade-available ollama -> upgrade snippet.
+    assert "aisctl restart llamacpp" in text
+    assert "aisctl upgrade ollama --restart" in text
+    # Security: copy-paste only, no live POST that would need a token in the page.
+    assert "hx-post" not in text
+    assert "/api/v1/fleet/" not in text
