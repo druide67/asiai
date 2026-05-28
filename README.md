@@ -216,6 +216,35 @@ Doctor
   5 ok, 0 warning(s), 3 failed
 ```
 
+### `asiai versions`
+
+Line up each engine's **running**, **installed**, and **available**
+versions and flag what's behind — including the post-upgrade trap where a
+live process predates the binary you just upgraded (`running-stale`).
+
+```bash
+asiai versions                   # offline: running/installed + brew outdated
+asiai versions --check-upstream  # also query PyPI / GitHub (network, opt-in)
+asiai versions --engine llamacpp # filter to one engine
+asiai versions --json | jq
+```
+
+```
+Engine versions
+
+  ENGINE     RUNNING  INSTALLED  AVAILABLE  STATUS
+  ─────────  ───────  ─────────  ─────────  ─────────────────
+  llama.cpp  9370     9370       9380       upgrade-available
+  Ollama     —        0.24.0     0.24.0     up-to-date
+
+  1 upgrade(s) available
+```
+
+`asiai doctor` carries an offline recap of this, and `asiai web` exposes a
+`/versions` page with changelog links. Triggering an upgrade is a write and
+lives in `aisctl upgrade <engine>` (see
+[docs/versions-mode.md](docs/versions-mode.md)).
+
 ### `asiai daemon`
 
 Background monitoring via macOS launchd. Collects metrics every minute.

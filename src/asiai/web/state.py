@@ -62,6 +62,13 @@ class AppState:
     # Serializes fan-out polls so two concurrent /api/v1/fleet/snapshot
     # GETs after a cache expiry don't both fire N requests at every node.
     _fleet_poll_lock: threading.Lock = field(default_factory=threading.Lock)
+    # Versions snapshot is cached separately for offline (brew) vs upstream
+    # (network) modes — a key of "offline"/"upstream" so a --check-upstream
+    # request never serves a stale offline result and vice-versa.
+    _versions_cache: dict | None = field(default=None, repr=False)
+    _versions_ts: float = 0.0
+    _versions_key: str = ""
+    _versions_lock: threading.Lock = field(default_factory=threading.Lock)
     ioreport_sampler: object | None = field(default=None, repr=False)
 
     def refresh_engines_if_stale(self, max_age: float = 30.0) -> list:
@@ -128,3 +135,25 @@ class AppState:
         with self._lock:
             self._fleet_snapshot_cache = dict(snapshot)
             self._fleet_snapshot_ts = time.time()
+
+    def get_versions_cache(self, key: str, max_age: float = 60.0) -> dict | None:
+        """Return the cached versions snapshot for *key* if fresh, else None.
+
+        *key* discriminates offline vs upstream so the two modes never serve
+        each other's results.
+        """
+        with self._lock:
+            if (
+                self._versions_cache
+                and self._versions_key == key
+                and (time.time() - self._versions_ts) < max_age
+            ):
+                return dict(self._versions_cache)
+        return None
+
+    def set_versions_cache(self, key: str, snapshot: dict) -> None:
+        """Update the cached versions snapshot for *key* (thread-safe)."""
+        with self._lock:
+            self._versions_cache = dict(snapshot)
+            self._versions_key = key
+            self._versions_ts = time.time()
