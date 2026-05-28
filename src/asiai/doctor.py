@@ -767,6 +767,45 @@ def _check_alerting() -> list[CheckResult]:
     return results
 
 
+def _check_versions() -> CheckResult:
+    """Offline recap of engine version freshness, pointing at ``asiai versions``.
+
+    Strictly offline (``check_upstream=False``) so ``doctor`` stays fast: it
+    only adds a single ``brew outdated`` subprocess plus the reachability
+    probes doctor already performs. ``ok`` when nothing needs attention,
+    ``warn`` when upgrades are available or a running process is stale.
+    """
+    try:
+        from asiai.versions.cli import collect_reports
+        from asiai.versions.models import VersionStatus
+
+        reports = collect_reports(check_upstream=False)
+    except Exception as e:  # noqa: BLE001 — never let the recap crash doctor
+        logger.debug("version recap failed: %s", e)
+        return CheckResult("engine", "Versions", "warn", f"version check failed: {e}")
+
+    upgrades = [r for r in reports if r.status == VersionStatus.UPGRADE_AVAILABLE]
+    stale = [r for r in reports if r.status == VersionStatus.RUNNING_STALE]
+
+    if not upgrades and not stale:
+        return CheckResult("engine", "Versions", "ok", "all detected engines up-to-date")
+
+    parts = []
+    if upgrades:
+        names = ", ".join(r.display or r.engine_name for r in upgrades)
+        parts.append(f"{len(upgrades)} upgrade(s): {names}")
+    if stale:
+        names = ", ".join(r.display or r.engine_name for r in stale)
+        parts.append(f"{len(stale)} stale process(es): {names}")
+    return CheckResult(
+        "engine",
+        "Versions",
+        "warn",
+        "; ".join(parts),
+        fix="asiai versions",
+    )
+
+
 def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
     """Run all diagnostic checks and return results."""
     checks: list[CheckResult] = []
@@ -786,6 +825,7 @@ def run_checks(db_path: str = DEFAULT_DB_PATH) -> list[CheckResult]:
     checks.append(_check_vllm_mlx())
     checks.append(_check_omlx())
     checks.append(_check_exo())
+    checks.append(_check_versions())
 
     # Database checks
     checks.append(_check_db(db_path))

@@ -1,0 +1,44 @@
+<table class="versions-table" style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+    <thead>
+        <tr style="text-align: left; border-bottom: 1px solid var(--border, #2a2a2a);">
+            <th style="padding: 0.5rem 0.75rem;">Engine</th>
+            <th style="padding: 0.5rem 0.75rem;">Running</th>
+            <th style="padding: 0.5rem 0.75rem;">Installed</th>
+            <th style="padding: 0.5rem 0.75rem;">Available</th>
+            <th style="padding: 0.5rem 0.75rem;">Status</th>
+            <th style="padding: 0.5rem 0.75rem;">Changelog</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for e in snapshot.engines %}
+        {% if e.installed or e.running or e.status != 'not-installed' %}
+        <tr style="border-bottom: 1px solid var(--border, #2a2a2a);">
+            <td style="padding: 0.5rem 0.75rem;"><strong>{{ e.display or e.engine_name }}</strong>
+                {% if e.source == 'aisrv' %}<span style="opacity: 0.4; font-size: 0.7rem;"> (aisrv)</span>{% endif %}
+            </td>
+            <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;">{{ e.running or '—' }}</td>
+            <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;">{{ e.installed or '—' }}</td>
+            <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;">{{ e.available or '—' }}</td>
+            <td style="padding: 0.5rem 0.75rem;">
+                {% if e.status == 'up-to-date' %}
+                <span class="badge badge-ok">up-to-date</span>
+                {% elif e.status == 'upgrade-available' %}
+                <span class="badge badge-warn">upgrade available</span>
+                {% elif e.status == 'running-stale' %}
+                <span class="badge badge-warn">running stale</span>
+                {% elif e.status == 'not-installed' %}
+                <span class="badge" style="opacity: 0.5;">not installed</span>
+                {% else %}
+                <span class="badge" style="opacity: 0.5;">unknown</span>
+                {% endif %}
+            </td>
+            <td style="padding: 0.5rem 0.75rem;">
+                {% if e.changelog_url %}
+                <a href="{{ e.changelog_url }}" target="_blank" rel="noopener noreferrer" style="opacity: 0.8;">↗</a>
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+    </tbody>
+</table>

@@ -1870,6 +1870,11 @@ def main(argv: list[str] | None = None) -> int:
 
     add_fleet_subparser(subparsers)
 
+    # versions (running / installed / available engine versions)
+    from asiai.versions.cli import add_versions_subparser
+
+    add_versions_subparser(subparsers)
+
     # auth (API tokens for fleet write commands, Phase 2)
     from asiai.auth.cli import add_auth_subparser
 
@@ -1922,6 +1927,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from asiai.auth.cli import cmd_auth
     from asiai.fleet.cli import cmd_fleet
+    from asiai.versions.cli import cmd_versions
 
     commands = {
         "detect": cmd_detect,
@@ -1941,6 +1947,7 @@ def main(argv: list[str] | None = None) -> int:
         "config": cmd_config,
         "fleet": cmd_fleet,
         "auth": cmd_auth,
+        "versions": cmd_versions,
     }
 
     handler = commands.get(args.command) or plugin_commands.get(args.command)
