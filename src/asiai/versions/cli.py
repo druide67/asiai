@@ -9,6 +9,7 @@ parser, mirroring ``asiai.fleet.cli.add_fleet_subparser``.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json as _json
 
 from asiai.versions.collectors import brew_outdated, installed_version, running_versions
@@ -42,11 +43,27 @@ def collect_reports(
     running = running_versions(urls)
     outdated = brew_outdated()  # offline, single subprocess
 
+    # Resolve installed versions concurrently — each lookup shells out to
+    # brew/pip/PlistBuddy (I/O-bound), and there are ~10 engines, so a
+    # sequential loop is the dominant cost (e.g. it makes `asiai doctor`
+    # blow past its timeout). A small thread pool keeps it snappy.
+    items = sorted(specs.items())
+    installed_by_name: dict[str, str | None] = {}
+    if items:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(items))) as pool:
+            futures = {pool.submit(installed_version, spec): name for name, spec in items}
+            for fut in concurrent.futures.as_completed(futures):
+                name = futures[fut]
+                try:
+                    installed_by_name[name] = fut.result()
+                except Exception:  # noqa: BLE001 — a bad spec must not sink the report
+                    installed_by_name[name] = None
+
     reports: list[EngineVersionReport] = []
     upstream_jobs: list[tuple[str, str, str]] = []
 
-    for name, spec in sorted(specs.items()):
-        inst = installed_version(spec)
+    for name, spec in items:
+        inst = installed_by_name.get(name)
         run = running.get(name)
         notes = "no_upstream" if spec.no_upstream else ""
 

@@ -253,7 +253,10 @@ def brew_outdated() -> dict[str, str]:
         return {}
     try:
         result = subprocess.run(
-            [brew, "outdated", "--json=v2", "--greedy"],
+            # No --greedy: it probes auto-updating casks (slow, sometimes
+            # network-bound) and we only care about the formulas/casks we map
+            # engines to. Keeps the call fast enough for the doctor recap.
+            [brew, "outdated", "--json=v2"],
             capture_output=True,
             text=True,
             timeout=30,
