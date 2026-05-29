@@ -30,6 +30,7 @@ def test_collect_reports_offline_brew_upgrade():
         mock.patch.object(versions_cli, "load_specs", return_value=specs),
         mock.patch.object(versions_cli, "provider_keys", return_value=set()),
         mock.patch.object(versions_cli, "running_versions", return_value={"llamacpp": "8180"}),
+        mock.patch.object(versions_cli, "installed_version", return_value="8180"),
         mock.patch.object(versions_cli, "brew_outdated", return_value={"llama.cpp": "8200"}),
     ):
         reports = versions_cli.collect_reports()
@@ -37,10 +38,10 @@ def test_collect_reports_offline_brew_upgrade():
     assert len(reports) == 1
     r = reports[0]
     assert r.running == "8180"
+    assert r.installed == "8180"
+    # brew reports 8200 outdated -> available comes from brew_outdated.
     assert r.available == "8200"
-    # running 8180 != installed... installed comes from installed_version (real
-    # subprocess); here it's the build the brew lookup says is current only if
-    # outdated. installed is resolved separately — check status logic instead.
+    assert r.status == VersionStatus.UPGRADE_AVAILABLE
 
 
 def test_collect_reports_running_stale(monkeypatch):
