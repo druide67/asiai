@@ -272,6 +272,88 @@ def render_snapshot(snap: dict) -> None:
     print()
 
 
+def _color_version_status(status: str, text: str) -> str:
+    """Color a version status label for the table."""
+    if status == "up-to-date":
+        return green(text)
+    if status in ("upgrade-available", "running-stale"):
+        return yellow(text)
+    if status == "not-installed":
+        return dim(text)
+    return dim(text)  # unknown
+
+
+def render_versions(reports: list, check_upstream: bool = False) -> None:
+    """Render the running / installed / available engine version table.
+
+    *reports* is a list of ``EngineVersionReport`` (duck-typed here to keep
+    the renderer dependency-light). Engines with nothing installed and
+    nothing running are dropped to keep the table focused on what's present.
+    """
+    visible = [r for r in reports if r.installed or r.running or r.status.value != "not-installed"]
+    if not visible:
+        print(dim("No inference engines installed or running."))
+        return
+
+    def _w(values: list[str], header: str, cap: int) -> int:
+        return min(max([len(header)] + [len(v) for v in values]), cap)
+
+    names = [r.display or r.engine_name for r in visible]
+    runs = [r.running or "—" for r in visible]
+    insts = [r.installed or "—" for r in visible]
+    avails = [r.available or "—" for r in visible]
+    statuses = [r.status.value for r in visible]
+
+    name_w = _w(names, "ENGINE", 22)
+    run_w = _w(runs, "RUNNING", 16)
+    inst_w = _w(insts, "INSTALLED", 16)
+    avail_w = _w(avails, "AVAILABLE", 16)
+    stat_w = max(len("STATUS"), max(len(s) for s in statuses))
+
+    print(bold("Engine versions"))
+    print()
+    print(
+        f"  {'ENGINE':<{name_w}} {'RUNNING':<{run_w}} {'INSTALLED':<{inst_w}} "
+        f"{'AVAILABLE':<{avail_w}} {'STATUS':<{stat_w}}"
+    )
+    print(f"  {'─' * name_w} {'─' * run_w} {'─' * inst_w} {'─' * avail_w} {'─' * stat_w}")
+
+    for r in visible:
+        name = (r.display or r.engine_name)[:name_w]
+        run = (r.running or "—")[:run_w]
+        inst = (r.installed or "—")[:inst_w]
+        avail = (r.available or "—")[:avail_w]
+        status = r.status.value
+        status_pad = f"{status:<{stat_w}}"
+        print(
+            f"  {name:<{name_w}} {run:<{run_w}} {inst:<{inst_w}} "
+            f"{avail:<{avail_w}} {_color_version_status(status, status_pad)}"
+        )
+
+    # Footnotes: changelog links + offline caveat.
+    links = [(r.display or r.engine_name, r.changelog_url) for r in visible if r.changelog_url]
+    if links:
+        print()
+        for label, url in links:
+            print(f"  {dim(f'{label}: {url}')}")
+
+    print()
+    if not check_upstream:
+        print(
+            dim("  AVAILABLE is brew-cache only (offline). Pass --check-upstream for PyPI/GitHub.")
+        )
+    upgradable = [r for r in visible if r.status.value == "upgrade-available"]
+    stale = [r for r in visible if r.status.value == "running-stale"]
+    parts = []
+    if upgradable:
+        parts.append(yellow(f"{len(upgradable)} upgrade(s) available"))
+    if stale:
+        parts.append(yellow(f"{len(stale)} running stale (restart to reconcile)"))
+    if parts:
+        print(f"  {', '.join(parts)}")
+    print()
+
+
 def render_history(data: list[dict], hours: int) -> None:
     """Render a history table."""
     if not data:

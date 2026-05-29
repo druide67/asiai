@@ -9,12 +9,14 @@ import sys
 class TestCLIEndToEnd:
     """Run the real CLI binary and validate stdout/stderr."""
 
-    def _run(self, *args: str, expect_rc: int = 0) -> subprocess.CompletedProcess:
+    def _run(
+        self, *args: str, expect_rc: int = 0, timeout: int = 10
+    ) -> subprocess.CompletedProcess:
         result = subprocess.run(
             [sys.executable, "-m", "asiai", *args],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=timeout,
         )
         assert result.returncode == expect_rc, (
             f"Expected rc={expect_rc}, got {result.returncode}\n"
@@ -48,8 +50,13 @@ class TestCLIEndToEnd:
         assert "engine" in combined.lower() or "detect" in combined.lower()
 
     def test_doctor_runs(self):
-        """doctor should always run (even without engines)."""
-        result = self._run("doctor")
+        """doctor should always run (even without engines).
+
+        doctor does heavy per-engine I/O (brew/pip/HTTP) plus the offline
+        version recap, so it gets a generous timeout — the test asserts it
+        runs and produces output, not that it's fast.
+        """
+        result = self._run("doctor", timeout=30)
         assert "Doctor" in result.stdout or "System" in result.stdout
 
     def test_version_enriched(self):
