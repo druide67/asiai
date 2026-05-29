@@ -290,11 +290,7 @@ def render_versions(reports: list, check_upstream: bool = False) -> None:
     the renderer dependency-light). Engines with nothing installed and
     nothing running are dropped to keep the table focused on what's present.
     """
-    visible = [
-        r
-        for r in reports
-        if r.installed or r.running or r.status.value != "not-installed"
-    ]
+    visible = [r for r in reports if r.installed or r.running or r.status.value != "not-installed"]
     if not visible:
         print(dim("No inference engines installed or running."))
         return
@@ -320,9 +316,7 @@ def render_versions(reports: list, check_upstream: bool = False) -> None:
         f"  {'ENGINE':<{name_w}} {'RUNNING':<{run_w}} {'INSTALLED':<{inst_w}} "
         f"{'AVAILABLE':<{avail_w}} {'STATUS':<{stat_w}}"
     )
-    print(
-        f"  {'─' * name_w} {'─' * run_w} {'─' * inst_w} {'─' * avail_w} {'─' * stat_w}"
-    )
+    print(f"  {'─' * name_w} {'─' * run_w} {'─' * inst_w} {'─' * avail_w} {'─' * stat_w}")
 
     for r in visible:
         name = (r.display or r.engine_name)[:name_w]
@@ -346,10 +340,7 @@ def render_versions(reports: list, check_upstream: bool = False) -> None:
     print()
     if not check_upstream:
         print(
-            dim(
-                "  AVAILABLE is brew-cache only (offline). "
-                "Pass --check-upstream for PyPI/GitHub."
-            )
+            dim("  AVAILABLE is brew-cache only (offline). Pass --check-upstream for PyPI/GitHub.")
         )
     upgradable = [r for r in visible if r.status.value == "upgrade-available"]
     stale = [r for r in visible if r.status.value == "running-stale"]
