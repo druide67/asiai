@@ -162,6 +162,31 @@ class TestAggregateSize:
         )
         assert agg.duplicate_processes == dups
 
+    def test_power_thermal_propagation_and_efficiency(self):
+        # 5 ok × 10 tokens / 1s = 50 t/s aggregate; at 25 W => 2.0 tok/s/W.
+        results = [self._mk(i, lat) for i, lat in enumerate([100.0, 200.0, 300.0, 400.0, 500.0])]
+        agg = _aggregate_size(
+            results,
+            wall_time_s=1.0,
+            swap_delta_mb=0.0,
+            swapouts_delta=0,
+            duplicates=[],
+            gpu_watts=25.0,
+            thermal_speed_limit=100,
+        )
+        assert agg.gpu_watts == 25.0
+        assert agg.thermal_speed_limit == 100
+        assert agg.tok_s_per_watt == 2.0
+
+    def test_power_absent_yields_none_efficiency(self):
+        results = [self._mk(0, 100.0)]
+        agg = _aggregate_size(
+            results, wall_time_s=1.0, swap_delta_mb=0.0, swapouts_delta=0, duplicates=[]
+        )
+        assert agg.gpu_watts is None
+        assert agg.tok_s_per_watt is None
+        assert agg.thermal_speed_limit is None
+
 
 class TestSchemaVersion:
     def test_schema_version_value(self):

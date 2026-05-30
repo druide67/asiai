@@ -54,6 +54,7 @@ from typing import Any
 from asiai.benchmark.prompts import SYS_A
 from asiai.benchmark.quality_gates import (
     MemoryWatcher,
+    PowerThermalProbe,
     check_duplicate_processes,
 )
 
@@ -106,6 +107,9 @@ class BurstSizeResult:
     memory_pressure_swap_delta_mb: float
     memory_pressure_swapouts_delta: int
     duplicate_processes: list[dict[str, str]] = field(default_factory=list)
+    gpu_watts: float | None = None
+    tok_s_per_watt: float | None = None
+    thermal_speed_limit: int | None = None
 
 
 def _make_user_prompt(call_index: int) -> str:
@@ -346,6 +350,8 @@ def _aggregate_size(
     swap_delta_mb: float,
     swapouts_delta: int,
     duplicates: list[dict[str, str]],
+    gpu_watts: float | None = None,
+    thermal_speed_limit: int | None = None,
 ) -> BurstSizeResult:
     """Compute per-size aggregate stats from N call results."""
     n = len(call_results)
@@ -384,6 +390,11 @@ def _aggregate_size(
 
     throughput_calls_per_s = (len(ok_results) / wall_time_s) if wall_time_s > 0 else 0.0
     throughput_tokens_per_s = (total_tokens / wall_time_s) if wall_time_s > 0 else 0.0
+    tok_s_per_watt = (
+        round(throughput_tokens_per_s / gpu_watts, 3)
+        if gpu_watts and throughput_tokens_per_s
+        else None
+    )
 
     return BurstSizeResult(
         n=n,
@@ -397,6 +408,9 @@ def _aggregate_size(
         memory_pressure_swap_delta_mb=swap_delta_mb,
         memory_pressure_swapouts_delta=swapouts_delta,
         duplicate_processes=duplicates,
+        gpu_watts=gpu_watts,
+        tok_s_per_watt=tok_s_per_watt,
+        thermal_speed_limit=thermal_speed_limit,
     )
 
 
@@ -414,7 +428,9 @@ def _run_one_burst_pass(
 ) -> dict[str, Any]:
     """One pass of N concurrent calls. Returns aggregated stats as a dict."""
     duplicates_before = check_duplicate_processes(engine)
+    probe = PowerThermalProbe()
 
+    probe.start()
     with MemoryWatcher() as mem_watcher:
         t0 = time.perf_counter()
         call_results: list[BurstCallResult] = []
@@ -454,6 +470,8 @@ def _run_one_burst_pass(
                         except Exception as e:  # noqa: BLE001
                             logger.debug("future raised: %s", e)
         wall_time_s = time.perf_counter() - t0
+    reading = probe.read()
+    probe.close()
 
     call_results.sort(key=lambda r: r.call_index)
     size_result = _aggregate_size(
@@ -462,6 +480,8 @@ def _run_one_burst_pass(
         swap_delta_mb=mem_watcher.result.max_swap_delta_mb,
         swapouts_delta=mem_watcher.result.max_swapouts_delta,
         duplicates=duplicates_before,
+        gpu_watts=reading["gpu_watts"],
+        thermal_speed_limit=reading["thermal_speed_limit"],
     )
     return asdict(size_result)
 
