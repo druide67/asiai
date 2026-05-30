@@ -30,8 +30,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from asiai.collectors.ioreport import IOReportSampler, ioreport_available
-from asiai.collectors.system import collect_thermal
+from asiai.collectors import ioreport as _ioreport
+from asiai.collectors import system as _system
+
+# The probe resolves IOReport / thermal / powermetrics through their source
+# modules at call time (``_ioreport.ioreport_available``,
+# ``_ioreport.IOReportSampler``, ``_system.collect_thermal``, and a lazily
+# imported ``asiai.collectors.power.PowerMonitor``). A single set of patch
+# targets (``asiai.collectors.*``) therefore works for the standard runner
+# tests and the agentic/burst tests alike.
 
 logger = logging.getLogger("asiai.benchmark.quality_gates")
 
@@ -298,14 +305,18 @@ class MemoryWatcher:
 
 
 class PowerThermalProbe:
-    """Window sampler for GPU power (IOReport, no sudo) + thermal speed limit.
+    """Single power/thermal instrument shared by all three bench modes.
 
-    Single-call benches (agentic, burst) instrument each run the way
-    ``runner.py`` instruments standard runs, but without the sudo
-    ``powermetrics`` cross-check: IOReport alone is within ~1.5% of
-    powermetrics under load and needs no privileges.
+    IOReport by default (no sudo); pass ``cross_validate=True`` to also run
+    ``powermetrics`` and resolve a ``power_source`` — used only by the
+    standard runner for leaderboard provenance.
 
-    Usage::
+    Single-call benches (agentic, burst) keep calling ``PowerThermalProbe()``
+    with the defaults: IOReport alone is within ~1.5% of powermetrics under
+    load and needs no privileges, so those modes pay nothing for the
+    cross-validation fields.
+
+    Usage (per-window, agentic/burst)::
 
         probe = PowerThermalProbe()
         probe.start()                 # reset the IOReport energy baseline
@@ -313,48 +324,152 @@ class PowerThermalProbe:
         reading = probe.read()        # mean GPU watts over the window + thermal
         probe.close()
 
+    Usage (standard runner, with sudo cross-check)::
+
+        probe = PowerThermalProbe(cross_validate=True)
+        probe.start()                 # reset IOReport baseline + start powermetrics
+        ...run this engine's measured runs...
+        reading = probe.read_aggregate()  # 5-field dict with power_source
+        probe.close()
+
     ``read()`` returns ``gpu_watts`` (mean over the window since the last
     ``start()``/``read()``) and ``thermal_speed_limit`` (100 = no throttle,
     <100 = CPU/GPU throttled). Both default to ``None`` when the data source
     is unavailable so callers never crash on a missing channel.
+
+    Args:
+        cross_validate: When True, also start a ``PowerMonitor`` (powermetrics,
+            sudo) alongside the IOReport sampler so ``read_aggregate()`` can
+            report a ``power_source`` provenance. The IOReport arm is identical
+            regardless of this flag.
+        power_monitor_factory: Optional zero-arg callable returning a
+            ``PowerMonitor``-like object. Injection seam for tests; defaults to
+            ``asiai.collectors.power.PowerMonitor`` (resolved lazily so the
+            standard-runner test patches on that module path still bite).
     """
 
-    def __init__(self) -> None:
-        self._sampler: IOReportSampler | None = None
-        if ioreport_available():
+    def __init__(
+        self,
+        cross_validate: bool = False,
+        power_monitor_factory: Any = None,
+    ) -> None:
+        self._sampler: _ioreport.IOReportSampler | None = None
+        if _ioreport.ioreport_available():
             try:
-                self._sampler = IOReportSampler()
+                self._sampler = _ioreport.IOReportSampler()
             except Exception:  # noqa: BLE001 — ctypes/IOReport grab bag
                 logger.debug("IOReport sampler init failed", exc_info=True)
                 self._sampler = None
+        self._cross_validate = cross_validate
+        self._power_monitor_factory = power_monitor_factory
+        self._monitor: Any = None
 
     @property
     def available(self) -> bool:
         return self._sampler is not None
 
+    def _make_monitor(self) -> Any:
+        """Build a PowerMonitor, honoring the injected factory if any.
+
+        The default path imports ``PowerMonitor`` lazily from
+        ``asiai.collectors.power`` so a ``@patch("asiai.collectors.power.PowerMonitor")``
+        in the standard-runner tests resolves to the mock.
+        """
+        if self._power_monitor_factory is not None:
+            return self._power_monitor_factory()
+        from asiai.collectors.power import PowerMonitor
+
+        return PowerMonitor()
+
     def start(self) -> None:
-        """Discard one sample to reset the energy/time baseline."""
+        """Reset the energy/time baseline (and start powermetrics if cross-validating)."""
         if self._sampler is not None:
             try:
-                self._sampler.sample()
+                self._sampler.sample()  # discard one sample to reset the baseline
             except Exception:  # noqa: BLE001
                 logger.debug("IOReport baseline sample failed", exc_info=True)
-
-    def read(self) -> dict[str, Any]:
-        """Return mean GPU watts since the last start()/read() + thermal."""
-        gpu_watts: float | None = None
-        if self._sampler is not None:
+        if self._cross_validate and self._monitor is None:
             try:
-                gpu_watts = self._sampler.sample().gpu_watts
-            except Exception:  # noqa: BLE001
-                logger.debug("IOReport read failed", exc_info=True)
-        speed_limit: int | None = None
+                monitor = self._make_monitor()
+                if monitor.start():
+                    self._monitor = monitor
+            except Exception:  # noqa: BLE001 — powermetrics/sudo grab bag
+                logger.debug("powermetrics monitor start failed", exc_info=True)
+                self._monitor = None
+
+    def _read_ioreport_watts(self) -> float | None:
+        """Mean GPU watts (IOReport) since the last start()/read(), or None."""
+        if self._sampler is None:
+            return None
         try:
-            sl = collect_thermal().speed_limit
-            speed_limit = sl if sl >= 0 else None
+            return self._sampler.sample().gpu_watts
+        except Exception:  # noqa: BLE001
+            logger.debug("IOReport read failed", exc_info=True)
+            return None
+
+    def _read_thermal(self) -> int | None:
+        """Current thermal speed limit (100 = no throttle), or None if unknown."""
+        try:
+            sl = _system.collect_thermal().speed_limit
+            return sl if sl >= 0 else None
         except Exception:  # noqa: BLE001
             logger.debug("thermal read failed", exc_info=True)
-        return {"gpu_watts": gpu_watts, "thermal_speed_limit": speed_limit}
+            return None
+
+    def read(self) -> dict[str, Any]:
+        """Return mean GPU watts since the last start()/read() + thermal.
+
+        Per-window shape used by agentic/burst: only ``gpu_watts`` and
+        ``thermal_speed_limit``, so those modes pay nothing for the
+        cross-validation provenance fields.
+        """
+        return {
+            "gpu_watts": self._read_ioreport_watts(),
+            "thermal_speed_limit": self._read_thermal(),
+        }
+
+    def read_aggregate(self) -> dict[str, Any]:
+        """Return the 5-field power provenance dict used by the standard runner.
+
+        Reads the IOReport sampler once for ``io_gpu_watts``, stops the
+        ``PowerMonitor`` (if cross-validating) for ``pm_gpu_watts``, then
+        applies the runner's precedence ladder:
+
+        * io>0 and pm>0  => gpu_watts=io,  source='both'   (prefer IOReport)
+        * io>0 only      => gpu_watts=io,  source='ioreport'
+        * pm>0 only      => gpu_watts=pm,  source='powermetrics'
+        * neither        => gpu_watts=0.0, source=''
+        """
+        io_gpu_watts = self._read_ioreport_watts() or 0.0
+        pm_gpu_watts = 0.0
+        if self._monitor is not None:
+            try:
+                pm_gpu_watts = self._monitor.stop().gpu_watts
+            except Exception:  # noqa: BLE001
+                logger.debug("powermetrics stop failed", exc_info=True)
+            finally:
+                self._monitor = None
+
+        if io_gpu_watts > 0 and pm_gpu_watts > 0:
+            gpu_watts = io_gpu_watts  # prefer IOReport (no sudo)
+            power_source = "both"
+        elif io_gpu_watts > 0:
+            gpu_watts = io_gpu_watts
+            power_source = "ioreport"
+        elif pm_gpu_watts > 0:
+            gpu_watts = pm_gpu_watts
+            power_source = "powermetrics"
+        else:
+            gpu_watts = 0.0
+            power_source = ""
+
+        return {
+            "gpu_watts": gpu_watts,
+            "power_watts_ioreport": io_gpu_watts,
+            "power_watts_powermetrics": pm_gpu_watts,
+            "power_source": power_source,
+            "thermal_speed_limit": self._read_thermal(),
+        }
 
     def close(self) -> None:
         if self._sampler is not None:
@@ -363,6 +478,14 @@ class PowerThermalProbe:
             except Exception:  # noqa: BLE001
                 logger.debug("IOReport close failed", exc_info=True)
             self._sampler = None
+        if self._monitor is not None:
+            # Cross-validation path closed without read_aggregate(): release
+            # the powermetrics subprocess so it doesn't linger.
+            try:
+                self._monitor.stop()
+            except Exception:  # noqa: BLE001
+                logger.debug("powermetrics close failed", exc_info=True)
+            self._monitor = None
 
 
 def summarize_thermal(runs: list) -> dict[str, Any]:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from unittest.mock import patch
 
+import pytest
+
 from asiai.benchmark.agentic import AgenticRun
 from asiai.benchmark.quality_gates import (
     DEFAULT_EARLY_STOP_RATIO,
@@ -282,12 +284,12 @@ def test_summarize_thermal_throttled_when_any_below_100():
 def test_power_thermal_probe_unavailable_returns_none():
     # IOReport not available on this host (e.g. CI Linux runner): probe is
     # inert, read() still returns the dict shape with gpu_watts None.
-    with patch("asiai.benchmark.quality_gates.ioreport_available", return_value=False):
+    with patch("asiai.collectors.ioreport.ioreport_available", return_value=False):
         probe = PowerThermalProbe()
         assert probe.available is False
         probe.start()  # no-op, must not raise
         with patch(
-            "asiai.benchmark.quality_gates.collect_thermal",
+            "asiai.collectors.system.collect_thermal",
             side_effect=Exception("no thermal"),
         ):
             reading = probe.read()
@@ -307,9 +309,9 @@ def test_power_thermal_probe_reads_gpu_watts_and_thermal():
     )()
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
-        patch("asiai.benchmark.quality_gates.ioreport_available", return_value=True),
-        patch("asiai.benchmark.quality_gates.IOReportSampler", return_value=fake_sampler),
-        patch("asiai.benchmark.quality_gates.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=True),
+        patch("asiai.collectors.ioreport.IOReportSampler", return_value=fake_sampler),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
     ):
         probe = PowerThermalProbe()
         assert probe.available is True
@@ -324,8 +326,8 @@ def test_power_thermal_probe_negative_speed_limit_becomes_none():
     # maps that to None so consumers don't treat -1 as a real throttle value.
     fake_thermal = type("T", (), {"speed_limit": -1})()
     with (
-        patch("asiai.benchmark.quality_gates.ioreport_available", return_value=False),
-        patch("asiai.benchmark.quality_gates.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
     ):
         probe = PowerThermalProbe()
         reading = probe.read()
@@ -344,12 +346,99 @@ def test_power_thermal_probe_sampler_exception_yields_none():
 
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
-        patch("asiai.benchmark.quality_gates.ioreport_available", return_value=True),
-        patch("asiai.benchmark.quality_gates.IOReportSampler", return_value=BoomSampler()),
-        patch("asiai.benchmark.quality_gates.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=True),
+        patch("asiai.collectors.ioreport.IOReportSampler", return_value=BoomSampler()),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
     ):
         probe = PowerThermalProbe()
         probe.start()  # swallows the exception
         reading = probe.read()
     assert reading["gpu_watts"] is None
+    assert reading["thermal_speed_limit"] == 100
+
+
+def test_power_thermal_probe_default_no_cross_validate():
+    # Agentic/burst construct PowerThermalProbe() with the defaults: even when
+    # IOReport is available, no PowerMonitor (powermetrics/sudo) is ever built.
+    fake_sampler = type(
+        "FakeSampler",
+        (),
+        {"sample": lambda self: type("R", (), {"gpu_watts": 12.0})(), "close": lambda self: None},
+    )()
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=True),
+        patch("asiai.collectors.ioreport.IOReportSampler", return_value=fake_sampler),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.power.PowerMonitor") as mock_pm,
+    ):
+        probe = PowerThermalProbe()  # cross_validate defaults to False
+        probe.start()
+        reading = probe.read()
+        probe.close()
+    mock_pm.assert_not_called()
+    # read() keeps the per-window two-field shape (no provenance fields).
+    assert set(reading) == {"gpu_watts", "thermal_speed_limit"}
+    assert reading["gpu_watts"] == 12.0
+
+
+# --- read_aggregate precedence (standard runner provenance) ---------------
+
+
+class _StubSampler:
+    """Minimal IOReportSampler stand-in returning a fixed gpu_watts."""
+
+    def __init__(self, watts: float) -> None:
+        self._watts = watts
+
+    def sample(self):
+        return type("R", (), {"gpu_watts": self._watts})()
+
+    def close(self) -> None:
+        pass
+
+
+class _StubMonitor:
+    """Minimal PowerMonitor stand-in: start() ok, stop() returns fixed watts."""
+
+    def __init__(self, watts: float) -> None:
+        self._watts = watts
+
+    def start(self) -> bool:
+        return True
+
+    def stop(self):
+        return type("S", (), {"gpu_watts": self._watts})()
+
+
+@pytest.mark.parametrize(
+    ("io_watts", "pm_watts", "expect_gpu", "expect_source"),
+    [
+        (18.0, 20.0, 18.0, "both"),  # both >0 => prefer IOReport, source 'both'
+        (18.0, 0.0, 18.0, "ioreport"),  # io only
+        (0.0, 20.0, 20.0, "powermetrics"),  # pm only
+        (0.0, 0.0, 0.0, ""),  # neither
+    ],
+)
+def test_probe_read_aggregate_precedence(io_watts, pm_watts, expect_gpu, expect_source):
+    # IOReport availability decides whether the sampler arm contributes; the
+    # cross_validate flag plus the injected factory drives the powermetrics arm.
+    io_available = io_watts > 0
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=io_available),
+        patch("asiai.collectors.ioreport.IOReportSampler", return_value=_StubSampler(io_watts)),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+    ):
+        probe = PowerThermalProbe(
+            cross_validate=True,
+            power_monitor_factory=lambda: _StubMonitor(pm_watts),
+        )
+        probe.start()
+        reading = probe.read_aggregate()
+        probe.close()
+    assert reading["gpu_watts"] == expect_gpu
+    assert reading["power_source"] == expect_source
+    assert reading["power_watts_ioreport"] == io_watts
+    assert reading["power_watts_powermetrics"] == pm_watts
     assert reading["thermal_speed_limit"] == 100

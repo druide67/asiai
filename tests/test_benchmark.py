@@ -1316,6 +1316,43 @@ class TestThermalDrift:
         assert not any("thermal drift" in e for e in run.errors)
 
 
+# --- Duplicate-process detection (shared brick map) ---
+
+
+class TestRunnerDuplicateDetection:
+    @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
+    @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
+    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.collect_thermal")
+    @patch("asiai.benchmark.runner.collect_memory")
+    @patch("asiai.benchmark.runner.check_duplicate_processes")
+    def test_runner_duplicate_uses_brick_map(
+        self, mock_dup, mock_mem, mock_thermal, _procs, _hw, _os
+    ):
+        """Runner now detects duplicates for engines the old 3-entry map lacked.
+
+        ``mlx-lm`` was absent from the runner's legacy ``process_map`` but is in
+        the brick's canonical 10-engine map. Mock the brick to return two
+        matches and assert the runner surfaces a 'processes detected' warning.
+        """
+        mock_mem.return_value = MemoryInfo(total=68719476736, used=34000000000, pressure="normal")
+        mock_thermal.return_value = ThermalInfo(level="nominal", speed_limit=100)
+        mock_dup.return_value = [
+            {"pid": "111", "command": "mlx_lm.server --port 8080"},
+            {"pid": "222", "command": "mlx_lm.server --port 8081"},
+        ]
+
+        engine = _mock_engine("mlx-lm")
+        run = run_benchmark([engine], "test-model", ["code"])
+
+        mock_dup.assert_any_call("mlx-lm")
+        dup_warnings = [e for e in run.errors if "processes detected" in e]
+        assert dup_warnings, f"expected a duplicate-process warning, got {run.errors}"
+        assert "111" in dup_warnings[0]
+        assert "222" in dup_warnings[0]
+        assert "mlx-lm" in dup_warnings[0]
+
+
 # --- Cross-model / matrix reporter ---
 
 
