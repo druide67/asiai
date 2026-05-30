@@ -30,6 +30,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from asiai.collectors.ioreport import IOReportSampler, ioreport_available
+from asiai.collectors.system import collect_thermal
+
 logger = logging.getLogger("asiai.benchmark.quality_gates")
 
 
@@ -291,6 +294,99 @@ class MemoryWatcher:
             self._thread.join(timeout=5)
 
 
+# --- Power + thermal probe (per-run window sampler) ----------------------
+
+
+class PowerThermalProbe:
+    """Window sampler for GPU power (IOReport, no sudo) + thermal speed limit.
+
+    Single-call benches (agentic, burst) instrument each run the way
+    ``runner.py`` instruments standard runs, but without the sudo
+    ``powermetrics`` cross-check: IOReport alone is within ~1.5% of
+    powermetrics under load and needs no privileges.
+
+    Usage::
+
+        probe = PowerThermalProbe()
+        probe.start()                 # reset the IOReport energy baseline
+        ...run one request...
+        reading = probe.read()        # mean GPU watts over the window + thermal
+        probe.close()
+
+    ``read()`` returns ``gpu_watts`` (mean over the window since the last
+    ``start()``/``read()``) and ``thermal_speed_limit`` (100 = no throttle,
+    <100 = CPU/GPU throttled). Both default to ``None`` when the data source
+    is unavailable so callers never crash on a missing channel.
+    """
+
+    def __init__(self) -> None:
+        self._sampler: IOReportSampler | None = None
+        if ioreport_available():
+            try:
+                self._sampler = IOReportSampler()
+            except Exception:  # noqa: BLE001 — ctypes/IOReport grab bag
+                logger.debug("IOReport sampler init failed", exc_info=True)
+                self._sampler = None
+
+    @property
+    def available(self) -> bool:
+        return self._sampler is not None
+
+    def start(self) -> None:
+        """Discard one sample to reset the energy/time baseline."""
+        if self._sampler is not None:
+            try:
+                self._sampler.sample()
+            except Exception:  # noqa: BLE001
+                logger.debug("IOReport baseline sample failed", exc_info=True)
+
+    def read(self) -> dict[str, Any]:
+        """Return mean GPU watts since the last start()/read() + thermal."""
+        gpu_watts: float | None = None
+        if self._sampler is not None:
+            try:
+                gpu_watts = self._sampler.sample().gpu_watts
+            except Exception:  # noqa: BLE001
+                logger.debug("IOReport read failed", exc_info=True)
+        speed_limit: int | None = None
+        try:
+            sl = collect_thermal().speed_limit
+            speed_limit = sl if sl >= 0 else None
+        except Exception:  # noqa: BLE001
+            logger.debug("thermal read failed", exc_info=True)
+        return {"gpu_watts": gpu_watts, "thermal_speed_limit": speed_limit}
+
+    def close(self) -> None:
+        if self._sampler is not None:
+            try:
+                self._sampler.close()
+            except Exception:  # noqa: BLE001
+                logger.debug("IOReport close failed", exc_info=True)
+            self._sampler = None
+
+
+def summarize_thermal(runs: list) -> dict[str, Any]:
+    """Summarize per-run thermal speed limits into a quality-gate entry.
+
+    Returns the minimum observed speed limit and whether any run was
+    throttled (<100). ``observed`` is False when no run reported a limit,
+    so consumers can distinguish "not throttled" from "not measured."
+    """
+    limits = [
+        getattr(r, "thermal_speed_limit", None)
+        for r in runs
+        if getattr(r, "thermal_speed_limit", None) is not None
+    ]
+    if not limits:
+        return {"observed": False, "min_speed_limit": None, "throttled": False}
+    min_limit = min(limits)
+    return {
+        "observed": True,
+        "min_speed_limit": min_limit,
+        "throttled": min_limit < 100,
+    }
+
+
 __all__ = [
     "DEFAULT_EARLY_STOP_MIN_RUNS",
     "DEFAULT_EARLY_STOP_RATIO",
@@ -300,6 +396,8 @@ __all__ = [
     "MemorySample",
     "MemoryWatcher",
     "MemoryWatchResult",
+    "PowerThermalProbe",
     "check_duplicate_processes",
     "detect_early_stop",
+    "summarize_thermal",
 ]

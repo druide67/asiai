@@ -9,8 +9,10 @@ from asiai.benchmark.agentic import AgenticRun
 from asiai.benchmark.quality_gates import (
     DEFAULT_EARLY_STOP_RATIO,
     MemoryWatcher,
+    PowerThermalProbe,
     check_duplicate_processes,
     detect_early_stop,
+    summarize_thermal,
 )
 
 # --- early-stop -----------------------------------------------------------
@@ -242,3 +244,112 @@ def test_memory_watcher_no_alert_on_stable():
     assert w.result.alerted is False
     assert w.result.max_swap_delta_mb == 0.0
     assert w.result.max_swapouts_delta == 0
+
+
+# --- thermal summary ------------------------------------------------------
+
+
+def test_summarize_thermal_not_observed_when_no_limits():
+    runs = [AgenticRun(phase="cold"), AgenticRun(phase="warm")]
+    result = summarize_thermal(runs)
+    assert result == {"observed": False, "min_speed_limit": None, "throttled": False}
+
+
+def test_summarize_thermal_not_throttled_at_100():
+    runs = [
+        AgenticRun(phase="cold", thermal_speed_limit=100),
+        AgenticRun(phase="warm", thermal_speed_limit=100),
+    ]
+    result = summarize_thermal(runs)
+    assert result == {"observed": True, "min_speed_limit": 100, "throttled": False}
+
+
+def test_summarize_thermal_throttled_when_any_below_100():
+    runs = [
+        AgenticRun(phase="cold", thermal_speed_limit=100),
+        AgenticRun(phase="warm", thermal_speed_limit=70),
+        AgenticRun(phase="prefix-test-1", thermal_speed_limit=100),
+    ]
+    result = summarize_thermal(runs)
+    assert result["observed"] is True
+    assert result["min_speed_limit"] == 70
+    assert result["throttled"] is True
+
+
+# --- power/thermal probe --------------------------------------------------
+
+
+def test_power_thermal_probe_unavailable_returns_none():
+    # IOReport not available on this host (e.g. CI Linux runner): probe is
+    # inert, read() still returns the dict shape with gpu_watts None.
+    with patch("asiai.benchmark.quality_gates.ioreport_available", return_value=False):
+        probe = PowerThermalProbe()
+        assert probe.available is False
+        probe.start()  # no-op, must not raise
+        with patch(
+            "asiai.benchmark.quality_gates.collect_thermal",
+            side_effect=Exception("no thermal"),
+        ):
+            reading = probe.read()
+        assert reading == {"gpu_watts": None, "thermal_speed_limit": None}
+        probe.close()  # idempotent, must not raise
+        probe.close()
+
+
+def test_power_thermal_probe_reads_gpu_watts_and_thermal():
+    fake_sampler = type(
+        "FakeSampler",
+        (),
+        {
+            "sample": lambda self: type("R", (), {"gpu_watts": 24.5})(),
+            "close": lambda self: None,
+        },
+    )()
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.benchmark.quality_gates.ioreport_available", return_value=True),
+        patch("asiai.benchmark.quality_gates.IOReportSampler", return_value=fake_sampler),
+        patch("asiai.benchmark.quality_gates.collect_thermal", return_value=fake_thermal),
+    ):
+        probe = PowerThermalProbe()
+        assert probe.available is True
+        probe.start()
+        reading = probe.read()
+    assert reading["gpu_watts"] == 24.5
+    assert reading["thermal_speed_limit"] == 100
+
+
+def test_power_thermal_probe_negative_speed_limit_becomes_none():
+    # collect_thermal() returns -1 when the speed limit is unknown; the probe
+    # maps that to None so consumers don't treat -1 as a real throttle value.
+    fake_thermal = type("T", (), {"speed_limit": -1})()
+    with (
+        patch("asiai.benchmark.quality_gates.ioreport_available", return_value=False),
+        patch("asiai.benchmark.quality_gates.collect_thermal", return_value=fake_thermal),
+    ):
+        probe = PowerThermalProbe()
+        reading = probe.read()
+    assert reading["thermal_speed_limit"] is None
+
+
+def test_power_thermal_probe_sampler_exception_yields_none():
+    # A sampler that raises on sample() must not crash the bench; gpu_watts
+    # degrades to None.
+    class BoomSampler:
+        def sample(self):
+            raise RuntimeError("ioreport boom")
+
+        def close(self):
+            pass
+
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.benchmark.quality_gates.ioreport_available", return_value=True),
+        patch("asiai.benchmark.quality_gates.IOReportSampler", return_value=BoomSampler()),
+        patch("asiai.benchmark.quality_gates.collect_thermal", return_value=fake_thermal),
+    ):
+        probe = PowerThermalProbe()
+        probe.start()  # swallows the exception
+        reading = probe.read()
+    assert reading["gpu_watts"] is None
+    assert reading["thermal_speed_limit"] == 100
