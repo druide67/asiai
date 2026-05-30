@@ -7,7 +7,11 @@ import time
 from dataclasses import dataclass, field
 
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
-from asiai.benchmark.quality_gates import PowerThermalProbe, check_duplicate_processes
+from asiai.benchmark.quality_gates import (
+    MemoryWatcher,
+    PowerThermalProbe,
+    check_duplicate_processes,
+)
 from asiai.collectors.gpu import collect_gpu
 from asiai.collectors.system import (
     collect_engine_processes,
@@ -246,6 +250,13 @@ def run_benchmark(
     if any(s.engine.name == "ollama" for s in slots):
         ollama_runner_type = detect_ollama_runner_type()
 
+    # Continuous memory-pressure watcher around the whole bench loop, for
+    # parity with agentic/burst (standard previously had only the one-shot
+    # pre-check above). Daemon thread, observational: surfaces an error if
+    # swap/swapouts grow past threshold during the runs. Stopped after the loop.
+    mem_watcher = MemoryWatcher()
+    mem_watcher.__enter__()
+
     slots_run = 0
     prev_model = ""
     prev_engine = None
@@ -426,6 +437,10 @@ def run_benchmark(
         slots_run += 1
         prev_model = engine_model
         prev_engine = engine
+
+    mem_watcher.__exit__(None, None, None)
+    if mem_watcher.result.alerted:
+        run.errors.append(f"Memory pressure during benchmark: {mem_watcher.result.alert_reason}")
 
     return run
 
