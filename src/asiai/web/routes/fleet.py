@@ -300,8 +300,14 @@ async def api_fleet_nodes() -> JSONResponse:
     return JSONResponse({"nodes": nodes_out})
 
 
-def _aggregate_fleet_snapshot(state: AppState, timeout: float = 5.0) -> dict:
-    """Get cached fleet snapshot or run a fresh parallel poll."""
+def _aggregate_fleet_snapshot(state: AppState, timeout: float = 10.0) -> dict:
+    """Get cached fleet snapshot or run a fresh parallel poll.
+
+    The per-node timeout is 10s (not 5s): a remote node's ``/api/v1/snapshot``
+    does a full engine scan on a cold cache and can legitimately take ~6s on a
+    loaded host, which a 5s timeout would mis-report as DOWN. The node caches
+    its own snapshot ~10s, so subsequent polls are sub-second.
+    """
     cached = state.get_fleet_cache(max_age=10.0)
     if cached:
         return cached

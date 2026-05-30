@@ -103,6 +103,22 @@ def test_versions_grid_fragment(client):
     assert "<!DOCTYPE html>" not in resp.text
 
 
+def test_versions_page_shows_not_installed_engines(client):
+    # The page must list ALL engines, including not-installed ones (with a
+    # "not installed" marker) — a fleet-style at-a-glance view.
+    reports = [
+        EngineVersionReport(
+            engine_name="llamacpp", display="llama.cpp", status=VersionStatus.UP_TO_DATE
+        ),
+        EngineVersionReport(engine_name="exo", display="Exo", status=VersionStatus.NOT_INSTALLED),
+    ]
+    with mock.patch("asiai.web.routes.versions.collect_reports", return_value=reports):
+        resp = client.get("/versions")
+    assert resp.status_code == 200
+    assert "Exo" in resp.text
+    assert "not installed" in resp.text
+
+
 def test_versions_page_has_copypaste_actions_not_post_buttons(client):
     with mock.patch("asiai.web.routes.versions.collect_reports", return_value=_reports()):
         resp = client.get("/versions")
