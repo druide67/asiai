@@ -38,6 +38,7 @@ AISCTL_MANAGED_ENGINES = frozenset(
         "turboquant",
         "vmlx",
         "mlx-lm",
+        "rapidmlx",
     }
 )
 

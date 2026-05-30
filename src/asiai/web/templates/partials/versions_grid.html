@@ -10,15 +10,26 @@
         </tr>
     </thead>
     <tbody>
+    {# Status -> dot colour (visual scan). Amber = needs attention,
+       green = ok, dim = not installed / unknown. #}
+    {% set dot = {
+        'up-to-date': '#3fb950',
+        'upgrade-available': '#d29922',
+        'running-stale': '#db6d28',
+        'not-installed': '#484f58',
+        'unknown': '#6e7681'
+    } %}
     {% for e in snapshot.engines %}
-        {% if e.installed or e.running or e.status != 'not-installed' %}
-        <tr style="border-bottom: 1px solid var(--border, #2a2a2a);">
-            <td style="padding: 0.5rem 0.75rem;"><strong>{{ e.display or e.engine_name }}</strong>
+        {% set absent = e.status == 'not-installed' %}
+        <tr style="border-bottom: 1px solid var(--border, #2a2a2a);{% if absent %} opacity: 0.5;{% endif %}">
+            <td style="padding: 0.5rem 0.75rem; white-space: nowrap;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {{ dot.get(e.status, '#6e7681') }}; margin-right: 0.5rem;"></span>
+                <strong>{{ e.display or e.engine_name }}</strong>
                 {% if e.source == 'aisrv' %}<span style="opacity: 0.4; font-size: 0.7rem;"> (aisrv)</span>{% endif %}
             </td>
             <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;">{{ e.running or '—' }}</td>
             <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;">{{ e.installed or '—' }}</td>
-            <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;">{{ e.available or '—' }}</td>
+            <td style="padding: 0.5rem 0.75rem; font-family: 'Geist Mono', monospace;{% if e.status == 'upgrade-available' %} color: #d29922; font-weight: 600;{% endif %}">{{ e.available or '—' }}</td>
             <td style="padding: 0.5rem 0.75rem;">
                 {% if e.status == 'up-to-date' %}
                 <span class="badge badge-ok">up-to-date</span>
@@ -27,9 +38,9 @@
                 {% elif e.status == 'running-stale' %}
                 <span class="badge badge-warn">running stale</span>
                 {% elif e.status == 'not-installed' %}
-                <span class="badge" style="opacity: 0.5;">not installed</span>
+                <span class="badge" style="opacity: 0.6;">not installed</span>
                 {% else %}
-                <span class="badge" style="opacity: 0.5;">unknown</span>
+                <span class="badge" style="opacity: 0.6;">unknown</span>
                 {% endif %}
             </td>
             <td style="padding: 0.5rem 0.75rem;">
@@ -38,7 +49,6 @@
                 {% else %}—{% endif %}
             </td>
         </tr>
-        {% endif %}
     {% endfor %}
     </tbody>
 </table>

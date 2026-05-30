@@ -17,6 +17,7 @@ def test_managed_engines_set_is_non_empty():
     assert "llamacpp" in AISCTL_MANAGED_ENGINES
     assert "ollama" in AISCTL_MANAGED_ENGINES
     assert "mlx-lm" in AISCTL_MANAGED_ENGINES
+    assert "rapidmlx" in AISCTL_MANAGED_ENGINES
 
 
 def test_is_aisctl_available_true_when_on_path():
