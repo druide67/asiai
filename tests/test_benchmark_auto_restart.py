@@ -17,6 +17,9 @@ def test_managed_engines_set_is_non_empty():
     assert "llamacpp" in AISCTL_MANAGED_ENGINES
     assert "ollama" in AISCTL_MANAGED_ENGINES
     assert "mlx-lm" in AISCTL_MANAGED_ENGINES
+    # rapidmlx is the M5 winner (109 tok/s) and is an aisrv-registered driver;
+    # it must be auto-restartable or its cold-start is silently skipped.
+    assert "rapidmlx" in AISCTL_MANAGED_ENGINES
 
 
 def test_is_aisctl_available_true_when_on_path():
