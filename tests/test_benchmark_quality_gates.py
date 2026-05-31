@@ -14,6 +14,7 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
     detect_early_stop,
+    read_kv_cache_tokens,
     summarize_thermal,
 )
 
@@ -293,7 +294,7 @@ def test_power_thermal_probe_unavailable_returns_none():
             side_effect=Exception("no thermal"),
         ):
             reading = probe.read()
-        assert reading == {"gpu_watts": None, "thermal_speed_limit": None}
+        assert reading == {"gpu_watts": None, "thermal_speed_limit": None, "engine_rss_mb": None}
         probe.close()  # idempotent, must not raise
         probe.close()
 
@@ -377,8 +378,8 @@ def test_power_thermal_probe_default_no_cross_validate():
         reading = probe.read()
         probe.close()
     mock_pm.assert_not_called()
-    # read() keeps the per-window two-field shape (no provenance fields).
-    assert set(reading) == {"gpu_watts", "thermal_speed_limit"}
+    # read() keeps the per-window shape (no powermetrics provenance fields).
+    assert set(reading) == {"gpu_watts", "thermal_speed_limit", "engine_rss_mb"}
     assert reading["gpu_watts"] == 12.0
 
 
@@ -442,3 +443,82 @@ def test_probe_read_aggregate_precedence(io_watts, pm_watts, expect_gpu, expect_
     assert reading["power_watts_ioreport"] == io_watts
     assert reading["power_watts_powermetrics"] == pm_watts
     assert reading["thermal_speed_limit"] == 100
+
+
+# --- engine footprint (#18) -----------------------------------------------
+
+
+def test_engine_footprint_matches_and_converts_to_mb():
+    # engine_name set + a matching process → engine_rss_mb in MB (phys footprint).
+    fake_proc = type("P", (), {"name": "llamacpp", "rss_bytes": 21474836480})()  # 20 GiB
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
+    ):
+        probe = PowerThermalProbe(engine_name="llamacpp")
+        reading = probe.read()
+    assert reading["engine_rss_mb"] == 20480.0  # 20 GiB → MB
+
+
+def test_engine_footprint_normalizes_engine_name():
+    # 'mlx-lm' (hyphen) must match the collector's 'mlxlm' key.
+    fake_proc = type("P", (), {"name": "mlxlm", "rss_bytes": 1073741824})()  # 1 GiB
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
+    ):
+        probe = PowerThermalProbe(engine_name="mlx-lm")
+        assert probe.read()["engine_rss_mb"] == 1024.0
+
+
+def test_engine_footprint_none_when_no_match_or_no_name():
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[]) as mock_procs,
+    ):
+        # no engine_name → no process scan at all
+        assert PowerThermalProbe().read()["engine_rss_mb"] is None
+        mock_procs.assert_not_called()
+        # engine_name set but no matching process → None
+        assert PowerThermalProbe(engine_name="llamacpp").read()["engine_rss_mb"] is None
+
+
+# --- KV cache tokens via /metrics (#19) -----------------------------------
+
+
+class _FakeResp:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, _n=None):
+        return self._body
+
+
+def test_read_kv_cache_tokens_parses_llamacpp_metrics():
+    metrics = b"llamacpp:prompt_tokens_total 0\nllamacpp:kv_cache_tokens 6144\n"
+    with patch("urllib.request.urlopen", return_value=_FakeResp(metrics)):
+        assert read_kv_cache_tokens("http://localhost:8080") == 6144
+
+
+def test_read_kv_cache_tokens_none_cases():
+    # empty / non-http scheme → None, without touching the network
+    assert read_kv_cache_tokens("") is None
+    assert read_kv_cache_tokens("file:///x") is None
+    # metric absent (MLX engine without the counter) → None
+    with patch("urllib.request.urlopen", return_value=_FakeResp(b"some_other_metric 1\n")):
+        assert read_kv_cache_tokens("http://localhost:8004") is None
+    # network error → None
+    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+        assert read_kv_cache_tokens("http://localhost:8080") is None

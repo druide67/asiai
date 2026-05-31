@@ -27,6 +27,7 @@ import re
 import subprocess
 import threading
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -352,7 +353,9 @@ class PowerThermalProbe:
         self,
         cross_validate: bool = False,
         power_monitor_factory: Any = None,
+        engine_name: str | None = None,
     ) -> None:
+        self._engine_name = engine_name
         self._sampler: _ioreport.IOReportSampler | None = None
         if _ioreport.ioreport_available():
             try:
@@ -416,16 +419,39 @@ class PowerThermalProbe:
             logger.debug("thermal read failed", exc_info=True)
             return None
 
-    def read(self) -> dict[str, Any]:
-        """Return mean GPU watts since the last start()/read() + thermal.
+    def _read_engine_rss_mb(self) -> float | None:
+        """Physical footprint (MB, incl. Metal/GPU) of the bench target engine.
 
-        Per-window shape used by agentic/burst: only ``gpu_watts`` and
-        ``thermal_speed_limit``, so those modes pay nothing for the
-        cross-validation provenance fields.
+        Best-effort snapshot via ``collect_engine_processes()`` (prefers
+        ``ri_phys_footprint`` over RSS, sums child processes). ``None`` when no
+        ``engine_name`` was given or no matching process is running. Captures
+        weights + KV cache + runtime together; the per-component breakdown is a
+        separate follow-up (model vs KV).
+        """
+        if not self._engine_name:
+            return None
+        try:
+            procs = _system.collect_engine_processes()
+        except Exception:  # noqa: BLE001
+            logger.debug("engine footprint read failed", exc_info=True)
+            return None
+        target = self._engine_name.lower().replace("-", "").replace("_", "")
+        for p in procs:
+            if p.name.lower().replace("-", "").replace("_", "") == target and p.rss_bytes > 0:
+                return round(p.rss_bytes / (1024 * 1024), 1)
+        return None
+
+    def read(self) -> dict[str, Any]:
+        """Return mean GPU watts since the last start()/read() + thermal + footprint.
+
+        Per-window shape used by agentic/burst: ``gpu_watts``,
+        ``thermal_speed_limit`` and ``engine_rss_mb`` (no powermetrics
+        provenance fields — those modes pay nothing for cross-validation).
         """
         return {
             "gpu_watts": self._read_ioreport_watts(),
             "thermal_speed_limit": self._read_thermal(),
+            "engine_rss_mb": self._read_engine_rss_mb(),
         }
 
     def read_aggregate(self) -> dict[str, Any]:
@@ -469,6 +495,7 @@ class PowerThermalProbe:
             "power_watts_powermetrics": pm_gpu_watts,
             "power_source": power_source,
             "thermal_speed_limit": self._read_thermal(),
+            "engine_rss_mb": self._read_engine_rss_mb(),
         }
 
     def close(self) -> None:
@@ -510,6 +537,36 @@ def summarize_thermal(runs: list) -> dict[str, Any]:
     }
 
 
+def read_kv_cache_tokens(base_url: str | None, timeout: float = 2.0) -> int | None:
+    """KV-cache tokens currently held by the engine, via its Prometheus ``/metrics``.
+
+    Reads ``llamacpp:kv_cache_tokens`` — exposed by llama.cpp and ollama (bundled
+    llama.cpp). This is the KV-cache *occupancy* (the memory component that grows
+    with context length and with ``--parallel`` slots), complementing the global
+    engine footprint (``engine_rss_mb``). MLX-family engines have no standard
+    metrics endpoint → returns None (graceful).
+
+    Best-effort: never raises. Note (1) it is a live snapshot, so call it right
+    after a run before the next prompt resets the cache; (2) it is *tokens*, not
+    bytes — a bytes split would need per-engine model metadata.
+    """
+    if not base_url or not base_url.startswith(("http://", "https://")):
+        return None
+    url = base_url.rstrip("/") + "/metrics"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            body = resp.read(1_000_000).decode("utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 — network/timeout/HTTP grab bag
+        return None
+    for line in body.splitlines():
+        if line.startswith("llamacpp:kv_cache_tokens"):
+            try:
+                return int(float(line.split()[-1]))
+            except (ValueError, IndexError):
+                return None
+    return None
+
+
 __all__ = [
     "DEFAULT_EARLY_STOP_MIN_RUNS",
     "DEFAULT_EARLY_STOP_RATIO",
@@ -522,5 +579,6 @@ __all__ = [
     "PowerThermalProbe",
     "check_duplicate_processes",
     "detect_early_stop",
+    "read_kv_cache_tokens",
     "summarize_thermal",
 ]

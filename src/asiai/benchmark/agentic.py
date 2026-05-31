@@ -50,6 +50,7 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
     detect_early_stop,
+    read_kv_cache_tokens,
     summarize_thermal,
 )
 
@@ -97,6 +98,8 @@ class AgenticRun:
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
     thermal_speed_limit: int | None = None
+    engine_rss_mb: float | None = None
+    kv_cache_tokens: int | None = None  # KV occupancy via /metrics (≠ cached_tokens prefix-hit)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -236,6 +239,10 @@ def _do_single_run(
         reading = probe.read()
         run.gpu_watts = reading["gpu_watts"]
         run.thermal_speed_limit = reading["thermal_speed_limit"]
+        run.engine_rss_mb = reading["engine_rss_mb"]
+        # KV occupancy snapshot right after the run (before the next prompt
+        # resets it). llama.cpp/ollama only; None elsewhere.
+        run.kv_cache_tokens = read_kv_cache_tokens(base_url)
         if run.gpu_watts and run.decode_tok_s:
             run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
 
@@ -333,7 +340,7 @@ def run_agentic_bench(
     started = int(time.time())
 
     watcher = None if skip_quality_gates else MemoryWatcher()
-    probe = None if skip_quality_gates else PowerThermalProbe()
+    probe = None if skip_quality_gates else PowerThermalProbe(engine_name=engine_name)
     # Equivalent to ``with watcher`` but lets us skip cleanly when None.
     if watcher is not None:
         watcher.__enter__()
