@@ -10,6 +10,7 @@ import pytest
 from asiai.benchmark.agentic import AgenticRun
 from asiai.benchmark.quality_gates import (
     DEFAULT_EARLY_STOP_RATIO,
+    KVCacheSampler,
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
@@ -522,3 +523,53 @@ def test_read_kv_cache_tokens_none_cases():
     # network error → None
     with patch("urllib.request.urlopen", side_effect=OSError("refused")):
         assert read_kv_cache_tokens("http://localhost:8080") is None
+
+
+# --- KVCacheSampler background peak (#19, modern /slots source) ------------
+
+
+def test_kv_cache_sampler_captures_peak_over_processing_slots():
+    # /slots returns rising n_prompt_tokens while processing, then idle.
+    # The sampler keeps the peak and ignores the idle (is_processing=False) read.
+    responses = [
+        b'[{"is_processing": true, "n_prompt_tokens": 100}]',
+        b'[{"is_processing": true, "n_prompt_tokens": 250}]',
+        b'[{"is_processing": true, "n_prompt_tokens": 420}]',
+        b'[{"is_processing": false, "n_prompt_tokens": 9999}]',
+    ]
+    state = {"i": 0}
+
+    def fake_urlopen(url, timeout=None):
+        body = responses[min(state["i"], len(responses) - 1)]
+        state["i"] += 1
+        return _FakeResp(body)
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            _wait_until(lambda: kv.result.max_kv_tokens >= 420, timeout=5.0)
+    assert kv.result.max_kv_tokens == 420  # idle 9999 not counted
+
+
+def test_kv_cache_sampler_parallel_sums_active_slots():
+    # Under --parallel, N processing slots each hold a KV → summed.
+    body = (
+        b'[{"is_processing": true, "n_prompt_tokens": 300}, '
+        b'{"is_processing": true, "n_prompt_tokens": 250}, '
+        b'{"is_processing": false, "n_prompt_tokens": 50}]'
+    )
+    with patch("urllib.request.urlopen", return_value=_FakeResp(body)):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            _wait_until(lambda: kv.result.max_kv_tokens >= 550, timeout=5.0)
+    assert kv.result.max_kv_tokens == 550  # 300 + 250, idle slot excluded
+
+
+def test_kv_cache_sampler_disabled_and_graceful():
+    # Non-http / empty → disabled, no thread, no network.
+    with KVCacheSampler("") as kv:
+        pass
+    assert kv.result.max_kv_tokens == 0
+    # Errors on /slots stay graceful → peak 0.
+    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            pass  # enter/exit; any poll errors stay graceful
+    assert kv.result.max_kv_tokens == 0
