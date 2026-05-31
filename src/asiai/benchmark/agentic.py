@@ -46,6 +46,7 @@ from asiai.benchmark.prompts import (
     USER_Y,
 )
 from asiai.benchmark.quality_gates import (
+    KVCacheSampler,
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
@@ -163,8 +164,12 @@ def _do_single_run(
 
     # Reset the power/energy baseline right before the request so the window
     # measured by ``probe.read()`` covers this run's prefill + decode only.
+    # KVCacheSampler polls /slots during the stream to capture the KV peak.
+    kv_sampler = KVCacheSampler(base_url) if probe is not None else None
     if probe is not None:
         probe.start()
+    if kv_sampler is not None:
+        kv_sampler.__enter__()
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -235,14 +240,18 @@ def _do_single_run(
     # tok/s/W uses decode_tok_s as the throughput numerator; on the short
     # phases (400 tokens) decode dominates the window so this is a fair
     # efficiency proxy, with the caveat that prefill power is folded in.
+    if kv_sampler is not None:
+        kv_sampler.__exit__(None, None, None)
     if probe is not None:
         reading = probe.read()
         run.gpu_watts = reading["gpu_watts"]
         run.thermal_speed_limit = reading["thermal_speed_limit"]
         run.engine_rss_mb = reading["engine_rss_mb"]
-        # KV occupancy snapshot right after the run (before the next prompt
-        # resets it). llama.cpp/ollama only; None elsewhere.
-        run.kv_cache_tokens = read_kv_cache_tokens(base_url)
+        # KV-cache occupancy peak sampled during the run via /slots (llama.cpp);
+        # fall back to the legacy /metrics counter (old builds / ollama). None
+        # for MLX engines without /slots.
+        kv_peak = kv_sampler.result.max_kv_tokens if kv_sampler else 0
+        run.kv_cache_tokens = kv_peak or read_kv_cache_tokens(base_url) or None
         if run.gpu_watts and run.decode_tok_s:
             run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
 

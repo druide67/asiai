@@ -22,6 +22,7 @@ isn't compared as-is against clean runs.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import subprocess
@@ -575,12 +576,91 @@ def read_kv_cache_tokens(base_url: str | None, timeout: float = 2.0) -> int | No
     return None
 
 
+# --- KV-cache occupancy sampler (background, per-run) ---------------------
+
+DEFAULT_KV_POLL_INTERVAL_SEC = 0.4
+
+
+@dataclass
+class KVCacheWatchResult:
+    samples: list[int] = field(default_factory=list)
+    max_kv_tokens: int = 0
+
+
+class KVCacheSampler:
+    """Background sampler for llama.cpp KV-cache occupancy via ``GET /slots``.
+
+    Same skeleton as :class:`MemoryWatcher` (daemon thread + context manager),
+    but tuned for the KV: a much tighter poll interval (the cache grows fast
+    during a run, so a single post-run snapshot misses it — it lands on idle),
+    scoped to a single run, and it keeps the *peak*.
+
+    Each poll sums ``n_prompt_tokens`` (prompt + decoded = tokens held in the
+    slot's KV, confirmed on llama.cpp b9430) over slots with
+    ``is_processing == True``. Under ``--parallel N`` the N active slots each
+    hold a KV, so the sum is the real total occupancy — the metric that drives
+    OOM/swap.
+
+    Graceful: ``/slots`` absent/disabled (some builds gate it behind a flag, or
+    MLX engines without the endpoint) or any error → ``max_kv_tokens`` stays 0
+    (callers map 0 → None).
+    """
+
+    def __init__(self, base_url: str | None, interval: float = DEFAULT_KV_POLL_INTERVAL_SEC):
+        self.base_url = base_url
+        self.interval = interval
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.result = KVCacheWatchResult()
+        self._enabled = bool(base_url) and base_url.startswith(("http://", "https://"))
+
+    def _poll_once(self) -> int | None:
+        url = self.base_url.rstrip("/") + "/slots"
+        try:
+            with urllib.request.urlopen(url, timeout=2.0) as resp:
+                slots = json.loads(resp.read(2_000_000).decode("utf-8", errors="replace"))
+        except Exception:  # noqa: BLE001 — /slots disabled, network, json
+            return None
+        if not isinstance(slots, list):
+            return None
+        total = 0
+        for s in slots:
+            if isinstance(s, dict) and s.get("is_processing"):
+                n = s.get("n_prompt_tokens")
+                if isinstance(n, int) and n > 0:
+                    total += n
+        return total
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self.interval):
+            total = self._poll_once()
+            if total is not None:
+                self.result.samples.append(total)
+                if total > self.result.max_kv_tokens:
+                    self.result.max_kv_tokens = total
+
+    def __enter__(self) -> KVCacheSampler:
+        if self._enabled:
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._loop, daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+
+
 __all__ = [
     "DEFAULT_EARLY_STOP_MIN_RUNS",
     "DEFAULT_EARLY_STOP_RATIO",
+    "DEFAULT_KV_POLL_INTERVAL_SEC",
     "DEFAULT_POLL_INTERVAL_SEC",
     "DEFAULT_SWAP_DELTA_THRESHOLD_MB",
     "DEFAULT_SWAPOUTS_DELTA_THRESHOLD",
+    "KVCacheSampler",
+    "KVCacheWatchResult",
     "MemorySample",
     "MemoryWatcher",
     "MemoryWatchResult",
