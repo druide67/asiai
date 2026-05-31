@@ -237,3 +237,30 @@ def test_run_agentic_bench_http_error():
             only=["cold"],
         )
     assert out["runs"][0]["error"] == "HTTP 400"
+
+
+def test_kv_sampler_stopped_on_error_path():
+    # Regression for the reviewed blocker: the KVCacheSampler must be stopped
+    # even when the request errors out, otherwise its daemon keeps polling
+    # /slots and contaminates the subsequent phases.
+    import urllib.error
+    from unittest.mock import MagicMock
+
+    err = urllib.error.HTTPError(
+        url="http://x", code=503, msg="busy", hdrs={}, fp=io.BytesIO(b"{}")
+    )
+    sampler = MagicMock()
+    with (
+        patch("asiai.benchmark.agentic.KVCacheSampler", return_value=sampler),
+        patch("asiai.benchmark.agentic.urllib.request.urlopen", side_effect=err),
+        patch("asiai.benchmark.agentic.time.sleep"),
+    ):
+        run_agentic_bench(
+            base_url="http://localhost:8080",
+            engine_name="t",
+            model="m",
+            pause=0,
+            only=["cold"],
+        )
+    sampler.__enter__.assert_called()
+    sampler.__exit__.assert_called()
