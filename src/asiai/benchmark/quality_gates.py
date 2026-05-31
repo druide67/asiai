@@ -420,13 +420,17 @@ class PowerThermalProbe:
             return None
 
     def _read_engine_rss_mb(self) -> float | None:
-        """Physical footprint (MB, incl. Metal/GPU) of the bench target engine.
+        """Physical footprint (MB) of the bench target engine's process(es).
 
-        Best-effort snapshot via ``collect_engine_processes()`` (prefers
-        ``ri_phys_footprint`` over RSS, sums child processes). ``None`` when no
-        ``engine_name`` was given or no matching process is running. Captures
-        weights + KV cache + runtime together; the per-component breakdown is a
-        separate follow-up (model vs KV).
+        Best-effort snapshot via ``collect_engine_processes()`` (``ri_phys_footprint``,
+        sums child processes). ``None`` when no ``engine_name`` was given or no
+        matching process is running.
+
+        Caveat (Apple Silicon): ``ri_phys_footprint`` counts anonymous + Metal
+        memory but NOT file-backed mmap pages, so for engines that mmap a GGUF
+        (llama.cpp) the model weights are largely excluded — this tracks the KV
+        cache + runtime/Metal buffers (the dynamic part), not the full model.
+        MLX engines (no GGUF mmap) report closer to the full footprint.
         """
         if not self._engine_name:
             return None
