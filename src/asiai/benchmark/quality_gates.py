@@ -544,15 +544,19 @@ def summarize_thermal(runs: list) -> dict[str, Any]:
 def read_kv_cache_tokens(base_url: str | None, timeout: float = 2.0) -> int | None:
     """KV-cache tokens currently held by the engine, via its Prometheus ``/metrics``.
 
-    Reads ``llamacpp:kv_cache_tokens`` — exposed by llama.cpp and ollama (bundled
-    llama.cpp). This is the KV-cache *occupancy* (the memory component that grows
-    with context length and with ``--parallel`` slots), complementing the global
-    engine footprint (``engine_rss_mb``). MLX-family engines have no standard
-    metrics endpoint → returns None (graceful).
+    Reads ``llamacpp:kv_cache_tokens`` — the KV-cache *occupancy* (memory that
+    grows with context length and ``--parallel`` slots), complementing the
+    global footprint (``engine_rss_mb``).
 
-    Best-effort: never raises. Note (1) it is a live snapshot, so call it right
-    after a run before the next prompt resets the cache; (2) it is *tokens*, not
-    bytes — a bytes split would need per-engine model metadata.
+    Caveat: llama.cpp **removed** ``kv_cache_usage_ratio`` / ``kv_cache_tokens``
+    from ``/metrics`` in recent builds (KV-cache refactor → unified memory), so
+    modern llama.cpp returns None here; ollama (older bundled llama.cpp) and
+    legacy builds may still expose it. MLX engines have no metrics endpoint.
+    The modern KV-occupancy source is ``/slots`` (``n_past``, only while
+    processing) sampled by a background thread — a follow-up (#19).
+
+    Best-effort: never raises. Returns *tokens*, not bytes (a bytes split needs
+    per-engine model metadata), and a live snapshot.
     """
     if not base_url or not base_url.startswith(("http://", "https://")):
         return None
