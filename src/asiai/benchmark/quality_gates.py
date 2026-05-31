@@ -440,7 +440,11 @@ class PowerThermalProbe:
         except Exception:  # noqa: BLE001
             logger.debug("engine footprint read failed", exc_info=True)
             return None
-        target = self._engine_name.lower().replace("-", "").replace("_", "")
+        # collect_engine_processes() maps every llama-server process to the key
+        # "llamacpp", so aux instances (llamacpp-aux, llamacpp-aux-N) must alias
+        # to it or they'd never match (their phys footprint would read None).
+        name = "llamacpp" if self._engine_name.startswith("llamacpp-aux") else self._engine_name
+        target = name.lower().replace("-", "").replace("_", "")
         for p in procs:
             if p.name.lower().replace("-", "").replace("_", "") == target and p.rss_bytes > 0:
                 return round(p.rss_bytes / (1024 * 1024), 1)

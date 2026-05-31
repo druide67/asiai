@@ -51,7 +51,6 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
     detect_early_stop,
-    read_kv_cache_tokens,
     summarize_thermal,
 )
 
@@ -206,10 +205,14 @@ def _do_single_run(
         body_text = e.read().decode("utf-8", errors="replace")[:500]
         run.error = f"HTTP {e.code}"
         run.error_body = body_text
+        if kv_sampler is not None:
+            kv_sampler.__exit__(None, None, None)
         return run
     except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
         run.error = type(e).__name__
         run.error_body = str(e)[:300]
+        if kv_sampler is not None:
+            kv_sampler.__exit__(None, None, None)
         return run
 
     t_end = time.perf_counter() - t0
@@ -247,11 +250,12 @@ def _do_single_run(
         run.gpu_watts = reading["gpu_watts"]
         run.thermal_speed_limit = reading["thermal_speed_limit"]
         run.engine_rss_mb = reading["engine_rss_mb"]
-        # KV-cache occupancy peak sampled during the run via /slots (llama.cpp);
-        # fall back to the legacy /metrics counter (old builds / ollama). None
-        # for MLX engines without /slots.
+        # KV-cache occupancy peak sampled during the run via /slots (llama.cpp).
+        # None for MLX engines (no /slots). No synchronous /metrics fallback:
+        # the kv_cache counter was removed from modern llama.cpp and the call
+        # only added up to 2 s of inter-run dead-time.
         kv_peak = kv_sampler.result.max_kv_tokens if kv_sampler else 0
-        run.kv_cache_tokens = kv_peak or read_kv_cache_tokens(base_url) or None
+        run.kv_cache_tokens = kv_peak or None
         if run.gpu_watts and run.decode_tok_s:
             run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
 

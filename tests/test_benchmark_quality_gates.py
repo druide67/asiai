@@ -444,6 +444,7 @@ def test_probe_read_aggregate_precedence(io_watts, pm_watts, expect_gpu, expect_
     assert reading["power_watts_ioreport"] == io_watts
     assert reading["power_watts_powermetrics"] == pm_watts
     assert reading["thermal_speed_limit"] == 100
+    assert "engine_rss_mb" in reading  # read_aggregate carries the footprint field
 
 
 # --- engine footprint (#18) -----------------------------------------------
@@ -488,6 +489,19 @@ def test_engine_footprint_none_when_no_match_or_no_name():
         mock_procs.assert_not_called()
         # engine_name set but no matching process → None
         assert PowerThermalProbe(engine_name="llamacpp").read()["engine_rss_mb"] is None
+
+
+def test_engine_footprint_llamacpp_aux_aliases_to_llamacpp():
+    # collect_engine_processes emits key "llamacpp" for any llama-server, so
+    # llamacpp-aux-N must alias to it (else footprint would always be None).
+    fake_proc = type("P", (), {"name": "llamacpp", "rss_bytes": 2147483648})()  # 2 GiB
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
+    ):
+        assert PowerThermalProbe(engine_name="llamacpp-aux-3").read()["engine_rss_mb"] == 2048.0
 
 
 # --- KV cache tokens via /metrics (#19) -----------------------------------
@@ -572,4 +586,19 @@ def test_kv_cache_sampler_disabled_and_graceful():
     with patch("urllib.request.urlopen", side_effect=OSError("refused")):
         with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
             pass  # enter/exit; any poll errors stay graceful
+    assert kv.result.max_kv_tokens == 0
+
+
+def test_kv_cache_sampler_non_list_slots_graceful():
+    # /slots returning a non-list (e.g. {"error":...} when disabled) → no crash,
+    # peak stays 0. Wait for at least one poll to confirm it was exercised.
+    calls = {"n": 0}
+
+    def fake(url, timeout=None):
+        calls["n"] += 1
+        return _FakeResp(b'{"error": "slots endpoint disabled"}')
+
+    with patch("urllib.request.urlopen", side_effect=fake):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            _wait_until(lambda: calls["n"] >= 1, timeout=2.0)
     assert kv.result.max_kv_tokens == 0
