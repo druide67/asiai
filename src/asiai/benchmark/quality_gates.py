@@ -34,24 +34,12 @@ from typing import Any
 
 from asiai.collectors import ioreport as _ioreport
 from asiai.collectors import system as _system
+from asiai.collectors.system import _engine_match_key, find_engine_process
 
 
 def _bytes_to_mb(b: int) -> float | None:
     """Bytes -> MB (1 decimal), or None when there is no reading (<= 0)."""
     return round(b / (1024 * 1024), 1) if b and b > 0 else None
-
-
-def _engine_match_key(engine_name: str | None) -> str:
-    """Canonical key to match an engine against ``collect_engine_processes()``.
-
-    Aux llama.cpp instances (``llamacpp-aux``, ``llamacpp-aux-N``) alias to the
-    ``llamacpp`` key that collector emits; everything else is lowercased with
-    ``-``/``_`` stripped.
-    """
-    if not engine_name:
-        return ""
-    name = "llamacpp" if engine_name.startswith("llamacpp-aux") else engine_name
-    return name.lower().replace("-", "").replace("_", "")
 
 
 # The probe resolves IOReport / thermal / powermetrics through their source
@@ -237,7 +225,54 @@ def _swap_used_mb() -> float:
         return 0.0
 
 
-class MemoryWatcher:
+class _IntervalSampler:
+    """Daemon-thread + context-manager skeleton shared by the bench samplers.
+
+    Subclasses implement ``_sample_once()`` (one poll, updating their own
+    ``result``). Set ``sample_on_start`` to take an immediate sample before the
+    first interval wait. Centralizing the thread lifecycle here means a fix to
+    join/exception handling propagates to every sampler — the sampler-leak
+    blocker came from this skeleton being copy-pasted three times.
+    """
+
+    def __init__(
+        self,
+        interval: float,
+        *,
+        enabled: bool = True,
+        join_timeout: float = 3.0,
+        sample_on_start: bool = False,
+    ) -> None:
+        self.interval = interval
+        self._enabled = enabled
+        self._join_timeout = join_timeout
+        self._sample_on_start = sample_on_start
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _sample_once(self) -> None:
+        raise NotImplementedError
+
+    def _loop(self) -> None:
+        if self._sample_on_start:
+            self._sample_once()
+        while not self._stop.wait(self.interval):
+            self._sample_once()
+
+    def __enter__(self):
+        if self._enabled:
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._loop, daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self._join_timeout)
+
+
+class MemoryWatcher(_IntervalSampler):
     """Background thread polling vm_stat + vm.swapusage at fixed interval.
 
     Used as a context manager around the bench loop. Records samples and
@@ -256,9 +291,7 @@ class MemoryWatcher:
         swap_delta_threshold_mb: float = DEFAULT_SWAP_DELTA_THRESHOLD_MB,
         swapouts_delta_threshold: int = DEFAULT_SWAPOUTS_DELTA_THRESHOLD,
     ):
-        self.interval = interval
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        super().__init__(interval, join_timeout=5.0)
 
         free, compressed, swapouts, page_size = _vm_stat_sample()
         swap_mb = _swap_used_mb()
@@ -279,47 +312,35 @@ class MemoryWatcher:
             )
         )
 
-    def _loop(self) -> None:
-        while not self._stop.wait(self.interval):
-            free, compressed, swapouts, _ = _vm_stat_sample()
-            swap_mb = _swap_used_mb()
-            sample = MemorySample(
-                timestamp=time.time(),
-                swap_used_mb=swap_mb,
-                swapouts=swapouts,
-                pages_free_bytes=free * self._page_size,
-                pages_compressed_bytes=compressed * self._page_size,
+    def _sample_once(self) -> None:
+        free, compressed, swapouts, _ = _vm_stat_sample()
+        swap_mb = _swap_used_mb()
+        sample = MemorySample(
+            timestamp=time.time(),
+            swap_used_mb=swap_mb,
+            swapouts=swapouts,
+            pages_free_bytes=free * self._page_size,
+            pages_compressed_bytes=compressed * self._page_size,
+        )
+        self.result.samples.append(sample)
+        swap_delta = sample.swap_used_mb - self.result.baseline_swap_mb
+        out_delta = sample.swapouts - self.result.baseline_swapouts
+        if swap_delta > self.result.max_swap_delta_mb:
+            self.result.max_swap_delta_mb = swap_delta
+        if out_delta > self.result.max_swapouts_delta:
+            self.result.max_swapouts_delta = out_delta
+        if not self.result.alerted and (
+            swap_delta >= self.result.swap_delta_threshold_mb
+            or out_delta >= self.result.swapouts_delta_threshold
+        ):
+            self.result.alerted = True
+            self.result.alert_reason = (
+                f"swap_delta={swap_delta:.0f}MB "
+                f"swapouts_delta={out_delta} (thresholds "
+                f"{self.result.swap_delta_threshold_mb:.0f}MB / "
+                f"{self.result.swapouts_delta_threshold})"
             )
-            self.result.samples.append(sample)
-            swap_delta = sample.swap_used_mb - self.result.baseline_swap_mb
-            out_delta = sample.swapouts - self.result.baseline_swapouts
-            if swap_delta > self.result.max_swap_delta_mb:
-                self.result.max_swap_delta_mb = swap_delta
-            if out_delta > self.result.max_swapouts_delta:
-                self.result.max_swapouts_delta = out_delta
-            if not self.result.alerted and (
-                swap_delta >= self.result.swap_delta_threshold_mb
-                or out_delta >= self.result.swapouts_delta_threshold
-            ):
-                self.result.alerted = True
-                self.result.alert_reason = (
-                    f"swap_delta={swap_delta:.0f}MB "
-                    f"swapouts_delta={out_delta} (thresholds "
-                    f"{self.result.swap_delta_threshold_mb:.0f}MB / "
-                    f"{self.result.swapouts_delta_threshold})"
-                )
-                logger.warning("memory pressure alert: %s", self.result.alert_reason)
-
-    def __enter__(self) -> MemoryWatcher:
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5)
+            logger.warning("memory pressure alert: %s", self.result.alert_reason)
 
 
 # --- Power + thermal probe (per-run window sampler) ----------------------
@@ -445,22 +466,8 @@ class PowerThermalProbe:
         return self._engine_name
 
     def _read_engine_proc(self) -> Any:
-        """The bench target engine's aggregated process info, or ``None``.
-
-        ``None`` when no ``engine_name`` was given or no matching process runs.
-        """
-        if not self._engine_name:
-            return None
-        try:
-            procs = _system.collect_engine_processes()
-        except Exception:  # noqa: BLE001
-            logger.debug("engine footprint read failed", exc_info=True)
-            return None
-        target = _engine_match_key(self._engine_name)
-        for p in procs:
-            if _engine_match_key(p.name) == target:
-                return p
-        return None
+        """The bench target engine's aggregated process info, or ``None``."""
+        return find_engine_process(self._engine_name)
 
     def _read_engine_rss_mb(self) -> float | None:
         """True RSS (MB) of the bench target engine — the honest, cross-family RAM.
@@ -484,8 +491,8 @@ class PowerThermalProbe:
         Kept as a second column for continuity and the KV/runtime breakdown.
         """
         p = self._read_engine_proc()
-        if p is not None and p.rss_bytes > 0:
-            return round(p.rss_bytes / (1024 * 1024), 1)
+        if p is not None and p.phys_footprint_bytes > 0:
+            return round(p.phys_footprint_bytes / (1024 * 1024), 1)
         return None
 
     def read(self) -> dict[str, Any]:
@@ -498,11 +505,13 @@ class PowerThermalProbe:
         memory fields.
         """
         p = self._read_engine_proc()
+        rss_mb = _bytes_to_mb(p.resident_bytes) if p is not None else None
+        phys_mb = _bytes_to_mb(p.phys_footprint_bytes) if p is not None else None
         return {
             "gpu_watts": self._read_ioreport_watts(),
             "thermal_speed_limit": self._read_thermal(),
-            "engine_rss_mb": _bytes_to_mb(p.resident_bytes) if p is not None else None,
-            "engine_phys_footprint_mb": _bytes_to_mb(p.rss_bytes) if p is not None else None,
+            "engine_rss_mb": rss_mb,
+            "engine_phys_footprint_mb": phys_mb,
         }
 
     def read_aggregate(self) -> dict[str, Any]:
@@ -541,14 +550,16 @@ class PowerThermalProbe:
             power_source = ""
 
         p = self._read_engine_proc()
+        rss_mb = _bytes_to_mb(p.resident_bytes) if p is not None else None
+        phys_mb = _bytes_to_mb(p.phys_footprint_bytes) if p is not None else None
         return {
             "gpu_watts": gpu_watts,
             "power_watts_ioreport": io_gpu_watts,
             "power_watts_powermetrics": pm_gpu_watts,
             "power_source": power_source,
             "thermal_speed_limit": self._read_thermal(),
-            "engine_rss_mb": _bytes_to_mb(p.resident_bytes) if p is not None else None,
-            "engine_phys_footprint_mb": _bytes_to_mb(p.rss_bytes) if p is not None else None,
+            "engine_rss_mb": rss_mb,
+            "engine_phys_footprint_mb": phys_mb,
         }
 
     def close(self) -> None:
@@ -635,7 +646,7 @@ class KVCacheWatchResult:
     max_kv_tokens: int = 0
 
 
-class KVCacheSampler:
+class KVCacheSampler(_IntervalSampler):
     """Background sampler for llama.cpp KV-cache occupancy via ``GET /slots``.
 
     Same skeleton as :class:`MemoryWatcher` (daemon thread + context manager),
@@ -656,11 +667,9 @@ class KVCacheSampler:
 
     def __init__(self, base_url: str | None, interval: float = DEFAULT_KV_POLL_INTERVAL_SEC):
         self.base_url = base_url
-        self.interval = interval
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        enabled = bool(base_url) and base_url.startswith(("http://", "https://"))
+        super().__init__(interval, enabled=enabled)
         self.result = KVCacheWatchResult()
-        self._enabled = bool(base_url) and base_url.startswith(("http://", "https://"))
 
     def _poll_once(self) -> int | None:
         url = self.base_url.rstrip("/") + "/slots"
@@ -679,25 +688,12 @@ class KVCacheSampler:
                     total += n
         return total
 
-    def _loop(self) -> None:
-        while not self._stop.wait(self.interval):
-            total = self._poll_once()
-            if total is not None:
-                self.result.samples.append(total)
-                if total > self.result.max_kv_tokens:
-                    self.result.max_kv_tokens = total
-
-    def __enter__(self) -> KVCacheSampler:
-        if self._enabled:
-            self._stop.clear()
-            self._thread = threading.Thread(target=self._loop, daemon=True)
-            self._thread.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=3)
+    def _sample_once(self) -> None:
+        total = self._poll_once()
+        if total is not None:
+            self.result.samples.append(total)
+            if total > self.result.max_kv_tokens:
+                self.result.max_kv_tokens = total
 
 
 # --- Engine RAM footprint sampler (background, per-run) -------------------
@@ -711,7 +707,7 @@ class EngineMemoryWatchResult:
     max_phys_footprint_mb: float = 0.0
 
 
-class EngineMemorySampler:
+class EngineMemorySampler(_IntervalSampler):
     """Background sampler for the bench target engine's RAM footprint.
 
     Same skeleton as :class:`MemoryWatcher` / :class:`KVCacheSampler` (daemon
@@ -733,44 +729,20 @@ class EngineMemorySampler:
         self, engine_name: str | None, interval: float = DEFAULT_ENGINE_MEM_POLL_INTERVAL_SEC
     ):
         self.engine_name = engine_name
-        self.interval = interval
         self._target = _engine_match_key(engine_name)
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        super().__init__(interval, enabled=bool(self._target), sample_on_start=True)
         self.result = EngineMemoryWatchResult()
-        self._enabled = bool(self._target)
 
-    def _poll_once(self) -> None:
-        try:
-            procs = _system.collect_engine_processes()
-        except Exception:  # noqa: BLE001 — ps failure, never fatal
+    def _sample_once(self) -> None:
+        p = find_engine_process(self.engine_name)
+        if p is None:
             return
-        for p in procs:
-            if _engine_match_key(p.name) == self._target:
-                rss = _bytes_to_mb(p.resident_bytes)
-                phys = _bytes_to_mb(p.rss_bytes)
-                if rss and rss > self.result.max_rss_mb:
-                    self.result.max_rss_mb = rss
-                if phys and phys > self.result.max_phys_footprint_mb:
-                    self.result.max_phys_footprint_mb = phys
-                return
-
-    def _loop(self) -> None:
-        self._poll_once()  # immediate first sample
-        while not self._stop.wait(self.interval):
-            self._poll_once()
-
-    def __enter__(self) -> EngineMemorySampler:
-        if self._enabled:
-            self._stop.clear()
-            self._thread = threading.Thread(target=self._loop, daemon=True)
-            self._thread.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=3)
+        rss = _bytes_to_mb(p.resident_bytes)
+        phys = _bytes_to_mb(p.phys_footprint_bytes)
+        if rss and rss > self.result.max_rss_mb:
+            self.result.max_rss_mb = rss
+        if phys and phys > self.result.max_phys_footprint_mb:
+            self.result.max_phys_footprint_mb = phys
 
 
 __all__ = [

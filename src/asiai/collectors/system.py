@@ -298,7 +298,8 @@ class ProcessInfo:
     name: str = ""
     cpu_pct: float = 0.0
     mem_pct: float = 0.0
-    rss_bytes: int = 0  # physical footprint (ri_phys_footprint), fallback to RSS
+    phys_footprint_bytes: int = 0  # ri_phys_footprint (dirty+compressed+iokit/Metal,
+    # EXCLUDES clean file-backed mmap); falls back to RSS when rusage fails.
     resident_bytes: int = 0  # true RSS (ps resident_size): counts resident
     # file-backed mmap pages too, so it captures GGUF weights that phys_footprint
     # excludes — the honest, cross-family RAM figure on Apple Silicon UMA.
@@ -384,11 +385,42 @@ def collect_engine_processes() -> list[ProcessInfo]:
                 pid = int(cols[1])
                 rss = int(cols[5]) * 1024
                 phys = _get_phys_footprint(pid)
-                totals[key].rss_bytes += phys if phys > 0 else rss
+                totals[key].phys_footprint_bytes += phys if phys > 0 else rss
                 totals[key].resident_bytes += rss
                 break
 
     return list(totals.values())
+
+
+def _engine_match_key(engine_name: str | None) -> str:
+    """Canonical key to match an engine against ``collect_engine_processes()``.
+
+    Aux llama.cpp instances (``llamacpp-aux``, ``llamacpp-aux-N``) alias to the
+    ``llamacpp`` key the collector emits; everything else is lowercased with
+    ``-``/``_`` stripped. This is the single source of truth for engine-name
+    normalization (the collector produces the keys, so the matcher lives here).
+    """
+    if not engine_name:
+        return ""
+    name = "llamacpp" if engine_name.startswith("llamacpp-aux") else engine_name
+    return name.lower().replace("-", "").replace("_", "")
+
+
+def find_engine_process(engine_name: str | None) -> ProcessInfo | None:
+    """The aggregated ProcessInfo for ``engine_name``, matched by canonical key.
+
+    Use this instead of ``p.name == engine_name``: the collector emits canonical
+    keys ('llamacpp', 'mlxlm', 'lmstudio', 'vllm_mlx') that differ from adapter
+    names ('llamacpp-aux', 'mlx-lm', 'vllm-mlx'), so a direct equality misses
+    MLX/aux engines. ``None`` when no name or no matching process.
+    """
+    target = _engine_match_key(engine_name)
+    if not target:
+        return None
+    for p in collect_engine_processes():
+        if _engine_match_key(p.name) == target:
+            return p
+    return None
 
 
 def collect_uptime() -> int:

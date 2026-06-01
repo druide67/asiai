@@ -470,7 +470,7 @@ def test_engine_footprint_rss_and_phys_are_decoupled():
     fake_proc = type(
         "P",
         (),
-        {"name": "llamacpp", "resident_bytes": 21474836480, "rss_bytes": 3221225472},
+        {"name": "llamacpp", "resident_bytes": 21474836480, "phys_footprint_bytes": 3221225472},
     )()  # RSS 20 GiB, phys 3 GiB
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
@@ -487,7 +487,7 @@ def test_engine_footprint_rss_and_phys_are_decoupled():
 def test_engine_footprint_normalizes_engine_name():
     # 'mlx-lm' (hyphen) must match the collector's 'mlxlm' key.
     fake_proc = type(
-        "P", (), {"name": "mlxlm", "resident_bytes": 1073741824, "rss_bytes": 1073741824}
+        "P", (), {"name": "mlxlm", "resident_bytes": 1073741824, "phys_footprint_bytes": 1073741824}
     )()  # MLX: RSS ≈ phys (anonymous + Metal, no GGUF mmap)
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
@@ -517,7 +517,9 @@ def test_engine_footprint_llamacpp_aux_aliases_to_llamacpp():
     # collect_engine_processes emits key "llamacpp" for any llama-server, so
     # llamacpp-aux-N must alias to it (else footprint would always be None).
     fake_proc = type(
-        "P", (), {"name": "llamacpp", "resident_bytes": 2147483648, "rss_bytes": 2147483648}
+        "P",
+        (),
+        {"name": "llamacpp", "resident_bytes": 2147483648, "phys_footprint_bytes": 2147483648},
     )()  # 2 GiB
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
@@ -538,7 +540,7 @@ def _mem_proc(name, resident_gib, phys_gib):
         {
             "name": name,
             "resident_bytes": int(resident_gib * 1024**3),
-            "rss_bytes": int(phys_gib * 1024**3),
+            "phys_footprint_bytes": int(phys_gib * 1024**3),
         },
     )()
 
@@ -554,7 +556,7 @@ def test_engine_memory_sampler_keeps_peak_despite_dip():
     s = EngineMemorySampler("llamacpp")
     with patch("asiai.collectors.system.collect_engine_processes", side_effect=seq):
         for _ in range(3):
-            s._poll_once()
+            s._sample_once()
     assert s.result.max_rss_mb == 5120.0  # 5 GiB peak, not the 2 GiB dip
     assert s.result.max_phys_footprint_mb == 3072.0  # 3 GiB peak
 
@@ -572,7 +574,7 @@ def test_engine_memory_sampler_disabled_without_engine():
 def test_engine_memory_sampler_no_match_stays_zero():
     s = EngineMemorySampler("llamacpp")
     with patch("asiai.collectors.system.collect_engine_processes", return_value=[]):
-        s._poll_once()
+        s._sample_once()
     assert s.result.max_rss_mb == 0.0
     assert s.result.max_phys_footprint_mb == 0.0
 
@@ -585,7 +587,7 @@ def test_engine_memory_sampler_aux_aliases_to_llamacpp():
         "asiai.collectors.system.collect_engine_processes",
         return_value=[_mem_proc("llamacpp", 4.0, 2.0)],
     ):
-        s._poll_once()
+        s._sample_once()
     assert s.result.max_rss_mb == 4096.0
 
 

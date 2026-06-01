@@ -49,13 +49,12 @@ class OpenAICompatEngine(InferenceEngine):
         # Enrich with process footprint when engine doesn't report VRAM
         if models and all(m.size_vram == 0 for m in models):
             try:
-                from asiai.collectors.system import collect_engine_processes
+                from asiai.collectors.system import find_engine_process
 
-                procs = collect_engine_processes()
-                engine_proc = next((p for p in procs if p.name == self.name), None)
-                if engine_proc and engine_proc.rss_bytes > 0:
+                engine_proc = find_engine_process(self.name)
+                if engine_proc and engine_proc.phys_footprint_bytes > 0:
                     # Divide evenly if multiple models (rough estimate)
-                    per_model = engine_proc.rss_bytes // len(models)
+                    per_model = engine_proc.phys_footprint_bytes // len(models)
                     for m in models:
                         m.size_vram = per_model
             except Exception:

@@ -14,11 +14,11 @@ from asiai.benchmark.quality_gates import (
 )
 from asiai.collectors.gpu import collect_gpu
 from asiai.collectors.system import (
-    collect_engine_processes,
     collect_hw_chip,
     collect_memory,
     collect_os_version,
     collect_thermal,
+    find_engine_process,
 )
 from asiai.engines.base import InferenceEngine
 
@@ -328,12 +328,9 @@ def run_benchmark(
 
         # Fallback: use process physical footprint as VRAM estimate
         if vram_bytes == 0:
-            from asiai.collectors.system import collect_engine_processes
-
-            procs = collect_engine_processes()
-            engine_proc = next((p for p in procs if p.name == engine.name), None)
-            if engine_proc and engine_proc.rss_bytes > 0:
-                vram_bytes = engine_proc.rss_bytes
+            engine_proc = find_engine_process(engine.name)
+            if engine_proc and engine_proc.phys_footprint_bytes > 0:
+                vram_bytes = engine_proc.phys_footprint_bytes
                 vram_estimated = True
                 logger.info(
                     "VRAM fallback for %s: %d bytes (physical footprint)",
@@ -472,8 +469,7 @@ def _run_single(
     gen = engine.generate(model, prompt.prompt, prompt.max_tokens)
 
     # Capture process-level resource usage right after generation
-    procs = collect_engine_processes()
-    engine_proc = next((p for p in procs if p.name == engine.name), None)
+    engine_proc = find_engine_process(engine.name)
 
     if gen.error:
         run.errors.append(f"{engine.name}/{prompt.name}: {gen.error}")

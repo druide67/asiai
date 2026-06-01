@@ -149,9 +149,9 @@ class TestEngineProcesses:
         assert len(procs) == 1
         assert procs[0].cpu_pct == 3.4
         # True RSS from the ps RSS column (KB → bytes). On a bogus PID
-        # proc_pid_rusage fails, so rss_bytes falls back to the same RSS.
+        # proc_pid_rusage fails, so phys_footprint_bytes falls back to the RSS.
         assert procs[0].resident_bytes == 65432 * 1024
-        assert procs[0].rss_bytes == 65432 * 1024
+        assert procs[0].phys_footprint_bytes == 65432 * 1024
 
     def test_no_engine_processes(self):
         """No engine processes found should return empty list."""
