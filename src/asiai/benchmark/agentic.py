@@ -47,8 +47,10 @@ from asiai.benchmark.prompts import (
 )
 from asiai.benchmark.quality_gates import (
     MemoryWatcher,
+    PowerThermalProbe,
     check_duplicate_processes,
     detect_early_stop,
+    summarize_thermal,
 )
 
 logger = logging.getLogger("asiai.benchmark.agentic")
@@ -92,6 +94,9 @@ class AgenticRun:
     prompt_tokens: int | None = None
     cached_tokens: int | None = None
     decode_tok_s: float | None = None
+    gpu_watts: float | None = None
+    tok_s_per_watt: float | None = None
+    thermal_speed_limit: int | None = None
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -108,6 +113,7 @@ def _do_single_run(
     max_tokens: int,
     timeout: int = 900,
     extra_body: dict[str, Any] | None = None,
+    probe: PowerThermalProbe | None = None,
 ) -> AgenticRun:
     """Send a single chat completion and parse SSE stream for usage.
 
@@ -151,6 +157,11 @@ def _do_single_run(
         user_chars=len(user_msg),
         max_tokens_requested=max_tokens,
     )
+
+    # Reset the power/energy baseline right before the request so the window
+    # measured by ``probe.read()`` covers this run's prefill + decode only.
+    if probe is not None:
+        probe.start()
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -216,6 +227,17 @@ def _do_single_run(
         and completion_tokens > 1
     ):
         run.decode_tok_s = round((completion_tokens - 1) / (t_end - first_token_time), 2)
+
+    # Mean GPU watts over the run window (prefill + decode) + thermal state.
+    # tok/s/W uses decode_tok_s as the throughput numerator; on the short
+    # phases (400 tokens) decode dominates the window so this is a fair
+    # efficiency proxy, with the caveat that prefill power is folded in.
+    if probe is not None:
+        reading = probe.read()
+        run.gpu_watts = reading["gpu_watts"]
+        run.thermal_speed_limit = reading["thermal_speed_limit"]
+        if run.gpu_watts and run.decode_tok_s:
+            run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
 
     return run
 
@@ -311,6 +333,7 @@ def run_agentic_bench(
     started = int(time.time())
 
     watcher = None if skip_quality_gates else MemoryWatcher()
+    probe = None if skip_quality_gates else PowerThermalProbe()
     # Equivalent to ``with watcher`` but lets us skip cleanly when None.
     if watcher is not None:
         watcher.__enter__()
@@ -326,6 +349,7 @@ def run_agentic_bench(
                 max_tokens=phase.max_tokens,
                 timeout=timeout,
                 extra_body=extra_body,
+                probe=probe,
             )
             runs.append(run)
             if on_run:
@@ -337,11 +361,14 @@ def run_agentic_bench(
     finally:
         if watcher is not None:
             watcher.__exit__(None, None, None)
+        if probe is not None:
+            probe.close()
 
     verdict = _compute_verdict(runs)
     quality_gates: dict[str, Any] = {
         "early_stop": detect_early_stop(runs),
         "duplicate_processes": duplicates,
+        "thermal": summarize_thermal(runs),
     }
     if watcher is not None:
         mw = watcher.result

@@ -7,6 +7,11 @@ import time
 from dataclasses import dataclass, field
 
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
+from asiai.benchmark.quality_gates import (
+    MemoryWatcher,
+    PowerThermalProbe,
+    check_duplicate_processes,
+)
 from asiai.collectors.gpu import collect_gpu
 from asiai.collectors.system import (
     collect_engine_processes,
@@ -50,46 +55,39 @@ def detect_ollama_runner_type() -> str:
     return ""
 
 
+def _format_duplicate_warning(engine_name: str, matches: list[dict[str, str]]) -> str:
+    """Build the runner's duplicate-process warning string from brick matches.
+
+    ``matches`` is the list returned by
+    :func:`asiai.benchmark.quality_gates.check_duplicate_processes` (≥2 entries
+    with ``pid``/``command``). Reproduces the historical message shape that the
+    reporter/CLI consume off ``run.errors``.
+    """
+    pids = [m["pid"] for m in matches]
+    return (
+        f"WARNING: {len(pids)} '{engine_name}' processes detected "
+        f"(PIDs: {', '.join(pids)}). Results may be unreliable — "
+        f"kill duplicate processes before benchmarking."
+    )
+
+
 def _check_duplicate_engines(run: BenchmarkRun, slots: list) -> None:
     """Detect duplicate engine processes that could cause wrong measurements.
 
-    Checks ``ps aux`` for multiple instances of the same engine binary
-    (e.g., two ``ollama serve`` processes). Adds a warning to the run if found.
+    Uses the canonical 10-engine pattern map shared with the agentic/burst
+    modes (``quality_gates.check_duplicate_processes``) so the standard runner
+    now also catches duplicate mlx-lm/turboquant/omlx/etc. that its old
+    3-engine map missed. Adds a warning to ``run.errors`` per affected engine.
     """
-    import subprocess
-
-    try:
-        ps_out = subprocess.run(
-            ["ps", "axo", "pid,command"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return
-
-    engine_names = {s.engine.name for s in slots}
-    process_map = {
-        "ollama": "ollama serve",
-        "llamacpp": "llama-server",
-        "lmstudio": "LM Studio",
-    }
-
-    for ename in engine_names:
-        pattern = process_map.get(ename, ename)
-        pids = []
-        for line in ps_out.splitlines()[1:]:
-            if pattern in line:
-                parts = line.split(None, 1)
-                if parts:
-                    pids.append(parts[0])
-        if len(pids) > 1:
-            run.errors.append(
-                f"WARNING: {len(pids)} '{pattern}' processes detected "
-                f"(PIDs: {', '.join(pids)}). Results may be unreliable — "
-                f"kill duplicate processes before benchmarking."
+    for ename in {s.engine.name for s in slots}:
+        matches = check_duplicate_processes(ename)
+        if matches:
+            run.errors.append(_format_duplicate_warning(ename, matches))
+            logger.warning(
+                "Duplicate %s processes: %s",
+                ename,
+                [m["pid"] for m in matches],
             )
-            logger.warning("Duplicate %s processes: %s", pattern, pids)
 
 
 @dataclass
@@ -210,23 +208,23 @@ def run_benchmark(
     gpu_info = collect_gpu()
     gpu_cores = gpu_info.cores
 
-    # IOReport power (no sudo, always available on Apple Silicon)
-    ioreport_sampler = None
+    # Whether IOReport (no sudo) is available — used only to decide if the
+    # powermetrics sudo failure below is worth surfacing as an error.
     try:
-        from asiai.collectors.ioreport import IOReportSampler, ioreport_available
+        from asiai.collectors.ioreport import ioreport_available
 
-        if ioreport_available():
-            ioreport_sampler = IOReportSampler()
-            time.sleep(1)  # baseline warmup
+        ioreport_ok = ioreport_available()
     except Exception:
-        pass
+        ioreport_ok = False
 
-    # Track whether powermetrics (sudo) is available for cross-validation
+    # Track whether powermetrics (sudo) is available for cross-validation.
+    # A single probe PowerMonitor tests passwordless sudo once up front; the
+    # per-engine PowerThermalProbe below owns the actual measurement windows.
     power_unavailable = False
     if power:
         test_monitor = PowerMonitor()
         if not test_monitor.start():
-            if not ioreport_sampler:
+            if not ioreport_ok:
                 run.errors.append("Power monitoring: sudo access required (run 'sudo -v' first)")
             power_unavailable = True
         else:
@@ -251,6 +249,13 @@ def run_benchmark(
     ollama_runner_type = ""
     if any(s.engine.name == "ollama" for s in slots):
         ollama_runner_type = detect_ollama_runner_type()
+
+    # Continuous memory-pressure watcher around the whole bench loop, for
+    # parity with agentic/burst (standard previously had only the one-shot
+    # pre-check above). Daemon thread, observational: surfaces an error if
+    # swap/swapouts grow past threshold during the runs. Stopped after the loop.
+    mem_watcher = MemoryWatcher()
+    mem_watcher.__enter__()
 
     slots_run = 0
     prev_model = ""
@@ -343,16 +348,13 @@ def run_benchmark(
         except Exception as e:
             logger.debug("warmup failed for %s: %s", engine.name, e)
 
-        # Start per-engine power monitoring (both sources if available)
-        engine_power: PowerMonitor | None = None
-        if power and not power_unavailable:
-            engine_power = PowerMonitor()
-            if not engine_power.start():
-                engine_power = None
-
-        # IOReport: discard stale sample, start fresh for this engine
-        if ioreport_sampler:
-            ioreport_sampler.sample()  # discard
+        # Per-engine power/thermal probe (shared brick). IOReport is always
+        # sampled (no sudo); powermetrics is cross-validated only when --power
+        # is set and passwordless sudo was confirmed above. start() opens a
+        # fresh window per engine (discards the stale IOReport sample and
+        # starts powermetrics) AFTER the warmup, so warmup energy is excluded.
+        probe = PowerThermalProbe(cross_validate=power and not power_unavailable)
+        probe.start()
 
         results_before = len(run.results)
 
@@ -387,41 +389,20 @@ def run_benchmark(
                     ollama_runner_type=ollama_runner_type,
                 )
 
-        # Stop per-engine power monitoring and annotate this engine's results
-        pm_gpu_watts = 0.0
-        io_gpu_watts = 0.0
-        power_source = ""
-
-        if engine_power:
-            power_sample = engine_power.stop()
-            pm_gpu_watts = power_sample.gpu_watts
-
-        if ioreport_sampler:
-            try:
-                io_reading = ioreport_sampler.sample()
-                io_gpu_watts = io_reading.gpu_watts
-            except Exception:
-                pass
-
-        # Determine display value and source
-        if io_gpu_watts > 0 and pm_gpu_watts > 0:
-            gpu_watts = io_gpu_watts  # prefer IOReport (no sudo)
-            power_source = "both"
-        elif io_gpu_watts > 0:
-            gpu_watts = io_gpu_watts
-            power_source = "ioreport"
-        elif pm_gpu_watts > 0:
-            gpu_watts = pm_gpu_watts
-            power_source = "powermetrics"
-        else:
-            gpu_watts = 0.0
-
+        # Stop the probe and annotate this engine's results. read_aggregate()
+        # applies the IOReport/powermetrics precedence and returns the locked
+        # leaderboard fields; we keep the historical contract that power_watts
+        # is absent (not 0) when no source reported, and that
+        # tok_per_sec_per_watt is only set when tok/s > 0.
+        reading = probe.read_aggregate()
+        probe.close()
+        gpu_watts = reading["gpu_watts"]
         if gpu_watts > 0:
             for result in run.results[results_before:]:
                 result["power_watts"] = gpu_watts
-                result["power_watts_ioreport"] = io_gpu_watts
-                result["power_watts_powermetrics"] = pm_gpu_watts
-                result["power_source"] = power_source
+                result["power_watts_ioreport"] = reading["power_watts_ioreport"]
+                result["power_watts_powermetrics"] = reading["power_watts_powermetrics"]
+                result["power_source"] = reading["power_source"]
                 tok_s = result.get("tok_per_sec", 0.0)
                 if tok_s > 0:
                     result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
@@ -457,8 +438,9 @@ def run_benchmark(
         prev_model = engine_model
         prev_engine = engine
 
-    if ioreport_sampler:
-        ioreport_sampler.close()
+    mem_watcher.__exit__(None, None, None)
+    if mem_watcher.result.alerted:
+        run.errors.append(f"Memory pressure during benchmark: {mem_watcher.result.alert_reason}")
 
     return run
 
