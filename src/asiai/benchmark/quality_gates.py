@@ -35,6 +35,25 @@ from typing import Any
 from asiai.collectors import ioreport as _ioreport
 from asiai.collectors import system as _system
 
+
+def _bytes_to_mb(b: int) -> float | None:
+    """Bytes -> MB (1 decimal), or None when there is no reading (<= 0)."""
+    return round(b / (1024 * 1024), 1) if b and b > 0 else None
+
+
+def _engine_match_key(engine_name: str | None) -> str:
+    """Canonical key to match an engine against ``collect_engine_processes()``.
+
+    Aux llama.cpp instances (``llamacpp-aux``, ``llamacpp-aux-N``) alias to the
+    ``llamacpp`` key that collector emits; everything else is lowercased with
+    ``-``/``_`` stripped.
+    """
+    if not engine_name:
+        return ""
+    name = "llamacpp" if engine_name.startswith("llamacpp-aux") else engine_name
+    return name.lower().replace("-", "").replace("_", "")
+
+
 # The probe resolves IOReport / thermal / powermetrics through their source
 # modules at call time (``_ioreport.ioreport_available``,
 # ``_ioreport.IOReportSampler``, ``_system.collect_thermal``, and a lazily
@@ -420,18 +439,15 @@ class PowerThermalProbe:
             logger.debug("thermal read failed", exc_info=True)
             return None
 
-    def _read_engine_rss_mb(self) -> float | None:
-        """Physical footprint (MB) of the bench target engine's process(es).
+    @property
+    def engine_name(self) -> str | None:
+        """The bench target engine name this probe was created for (or None)."""
+        return self._engine_name
 
-        Best-effort snapshot via ``collect_engine_processes()`` (``ri_phys_footprint``,
-        sums child processes). ``None`` when no ``engine_name`` was given or no
-        matching process is running.
+    def _read_engine_proc(self) -> Any:
+        """The bench target engine's aggregated process info, or ``None``.
 
-        Caveat (Apple Silicon): ``ri_phys_footprint`` counts anonymous + Metal
-        memory but NOT file-backed mmap pages, so for engines that mmap a GGUF
-        (llama.cpp) the model weights are largely excluded — this tracks the KV
-        cache + runtime/Metal buffers (the dynamic part), not the full model.
-        MLX engines (no GGUF mmap) report closer to the full footprint.
+        ``None`` when no ``engine_name`` was given or no matching process runs.
         """
         if not self._engine_name:
             return None
@@ -440,27 +456,53 @@ class PowerThermalProbe:
         except Exception:  # noqa: BLE001
             logger.debug("engine footprint read failed", exc_info=True)
             return None
-        # collect_engine_processes() maps every llama-server process to the key
-        # "llamacpp", so aux instances (llamacpp-aux, llamacpp-aux-N) must alias
-        # to it or they'd never match (their phys footprint would read None).
-        name = "llamacpp" if self._engine_name.startswith("llamacpp-aux") else self._engine_name
-        target = name.lower().replace("-", "").replace("_", "")
+        target = _engine_match_key(self._engine_name)
         for p in procs:
-            if p.name.lower().replace("-", "").replace("_", "") == target and p.rss_bytes > 0:
-                return round(p.rss_bytes / (1024 * 1024), 1)
+            if _engine_match_key(p.name) == target:
+                return p
+        return None
+
+    def _read_engine_rss_mb(self) -> float | None:
+        """True RSS (MB) of the bench target engine — the honest, cross-family RAM.
+
+        ``resident_size`` counts every resident physical page, INCLUDING the
+        resident file-backed GGUF weight pages that ``phys_footprint`` excludes,
+        so it is comparable across llama.cpp (GGUF mmap) and MLX (anonymous +
+        Metal) families on Apple Silicon unified memory. SSD-paged cold KV
+        (oMLX) is naturally excluded (those pages aren't resident). ``None``
+        when no ``engine_name`` was given or no matching process is running.
+        """
+        p = self._read_engine_proc()
+        if p is not None and p.resident_bytes > 0:
+            return round(p.resident_bytes / (1024 * 1024), 1)
+        return None
+
+    def _read_engine_phys_footprint_mb(self) -> float | None:
+        """Physical footprint (MB) — dirty + compressed + iokit/Metal, EXCLUDES
+        clean file-backed mmap. For GGUF this is ~KV + runtime (the dynamic
+        part), so ``engine_rss_mb − engine_phys_footprint_mb ≈ resident weights``.
+        Kept as a second column for continuity and the KV/runtime breakdown.
+        """
+        p = self._read_engine_proc()
+        if p is not None and p.rss_bytes > 0:
+            return round(p.rss_bytes / (1024 * 1024), 1)
         return None
 
     def read(self) -> dict[str, Any]:
-        """Return mean GPU watts since the last start()/read() + thermal + footprint.
+        """Return mean GPU watts since the last start()/read() + thermal + memory.
 
         Per-window shape used by agentic/burst: ``gpu_watts``,
-        ``thermal_speed_limit`` and ``engine_rss_mb`` (no powermetrics
-        provenance fields — those modes pay nothing for cross-validation).
+        ``thermal_speed_limit``, ``engine_rss_mb`` (true RSS, headline) and
+        ``engine_phys_footprint_mb`` (no powermetrics provenance fields — those
+        modes pay nothing for cross-validation). One ``ps`` snapshot feeds both
+        memory fields.
         """
+        p = self._read_engine_proc()
         return {
             "gpu_watts": self._read_ioreport_watts(),
             "thermal_speed_limit": self._read_thermal(),
-            "engine_rss_mb": self._read_engine_rss_mb(),
+            "engine_rss_mb": _bytes_to_mb(p.resident_bytes) if p is not None else None,
+            "engine_phys_footprint_mb": _bytes_to_mb(p.rss_bytes) if p is not None else None,
         }
 
     def read_aggregate(self) -> dict[str, Any]:
@@ -498,13 +540,15 @@ class PowerThermalProbe:
             gpu_watts = 0.0
             power_source = ""
 
+        p = self._read_engine_proc()
         return {
             "gpu_watts": gpu_watts,
             "power_watts_ioreport": io_gpu_watts,
             "power_watts_powermetrics": pm_gpu_watts,
             "power_source": power_source,
             "thermal_speed_limit": self._read_thermal(),
-            "engine_rss_mb": self._read_engine_rss_mb(),
+            "engine_rss_mb": _bytes_to_mb(p.resident_bytes) if p is not None else None,
+            "engine_phys_footprint_mb": _bytes_to_mb(p.rss_bytes) if p is not None else None,
         }
 
     def close(self) -> None:
@@ -656,13 +700,89 @@ class KVCacheSampler:
             self._thread.join(timeout=3)
 
 
+# --- Engine RAM footprint sampler (background, per-run) -------------------
+
+DEFAULT_ENGINE_MEM_POLL_INTERVAL_SEC = 1.0
+
+
+@dataclass
+class EngineMemoryWatchResult:
+    max_rss_mb: float = 0.0
+    max_phys_footprint_mb: float = 0.0
+
+
+class EngineMemorySampler:
+    """Background sampler for the bench target engine's RAM footprint.
+
+    Same skeleton as :class:`MemoryWatcher` / :class:`KVCacheSampler` (daemon
+    thread + context manager). Polls ``collect_engine_processes()`` and keeps
+    the PEAK over the run window of both the true RSS (``resident_size`` — the
+    honest, cross-family figure that counts resident GGUF weight pages) and the
+    phys_footprint.
+
+    Why the peak rather than a post-run snapshot: GGUF weight pages are clean +
+    file-backed, hence reclaimable, so a lone snapshot can dip below real
+    residency if the OS evicts under pressure. The max over the window, sampled
+    mid-generation, is the honest reading.
+
+    Graceful: no ``engine_name`` or no matching process → peaks stay 0.0
+    (callers map 0 → None).
+    """
+
+    def __init__(
+        self, engine_name: str | None, interval: float = DEFAULT_ENGINE_MEM_POLL_INTERVAL_SEC
+    ):
+        self.engine_name = engine_name
+        self.interval = interval
+        self._target = _engine_match_key(engine_name)
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.result = EngineMemoryWatchResult()
+        self._enabled = bool(self._target)
+
+    def _poll_once(self) -> None:
+        try:
+            procs = _system.collect_engine_processes()
+        except Exception:  # noqa: BLE001 — ps failure, never fatal
+            return
+        for p in procs:
+            if _engine_match_key(p.name) == self._target:
+                rss = _bytes_to_mb(p.resident_bytes)
+                phys = _bytes_to_mb(p.rss_bytes)
+                if rss and rss > self.result.max_rss_mb:
+                    self.result.max_rss_mb = rss
+                if phys and phys > self.result.max_phys_footprint_mb:
+                    self.result.max_phys_footprint_mb = phys
+                return
+
+    def _loop(self) -> None:
+        self._poll_once()  # immediate first sample
+        while not self._stop.wait(self.interval):
+            self._poll_once()
+
+    def __enter__(self) -> EngineMemorySampler:
+        if self._enabled:
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._loop, daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+
+
 __all__ = [
     "DEFAULT_EARLY_STOP_MIN_RUNS",
     "DEFAULT_EARLY_STOP_RATIO",
+    "DEFAULT_ENGINE_MEM_POLL_INTERVAL_SEC",
     "DEFAULT_KV_POLL_INTERVAL_SEC",
     "DEFAULT_POLL_INTERVAL_SEC",
     "DEFAULT_SWAP_DELTA_THRESHOLD_MB",
     "DEFAULT_SWAPOUTS_DELTA_THRESHOLD",
+    "EngineMemorySampler",
+    "EngineMemoryWatchResult",
     "KVCacheSampler",
     "KVCacheWatchResult",
     "MemorySample",

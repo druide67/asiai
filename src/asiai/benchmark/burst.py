@@ -53,6 +53,7 @@ from typing import Any
 
 from asiai.benchmark.prompts import SYS_A
 from asiai.benchmark.quality_gates import (
+    EngineMemorySampler,
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
@@ -110,7 +111,8 @@ class BurstSizeResult:
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
     thermal_speed_limit: int | None = None
-    engine_rss_mb: float | None = None
+    engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
+    engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
 
 
 def _make_user_prompt(call_index: int) -> str:
@@ -354,6 +356,7 @@ def _aggregate_size(
     gpu_watts: float | None = None,
     thermal_speed_limit: int | None = None,
     engine_rss_mb: float | None = None,
+    engine_phys_footprint_mb: float | None = None,
 ) -> BurstSizeResult:
     """Compute per-size aggregate stats from N call results."""
     n = len(call_results)
@@ -414,6 +417,7 @@ def _aggregate_size(
         tok_s_per_watt=tok_s_per_watt,
         thermal_speed_limit=thermal_speed_limit,
         engine_rss_mb=engine_rss_mb,
+        engine_phys_footprint_mb=engine_phys_footprint_mb,
     )
 
 
@@ -434,7 +438,8 @@ def _run_one_burst_pass(
     probe = PowerThermalProbe(engine_name=engine)
 
     probe.start()
-    with MemoryWatcher() as mem_watcher:
+    mem_sampler = EngineMemorySampler(engine)
+    with MemoryWatcher() as mem_watcher, mem_sampler:
         t0 = time.perf_counter()
         call_results: list[BurstCallResult] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=size) as pool:
@@ -485,7 +490,10 @@ def _run_one_burst_pass(
         duplicates=duplicates_before,
         gpu_watts=reading["gpu_watts"],
         thermal_speed_limit=reading["thermal_speed_limit"],
-        engine_rss_mb=reading["engine_rss_mb"],
+        engine_rss_mb=mem_sampler.result.max_rss_mb or reading["engine_rss_mb"],
+        engine_phys_footprint_mb=(
+            mem_sampler.result.max_phys_footprint_mb or reading["engine_phys_footprint_mb"]
+        ),
     )
     return asdict(size_result)
 

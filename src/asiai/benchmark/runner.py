@@ -516,7 +516,7 @@ def _run_single(
             "thermal_speed_limit": thermal.speed_limit,
             "proc_cpu_pct": engine_proc.cpu_pct if engine_proc else 0.0,
             "proc_mem_pct": engine_proc.mem_pct if engine_proc else 0.0,
-            "proc_rss_bytes": engine_proc.rss_bytes if engine_proc else 0,
+            "proc_rss_bytes": engine_proc.resident_bytes if engine_proc else 0,
             "run_index": run_index,
             "load_time_ms": load_time_ms,
             "engine_version": engine_version,

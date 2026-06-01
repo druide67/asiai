@@ -46,6 +46,7 @@ from asiai.benchmark.prompts import (
     USER_Y,
 )
 from asiai.benchmark.quality_gates import (
+    EngineMemorySampler,
     KVCacheSampler,
     MemoryWatcher,
     PowerThermalProbe,
@@ -98,8 +99,9 @@ class AgenticRun:
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
     thermal_speed_limit: int | None = None
-    engine_rss_mb: float | None = None
-    kv_cache_tokens: int | None = None  # KV occupancy via /metrics (≠ cached_tokens prefix-hit)
+    engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
+    engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
+    kv_cache_tokens: int | None = None  # KV occupancy via /slots (≠ cached_tokens prefix-hit)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -165,10 +167,15 @@ def _do_single_run(
     # measured by ``probe.read()`` covers this run's prefill + decode only.
     # KVCacheSampler polls /slots during the stream to capture the KV peak.
     kv_sampler = KVCacheSampler(base_url) if probe is not None else None
+    mem_sampler = (
+        EngineMemorySampler(probe.engine_name) if probe is not None and probe.engine_name else None
+    )
     if probe is not None:
         probe.start()
     if kv_sampler is not None:
         kv_sampler.__enter__()
+    if mem_sampler is not None:
+        mem_sampler.__enter__()
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -207,12 +214,16 @@ def _do_single_run(
         run.error_body = body_text
         if kv_sampler is not None:
             kv_sampler.__exit__(None, None, None)
+        if mem_sampler is not None:
+            mem_sampler.__exit__(None, None, None)
         return run
     except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
         run.error = type(e).__name__
         run.error_body = str(e)[:300]
         if kv_sampler is not None:
             kv_sampler.__exit__(None, None, None)
+        if mem_sampler is not None:
+            mem_sampler.__exit__(None, None, None)
         return run
 
     t_end = time.perf_counter() - t0
@@ -245,11 +256,19 @@ def _do_single_run(
     # efficiency proxy, with the caveat that prefill power is folded in.
     if kv_sampler is not None:
         kv_sampler.__exit__(None, None, None)
+    if mem_sampler is not None:
+        mem_sampler.__exit__(None, None, None)
     if probe is not None:
         reading = probe.read()
         run.gpu_watts = reading["gpu_watts"]
         run.thermal_speed_limit = reading["thermal_speed_limit"]
-        run.engine_rss_mb = reading["engine_rss_mb"]
+        # RAM footprint: prefer the peak sampled mid-generation (GGUF clean
+        # weight pages are reclaimable, so the post-run snapshot can dip);
+        # fall back to the snapshot when the sampler caught nothing.
+        mem_rss = mem_sampler.result.max_rss_mb if mem_sampler else 0.0
+        mem_phys = mem_sampler.result.max_phys_footprint_mb if mem_sampler else 0.0
+        run.engine_rss_mb = mem_rss or reading["engine_rss_mb"]
+        run.engine_phys_footprint_mb = mem_phys or reading["engine_phys_footprint_mb"]
         # KV-cache occupancy peak sampled during the run via /slots (llama.cpp).
         # None for MLX engines (no /slots). No synchronous /metrics fallback:
         # the kv_cache counter was removed from modern llama.cpp and the call

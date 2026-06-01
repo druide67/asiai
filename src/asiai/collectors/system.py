@@ -298,7 +298,10 @@ class ProcessInfo:
     name: str = ""
     cpu_pct: float = 0.0
     mem_pct: float = 0.0
-    rss_bytes: int = 0  # physical footprint (includes Metal/GPU), fallback to RSS
+    rss_bytes: int = 0  # physical footprint (ri_phys_footprint), fallback to RSS
+    resident_bytes: int = 0  # true RSS (ps resident_size): counts resident
+    # file-backed mmap pages too, so it captures GGUF weights that phys_footprint
+    # excludes — the honest, cross-family RAM figure on Apple Silicon UMA.
 
 
 # ---------------------------------------------------------------------------
@@ -374,10 +377,15 @@ def collect_engine_processes() -> list[ProcessInfo]:
                     totals[key] = ProcessInfo(name=key)
                 totals[key].cpu_pct += float(cols[2].replace(",", "."))
                 totals[key].mem_pct += float(cols[3].replace(",", "."))
-                # Prefer phys_footprint (includes Metal/GPU), fallback to RSS
+                # Capture BOTH metrics per process: phys_footprint (dirty +
+                # compressed + iokit/Metal, excludes clean file-backed mmap) and
+                # the true RSS (resident_size from ps, KB), which DOES count the
+                # resident GGUF weight pages that phys_footprint omits.
                 pid = int(cols[1])
+                rss = int(cols[5]) * 1024
                 phys = _get_phys_footprint(pid)
-                totals[key].rss_bytes += phys if phys > 0 else int(cols[5]) * 1024
+                totals[key].rss_bytes += phys if phys > 0 else rss
+                totals[key].resident_bytes += rss
                 break
 
     return list(totals.values())
