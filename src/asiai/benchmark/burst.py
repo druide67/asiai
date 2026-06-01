@@ -110,6 +110,7 @@ class BurstSizeResult:
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
     thermal_speed_limit: int | None = None
+    engine_rss_mb: float | None = None
 
 
 def _make_user_prompt(call_index: int) -> str:
@@ -352,6 +353,7 @@ def _aggregate_size(
     duplicates: list[dict[str, str]],
     gpu_watts: float | None = None,
     thermal_speed_limit: int | None = None,
+    engine_rss_mb: float | None = None,
 ) -> BurstSizeResult:
     """Compute per-size aggregate stats from N call results."""
     n = len(call_results)
@@ -411,6 +413,7 @@ def _aggregate_size(
         gpu_watts=gpu_watts,
         tok_s_per_watt=tok_s_per_watt,
         thermal_speed_limit=thermal_speed_limit,
+        engine_rss_mb=engine_rss_mb,
     )
 
 
@@ -428,7 +431,7 @@ def _run_one_burst_pass(
 ) -> dict[str, Any]:
     """One pass of N concurrent calls. Returns aggregated stats as a dict."""
     duplicates_before = check_duplicate_processes(engine)
-    probe = PowerThermalProbe()
+    probe = PowerThermalProbe(engine_name=engine)
 
     probe.start()
     with MemoryWatcher() as mem_watcher:
@@ -482,6 +485,7 @@ def _run_one_burst_pass(
         duplicates=duplicates_before,
         gpu_watts=reading["gpu_watts"],
         thermal_speed_limit=reading["thermal_speed_limit"],
+        engine_rss_mb=reading["engine_rss_mb"],
     )
     return asdict(size_result)
 

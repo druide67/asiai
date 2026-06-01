@@ -10,10 +10,12 @@ import pytest
 from asiai.benchmark.agentic import AgenticRun
 from asiai.benchmark.quality_gates import (
     DEFAULT_EARLY_STOP_RATIO,
+    KVCacheSampler,
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
     detect_early_stop,
+    read_kv_cache_tokens,
     summarize_thermal,
 )
 
@@ -293,7 +295,7 @@ def test_power_thermal_probe_unavailable_returns_none():
             side_effect=Exception("no thermal"),
         ):
             reading = probe.read()
-        assert reading == {"gpu_watts": None, "thermal_speed_limit": None}
+        assert reading == {"gpu_watts": None, "thermal_speed_limit": None, "engine_rss_mb": None}
         probe.close()  # idempotent, must not raise
         probe.close()
 
@@ -377,8 +379,8 @@ def test_power_thermal_probe_default_no_cross_validate():
         reading = probe.read()
         probe.close()
     mock_pm.assert_not_called()
-    # read() keeps the per-window two-field shape (no provenance fields).
-    assert set(reading) == {"gpu_watts", "thermal_speed_limit"}
+    # read() keeps the per-window shape (no powermetrics provenance fields).
+    assert set(reading) == {"gpu_watts", "thermal_speed_limit", "engine_rss_mb"}
     assert reading["gpu_watts"] == 12.0
 
 
@@ -442,3 +444,161 @@ def test_probe_read_aggregate_precedence(io_watts, pm_watts, expect_gpu, expect_
     assert reading["power_watts_ioreport"] == io_watts
     assert reading["power_watts_powermetrics"] == pm_watts
     assert reading["thermal_speed_limit"] == 100
+    assert "engine_rss_mb" in reading  # read_aggregate carries the footprint field
+
+
+# --- engine footprint (#18) -----------------------------------------------
+
+
+def test_engine_footprint_matches_and_converts_to_mb():
+    # engine_name set + a matching process → engine_rss_mb in MB (phys footprint).
+    fake_proc = type("P", (), {"name": "llamacpp", "rss_bytes": 21474836480})()  # 20 GiB
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
+    ):
+        probe = PowerThermalProbe(engine_name="llamacpp")
+        reading = probe.read()
+    assert reading["engine_rss_mb"] == 20480.0  # 20 GiB → MB
+
+
+def test_engine_footprint_normalizes_engine_name():
+    # 'mlx-lm' (hyphen) must match the collector's 'mlxlm' key.
+    fake_proc = type("P", (), {"name": "mlxlm", "rss_bytes": 1073741824})()  # 1 GiB
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
+    ):
+        probe = PowerThermalProbe(engine_name="mlx-lm")
+        assert probe.read()["engine_rss_mb"] == 1024.0
+
+
+def test_engine_footprint_none_when_no_match_or_no_name():
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[]) as mock_procs,
+    ):
+        # no engine_name → no process scan at all
+        assert PowerThermalProbe().read()["engine_rss_mb"] is None
+        mock_procs.assert_not_called()
+        # engine_name set but no matching process → None
+        assert PowerThermalProbe(engine_name="llamacpp").read()["engine_rss_mb"] is None
+
+
+def test_engine_footprint_llamacpp_aux_aliases_to_llamacpp():
+    # collect_engine_processes emits key "llamacpp" for any llama-server, so
+    # llamacpp-aux-N must alias to it (else footprint would always be None).
+    fake_proc = type("P", (), {"name": "llamacpp", "rss_bytes": 2147483648})()  # 2 GiB
+    fake_thermal = type("T", (), {"speed_limit": 100})()
+    with (
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
+        patch("asiai.collectors.system.collect_thermal", return_value=fake_thermal),
+        patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
+    ):
+        assert PowerThermalProbe(engine_name="llamacpp-aux-3").read()["engine_rss_mb"] == 2048.0
+
+
+# --- KV cache tokens via /metrics (#19) -----------------------------------
+
+
+class _FakeResp:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, _n=None):
+        return self._body
+
+
+def test_read_kv_cache_tokens_parses_llamacpp_metrics():
+    metrics = b"llamacpp:prompt_tokens_total 0\nllamacpp:kv_cache_tokens 6144\n"
+    with patch("urllib.request.urlopen", return_value=_FakeResp(metrics)):
+        assert read_kv_cache_tokens("http://localhost:8080") == 6144
+
+
+def test_read_kv_cache_tokens_none_cases():
+    # empty / non-http scheme → None, without touching the network
+    assert read_kv_cache_tokens("") is None
+    assert read_kv_cache_tokens("file:///x") is None
+    # metric absent (MLX engine without the counter) → None
+    with patch("urllib.request.urlopen", return_value=_FakeResp(b"some_other_metric 1\n")):
+        assert read_kv_cache_tokens("http://localhost:8004") is None
+    # network error → None
+    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+        assert read_kv_cache_tokens("http://localhost:8080") is None
+
+
+# --- KVCacheSampler background peak (#19, modern /slots source) ------------
+
+
+def test_kv_cache_sampler_captures_peak_over_processing_slots():
+    # /slots returns rising n_prompt_tokens while processing, then idle.
+    # The sampler keeps the peak and ignores the idle (is_processing=False) read.
+    responses = [
+        b'[{"is_processing": true, "n_prompt_tokens": 100}]',
+        b'[{"is_processing": true, "n_prompt_tokens": 250}]',
+        b'[{"is_processing": true, "n_prompt_tokens": 420}]',
+        b'[{"is_processing": false, "n_prompt_tokens": 9999}]',
+    ]
+    state = {"i": 0}
+
+    def fake_urlopen(url, timeout=None):
+        body = responses[min(state["i"], len(responses) - 1)]
+        state["i"] += 1
+        return _FakeResp(body)
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            _wait_until(lambda: kv.result.max_kv_tokens >= 420, timeout=5.0)
+    assert kv.result.max_kv_tokens == 420  # idle 9999 not counted
+
+
+def test_kv_cache_sampler_parallel_sums_active_slots():
+    # Under --parallel, N processing slots each hold a KV → summed.
+    body = (
+        b'[{"is_processing": true, "n_prompt_tokens": 300}, '
+        b'{"is_processing": true, "n_prompt_tokens": 250}, '
+        b'{"is_processing": false, "n_prompt_tokens": 50}]'
+    )
+    with patch("urllib.request.urlopen", return_value=_FakeResp(body)):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            _wait_until(lambda: kv.result.max_kv_tokens >= 550, timeout=5.0)
+    assert kv.result.max_kv_tokens == 550  # 300 + 250, idle slot excluded
+
+
+def test_kv_cache_sampler_disabled_and_graceful():
+    # Non-http / empty → disabled, no thread, no network.
+    with KVCacheSampler("") as kv:
+        pass
+    assert kv.result.max_kv_tokens == 0
+    # Errors on /slots stay graceful → peak 0.
+    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            pass  # enter/exit; any poll errors stay graceful
+    assert kv.result.max_kv_tokens == 0
+
+
+def test_kv_cache_sampler_non_list_slots_graceful():
+    # /slots returning a non-list (e.g. {"error":...} when disabled) → no crash,
+    # peak stays 0. Wait for at least one poll to confirm it was exercised.
+    calls = {"n": 0}
+
+    def fake(url, timeout=None):
+        calls["n"] += 1
+        return _FakeResp(b'{"error": "slots endpoint disabled"}')
+
+    with patch("urllib.request.urlopen", side_effect=fake):
+        with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
+            _wait_until(lambda: calls["n"] >= 1, timeout=2.0)
+    assert kv.result.max_kv_tokens == 0
