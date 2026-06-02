@@ -637,7 +637,15 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         repeats=max(1, getattr(args, "runs", 1) or 1),
     )
 
-    print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
+    reuse = result.get("prefix_cache_reuse", {})
+    print(f"\nPrefix-cache reuse verdict: {result['prefix_cache_reuse_verdict']}")
+    rf = reuse.get("reuse_fraction")
+    print(
+        f"  {dim('raw signal')}: reuse_fraction={rf if rf is not None else 'n/a'} "
+        f"source={reuse.get('cache_source', '?')} "
+        f"ttft_corroborated={reuse.get('reuse_corroborated_by_ttft', False)}"
+    )
+    print(f"  {dim('(verdict is engine-family-specific — compare the raw signal, not it)')}")
     qg = result.get("quality_gates") or {}
     es = qg.get("early_stop") or {}
     if es.get("detected"):

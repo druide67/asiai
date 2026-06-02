@@ -370,3 +370,56 @@ def test_repeats_produce_phase_stats_with_cv():
     assert stats["n"] == 3
     assert stats["median"] == 100.0
     assert stats["cv"] == 0.1  # stdev 10 / mean 100
+
+
+def _reuse_run(phase, **kw):
+    import asiai.benchmark.agentic as ag
+
+    base = {"completion_tokens": 400, "max_tokens_requested": 400, "prompt_tokens": 7500}
+    base.update(kw)
+    return ag.AgenticRun(phase=phase, **base)
+
+
+def test_compute_reuse_usage_cached_raw_signal():
+    import asiai.benchmark.agentic as ag
+
+    runs = [
+        _reuse_run("cold", cached_tokens=0, ttft_ms=1000),
+        _reuse_run("prefix-test-1", cached_tokens=6000, ttft_ms=150),
+        _reuse_run("prefix-test-3", cached_tokens=6000, ttft_ms=150),
+    ]
+    reuse = ag._compute_reuse(runs)
+    assert reuse["cache_source"] == "usage_cached"
+    assert reuse["reuse_fraction"] == round(6000 / 7500, 3)  # 0.8
+    assert reuse["reuse_corroborated_by_ttft"] is True  # 150 <= 1000/5
+    assert reuse["verdict"] == "yes"
+
+
+def test_compute_reuse_ttft_proxy_when_cached_absent():
+    # llama.cpp case: no usage.cached_tokens, but TTFT collapses on prefix reuse.
+    # The raw signal corroborates reuse where the verdict alone would mislead.
+    import asiai.benchmark.agentic as ag
+
+    runs = [
+        _reuse_run("cold", cached_tokens=None, ttft_ms=1000),
+        _reuse_run("prefix-test-1", cached_tokens=None, ttft_ms=120),
+        _reuse_run("prefix-test-3", cached_tokens=None, ttft_ms=120),
+    ]
+    reuse = ag._compute_reuse(runs)
+    assert reuse["cache_source"] == "ttft_proxy"
+    assert reuse["reuse_fraction"] is None
+    assert reuse["reuse_corroborated_by_ttft"] is True
+
+
+def test_compute_reuse_excludes_early_stop_runs():
+    # An early-stopped prefix run (tokens << requested) must not feed the vote.
+    import asiai.benchmark.agentic as ag
+
+    runs = [
+        _reuse_run("cold", cached_tokens=0, ttft_ms=1000),
+        _reuse_run("prefix-test-1", completion_tokens=10, cached_tokens=6000, ttft_ms=150),
+    ]
+    reuse = ag._compute_reuse(runs)
+    # The only prefix run was early-stopped => no usable prefix samples.
+    assert reuse["reuse_fraction"] is None
+    assert reuse["cache_source"] == "absent"

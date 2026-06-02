@@ -348,6 +348,88 @@ def _compute_verdict(runs: list[AgenticRun]) -> str:
     return "unknown"
 
 
+def _compute_reuse(runs: list[AgenticRun]) -> dict[str, Any]:
+    """Cross-family-safe prefix-cache reuse signal.
+
+    The categorical verdict ('yes'/'no') is NOT comparable across engine
+    families: llama.cpp does not surface ``usage.cached_tokens`` the way mlx-lm
+    does, so a reusing llama.cpp scores 'no' on the cached ratio while a weaker
+    MLX engine scores 'yes'. So this publishes the RAW signal — the cached/prompt
+    fraction when reported, the detection source, and whether a TTFT collapse
+    independently corroborates reuse — and tags the categorical verdict with its
+    source so consumers never compare the verdict itself across families.
+
+    Early-stop runs are excluded from the vote (a truncated run's tokens are
+    unreliable). reuse_fraction is RAW cached/prompt clamped to [0,1]; on a
+    prefix-test only SYS_A is cacheable, so a perfect prefix hit ceilings around
+    0.8 (USER_Y is never cached) — see docs/bench-modes.md, do not read it as a
+    fraction of a 1.0 ideal.
+    """
+
+    def _ok(r: AgenticRun) -> bool:
+        if r.error is not None:
+            return False
+        requested = r.max_tokens_requested or 0
+        return not (requested and r.completion_tokens < requested * 0.5)
+
+    cold_runs = [r for r in runs if r.phase == "cold" and _ok(r)]
+    prefix_runs = [r for r in runs if r.phase in ("prefix-test-1", "prefix-test-3") and _ok(r)]
+
+    per_phase: dict[str, dict[str, Any]] = {}
+    for r in prefix_runs:
+        if r.cached_tokens is not None and r.prompt_tokens:
+            frac = round(max(0.0, min(1.0, r.cached_tokens / r.prompt_tokens)), 3)
+            entry = per_phase.setdefault(r.phase, {"cached_tokens": [], "reuse_fraction": []})
+            entry["cached_tokens"].append(r.cached_tokens)
+            entry["reuse_fraction"].append(frac)
+
+    paired = [
+        (r.cached_tokens, r.prompt_tokens)
+        for r in prefix_runs
+        if r.cached_tokens is not None and r.prompt_tokens
+    ]
+    reuse_fraction: float | None = None
+    if paired:
+        avg_cached = sum(c for c, _ in paired) / len(paired)
+        avg_prompt = sum(p for _, p in paired) / len(paired)
+        reuse_fraction = (
+            round(max(0.0, min(1.0, avg_cached / avg_prompt)), 3) if avg_prompt else None
+        )
+        cache_source = "usage_cached"
+    elif prefix_runs:
+        cache_source = "ttft_proxy"
+    else:
+        cache_source = "absent"
+
+    # TTFT corroboration: a >=5x first-token speedup on prefix-test vs the cold
+    # median is independent evidence of reuse, available even when the engine
+    # reports no cached_tokens (the llama.cpp case the categorical verdict misses).
+    import statistics
+
+    cold_ttfts = [r.ttft_ms for r in cold_runs if r.ttft_ms]
+    prefix_ttfts = [r.ttft_ms for r in prefix_runs if r.ttft_ms]
+    reuse_corroborated_by_ttft = bool(
+        cold_ttfts
+        and prefix_ttfts
+        and statistics.median(cold_ttfts)
+        and statistics.median(prefix_ttfts) <= statistics.median(cold_ttfts) / 5
+    )
+
+    return {
+        "verdict": _compute_verdict(runs),
+        "verdict_source": cache_source,
+        "reuse_fraction": reuse_fraction,
+        "cache_source": cache_source,
+        "reuse_corroborated_by_ttft": reuse_corroborated_by_ttft,
+        "per_phase": per_phase,
+        "note": (
+            "Categorical verdict is engine-family-specific (cached_tokens reporting "
+            "differs); compare reuse_fraction + reuse_corroborated_by_ttft across "
+            "families, never the verdict itself."
+        ),
+    }
+
+
 def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
     """Per-phase median + CV across repeats for the headline metrics.
 
@@ -473,7 +555,7 @@ def run_agentic_bench(
         if probe is not None:
             probe.close()
 
-    verdict = _compute_verdict(runs)
+    reuse = _compute_reuse(runs)
     quality_gates: dict[str, Any] = {
         "early_stop": detect_early_stop(runs),
         "duplicate_processes": duplicates,
@@ -500,7 +582,8 @@ def run_agentic_bench(
         "base_url": base_url,
         "started_at": started,
         "finished_at": int(time.time()),
-        "prefix_cache_reuse_verdict": verdict,
+        "prefix_cache_reuse_verdict": reuse["verdict"],
+        "prefix_cache_reuse": reuse,
         "quality_gates": quality_gates,
         "extra_body": extra_body or {},
         "repeats": max(1, repeats),
