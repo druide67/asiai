@@ -39,6 +39,12 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from asiai.benchmark.output_gates import (
+    DEFAULT_MIN_VALID_PCT,
+    check_degenerate,
+    output_valid_pct,
+    truncate_text,
+)
 from asiai.benchmark.prompts import (
     SYS_A,
     SYS_B,
@@ -109,6 +115,7 @@ class AgenticRun:
     kv_cache_tokens: int | None = None  # KV occupancy via /slots (≠ cached_tokens prefix-hit)
     finish_reason: str | None = None  # SSE finish_reason ('stop' | 'length' | None)
     repeat: int = 0  # 0-based protocol repetition index (for >=5-run variance)
+    text: str = ""  # truncated user-facing content (for output-validity gates)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -164,6 +171,7 @@ def _do_single_run(
     last_usage: dict[str, Any] | None = None
     prefill_power: dict[str, Any] | None = None
     finish_reason: str | None = None
+    content_parts: list[str] = []
 
     run = AgenticRun(
         phase=phase_name,
@@ -217,12 +225,16 @@ def _do_single_run(
                     delta = choices[0].get("delta", {}) or {}
                     # Qwen3.x thinking mode emits reasoning BEFORE content.
                     # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
-                    # Both contribute to TTFT (first token emitted server-side).
+                    # Both contribute to TTFT (first token emitted server-side);
+                    # only the user-facing content is kept for the output gate.
+                    text_content = delta.get("content") or ""
                     content = (
-                        (delta.get("content") or "")
+                        text_content
                         + (delta.get("reasoning_content") or "")
                         + (delta.get("reasoning") or "")
                     )
+                    if text_content:
+                        content_parts.append(text_content)
                     if content:
                         if first_token_time is None:
                             first_token_time = time.perf_counter() - t0
@@ -250,6 +262,7 @@ def _do_single_run(
     run.wall_total_ms = int(t_end * 1000)
     run.ttft_ms = int(first_token_time * 1000) if first_token_time else None
     run.finish_reason = finish_reason
+    run.text = truncate_text("".join(content_parts))
 
     completion_tokens = (last_usage or {}).get("completion_tokens", completion_chunks)
     run.completion_tokens = completion_tokens
@@ -467,6 +480,29 @@ def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _summarize_output(runs: list[AgenticRun]) -> dict[str, Any]:
+    """Deterministic output-validity gate across runs.
+
+    Flags degenerate generations (empty / repetition-loop / low-diversity) and
+    reports the share of clean runs, so a mis-quantised model or thinking-loop
+    that streams garbage fast can be refused a ranking below ``min_valid_pct``.
+    """
+    valid_flags: list[bool] = []
+    degenerate: list[dict[str, Any]] = []
+    for r in runs:
+        if r.error is not None:
+            continue
+        result = check_degenerate(r.text or "")
+        valid_flags.append(not result["degenerate"])
+        if result["degenerate"]:
+            degenerate.append({"phase": r.phase, "repeat": r.repeat, "reason": result["reason"]})
+    return {
+        "output_valid_pct": output_valid_pct(valid_flags),
+        "degenerate_runs": degenerate,
+        "min_valid_pct": DEFAULT_MIN_VALID_PCT,
+    }
+
+
 def run_agentic_bench(
     base_url: str,
     engine_name: str,
@@ -560,6 +596,7 @@ def run_agentic_bench(
         "early_stop": detect_early_stop(runs),
         "duplicate_processes": duplicates,
         "thermal": summarize_thermal(runs),
+        "output_validity": _summarize_output(runs),
     }
     if watcher is not None:
         mw = watcher.result

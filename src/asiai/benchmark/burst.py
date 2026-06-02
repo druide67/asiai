@@ -51,6 +51,7 @@ import urllib.request
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from asiai.benchmark.output_gates import check_arithmetic, output_valid_pct
 from asiai.benchmark.prompts import SYS_A
 from asiai.benchmark.quality_gates import (
     EngineMemorySampler,
@@ -91,6 +92,7 @@ class BurstCallResult:
     completion_tokens: int
     prompt_tokens: int | None
     error: str | None
+    output_valid: bool = True  # deterministic arithmetic answer matched
 
 
 @dataclass
@@ -113,9 +115,19 @@ class BurstSizeResult:
     soc_watts: float | None = None  # package power over the burst (gpu+cpu+ane+dram+dcs)
     tok_s_per_soc_watt: float | None = None  # headline efficiency (≈ tokens/Joule)
     energy_per_token_j: float | None = None  # SoC energy per token over the burst
+    output_valid_pct: float | None = None  # % of ok calls whose arithmetic answer matched
     thermal_speed_limit: int | None = None
     engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
     engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
+
+
+def _expected_answer(call_index: int) -> int:
+    """Deterministic answer to ``_make_user_prompt(call_index)`` — (12345+i)*7.
+
+    Used as a free correctness gate: the model's output must contain this exact
+    integer regardless of sampling temperature.
+    """
+    return (12345 + call_index) * 7
 
 
 def _make_user_prompt(call_index: int) -> str:
@@ -233,6 +245,8 @@ def _do_one_call_buffered(
 
     latency_ms = (time.perf_counter() - t0) * 1000
     usage = data.get("usage") or {}
+    msg = (data.get("choices") or [{}])[0].get("message", {}) or {}
+    text = msg.get("content") or ""
     return BurstCallResult(
         call_index=call_index,
         ok=True,
@@ -242,6 +256,7 @@ def _do_one_call_buffered(
         completion_tokens=usage.get("completion_tokens", 0),
         prompt_tokens=usage.get("prompt_tokens"),
         error=None,
+        output_valid=check_arithmetic(text, _expected_answer(call_index)),
     )
 
 
@@ -255,6 +270,7 @@ def _do_one_call_streaming(
     first_token_time: float | None = None
     bytes_read = 0
     last_usage: dict[str, Any] | None = None
+    content_parts: list[str] = []
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             for raw in resp:
@@ -287,12 +303,16 @@ def _do_one_call_streaming(
                     continue
                 delta = choices[0].get("delta", {}) or {}
                 # Qwen3 family emits reasoning_content before content under
-                # thinking mode; both count toward first-token-emitted.
+                # thinking mode; both count toward first-token-emitted, but only
+                # user-facing content is kept for the arithmetic gate.
+                text_content = delta.get("content") or ""
                 content = (
-                    (delta.get("content") or "")
+                    text_content
                     + (delta.get("reasoning_content") or "")
                     + (delta.get("reasoning") or "")
                 )
+                if text_content:
+                    content_parts.append(text_content)
                 if content and first_token_time is None:
                     first_token_time = time.perf_counter() - t0
     except urllib.error.HTTPError as e:
@@ -329,6 +349,7 @@ def _do_one_call_streaming(
         completion_tokens=usage.get("completion_tokens", 0),
         prompt_tokens=usage.get("prompt_tokens"),
         error=None,
+        output_valid=check_arithmetic("".join(content_parts), _expected_answer(call_index)),
     )
 
 
@@ -413,6 +434,7 @@ def _aggregate_size(
     energy_per_token_j = (
         round(energy_joules / total_tokens, 4) if energy_joules and total_tokens else None
     )
+    valid_pct = output_valid_pct([r.output_valid for r in ok_results]) if ok_results else None
 
     return BurstSizeResult(
         n=n,
@@ -431,6 +453,7 @@ def _aggregate_size(
         soc_watts=soc_watts,
         tok_s_per_soc_watt=tok_s_per_soc_watt,
         energy_per_token_j=energy_per_token_j,
+        output_valid_pct=valid_pct,
         thermal_speed_limit=thermal_speed_limit,
         engine_rss_mb=engine_rss_mb,
         engine_phys_footprint_mb=engine_phys_footprint_mb,

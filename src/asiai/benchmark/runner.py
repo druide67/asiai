@@ -6,6 +6,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
+from asiai.benchmark.output_gates import check_degenerate
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
 from asiai.benchmark.quality_gates import (
     MemoryWatcher,
@@ -538,6 +539,7 @@ def _run_single(
             "tokens_source": gen.tokens_source,
             "prompt_tokens": gen.prompt_tokens,
             "prefill_tok_s": gen.prefill_tok_s,
+            "output_degenerate": check_degenerate(gen.text)["degenerate"],
             "ttft_ms": gen.ttft_ms,
             "ttft_client_ms": gen.ttft_client_ms,
             "ttft_source": "server" if gen.prompt_eval_duration_ms > 0 else "client",

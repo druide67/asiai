@@ -7,6 +7,8 @@ import math
 import statistics
 from collections import defaultdict
 
+from asiai.benchmark.output_gates import DEFAULT_MIN_VALID_PCT
+
 # Two-sided 95% Student-t critical values by degrees of freedom (df = n-1).
 # A bench run has very few samples (n=3-5), where the z=2 normal approximation
 # gives a too-narrow interval; the t-quantile widens it for the real df.
@@ -250,19 +252,36 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     )
     data["outliers"] = _detect_outliers(tok_values) if tok_values else []
 
+    # Deterministic output validity: share of timed runs whose generated text
+    # is not degenerate (empty / repetition-loop / low-diversity). Engines below
+    # DEFAULT_MIN_VALID_PCT are refused a ranking by _determine_winner.
+    timed = [p for p in pr if p.get("tok_per_sec", 0) > 0]
+    if timed:
+        clean = sum(1 for p in timed if not p.get("output_degenerate", False))
+        data["output_valid_pct"] = round(100.0 * clean / len(timed), 1)
+
     return data
 
 
 def _determine_winner(engines: dict[str, dict]) -> dict | None:
     """Pick winner by median tok/s (more robust than mean) and compute deltas."""
-    if len(engines) < 2:
-        return None
 
     def _primary_tok_s(data: dict) -> float:
         """Use median when available (multi-run), fallback to avg."""
         return data.get("median_tok_s", 0.0) or data.get("avg_tok_s", 0.0)
 
-    ranked = sorted(engines.items(), key=lambda x: _primary_tok_s(x[1]), reverse=True)
+    # Refuse to crown an engine whose output failed the deterministic validity
+    # gate — fast garbage is not a win. Results without validity data (older
+    # runs) are treated as rankable for back-compat.
+    rankable = {
+        n: d
+        for n, d in engines.items()
+        if d.get("output_valid_pct") is None or d["output_valid_pct"] >= DEFAULT_MIN_VALID_PCT
+    }
+    if len(rankable) < 2:
+        return None
+
+    ranked = sorted(rankable.items(), key=lambda x: _primary_tok_s(x[1]), reverse=True)
     best_name, best = ranked[0]
     second_name, second = ranked[1]
 
