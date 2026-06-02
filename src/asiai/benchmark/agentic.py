@@ -29,6 +29,7 @@ Verdict for prefix_cache_reuse:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -170,63 +171,67 @@ def _do_single_run(
     mem_sampler = (
         EngineMemorySampler(probe.engine_name) if probe is not None and probe.engine_name else None
     )
-    if probe is not None:
-        probe.start()
-    if kv_sampler is not None:
-        kv_sampler.__enter__()
-    if mem_sampler is not None:
-        mem_sampler.__enter__()
 
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            for raw in resp:
-                line = raw.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                payload_str = line[len("data:") :].strip()
-                if payload_str == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(payload_str)
-                except json.JSONDecodeError:
-                    continue
-                if chunk.get("usage"):
-                    last_usage = chunk["usage"]
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {}) or {}
-                # Qwen3.x thinking mode emits reasoning BEFORE content.
-                # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
-                # Both contribute to TTFT (first token emitted server-side).
-                content = (
-                    (delta.get("content") or "")
-                    + (delta.get("reasoning_content") or "")
-                    + (delta.get("reasoning") or "")
-                )
-                if content:
-                    if first_token_time is None:
-                        first_token_time = time.perf_counter() - t0
-                    completion_chunks += 1
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", errors="replace")[:500]
-        run.error = f"HTTP {e.code}"
-        run.error_body = body_text
+    # An ExitStack guarantees both samplers are stopped (and their daemon
+    # threads joined) on every exit path — success, HTTPError, or any other
+    # exception — so a failed run can't leak a sampler thread into the next
+    # engine's measurement window. The probe's lifecycle is owned by the caller
+    # (read() below, close() upstream), so it is started here but not registered
+    # with the stack.
+    with contextlib.ExitStack() as stack:
+        if probe is not None:
+            probe.start()
         if kv_sampler is not None:
-            kv_sampler.__exit__(None, None, None)
+            stack.enter_context(kv_sampler)
         if mem_sampler is not None:
-            mem_sampler.__exit__(None, None, None)
-        return run
-    except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
-        run.error = type(e).__name__
-        run.error_body = str(e)[:300]
-        if kv_sampler is not None:
-            kv_sampler.__exit__(None, None, None)
-        if mem_sampler is not None:
-            mem_sampler.__exit__(None, None, None)
-        return run
+            stack.enter_context(mem_sampler)
 
-    t_end = time.perf_counter() - t0
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                for raw in resp:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload_str = line[len("data:") :].strip()
+                    if payload_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(payload_str)
+                    except json.JSONDecodeError:
+                        continue
+                    if chunk.get("usage"):
+                        last_usage = chunk["usage"]
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {}) or {}
+                    # Qwen3.x thinking mode emits reasoning BEFORE content.
+                    # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
+                    # Both contribute to TTFT (first token emitted server-side).
+                    content = (
+                        (delta.get("content") or "")
+                        + (delta.get("reasoning_content") or "")
+                        + (delta.get("reasoning") or "")
+                    )
+                    if content:
+                        if first_token_time is None:
+                            first_token_time = time.perf_counter() - t0
+                        completion_chunks += 1
+        except urllib.error.HTTPError as e:
+            body_text = e.read().decode("utf-8", errors="replace")[:500]
+            run.error = f"HTTP {e.code}"
+            run.error_body = body_text
+            return run
+        except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
+            run.error = type(e).__name__
+            run.error_body = str(e)[:300]
+            return run
+
+        # Capture the end time while the samplers are still running: the
+        # ExitStack join (up to join_timeout each) fires when this block closes
+        # and must not be folded into the decode window computed below.
+        t_end = time.perf_counter() - t0
+
     run.wall_total_ms = int(t_end * 1000)
     run.ttft_ms = int(first_token_time * 1000) if first_token_time else None
 
@@ -254,10 +259,6 @@ def _do_single_run(
     # tok/s/W uses decode_tok_s as the throughput numerator; on the short
     # phases (400 tokens) decode dominates the window so this is a fair
     # efficiency proxy, with the caveat that prefill power is folded in.
-    if kv_sampler is not None:
-        kv_sampler.__exit__(None, None, None)
-    if mem_sampler is not None:
-        mem_sampler.__exit__(None, None, None)
     if probe is not None:
         reading = probe.read()
         run.gpu_watts = reading["gpu_watts"]

@@ -239,19 +239,23 @@ def test_run_agentic_bench_http_error():
     assert out["runs"][0]["error"] == "HTTP 400"
 
 
-def test_kv_sampler_stopped_on_error_path():
-    # Regression for the reviewed blocker: the KVCacheSampler must be stopped
-    # even when the request errors out, otherwise its daemon keeps polling
-    # /slots and contaminates the subsequent phases.
+def test_samplers_stopped_on_error_path():
+    # Regression for the reviewed blocker: both the KVCacheSampler and the
+    # EngineMemorySampler must be stopped even when the request errors out,
+    # otherwise their daemon threads keep polling and contaminate later phases.
+    # A4 routes both through a single contextlib.ExitStack, so teardown holds on
+    # every exit path (success, HTTPError, generic exception).
     import urllib.error
     from unittest.mock import MagicMock
 
     err = urllib.error.HTTPError(
         url="http://x", code=503, msg="busy", hdrs={}, fp=io.BytesIO(b"{}")
     )
-    sampler = MagicMock()
+    kv_sampler = MagicMock()
+    mem_sampler = MagicMock()
     with (
-        patch("asiai.benchmark.agentic.KVCacheSampler", return_value=sampler),
+        patch("asiai.benchmark.agentic.KVCacheSampler", return_value=kv_sampler),
+        patch("asiai.benchmark.agentic.EngineMemorySampler", return_value=mem_sampler),
         patch("asiai.benchmark.agentic.urllib.request.urlopen", side_effect=err),
         patch("asiai.benchmark.agentic.time.sleep"),
     ):
@@ -262,5 +266,7 @@ def test_kv_sampler_stopped_on_error_path():
             pause=0,
             only=["cold"],
         )
-    sampler.__enter__.assert_called()
-    sampler.__exit__.assert_called()
+    kv_sampler.__enter__.assert_called()
+    kv_sampler.__exit__.assert_called()
+    mem_sampler.__enter__.assert_called()
+    mem_sampler.__exit__.assert_called()
