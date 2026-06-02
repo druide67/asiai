@@ -634,6 +634,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         out_path=args.agentic_output,
         include_host=getattr(args, "agentic_include_host", False),
         extra_body=extra_body,
+        repeats=max(1, getattr(args, "runs", 1) or 1),
     )
 
     print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
@@ -1667,7 +1668,8 @@ def main(argv: list[str] | None = None) -> int:
             "Run the 8-run agentic protocol with explicit prefix cache reuse test "
             "(sys identical + user different). Reads cached_tokens from streaming "
             "usage when the engine exposes it; falls back to TTFT ratio otherwise. "
-            "Disables --runs, --prompts, --quick, --compare, --share."
+            "--runs N repeats the whole protocol N times for variance (per-phase "
+            "median + CV in phase_stats; use >=5). Ignores --prompts/--quick/--compare/--share."
         ),
     )
     bench_parser.add_argument(

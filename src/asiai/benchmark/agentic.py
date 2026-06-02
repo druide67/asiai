@@ -58,7 +58,7 @@ from asiai.benchmark.quality_gates import (
 
 logger = logging.getLogger("asiai.benchmark.agentic")
 
-SCHEMA_VERSION = "agentic-v2"
+SCHEMA_VERSION = "agentic-v3"
 
 # Caveat on token counts: other tokenizers compress differently. Llama-3
 # averages ~4.0 chars/token on the same prose; the long-context phase
@@ -108,6 +108,7 @@ class AgenticRun:
     engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
     kv_cache_tokens: int | None = None  # KV occupancy via /slots (≠ cached_tokens prefix-hit)
     finish_reason: str | None = None  # SSE finish_reason ('stop' | 'length' | None)
+    repeat: int = 0  # 0-based protocol repetition index (for >=5-run variance)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -347,6 +348,43 @@ def _compute_verdict(runs: list[AgenticRun]) -> str:
     return "unknown"
 
 
+def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
+    """Per-phase median + CV across repeats for the headline metrics.
+
+    Only error-free runs contribute. CV (coefficient of variation = stdev/mean)
+    is the variance signal a single run (n=1) cannot provide; it is None when a
+    phase has fewer than 2 clean samples.
+    """
+    import statistics
+
+    by_phase: dict[str, list[AgenticRun]] = {}
+    for r in runs:
+        if getattr(r, "error", None):
+            continue
+        by_phase.setdefault(r.phase, []).append(r)
+
+    def _stat(values: list[float | None]) -> dict[str, Any]:
+        clean = [v for v in values if v is not None]
+        if not clean:
+            return {"n": 0, "median": None, "cv": None}
+        cv = None
+        if len(clean) >= 2:
+            mean = statistics.fmean(clean)
+            cv = round(statistics.stdev(clean) / mean, 3) if mean else None
+        return {"n": len(clean), "median": round(statistics.median(clean), 2), "cv": cv}
+
+    return {
+        phase: {
+            "decode_tok_s": _stat([r.decode_tok_s for r in phase_runs]),
+            "ttft_ms": _stat(
+                [float(r.ttft_ms) if r.ttft_ms is not None else None for r in phase_runs]
+            ),
+            "soc_watts": _stat([r.soc_watts for r in phase_runs]),
+        }
+        for phase, phase_runs in by_phase.items()
+    }
+
+
 def run_agentic_bench(
     base_url: str,
     engine_name: str,
@@ -360,6 +398,7 @@ def run_agentic_bench(
     include_host: bool = False,
     skip_quality_gates: bool = False,
     extra_body: dict[str, Any] | None = None,
+    repeats: int = 1,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -380,9 +419,13 @@ def run_agentic_bench(
         skip_quality_gates: Disable early-stop / memory pressure / duplicate
             process checks. Off by default. Useful for unit tests that mock
             ``_do_single_run`` and don't want a real thread or ``ps`` call.
+        repeats: Number of times to repeat the whole protocol (default 1). Use
+            >=5 for variance: each repetition's runs are tagged with ``repeat``
+            and ``phase_stats`` reports per-phase median + CV across them.
 
-    Returns the result dict with ``schema_version``, ``runs``,
-    ``prefix_cache_reuse_verdict``, ``quality_gates``, and engine metadata.
+    Returns the result dict with ``schema_version``, ``runs``, ``repeats``,
+    ``phase_stats``, ``prefix_cache_reuse_verdict``, ``quality_gates``, and
+    engine metadata.
     """
     selected = list(PHASES)
     if skip_long:
@@ -402,26 +445,28 @@ def run_agentic_bench(
     if watcher is not None:
         watcher.__enter__()
     try:
-        for phase in selected:
-            logger.info("[%s] starting", phase.name)
-            run = _do_single_run(
-                base_url=base_url,
-                model=model,
-                phase_name=phase.name,
-                sys_msg=phase.sys_msg,
-                user_msg=phase.user_msg,
-                max_tokens=phase.max_tokens,
-                timeout=timeout,
-                extra_body=extra_body,
-                probe=probe,
-            )
-            runs.append(run)
-            if on_run:
-                try:
-                    on_run(run)
-                except Exception:  # noqa: BLE001 — never let observer break bench
-                    logger.exception("on_run callback failed")
-            time.sleep(pause)
+        for repeat_idx in range(max(1, repeats)):
+            for phase in selected:
+                logger.info("[%s] starting (repeat %d/%d)", phase.name, repeat_idx + 1, repeats)
+                run = _do_single_run(
+                    base_url=base_url,
+                    model=model,
+                    phase_name=phase.name,
+                    sys_msg=phase.sys_msg,
+                    user_msg=phase.user_msg,
+                    max_tokens=phase.max_tokens,
+                    timeout=timeout,
+                    extra_body=extra_body,
+                    probe=probe,
+                )
+                run.repeat = repeat_idx
+                runs.append(run)
+                if on_run:
+                    try:
+                        on_run(run)
+                    except Exception:  # noqa: BLE001 — never let observer break bench
+                        logger.exception("on_run callback failed")
+                time.sleep(pause)
     finally:
         if watcher is not None:
             watcher.__exit__(None, None, None)
@@ -458,6 +503,8 @@ def run_agentic_bench(
         "prefix_cache_reuse_verdict": verdict,
         "quality_gates": quality_gates,
         "extra_body": extra_body or {},
+        "repeats": max(1, repeats),
+        "phase_stats": _phase_stats(runs),
         "runs": [asdict(r) for r in runs],
     }
     if include_host:

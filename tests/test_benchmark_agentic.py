@@ -328,3 +328,45 @@ def test_do_single_run_decode_window_and_soc_metrics():
     assert run.energy_per_token_j == round(200.0 / 3, 4)
     assert run.decode_tok_s is not None
     assert run.tok_s_per_soc_watt == round(run.decode_tok_s / 40.0, 3)
+
+
+def test_repeats_produce_phase_stats_with_cv():
+    # repeats>1 reruns the whole protocol; phase_stats reports per-phase median
+    # and CV across the repetitions (the variance a single run can't give).
+    from unittest.mock import patch
+
+    import asiai.benchmark.agentic as ag
+
+    seq = iter([100.0, 110.0, 90.0])
+
+    def fake_run(*, phase_name, **kw):
+        return ag.AgenticRun(
+            phase=phase_name,
+            completion_tokens=400,
+            max_tokens_requested=400,
+            decode_tok_s=next(seq),
+            ttft_ms=50,
+            soc_watts=40.0,
+        )
+
+    with (
+        patch("asiai.benchmark.agentic._do_single_run", side_effect=fake_run),
+        patch("asiai.benchmark.agentic.time.sleep"),
+    ):
+        out = ag.run_agentic_bench(
+            base_url="http://x",
+            engine_name="t",
+            model="m",
+            pause=0,
+            only=["cold"],
+            skip_quality_gates=True,
+            repeats=3,
+        )
+
+    assert out["repeats"] == 3
+    assert len(out["runs"]) == 3  # 1 phase x 3 repeats
+    assert {r["repeat"] for r in out["runs"]} == {0, 1, 2}
+    stats = out["phase_stats"]["cold"]["decode_tok_s"]
+    assert stats["n"] == 3
+    assert stats["median"] == 100.0
+    assert stats["cv"] == 0.1  # stdev 10 / mean 100

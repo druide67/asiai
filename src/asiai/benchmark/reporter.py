@@ -7,6 +7,49 @@ import math
 import statistics
 from collections import defaultdict
 
+# Two-sided 95% Student-t critical values by degrees of freedom (df = n-1).
+# A bench run has very few samples (n=3-5), where the z=2 normal approximation
+# gives a too-narrow interval; the t-quantile widens it for the real df.
+_T95 = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+    16: 2.120,
+    17: 2.110,
+    18: 2.101,
+    19: 2.093,
+    20: 2.086,
+    21: 2.080,
+    22: 2.074,
+    23: 2.069,
+    24: 2.064,
+    25: 2.060,
+    26: 2.056,
+    27: 2.052,
+    28: 2.048,
+    29: 2.045,
+    30: 2.042,
+}
+
+
+def _t95(df: int) -> float:
+    """Two-sided 95% Student-t critical value for ``df`` degrees of freedom."""
+    if df <= 0:
+        return 0.0
+    return _T95.get(df, 1.96)  # 1.96 = large-sample normal limit
+
 
 def aggregate_results(results: list[dict]) -> dict:
     """Aggregate per-prompt results into per-engine summaries.
@@ -189,8 +232,9 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     if tok_values and len(tok_values) >= 2:
         n = len(tok_values)
         se = data["std_dev_tok_s"] / math.sqrt(n) if n > 0 else 0.0
-        data["ci95_lower"] = round(data["avg_tok_s"] - 2 * se, 1)
-        data["ci95_upper"] = round(data["avg_tok_s"] + 2 * se, 1)
+        t = _t95(n - 1)
+        data["ci95_lower"] = round(data["avg_tok_s"] - t * se, 1)
+        data["ci95_upper"] = round(data["avg_tok_s"] + t * se, 1)
     else:
         data["ci95_lower"] = data["avg_tok_s"]
         data["ci95_upper"] = data["avg_tok_s"]
