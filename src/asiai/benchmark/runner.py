@@ -160,6 +160,7 @@ def run_benchmark(
     *,
     slots: list[BenchmarkSlot] | None = None,
     progress_cb: object | None = None,
+    extra_body: dict | None = None,
 ) -> BenchmarkRun:
     """Run benchmarks across engines for a given model, or across arbitrary slots.
 
@@ -344,7 +345,7 @@ def run_benchmark(
             # Warmup: one short non-timed generation to prime JIT/caches
             logger.info("Warmup run for %s on %s", engine_model, engine.name)
             try:
-                engine.generate(engine_model, "Hello", max_tokens=1)
+                engine.generate(engine_model, "Hello", max_tokens=1, extra_body=extra_body)
             except Exception as e:
                 logger.debug("warmup failed for %s: %s", engine.name, e)
 
@@ -391,6 +392,7 @@ def run_benchmark(
                             ram_gb=ram_gb,
                             vram_estimated=vram_estimated,
                             ollama_runner_type=ollama_runner_type,
+                            extra_body=extra_body,
                         )
 
                 # Stop the probe and annotate this engine's results.
@@ -485,12 +487,13 @@ def _run_single(
     ram_gb: int = 0,
     vram_estimated: bool = False,
     ollama_runner_type: str = "",
+    extra_body: dict | None = None,
 ) -> None:
     """Run a single engine+prompt benchmark and append to run."""
     mem = collect_memory()
     thermal = collect_thermal()
 
-    gen = engine.generate(model, prompt.prompt, prompt.max_tokens)
+    gen = engine.generate(model, prompt.prompt, prompt.max_tokens, extra_body=extra_body)
 
     # Capture process-level resource usage right after generation
     engine_proc = find_engine_process(engine.name)
@@ -524,6 +527,9 @@ def _run_single(
             "prompt_type": prompt.name,
             "tokens_generated": gen.tokens_generated,
             "tok_per_sec": gen.tok_per_sec,
+            "tokens_source": gen.tokens_source,
+            "prompt_tokens": gen.prompt_tokens,
+            "prefill_tok_s": gen.prefill_tok_s,
             "ttft_ms": gen.ttft_ms,
             "ttft_client_ms": gen.ttft_client_ms,
             "ttft_source": "server" if gen.prompt_eval_duration_ms > 0 else "client",

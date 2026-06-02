@@ -30,6 +30,9 @@ class GenerateResult:
     total_duration_ms: float = 0.0
     prompt_eval_duration_ms: float = 0.0
     generation_duration_ms: float = 0.0
+    prompt_tokens: int = 0
+    prefill_tok_s: float = 0.0  # prompt_tokens / time-to-first-token
+    tokens_source: str = ""  # 'usage' (server-exact) | 'chunks' (streamed count)
     model: str = ""
     engine: str = ""
     error: str = ""
@@ -75,8 +78,20 @@ class InferenceEngine(ABC):
         """List all available (downloaded) models."""
 
     @abstractmethod
-    def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
-        """Send a generation request and return timing metrics."""
+    def generate(
+        self,
+        model: str,
+        prompt: str,
+        max_tokens: int = 512,
+        extra_body: dict | None = None,
+    ) -> GenerateResult:
+        """Send a generation request and return timing metrics.
+
+        ``extra_body`` is merged into the request payload so the caller can pass
+        engine-specific kwargs uniformly — e.g.
+        ``{"chat_template_kwargs": {"enable_thinking": False}}`` to keep Qwen3
+        reasoning tokens out of the throughput/TTFT measurement.
+        """
 
     def unload_model(self, model: str) -> bool:
         """Unload a model from engine memory to free resources.

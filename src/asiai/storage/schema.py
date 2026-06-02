@@ -316,4 +316,16 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN energy_per_token_j REAL DEFAULT 0",
         ],
     },
+    # v1.11: token provenance ('usage'|'chunks') + prefill throughput (Lot C).
+    # tok/s is only comparable at comparable token counts — tokens_source flags
+    # whether the count is server-exact (usage) or a streamed chunk estimate.
+    {
+        "table": "benchmarks",
+        "columns": ["tokens_source", "prompt_tokens", "prefill_tok_s"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN tokens_source TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN prompt_tokens INTEGER DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN prefill_tok_s REAL DEFAULT 0",
+        ],
+    },
 ]

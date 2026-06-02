@@ -104,8 +104,10 @@ _FILL_BLOCK = (
     "systems to their limits during sustained inference workloads. "
 )
 
-# Approximate tokens per character ratio (conservative for English text).
-_CHARS_PER_TOKEN = 4.0
+# Chars per token, calibrated against the Qwen tokenizer (~5.3), matching the
+# long-form fixtures below. Used to size context-fill prompts so --context-size N
+# lands near N tokens on Qwen; the old 4.0 undershot the target by ~25%.
+_CHARS_PER_TOKEN = 5.3
 
 
 # --- Long-form fixtures (shared between agentic-mode and burst-mode) ---

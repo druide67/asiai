@@ -878,6 +878,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
         context_size = parse_context_size(args.context_size)
 
+    extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    if extra_body:
+        print(f"  {dim('●')} extra_body: {extra_body}")
+        print()
+
     if compare_mode:
         # --- Cross-model comparison mode ---
         bench_slots = expand_compare_args(args.compare, args.engines, engines)
@@ -896,6 +901,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             context_size=context_size,
             slots=bench_slots,
             progress_cb=lambda msg: print(f"  {msg}"),
+            extra_body=extra_body,
         )
     else:
         # --- Legacy engine comparison mode ---
@@ -930,6 +936,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             power=power,
             context_size=context_size,
             progress_cb=lambda msg: print(f"  {msg}"),
+            extra_body=extra_body,
         )
 
     # Inject kv_cache metadata if specified
@@ -1787,7 +1794,7 @@ def main(argv: list[str] | None = None) -> int:
             "Useful for engine-specific kwargs, e.g. "
             '\'{"chat_template_kwargs":{"enable_thinking":false}}\' to disable '
             "Qwen3 thinking mode (recommended for tool-call workloads). "
-            "Applies to both --agentic-mode and --burst-mode."
+            "Applies to standard, --agentic-mode and --burst-mode runs."
         ),
     )
 

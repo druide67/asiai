@@ -65,15 +65,16 @@ class TestContextFillPrompt:
         """Prompt input tokens + max_tokens should not exceed target_tokens."""
         target = 65536
         prompt = generate_context_fill_prompt(target)
-        # Estimate input tokens from prompt text length
-        input_tokens_estimate = len(prompt.prompt) / 4.0
+        # Estimate input tokens with the same ~5.3 chars/token Qwen calibration
+        # the generator uses to size the prompt.
+        input_tokens_estimate = len(prompt.prompt) / 5.3
         assert input_tokens_estimate + prompt.max_tokens <= target
 
     def test_custom_max_tokens(self):
         """Custom max_tokens should be respected."""
         prompt = generate_context_fill_prompt(4096, max_tokens=512)
         assert prompt.max_tokens == 512
-        input_tokens_estimate = len(prompt.prompt) / 4.0
+        input_tokens_estimate = len(prompt.prompt) / 5.3
         assert input_tokens_estimate + prompt.max_tokens <= 4096
 
     def test_small_context(self):
@@ -894,8 +895,9 @@ class TestPooledStddev:
 
 
 class TestTokenFallback:
-    def test_text_length_estimation(self):
-        """Token fallback should use len(text)//4, not chunk count."""
+    def test_no_usage_counts_chunks(self):
+        """No usage block: fall back to the streamed content chunk count
+        (tokens_source='chunks'), never the old chars//4 estimate."""
         from asiai.engines.openai_compat import OpenAICompatEngine
 
         class _TestEngine(OpenAICompatEngine):
@@ -928,8 +930,9 @@ class TestTokenFallback:
 
             result = engine.generate("test-model", "test prompt")
 
-        # Should be len(text)//4 = 100, NOT len(text_parts) = 2
-        assert result.tokens_generated == 100
+        # No usage => count the 2 streamed content chunks (chars//4 is gone).
+        assert result.tokens_generated == 2
+        assert result.tokens_source == "chunks"
         assert result.generation_duration_ms >= 0.0
 
 
@@ -1269,7 +1272,7 @@ class TestThermalDrift:
         # Simulate decreasing tok/s across 3 runs (50 -> 45 -> 40 = 20% drop)
         call_count = [0]
 
-        def varying_generate(model, prompt, max_tokens=512):
+        def varying_generate(model, prompt, max_tokens=512, extra_body=None):
             call_count[0] += 1
             if call_count[0] == 1:
                 # warmup

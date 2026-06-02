@@ -118,23 +118,35 @@ class OllamaEngine(InferenceEngine):
             logger.debug("Ollama unload failed for %s: %s", model, e)
             return False
 
-    def generate(self, model: str, prompt: str, max_tokens: int = 512) -> GenerateResult:
+    def generate(
+        self,
+        model: str,
+        prompt: str,
+        max_tokens: int = 512,
+        extra_body: dict | None = None,
+    ) -> GenerateResult:
         """Generate text using Ollama /api/generate with streaming.
 
-        Streams to measure client-side TTFT (comparable across engines)
-        while also capturing server-side timings from the final chunk.
+        Streams to measure client-side TTFT (comparable across engines) while
+        capturing server-side token counts from the final chunk. tok/s uses the
+        unified client-side decode formula so it lines up with the OpenAI-compat
+        engines on the same GGUF. ``extra_body`` is merged top-level into the
+        payload (e.g. ``{"think": False}`` to disable thinking on Ollama).
         """
-        payload = json.dumps(
-            {
-                "model": model,
-                "prompt": prompt,
-                "stream": True,
-                "options": {"num_predict": max_tokens, "temperature": 0},
-            }
-        ).encode()
+        body: dict = {
+            "model": model,
+            "prompt": prompt,
+            "stream": True,
+            "options": {"num_predict": max_tokens, "temperature": 0},
+        }
+        if extra_body:
+            body.update(extra_body)
+        payload = json.dumps(body).encode()
 
         t0 = time.monotonic()
         ttft_client_ms = 0.0
+        first_token_t = 0.0
+        last_token_t = 0.0
         text_parts: list[str] = []
         final_data: dict = {}
 
@@ -156,12 +168,13 @@ class OllamaEngine(InferenceEngine):
                     except json.JSONDecodeError:
                         continue
 
-                    # Measure client TTFT at first chunk (any content)
-                    if ttft_client_ms == 0.0:
-                        ttft_client_ms = round((time.monotonic() - t0) * 1000, 1)
-
                     token = chunk.get("response", "")
                     if token:
+                        now = time.monotonic()
+                        if not text_parts:
+                            first_token_t = now
+                            ttft_client_ms = round((now - t0) * 1000, 1)
+                        last_token_t = now
                         text_parts.append(token)
 
                     if chunk.get("done"):
@@ -178,9 +191,24 @@ class OllamaEngine(InferenceEngine):
         eval_count = final_data.get("eval_count", 0)
         eval_duration_ns = final_data.get("eval_duration", 0)
         prompt_eval_ns = final_data.get("prompt_eval_duration", 0)
+        prompt_eval_count = final_data.get("prompt_eval_count", 0)
         total_ns = final_data.get("total_duration", 0)
 
-        tok_s = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else 0.0
+        # Unified client-side decode rate (same formula as the OpenAI-compat
+        # engines) so Ollama lines up with llama.cpp on the same GGUF. The native
+        # server eval rate stays recoverable from generation_duration_ms.
+        decode_span_s = max(0.0, last_token_t - first_token_t)
+        if eval_count > 1 and decode_span_s >= 0.01:
+            tok_s = (eval_count - 1) / decode_span_s
+        else:
+            tok_s = 0.0
+
+        ttft_client_s = ttft_client_ms / 1000.0
+        prefill_tok_s = (
+            round(prompt_eval_count / ttft_client_s, 2)
+            if prompt_eval_count and ttft_client_s >= 0.01
+            else 0.0
+        )
 
         return GenerateResult(
             text="".join(text_parts),
@@ -191,6 +219,9 @@ class OllamaEngine(InferenceEngine):
             total_duration_ms=round(total_ns / 1e6, 1),
             prompt_eval_duration_ms=round(prompt_eval_ns / 1e6, 1),
             generation_duration_ms=round(eval_duration_ns / 1e6, 1),
+            prompt_tokens=prompt_eval_count,
+            prefill_tok_s=prefill_tok_s,
+            tokens_source="usage",
             model=model,
             engine=self.name,
         )
