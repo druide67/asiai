@@ -33,6 +33,28 @@ class TestIOReportReading:
         r = IOReportReading()
         assert r.total_watts == 0.0
 
+    def test_defaults_include_energy_and_dcs(self):
+        r = IOReportReading()
+        assert r.dcs_watts == 0.0
+        assert r.soc_watts == 0.0
+        assert r.soc_joules == 0.0
+        assert r.gpu_joules == 0.0
+        assert r.dcs_joules == 0.0
+
+    def test_soc_watts_includes_dcs(self):
+        # soc_watts = gpu+cpu+ane+dram+dcs; total_watts stays DCS-free (legacy).
+        r = IOReportReading(
+            gpu_watts=12.5, cpu_watts=4.3, ane_watts=0.0, dram_watts=2.1, dcs_watts=2.2
+        )
+        assert r.total_watts == pytest.approx(18.9, abs=0.01)
+        assert r.soc_watts == pytest.approx(21.1, abs=0.01)
+
+    def test_soc_joules_sums_all_rails(self):
+        r = IOReportReading(
+            gpu_joules=10.0, cpu_joules=5.0, ane_joules=0.0, dram_joules=2.0, dcs_joules=3.0
+        )
+        assert r.soc_joules == pytest.approx(20.0, abs=0.01)
+
 
 # ── Availability tests ─────────────────────────────────────────────
 
@@ -118,8 +140,12 @@ class TestIOReportHardware:
         assert reading.cpu_watts > 0.0
         assert reading.ane_watts >= 0.0
         assert reading.dram_watts >= 0.0
+        assert reading.dcs_watts >= 0.0
         assert reading.interval_s > 0.5
         assert reading.total_watts > 0.0
+        # soc_watts adds the DCS (DRAM controller) rail on top of total_watts.
+        assert reading.soc_watts >= reading.total_watts
+        assert reading.soc_joules > 0.0
 
     def test_context_manager(self):
         """Test context manager usage."""

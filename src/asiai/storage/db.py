@@ -188,9 +188,11 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     generation_duration_ms, hw_chip, os_version,
                     context_size, gpu_cores, ram_gb,
                     power_watts_ioreport, power_watts_powermetrics,
-                    power_source, kv_cache_type)
+                    power_source, kv_cache_type,
+                    soc_watts, tok_s_per_soc_watt, energy_per_token_j,
+                    tokens_source, prompt_tokens, prefill_tok_s)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
                     r["engine"],
@@ -209,7 +211,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("power_watts", 0.0),
                     r.get("tok_per_sec_per_watt", 0.0),
                     r.get("load_time_ms", 0.0),
-                    2,  # metrics_version: 2 = tok/s excludes TTFT
+                    3,  # metrics_version: 3 = SoC power + decode-scoped energy (1.11.0)
                     r.get("engine_version", ""),
                     r.get("model_format", ""),
                     r.get("model_quantization", ""),
@@ -223,6 +225,12 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("power_watts_powermetrics", 0.0),
                     r.get("power_source", ""),
                     r.get("kv_cache_type", ""),
+                    r.get("soc_watts", 0.0),
+                    r.get("tok_s_per_soc_watt", 0.0),
+                    r.get("energy_per_token_j", 0.0),
+                    r.get("tokens_source", ""),
+                    r.get("prompt_tokens", 0),
+                    r.get("prefill_tok_s", 0.0),
                 ),
             )
         conn.commit()

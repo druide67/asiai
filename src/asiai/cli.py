@@ -634,9 +634,18 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         out_path=args.agentic_output,
         include_host=getattr(args, "agentic_include_host", False),
         extra_body=extra_body,
+        repeats=max(1, getattr(args, "runs", 1) or 1),
     )
 
-    print(f"\nVerdict prefix_cache_reuse: {result['prefix_cache_reuse_verdict']}")
+    reuse = result.get("prefix_cache_reuse", {})
+    print(f"\nPrefix-cache reuse verdict: {result['prefix_cache_reuse_verdict']}")
+    rf = reuse.get("reuse_fraction")
+    print(
+        f"  {dim('raw signal')}: reuse_fraction={rf if rf is not None else 'n/a'} "
+        f"source={reuse.get('cache_source', '?')} "
+        f"ttft_corroborated={reuse.get('reuse_corroborated_by_ttft', False)}"
+    )
+    print(f"  {dim('(verdict is engine-family-specific — compare the raw signal, not it)')}")
     qg = result.get("quality_gates") or {}
     es = qg.get("early_stop") or {}
     if es.get("detected"):
@@ -878,6 +887,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
         context_size = parse_context_size(args.context_size)
 
+    extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    if extra_body:
+        print(f"  {dim('●')} extra_body: {extra_body}")
+        print()
+
     if compare_mode:
         # --- Cross-model comparison mode ---
         bench_slots = expand_compare_args(args.compare, args.engines, engines)
@@ -896,6 +910,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             context_size=context_size,
             slots=bench_slots,
             progress_cb=lambda msg: print(f"  {msg}"),
+            extra_body=extra_body,
         )
     else:
         # --- Legacy engine comparison mode ---
@@ -930,6 +945,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
             power=power,
             context_size=context_size,
             progress_cb=lambda msg: print(f"  {msg}"),
+            extra_body=extra_body,
         )
 
     # Inject kv_cache metadata if specified
@@ -1660,7 +1676,8 @@ def main(argv: list[str] | None = None) -> int:
             "Run the 8-run agentic protocol with explicit prefix cache reuse test "
             "(sys identical + user different). Reads cached_tokens from streaming "
             "usage when the engine exposes it; falls back to TTFT ratio otherwise. "
-            "Disables --runs, --prompts, --quick, --compare, --share."
+            "--runs N repeats the whole protocol N times for variance (per-phase "
+            "median + CV in phase_stats; use >=5). Ignores --prompts/--quick/--compare/--share."
         ),
     )
     bench_parser.add_argument(
@@ -1787,7 +1804,7 @@ def main(argv: list[str] | None = None) -> int:
             "Useful for engine-specific kwargs, e.g. "
             '\'{"chat_template_kwargs":{"enable_thinking":false}}\' to disable '
             "Qwen3 thinking mode (recommended for tool-call workloads). "
-            "Applies to both --agentic-mode and --burst-mode."
+            "Applies to standard, --agentic-mode and --burst-mode runs."
         ),
     )
 

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import platform
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from asiai.collectors.system import (
+    ThermalInfo,
     collect_cpu_cores,
     collect_cpu_load,
     collect_engine_processes,
@@ -94,8 +98,23 @@ class TestMemory:
 
 
 class TestThermal:
+    def test_notifyd_preferred_when_available(self):
+        # notifyd is the live Apple-Silicon signal; it short-circuits the
+        # legacy sysctl/pmset fallback (the Intel OID is dead on M-series).
+        with patch(
+            "asiai.collectors.system._thermal_via_notifyd",
+            return_value=ThermalInfo(level="fair", speed_limit=80),
+        ):
+            thermal = collect_thermal()
+        assert thermal.level == "fair"
+        assert thermal.speed_limit == 80
+
     def test_nominal_via_sysctl(self):
-        with patch("asiai.collectors.system.subprocess.run") as mock:
+        # Force the fallback path (notifyd unavailable, e.g. Intel/older macOS).
+        with (
+            patch("asiai.collectors.system._thermal_via_notifyd", return_value=None),
+            patch("asiai.collectors.system.subprocess.run") as mock,
+        ):
             mock.return_value = _mock_run("0")
             thermal = collect_thermal()
 
@@ -103,21 +122,34 @@ class TestThermal:
         assert thermal.speed_limit == 100
 
     def test_fallback_pmset(self):
-        call_count = 0
-
         def mock_run(cmd, **kwargs):
-            nonlocal call_count
-            call_count += 1
             if "machdep.xcpm" in cmd:
                 raise subprocess.CalledProcessError(1, cmd)
             if "pmset" in cmd:
                 return _mock_run("No thermal warning level has been recorded")
             return _mock_run("")
 
-        with patch("asiai.collectors.system.subprocess.run", side_effect=mock_run):
+        with (
+            patch("asiai.collectors.system._thermal_via_notifyd", return_value=None),
+            patch("asiai.collectors.system.subprocess.run", side_effect=mock_run),
+        ):
             thermal = collect_thermal()
 
         assert thermal.level == "nominal"
+
+    @pytest.mark.skipif(
+        platform.system() != "Darwin" or platform.machine() != "arm64",
+        reason="notifyd thermal pressure channel is Apple Silicon only",
+    )
+    def test_notifyd_real_returns_valid_level(self):
+        # Integration: the channel is live on Apple Silicon and yields a real
+        # level (the whole point of Lot D — the sysctl signal was dead here).
+        from asiai.collectors.system import _thermal_via_notifyd
+
+        result = _thermal_via_notifyd()
+        assert result is not None
+        assert result.speed_limit >= 0
+        assert result.level in {"nominal", "fair", "serious", "critical"}
 
 
 class TestEngineProcesses:
@@ -148,6 +180,10 @@ class TestEngineProcesses:
 
         assert len(procs) == 1
         assert procs[0].cpu_pct == 3.4
+        # True RSS from the ps RSS column (KB → bytes). On a bogus PID
+        # proc_pid_rusage fails, so phys_footprint_bytes falls back to the RSS.
+        assert procs[0].resident_bytes == 65432 * 1024
+        assert procs[0].phys_footprint_bytes == 65432 * 1024
 
     def test_no_engine_processes(self):
         """No engine processes found should return empty list."""

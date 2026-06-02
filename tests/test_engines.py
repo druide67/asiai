@@ -225,16 +225,19 @@ class TestOllamaGenerate:
             },
         ]
 
-        with patch(
-            "asiai.engines.ollama.urlopen",
-            return_value=_ollama_stream_response(chunks),
+        with (
+            patch("asiai.engines.ollama.urlopen", return_value=_ollama_stream_response(chunks)),
+            patch("asiai.engines.ollama.time") as mock_time,
         ):
+            # t0, first token (0.2), last token (3.18). Unified client-side decode:
+            # (150-1) tokens over the 2.98s span = 50 tok/s.
+            mock_time.monotonic.side_effect = [0.0, 0.2, 3.18]
             engine = OllamaEngine("http://localhost:11434")
             result = engine.generate("test-model", "Write a BST", 512)
 
         assert result.tokens_generated == 150
         assert result.tok_per_sec == 50.0
-        assert result.ttft_ms == 800.0
+        assert result.ttft_ms == 800.0  # server-native prompt eval, unchanged
         assert result.text == "class BST:\n    pass"
         assert result.error == ""
 
@@ -288,20 +291,23 @@ def _sse_response(chunks: list[dict]):
 class TestLMStudioGenerate:
     def test_generate_success(self):
         chunks = [
-            {"choices": [{"text": "def hello(): pass"}], "usage": {"completion_tokens": 80}},
+            {"choices": [{"text": "def hello():"}]},
+            {"choices": [{"text": " pass"}], "usage": {"completion_tokens": 80}},
         ]
 
         with (
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1, 2.0]
+            # t0, first token (0.1), last token (1.7), elapsed. (80-1)/1.6 = 49.38.
+            mock_time.monotonic.side_effect = [0.0, 0.1, 1.7, 2.0]
             engine = LMStudioEngine("http://localhost:1234")
             result = engine.generate("test-model", "Write code", 512)
 
         assert result.tokens_generated == 80
-        assert result.tok_per_sec == 42.11  # 80 / (2.0 - 0.1) generation only
+        assert result.tok_per_sec == 49.38
         assert result.ttft_ms == 100.0
+        assert result.text == "def hello(): pass"
         assert result.error == ""
 
     def test_generate_error(self):
@@ -402,22 +408,21 @@ class TestMlxLmGenerate:
     def test_generate_success(self):
         chunks = [
             {"choices": [{"delta": {"role": "assistant"}}]},
-            {
-                "choices": [{"delta": {"content": "def hello(): pass"}}],
-                "usage": {"completion_tokens": 80},
-            },
+            {"choices": [{"delta": {"content": "def hello():"}}]},
+            {"choices": [{"delta": {"content": " pass"}}], "usage": {"completion_tokens": 80}},
         ]
 
         with (
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1, 2.0]
+            # t0, first token (0.1), last token (1.7), elapsed. (80-1)/1.6 = 49.38.
+            mock_time.monotonic.side_effect = [0.0, 0.1, 1.7, 2.0]
             engine = MlxLmEngine("http://localhost:8080")
             result = engine.generate("test-model", "Write code", 512)
 
         assert result.tokens_generated == 80
-        assert result.tok_per_sec == 42.11  # 80 / (2.0 - 0.1) generation only
+        assert result.tok_per_sec == 49.38
         assert result.text == "def hello(): pass"
         assert result.error == ""
 
@@ -614,23 +619,27 @@ class TestLlamaCppEngine:
         assert result.tokens_generated == 50
         assert result.tok_per_sec > 0
 
-    def test_generate_reasoning_only_no_usage_estimates_throughput(self):
+    def test_generate_reasoning_only_no_usage_counts_chunks(self):
         # Edge case: model stops in thinking mode (no content), no usage block.
-        # Fallback estimate must include reasoning chars to produce non-zero tok/s.
+        # The old chars//4 estimate is gone — reasoning chunks are counted as
+        # tokens (tokens_source='chunks'); reasoning stays out of the user text.
         chunks = [
-            {"choices": [{"delta": {"reasoning_content": "x" * 200}}]},
+            {"choices": [{"delta": {"reasoning_content": "thinking "}}]},
+            {"choices": [{"delta": {"reasoning_content": "more "}}]},
+            {"choices": [{"delta": {"reasoning_content": "done"}}]},
         ]
         with (
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1, 1.1]
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5, 0.9, 1.1]
             engine = LlamaCppEngine("http://localhost:8080")
             result = engine.generate("qwen3.6", "hi", 512)
 
-        assert result.text == ""
-        assert result.tokens_generated >= 1
-        assert result.tok_per_sec > 0
+        assert result.text == ""  # reasoning excluded from user-facing text
+        assert result.tokens_generated == 3  # 3 reasoning chunks counted
+        assert result.tokens_source == "chunks"
+        assert result.tok_per_sec == 2.5  # (3-1) tokens over the 0.8s span
 
     def test_list_running(self):
         data = {"data": [{"id": "my-gguf-model"}]}
@@ -694,19 +703,21 @@ class TestVllmMlxEngine:
 
     def test_generate_uses_chat_mode(self):
         chunks = [
-            {"choices": [{"delta": {"content": "fast"}}], "usage": {"completion_tokens": 200}},
+            {"choices": [{"delta": {"content": "fa"}}]},
+            {"choices": [{"delta": {"content": "st"}}], "usage": {"completion_tokens": 200}},
         ]
 
         with (
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5]
+            # t0, first (0.1), last (0.5), elapsed. (200-1)/0.4 = 497.5.
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5, 0.6]
             engine = VllmMlxEngine("http://localhost:8000")
             result = engine.generate("model", "hi", 256)
 
         assert result.text == "fast"
-        assert result.tok_per_sec == 500.0  # 200 / (0.5 - 0.1) generation only
+        assert result.tok_per_sec == 497.5
         assert result.engine == "vllm_mlx"
 
     def test_list_running(self):
@@ -755,18 +766,20 @@ class TestVmlxEngine:
 
     def test_generate_uses_chat_mode(self):
         chunks = [
-            {"choices": [{"delta": {"content": "vmlx"}}], "usage": {"completion_tokens": 100}},
+            {"choices": [{"delta": {"content": "vm"}}]},
+            {"choices": [{"delta": {"content": "lx"}}], "usage": {"completion_tokens": 100}},
         ]
         with (
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5]
+            # t0, first (0.1), last (0.5), elapsed. (100-1)/0.4 = 247.5.
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5, 0.6]
             engine = VmlxEngine("http://localhost:8000")
             result = engine.generate("model", "hi", 256)
 
         assert result.text == "vmlx"
-        assert result.tok_per_sec == 250.0  # 100 / (0.5 - 0.1) generation only
+        assert result.tok_per_sec == 247.5
         assert result.engine == "vmlx"
 
     def test_list_running(self):

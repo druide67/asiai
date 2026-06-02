@@ -10,14 +10,17 @@ import pytest
 from asiai.benchmark.agentic import AgenticRun
 from asiai.benchmark.quality_gates import (
     DEFAULT_EARLY_STOP_RATIO,
+    EngineMemorySampler,
     KVCacheSampler,
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
+    check_other_engines_resident,
     detect_early_stop,
     read_kv_cache_tokens,
     summarize_thermal,
 )
+from asiai.collectors.ioreport import IOReportReading
 
 # --- early-stop -----------------------------------------------------------
 
@@ -280,6 +283,18 @@ def test_summarize_thermal_throttled_when_any_below_100():
     assert result["throttled"] is True
 
 
+def test_summarize_thermal_ignores_unknown_minus_one():
+    # -1 means "not measured" — it must not be read as a throttle (-1 < 100).
+    runs = [
+        AgenticRun(phase="cold", thermal_speed_limit=-1),
+        AgenticRun(phase="warm", thermal_speed_limit=100),
+    ]
+    result = summarize_thermal(runs)
+    assert result["observed"] is True
+    assert result["min_speed_limit"] == 100
+    assert result["throttled"] is False
+
+
 # --- power/thermal probe --------------------------------------------------
 
 
@@ -295,7 +310,14 @@ def test_power_thermal_probe_unavailable_returns_none():
             side_effect=Exception("no thermal"),
         ):
             reading = probe.read()
-        assert reading == {"gpu_watts": None, "thermal_speed_limit": None, "engine_rss_mb": None}
+        assert reading == {
+            "gpu_watts": None,
+            "soc_watts": None,
+            "energy_joules": None,
+            "thermal_speed_limit": None,
+            "engine_rss_mb": None,
+            "engine_phys_footprint_mb": None,
+        }
         probe.close()  # idempotent, must not raise
         probe.close()
 
@@ -305,7 +327,7 @@ def test_power_thermal_probe_reads_gpu_watts_and_thermal():
         "FakeSampler",
         (),
         {
-            "sample": lambda self: type("R", (), {"gpu_watts": 24.5})(),
+            "sample": lambda self: IOReportReading(gpu_watts=24.5, cpu_watts=5.0, dcs_watts=2.5),
             "close": lambda self: None,
         },
     )()
@@ -320,6 +342,8 @@ def test_power_thermal_probe_reads_gpu_watts_and_thermal():
         probe.start()
         reading = probe.read()
     assert reading["gpu_watts"] == 24.5
+    # soc_watts adds cpu+ane+dram+dcs to the GPU rail (24.5 + 5.0 + 2.5).
+    assert reading["soc_watts"] == 32.0
     assert reading["thermal_speed_limit"] == 100
 
 
@@ -365,7 +389,10 @@ def test_power_thermal_probe_default_no_cross_validate():
     fake_sampler = type(
         "FakeSampler",
         (),
-        {"sample": lambda self: type("R", (), {"gpu_watts": 12.0})(), "close": lambda self: None},
+        {
+            "sample": lambda self: IOReportReading(gpu_watts=12.0),
+            "close": lambda self: None,
+        },
     )()
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
@@ -380,7 +407,14 @@ def test_power_thermal_probe_default_no_cross_validate():
         probe.close()
     mock_pm.assert_not_called()
     # read() keeps the per-window shape (no powermetrics provenance fields).
-    assert set(reading) == {"gpu_watts", "thermal_speed_limit", "engine_rss_mb"}
+    assert set(reading) == {
+        "gpu_watts",
+        "soc_watts",
+        "energy_joules",
+        "thermal_speed_limit",
+        "engine_rss_mb",
+        "engine_phys_footprint_mb",
+    }
     assert reading["gpu_watts"] == 12.0
 
 
@@ -388,13 +422,17 @@ def test_power_thermal_probe_default_no_cross_validate():
 
 
 class _StubSampler:
-    """Minimal IOReportSampler stand-in returning a fixed gpu_watts."""
+    """Minimal IOReportSampler stand-in returning a fixed gpu_watts.
+
+    Returns a real IOReportReading so soc_watts/soc_joules properties work;
+    with only gpu_watts set, soc_watts collapses to the GPU rail.
+    """
 
     def __init__(self, watts: float) -> None:
         self._watts = watts
 
     def sample(self):
-        return type("R", (), {"gpu_watts": self._watts})()
+        return IOReportReading(gpu_watts=self._watts)
 
     def close(self) -> None:
         pass
@@ -444,15 +482,23 @@ def test_probe_read_aggregate_precedence(io_watts, pm_watts, expect_gpu, expect_
     assert reading["power_watts_ioreport"] == io_watts
     assert reading["power_watts_powermetrics"] == pm_watts
     assert reading["thermal_speed_limit"] == 100
-    assert "engine_rss_mb" in reading  # read_aggregate carries the footprint field
+    # read_aggregate carries BOTH memory columns (RSS headline + phys 2nd col)
+    assert "engine_rss_mb" in reading
+    assert "engine_phys_footprint_mb" in reading
 
 
 # --- engine footprint (#18) -----------------------------------------------
 
 
-def test_engine_footprint_matches_and_converts_to_mb():
-    # engine_name set + a matching process → engine_rss_mb in MB (phys footprint).
-    fake_proc = type("P", (), {"name": "llamacpp", "rss_bytes": 21474836480})()  # 20 GiB
+def test_engine_footprint_rss_and_phys_are_decoupled():
+    # The GGUF case: true RSS (resident_size, 20 GiB — includes the resident
+    # weight pages) is the headline; phys_footprint (3 GiB — KV+runtime, excludes
+    # clean file-backed mmap) is the second column. They must NOT be conflated.
+    fake_proc = type(
+        "P",
+        (),
+        {"name": "llamacpp", "resident_bytes": 21474836480, "phys_footprint_bytes": 3221225472},
+    )()  # RSS 20 GiB, phys 3 GiB
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
         patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
@@ -461,12 +507,15 @@ def test_engine_footprint_matches_and_converts_to_mb():
     ):
         probe = PowerThermalProbe(engine_name="llamacpp")
         reading = probe.read()
-    assert reading["engine_rss_mb"] == 20480.0  # 20 GiB → MB
+    assert reading["engine_rss_mb"] == 20480.0  # RSS headline: 20 GiB → MB
+    assert reading["engine_phys_footprint_mb"] == 3072.0  # phys 2nd column: 3 GiB → MB
 
 
 def test_engine_footprint_normalizes_engine_name():
     # 'mlx-lm' (hyphen) must match the collector's 'mlxlm' key.
-    fake_proc = type("P", (), {"name": "mlxlm", "rss_bytes": 1073741824})()  # 1 GiB
+    fake_proc = type(
+        "P", (), {"name": "mlxlm", "resident_bytes": 1073741824, "phys_footprint_bytes": 1073741824}
+    )()  # MLX: RSS ≈ phys (anonymous + Metal, no GGUF mmap)
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
         patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
@@ -494,7 +543,11 @@ def test_engine_footprint_none_when_no_match_or_no_name():
 def test_engine_footprint_llamacpp_aux_aliases_to_llamacpp():
     # collect_engine_processes emits key "llamacpp" for any llama-server, so
     # llamacpp-aux-N must alias to it (else footprint would always be None).
-    fake_proc = type("P", (), {"name": "llamacpp", "rss_bytes": 2147483648})()  # 2 GiB
+    fake_proc = type(
+        "P",
+        (),
+        {"name": "llamacpp", "resident_bytes": 2147483648, "phys_footprint_bytes": 2147483648},
+    )()  # 2 GiB
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
         patch("asiai.collectors.ioreport.ioreport_available", return_value=False),
@@ -502,6 +555,67 @@ def test_engine_footprint_llamacpp_aux_aliases_to_llamacpp():
         patch("asiai.collectors.system.collect_engine_processes", return_value=[fake_proc]),
     ):
         assert PowerThermalProbe(engine_name="llamacpp-aux-3").read()["engine_rss_mb"] == 2048.0
+
+
+# --- engine memory sampler (max-on-window) --------------------------------
+
+
+def _mem_proc(name, resident_gib, phys_gib):
+    return type(
+        "P",
+        (),
+        {
+            "name": name,
+            "resident_bytes": int(resident_gib * 1024**3),
+            "phys_footprint_bytes": int(phys_gib * 1024**3),
+        },
+    )()
+
+
+def test_engine_memory_sampler_keeps_peak_despite_dip():
+    # The whole point of sampling vs a post-run snapshot: keep the PEAK even
+    # when a later reading dips (GGUF clean weight pages are reclaimable).
+    seq = [
+        [_mem_proc("llamacpp", 1.0, 1.0)],  # 1 GiB
+        [_mem_proc("llamacpp", 5.0, 3.0)],  # peak: 5 GiB RSS / 3 GiB phys
+        [_mem_proc("llamacpp", 2.0, 2.0)],  # dip back to 2 GiB
+    ]
+    s = EngineMemorySampler("llamacpp")
+    with patch("asiai.collectors.system.collect_engine_processes", side_effect=seq):
+        for _ in range(3):
+            s._sample_once()
+    assert s.result.max_rss_mb == 5120.0  # 5 GiB peak, not the 2 GiB dip
+    assert s.result.max_phys_footprint_mb == 3072.0  # 3 GiB peak
+
+
+def test_engine_memory_sampler_disabled_without_engine():
+    # No engine_name → never scans processes, peaks stay 0.
+    s = EngineMemorySampler(None)
+    assert s._enabled is False
+    with patch("asiai.collectors.system.collect_engine_processes") as mock_procs, s:
+        pass
+    mock_procs.assert_not_called()
+    assert s.result.max_rss_mb == 0.0
+
+
+def test_engine_memory_sampler_no_match_stays_zero():
+    s = EngineMemorySampler("llamacpp")
+    with patch("asiai.collectors.system.collect_engine_processes", return_value=[]):
+        s._sample_once()
+    assert s.result.max_rss_mb == 0.0
+    assert s.result.max_phys_footprint_mb == 0.0
+
+
+def test_engine_memory_sampler_aux_aliases_to_llamacpp():
+    # llamacpp-aux-N must match the "llamacpp" key the collector emits.
+    s = EngineMemorySampler("llamacpp-aux-2")
+    assert s._target == "llamacpp"
+    with patch(
+        "asiai.collectors.system.collect_engine_processes",
+        return_value=[_mem_proc("llamacpp", 4.0, 2.0)],
+    ):
+        s._sample_once()
+    assert s.result.max_rss_mb == 4096.0
 
 
 # --- KV cache tokens via /metrics (#19) -----------------------------------
@@ -602,3 +716,37 @@ def test_kv_cache_sampler_non_list_slots_graceful():
         with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
             _wait_until(lambda: calls["n"] >= 1, timeout=2.0)
     assert kv.result.max_kv_tokens == 0
+
+
+# --- SOLO clean-table: foreign engine detection ---------------------------
+
+
+def _ps_result(stdout: str):
+    return type("R", (), {"stdout": stdout})()
+
+
+def test_check_other_engines_resident_flags_foreign_engine():
+    # Target is llamacpp; an mlx-lm server is also resident => flagged.
+    ps = "  PID COMMAND\n  100 /usr/bin/python mlx_lm.server --port 8081\n  200 /bin/zsh\n"
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("llamacpp")
+    engines = {f["engine"] for f in found}
+    assert "mlx-lm" in engines
+    assert all(f["pid"] == "100" for f in found if f["engine"] == "mlx-lm")
+
+
+def test_check_other_engines_resident_excludes_target():
+    # The only resident engine IS the target => clean table.
+    ps = "  PID COMMAND\n  100 /usr/bin/python mlx_lm.server --port 8081\n"
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("mlx-lm") == []
+
+
+def test_check_other_engines_resident_dedups_shared_pattern():
+    # llamacpp and llamacpp-aux share the 'llama-server' pattern; a single
+    # llama-server process must be reported once, not twice.
+    ps = "  PID COMMAND\n  300 /opt/llama-server --port 8080\n"
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("mlx-lm")
+    pids = [f["pid"] for f in found]
+    assert pids == ["300"]

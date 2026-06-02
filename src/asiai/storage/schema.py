@@ -304,4 +304,28 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN ttft_client_ms REAL DEFAULT 0",
         ],
     },
+    # v1.11: SoC power (gpu+cpu+ane+dram+dcs) + energy-per-token (metrics_version 3).
+    # GPU-only power undercounts a memory-bound decode on unified memory; soc_watts
+    # is the honest package headline and energy_per_token_j its decode-scoped energy.
+    {
+        "table": "benchmarks",
+        "columns": ["soc_watts", "tok_s_per_soc_watt", "energy_per_token_j"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN soc_watts REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN tok_s_per_soc_watt REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN energy_per_token_j REAL DEFAULT 0",
+        ],
+    },
+    # v1.11: token provenance ('usage'|'chunks') + prefill throughput (Lot C).
+    # tok/s is only comparable at comparable token counts — tokens_source flags
+    # whether the count is server-exact (usage) or a streamed chunk estimate.
+    {
+        "table": "benchmarks",
+        "columns": ["tokens_source", "prompt_tokens", "prefill_tok_s"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN tokens_source TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN prompt_tokens INTEGER DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN prefill_tok_s REAL DEFAULT 0",
+        ],
+    },
 ]

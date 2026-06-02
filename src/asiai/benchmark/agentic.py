@@ -29,6 +29,7 @@ Verdict for prefix_cache_reuse:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -38,6 +39,12 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from asiai.benchmark.output_gates import (
+    DEFAULT_MIN_VALID_PCT,
+    check_degenerate,
+    output_valid_pct,
+    truncate_text,
+)
 from asiai.benchmark.prompts import (
     SYS_A,
     SYS_B,
@@ -46,17 +53,19 @@ from asiai.benchmark.prompts import (
     USER_Y,
 )
 from asiai.benchmark.quality_gates import (
+    EngineMemorySampler,
     KVCacheSampler,
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
+    check_other_engines_resident,
     detect_early_stop,
     summarize_thermal,
 )
 
 logger = logging.getLogger("asiai.benchmark.agentic")
 
-SCHEMA_VERSION = "agentic-v2"
+SCHEMA_VERSION = "agentic-v3"
 
 # Caveat on token counts: other tokenizers compress differently. Llama-3
 # averages ~4.0 chars/token on the same prose; the long-context phase
@@ -97,9 +106,18 @@ class AgenticRun:
     decode_tok_s: float | None = None
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
+    soc_watts: float | None = None  # decode-window package power (gpu+cpu+ane+dram+dcs)
+    prefill_watts: float | None = None  # package power over the prefill window
+    tok_s_per_soc_watt: float | None = None  # headline efficiency (≈ tokens/Joule)
+    energy_per_token_j: float | None = None  # decode SoC energy per token
     thermal_speed_limit: int | None = None
-    engine_rss_mb: float | None = None
-    kv_cache_tokens: int | None = None  # KV occupancy via /metrics (≠ cached_tokens prefix-hit)
+    engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
+    engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
+    kv_cache_tokens: int | None = None  # KV occupancy via /slots (≠ cached_tokens prefix-hit)
+    finish_reason: str | None = None  # SSE finish_reason ('stop' | 'length' | None)
+    repeat: int = 0  # 0-based protocol repetition index (for >=5-run variance)
+    text: str = ""  # truncated user-facing content (for output-validity gates)
+    reasoning_chars: int = 0  # reasoning_content streamed (for the enable_thinking guard)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -153,6 +171,10 @@ def _do_single_run(
     first_token_time: float | None = None
     completion_chunks = 0
     last_usage: dict[str, Any] | None = None
+    prefill_power: dict[str, Any] | None = None
+    finish_reason: str | None = None
+    content_parts: list[str] = []
+    reasoning_chars = 0
 
     run = AgenticRun(
         phase=phase_name,
@@ -165,59 +187,87 @@ def _do_single_run(
     # measured by ``probe.read()`` covers this run's prefill + decode only.
     # KVCacheSampler polls /slots during the stream to capture the KV peak.
     kv_sampler = KVCacheSampler(base_url) if probe is not None else None
-    if probe is not None:
-        probe.start()
-    if kv_sampler is not None:
-        kv_sampler.__enter__()
+    mem_sampler = (
+        EngineMemorySampler(probe.engine_name) if probe is not None and probe.engine_name else None
+    )
 
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            for raw in resp:
-                line = raw.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                payload_str = line[len("data:") :].strip()
-                if payload_str == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(payload_str)
-                except json.JSONDecodeError:
-                    continue
-                if chunk.get("usage"):
-                    last_usage = chunk["usage"]
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {}) or {}
-                # Qwen3.x thinking mode emits reasoning BEFORE content.
-                # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
-                # Both contribute to TTFT (first token emitted server-side).
-                content = (
-                    (delta.get("content") or "")
-                    + (delta.get("reasoning_content") or "")
-                    + (delta.get("reasoning") or "")
-                )
-                if content:
-                    if first_token_time is None:
-                        first_token_time = time.perf_counter() - t0
-                    completion_chunks += 1
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", errors="replace")[:500]
-        run.error = f"HTTP {e.code}"
-        run.error_body = body_text
+    # An ExitStack guarantees both samplers are stopped (and their daemon
+    # threads joined) on every exit path — success, HTTPError, or any other
+    # exception — so a failed run can't leak a sampler thread into the next
+    # engine's measurement window. The probe's lifecycle is owned by the caller
+    # (read() below, close() upstream), so it is started here but not registered
+    # with the stack.
+    with contextlib.ExitStack() as stack:
+        if probe is not None:
+            probe.start()
         if kv_sampler is not None:
-            kv_sampler.__exit__(None, None, None)
-        return run
-    except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
-        run.error = type(e).__name__
-        run.error_body = str(e)[:300]
-        if kv_sampler is not None:
-            kv_sampler.__exit__(None, None, None)
-        return run
+            stack.enter_context(kv_sampler)
+        if mem_sampler is not None:
+            stack.enter_context(mem_sampler)
 
-    t_end = time.perf_counter() - t0
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                for raw in resp:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload_str = line[len("data:") :].strip()
+                    if payload_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(payload_str)
+                    except json.JSONDecodeError:
+                        continue
+                    if chunk.get("usage"):
+                        last_usage = chunk["usage"]
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    if choices[0].get("finish_reason"):
+                        finish_reason = choices[0]["finish_reason"]
+                    delta = choices[0].get("delta", {}) or {}
+                    # Qwen3.x thinking mode emits reasoning BEFORE content.
+                    # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
+                    # Both contribute to TTFT (first token emitted server-side);
+                    # only the user-facing content is kept for the output gate.
+                    text_content = delta.get("content") or ""
+                    reasoning_chunk = (delta.get("reasoning_content") or "") + (
+                        delta.get("reasoning") or ""
+                    )
+                    content = text_content + reasoning_chunk
+                    if text_content:
+                        content_parts.append(text_content)
+                    if reasoning_chunk:
+                        reasoning_chars += len(reasoning_chunk)
+                    if content:
+                        if first_token_time is None:
+                            first_token_time = time.perf_counter() - t0
+                            # Split the power window at first-token: this call
+                            # captures the prefill slice and rebaselines IOReport
+                            # so the final read() measures decode power only.
+                            if probe is not None:
+                                prefill_power = probe.read_power()
+                        completion_chunks += 1
+        except urllib.error.HTTPError as e:
+            body_text = e.read().decode("utf-8", errors="replace")[:500]
+            run.error = f"HTTP {e.code}"
+            run.error_body = body_text
+            return run
+        except Exception as e:  # noqa: BLE001 — network/json/timeout grab bag
+            run.error = type(e).__name__
+            run.error_body = str(e)[:300]
+            return run
+
+        # Capture the end time while the samplers are still running: the
+        # ExitStack join (up to join_timeout each) fires when this block closes
+        # and must not be folded into the decode window computed below.
+        t_end = time.perf_counter() - t0
+
     run.wall_total_ms = int(t_end * 1000)
     run.ttft_ms = int(first_token_time * 1000) if first_token_time else None
+    run.finish_reason = finish_reason
+    run.text = truncate_text("".join(content_parts))
+    run.reasoning_chars = reasoning_chars
 
     completion_tokens = (last_usage or {}).get("completion_tokens", completion_chunks)
     run.completion_tokens = completion_tokens
@@ -239,25 +289,41 @@ def _do_single_run(
     ):
         run.decode_tok_s = round((completion_tokens - 1) / (t_end - first_token_time), 2)
 
-    # Mean GPU watts over the run window (prefill + decode) + thermal state.
-    # tok/s/W uses decode_tok_s as the throughput numerator; on the short
-    # phases (400 tokens) decode dominates the window so this is a fair
-    # efficiency proxy, with the caveat that prefill power is folded in.
-    if kv_sampler is not None:
-        kv_sampler.__exit__(None, None, None)
+    # Power is decode-scoped: the window was rebaselined at first-token (above),
+    # so soc_watts/energy_joules here cover decode only and pair cleanly with
+    # decode_tok_s. gpu_watts stays a diagnostic; soc_watts (full package incl.
+    # the DRAM controller) is the headline for a memory-bound decode on UMA.
     if probe is not None:
         reading = probe.read()
         run.gpu_watts = reading["gpu_watts"]
+        run.soc_watts = reading["soc_watts"]
         run.thermal_speed_limit = reading["thermal_speed_limit"]
-        run.engine_rss_mb = reading["engine_rss_mb"]
+        if prefill_power is not None:
+            run.prefill_watts = prefill_power["soc_watts"]
+        # RAM footprint: prefer the peak sampled mid-generation (GGUF clean
+        # weight pages are reclaimable, so the post-run snapshot can dip);
+        # fall back to the snapshot when the sampler caught nothing.
+        mem_rss = mem_sampler.result.max_rss_mb if mem_sampler else 0.0
+        mem_phys = mem_sampler.result.max_phys_footprint_mb if mem_sampler else 0.0
+        run.engine_rss_mb = mem_rss or reading["engine_rss_mb"]
+        run.engine_phys_footprint_mb = mem_phys or reading["engine_phys_footprint_mb"]
         # KV-cache occupancy peak sampled during the run via /slots (llama.cpp).
         # None for MLX engines (no /slots). No synchronous /metrics fallback:
         # the kv_cache counter was removed from modern llama.cpp and the call
         # only added up to 2 s of inter-run dead-time.
         kv_peak = kv_sampler.result.max_kv_tokens if kv_sampler else 0
         run.kv_cache_tokens = kv_peak or None
+        # Energy per token over the decode window. Divide by (completion_tokens
+        # - 1) so the token count matches decode_tok_s's numerator over the SAME
+        # window (rebaselined at first-token), keeping
+        # energy_per_token_j ≈ soc_watts / decode_tok_s.
+        decode_energy_j = reading["energy_joules"]
+        if decode_energy_j and run.completion_tokens and run.completion_tokens > 1:
+            run.energy_per_token_j = round(decode_energy_j / (run.completion_tokens - 1), 4)
         if run.gpu_watts and run.decode_tok_s:
             run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
+        if run.soc_watts and run.decode_tok_s:
+            run.tok_s_per_soc_watt = round(run.decode_tok_s / run.soc_watts, 3)
 
     return run
 
@@ -303,6 +369,183 @@ def _compute_verdict(runs: list[AgenticRun]) -> str:
     return "unknown"
 
 
+def _compute_reuse(runs: list[AgenticRun]) -> dict[str, Any]:
+    """Cross-family-safe prefix-cache reuse signal.
+
+    The categorical verdict ('yes'/'no') is NOT comparable across engine
+    families: llama.cpp does not surface ``usage.cached_tokens`` the way mlx-lm
+    does, so a reusing llama.cpp scores 'no' on the cached ratio while a weaker
+    MLX engine scores 'yes'. So this publishes the RAW signal — the cached/prompt
+    fraction when reported, the detection source, and whether a TTFT collapse
+    independently corroborates reuse — and tags the categorical verdict with its
+    source so consumers never compare the verdict itself across families.
+
+    Early-stop runs are excluded from the vote (a truncated run's tokens are
+    unreliable). reuse_fraction is RAW cached/prompt clamped to [0,1]; on a
+    prefix-test only SYS_A is cacheable, so a perfect prefix hit ceilings around
+    0.8 (USER_Y is never cached) — see docs/bench-modes.md, do not read it as a
+    fraction of a 1.0 ideal.
+    """
+
+    def _ok(r: AgenticRun) -> bool:
+        if r.error is not None:
+            return False
+        requested = r.max_tokens_requested or 0
+        return not (requested and r.completion_tokens < requested * 0.5)
+
+    cold_runs = [r for r in runs if r.phase == "cold" and _ok(r)]
+    prefix_runs = [r for r in runs if r.phase in ("prefix-test-1", "prefix-test-3") and _ok(r)]
+
+    per_phase: dict[str, dict[str, Any]] = {}
+    for r in prefix_runs:
+        if r.cached_tokens is not None and r.prompt_tokens:
+            frac = round(max(0.0, min(1.0, r.cached_tokens / r.prompt_tokens)), 3)
+            entry = per_phase.setdefault(r.phase, {"cached_tokens": [], "reuse_fraction": []})
+            entry["cached_tokens"].append(r.cached_tokens)
+            entry["reuse_fraction"].append(frac)
+
+    paired = [
+        (r.cached_tokens, r.prompt_tokens)
+        for r in prefix_runs
+        if r.cached_tokens is not None and r.prompt_tokens
+    ]
+    reuse_fraction: float | None = None
+    if paired:
+        avg_cached = sum(c for c, _ in paired) / len(paired)
+        avg_prompt = sum(p for _, p in paired) / len(paired)
+        reuse_fraction = (
+            round(max(0.0, min(1.0, avg_cached / avg_prompt)), 3) if avg_prompt else None
+        )
+        cache_source = "usage_cached"
+    elif prefix_runs:
+        cache_source = "ttft_proxy"
+    else:
+        cache_source = "absent"
+
+    # TTFT corroboration: a >=5x first-token speedup on prefix-test vs the cold
+    # median is independent evidence of reuse, available even when the engine
+    # reports no cached_tokens (the llama.cpp case the categorical verdict misses).
+    import statistics
+
+    cold_ttfts = [r.ttft_ms for r in cold_runs if r.ttft_ms]
+    prefix_ttfts = [r.ttft_ms for r in prefix_runs if r.ttft_ms]
+    reuse_corroborated_by_ttft = bool(
+        cold_ttfts
+        and prefix_ttfts
+        and statistics.median(cold_ttfts)
+        and statistics.median(prefix_ttfts) <= statistics.median(cold_ttfts) / 5
+    )
+
+    return {
+        "verdict": _compute_verdict(runs),
+        "verdict_source": cache_source,
+        "reuse_fraction": reuse_fraction,
+        "cache_source": cache_source,
+        "reuse_corroborated_by_ttft": reuse_corroborated_by_ttft,
+        "per_phase": per_phase,
+        "note": (
+            "Categorical verdict is engine-family-specific (cached_tokens reporting "
+            "differs); compare reuse_fraction + reuse_corroborated_by_ttft across "
+            "families, never the verdict itself. reuse_fraction is raw cached/prompt: "
+            "on a prefix-test only SYS_A is cacheable, so a perfect hit ceilings near "
+            "0.8 (USER_Y is never cached), not 1.0."
+        ),
+    }
+
+
+def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
+    """Per-phase median + CV across repeats for the headline metrics.
+
+    Only error-free runs contribute. CV (coefficient of variation = stdev/mean)
+    is the variance signal a single run (n=1) cannot provide; it is None when a
+    phase has fewer than 2 clean samples.
+    """
+    import statistics
+
+    by_phase: dict[str, list[AgenticRun]] = {}
+    for r in runs:
+        if getattr(r, "error", None):
+            continue
+        by_phase.setdefault(r.phase, []).append(r)
+
+    def _stat(values: list[float | None]) -> dict[str, Any]:
+        clean = [v for v in values if v is not None]
+        if not clean:
+            return {"n": 0, "median": None, "cv": None}
+        cv = None
+        if len(clean) >= 2:
+            mean = statistics.fmean(clean)
+            cv = round(statistics.stdev(clean) / mean, 3) if mean else None
+        return {"n": len(clean), "median": round(statistics.median(clean), 2), "cv": cv}
+
+    return {
+        phase: {
+            "decode_tok_s": _stat([r.decode_tok_s for r in phase_runs]),
+            "ttft_ms": _stat(
+                [float(r.ttft_ms) if r.ttft_ms is not None else None for r in phase_runs]
+            ),
+            "soc_watts": _stat([r.soc_watts for r in phase_runs]),
+        }
+        for phase, phase_runs in by_phase.items()
+    }
+
+
+def _summarize_output(runs: list[AgenticRun]) -> dict[str, Any]:
+    """Deterministic output-validity gate across runs.
+
+    Flags degenerate generations (empty / repetition-loop / low-diversity) and
+    reports the share of clean runs, so a mis-quantised model or thinking-loop
+    that streams garbage fast can be refused a ranking below ``min_valid_pct``.
+    """
+    valid_flags: list[bool] = []
+    degenerate: list[dict[str, Any]] = []
+    for r in runs:
+        if r.error is not None:
+            continue
+        result = check_degenerate(r.text or "")
+        valid_flags.append(not result["degenerate"])
+        if result["degenerate"]:
+            degenerate.append({"phase": r.phase, "repeat": r.repeat, "reason": result["reason"]})
+    return {
+        "output_valid_pct": output_valid_pct(valid_flags),
+        "degenerate_runs": degenerate,
+        "min_valid_pct": DEFAULT_MIN_VALID_PCT,
+    }
+
+
+def _thinking_requested_off(extra_body: dict[str, Any] | None) -> bool:
+    """True if extra_body asked the model to disable thinking.
+
+    Recognises the OpenAI chat-template form
+    (``chat_template_kwargs.enable_thinking = False``) and the Ollama form
+    (``think = False``).
+    """
+    if not extra_body:
+        return False
+    ctk = extra_body.get("chat_template_kwargs") or {}
+    return ctk.get("enable_thinking") is False or extra_body.get("think") is False
+
+
+def _summarize_thinking(
+    runs: list[AgenticRun], extra_body: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Guard: did ``enable_thinking=off`` actually take?
+
+    If thinking was requested off but the engine still streamed reasoning tokens,
+    it silently ignored the key (e.g. Ollama's OpenAI endpoint wants
+    ``{"think": false}`` but got the chat_template_kwargs form). Such a run's
+    tok/s and TTFT are reasoning-polluted and NOT comparable to engines that
+    honoured the request — ``honoured=False`` flags it.
+    """
+    requested_off = _thinking_requested_off(extra_body)
+    reasoning_detected = any((r.reasoning_chars or 0) > 0 for r in runs if r.error is None)
+    return {
+        "requested_off": requested_off,
+        "reasoning_detected": reasoning_detected,
+        "honoured": (not requested_off) or (not reasoning_detected),
+    }
+
+
 def run_agentic_bench(
     base_url: str,
     engine_name: str,
@@ -316,6 +559,7 @@ def run_agentic_bench(
     include_host: bool = False,
     skip_quality_gates: bool = False,
     extra_body: dict[str, Any] | None = None,
+    repeats: int = 1,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -336,9 +580,13 @@ def run_agentic_bench(
         skip_quality_gates: Disable early-stop / memory pressure / duplicate
             process checks. Off by default. Useful for unit tests that mock
             ``_do_single_run`` and don't want a real thread or ``ps`` call.
+        repeats: Number of times to repeat the whole protocol (default 1). Use
+            >=5 for variance: each repetition's runs are tagged with ``repeat``
+            and ``phase_stats`` reports per-phase median + CV across them.
 
-    Returns the result dict with ``schema_version``, ``runs``,
-    ``prefix_cache_reuse_verdict``, ``quality_gates``, and engine metadata.
+    Returns the result dict with ``schema_version``, ``runs``, ``repeats``,
+    ``phase_stats``, ``prefix_cache_reuse_verdict``, ``quality_gates``, and
+    engine metadata.
     """
     selected = list(PHASES)
     if skip_long:
@@ -348,6 +596,7 @@ def run_agentic_bench(
         selected = [p for p in selected if p.name in allowed]
 
     duplicates = [] if skip_quality_gates else check_duplicate_processes(engine_name)
+    other_engines = [] if skip_quality_gates else check_other_engines_resident(engine_name)
 
     runs: list[AgenticRun] = []
     started = int(time.time())
@@ -358,37 +607,42 @@ def run_agentic_bench(
     if watcher is not None:
         watcher.__enter__()
     try:
-        for phase in selected:
-            logger.info("[%s] starting", phase.name)
-            run = _do_single_run(
-                base_url=base_url,
-                model=model,
-                phase_name=phase.name,
-                sys_msg=phase.sys_msg,
-                user_msg=phase.user_msg,
-                max_tokens=phase.max_tokens,
-                timeout=timeout,
-                extra_body=extra_body,
-                probe=probe,
-            )
-            runs.append(run)
-            if on_run:
-                try:
-                    on_run(run)
-                except Exception:  # noqa: BLE001 — never let observer break bench
-                    logger.exception("on_run callback failed")
-            time.sleep(pause)
+        for repeat_idx in range(max(1, repeats)):
+            for phase in selected:
+                logger.info("[%s] starting (repeat %d/%d)", phase.name, repeat_idx + 1, repeats)
+                run = _do_single_run(
+                    base_url=base_url,
+                    model=model,
+                    phase_name=phase.name,
+                    sys_msg=phase.sys_msg,
+                    user_msg=phase.user_msg,
+                    max_tokens=phase.max_tokens,
+                    timeout=timeout,
+                    extra_body=extra_body,
+                    probe=probe,
+                )
+                run.repeat = repeat_idx
+                runs.append(run)
+                if on_run:
+                    try:
+                        on_run(run)
+                    except Exception:  # noqa: BLE001 — never let observer break bench
+                        logger.exception("on_run callback failed")
+                time.sleep(pause)
     finally:
         if watcher is not None:
             watcher.__exit__(None, None, None)
         if probe is not None:
             probe.close()
 
-    verdict = _compute_verdict(runs)
+    reuse = _compute_reuse(runs)
     quality_gates: dict[str, Any] = {
         "early_stop": detect_early_stop(runs),
         "duplicate_processes": duplicates,
+        "other_engines_resident": other_engines,
         "thermal": summarize_thermal(runs),
+        "output_validity": _summarize_output(runs),
+        "thinking": _summarize_thinking(runs, extra_body),
     }
     if watcher is not None:
         mw = watcher.result
@@ -411,9 +665,12 @@ def run_agentic_bench(
         "base_url": base_url,
         "started_at": started,
         "finished_at": int(time.time()),
-        "prefix_cache_reuse_verdict": verdict,
+        "prefix_cache_reuse_verdict": reuse["verdict"],
+        "prefix_cache_reuse": reuse,
         "quality_gates": quality_gates,
         "extra_body": extra_body or {},
+        "repeats": max(1, repeats),
+        "phase_stats": _phase_stats(runs),
         "runs": [asdict(r) for r in runs],
     }
     if include_host:

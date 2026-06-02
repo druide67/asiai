@@ -65,15 +65,16 @@ class TestContextFillPrompt:
         """Prompt input tokens + max_tokens should not exceed target_tokens."""
         target = 65536
         prompt = generate_context_fill_prompt(target)
-        # Estimate input tokens from prompt text length
-        input_tokens_estimate = len(prompt.prompt) / 4.0
+        # Estimate input tokens with the same ~5.3 chars/token Qwen calibration
+        # the generator uses to size the prompt.
+        input_tokens_estimate = len(prompt.prompt) / 5.3
         assert input_tokens_estimate + prompt.max_tokens <= target
 
     def test_custom_max_tokens(self):
         """Custom max_tokens should be respected."""
         prompt = generate_context_fill_prompt(4096, max_tokens=512)
         assert prompt.max_tokens == 512
-        input_tokens_estimate = len(prompt.prompt) / 4.0
+        input_tokens_estimate = len(prompt.prompt) / 5.3
         assert input_tokens_estimate + prompt.max_tokens <= 4096
 
     def test_small_context(self):
@@ -267,7 +268,7 @@ class TestCheckModelAvailability:
 class TestRunBenchmark:
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_single_engine(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -287,7 +288,7 @@ class TestRunBenchmark:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_multi_engine(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -333,7 +334,7 @@ class TestRunBenchmark:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_generate_error(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -354,7 +355,7 @@ class TestRunBenchmark:
 class TestRunBenchmarkMultiRun:
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_runs_3_generates_3x(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -597,7 +598,7 @@ class TestRunBenchmarkPower:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
@@ -644,7 +645,7 @@ class TestRunBenchmarkPower:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
@@ -671,7 +672,7 @@ class TestRunBenchmarkPower:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
@@ -705,7 +706,7 @@ class TestRunBenchmarkPower:
 class TestLoadTime:
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_load_time_stored_in_results(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -720,7 +721,7 @@ class TestLoadTime:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_load_time_exception_defaults_zero(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -736,7 +737,7 @@ class TestLoadTime:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_load_time_default_zero(self, mock_mem, mock_thermal, _mock_procs, _hw, _os):
@@ -894,8 +895,9 @@ class TestPooledStddev:
 
 
 class TestTokenFallback:
-    def test_text_length_estimation(self):
-        """Token fallback should use len(text)//4, not chunk count."""
+    def test_no_usage_counts_chunks(self):
+        """No usage block: fall back to the streamed content chunk count
+        (tokens_source='chunks'), never the old chars//4 estimate."""
         from asiai.engines.openai_compat import OpenAICompatEngine
 
         class _TestEngine(OpenAICompatEngine):
@@ -928,8 +930,9 @@ class TestTokenFallback:
 
             result = engine.generate("test-model", "test prompt")
 
-        # Should be len(text)//4 = 100, NOT len(text_parts) = 2
-        assert result.tokens_generated == 100
+        # No usage => count the 2 streamed content chunks (chars//4 is gone).
+        assert result.tokens_generated == 2
+        assert result.tokens_source == "chunks"
         assert result.generation_duration_ms >= 0.0
 
 
@@ -940,7 +943,7 @@ class TestPerEnginePower:
     @patch("asiai.collectors.ioreport.ioreport_available", return_value=False)
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.collectors.power.PowerMonitor")
@@ -1114,7 +1117,7 @@ class TestAggregateStats:
 class TestTokenRatioCheck:
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_low_token_ratio_warns(self, mock_mem, mock_thermal, _procs, _hw, _os):
@@ -1137,7 +1140,7 @@ class TestTokenRatioCheck:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_full_token_ratio_no_warning(self, mock_mem, mock_thermal, _procs, _hw, _os):
@@ -1258,7 +1261,7 @@ class TestExportBenchmark:
 class TestThermalDrift:
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_drift_detected(self, mock_mem, mock_thermal, _procs, _hw, _os):
@@ -1269,7 +1272,7 @@ class TestThermalDrift:
         # Simulate decreasing tok/s across 3 runs (50 -> 45 -> 40 = 20% drop)
         call_count = [0]
 
-        def varying_generate(model, prompt, max_tokens=512):
+        def varying_generate(model, prompt, max_tokens=512, extra_body=None):
             call_count[0] += 1
             if call_count[0] == 1:
                 # warmup
@@ -1294,7 +1297,7 @@ class TestThermalDrift:
 
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     def test_no_drift_stable(self, mock_mem, mock_thermal, _procs, _hw, _os):
@@ -1322,7 +1325,7 @@ class TestThermalDrift:
 class TestRunnerDuplicateDetection:
     @patch("asiai.benchmark.runner.collect_os_version", return_value="15.3")
     @patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M1 Max")
-    @patch("asiai.benchmark.runner.collect_engine_processes", return_value=[])
+    @patch("asiai.benchmark.runner.find_engine_process", return_value=None)
     @patch("asiai.benchmark.runner.collect_thermal")
     @patch("asiai.benchmark.runner.collect_memory")
     @patch("asiai.benchmark.runner.check_duplicate_processes")

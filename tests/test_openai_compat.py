@@ -118,14 +118,18 @@ class TestOpenAICompatGenerateChat:
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.15, 1.0]
+            # t0, "hello" (first token), " world" (last token), elapsed-at-end.
+            mock_time.monotonic.side_effect = [0.0, 0.15, 0.95, 1.0]
             engine = _ChatEngine("http://localhost:8080")
             result = engine.generate("model-a", "say hi", 256)
 
         assert result.text == "hello world"
         assert result.tokens_generated == 50
-        assert result.tok_per_sec == 58.82  # 50 / (1.0 - 0.15) generation only
+        assert result.tokens_source == "usage"
+        # Unified decode rate: (50-1) tokens over the [first, last] span (0.95-0.15).
+        assert result.tok_per_sec == 61.25
         assert result.ttft_ms == 150.0
+        assert result.prompt_eval_duration_ms == 0.0  # no server-native prefill
         assert result.engine == "test_chat"
         assert result.error == ""
 
@@ -164,6 +168,41 @@ class TestOpenAICompatGenerateChat:
 
         assert result.error != ""
 
+    def test_generate_no_usage_counts_chunks(self):
+        # No usage block: completion_tokens falls back to the streamed content
+        # chunk count (labeled tokens_source='chunks'), never the old chars//4.
+        chunks = [
+            {"choices": [{"delta": {"content": "a"}}]},
+            {"choices": [{"delta": {"content": "b"}}]},
+            {"choices": [{"delta": {"content": "c"}}]},
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 0.3, 0.4]
+            engine = _ChatEngine("http://localhost:8080")
+            result = engine.generate("m", "go", 64)
+
+        assert result.tokens_generated == 3
+        assert result.tokens_source == "chunks"
+        assert result.error == ""
+
+    def test_generate_empty_response_errors(self):
+        # No content and no usage: refuse to fabricate a tok/s — error out
+        # (the old chars//4 estimate is gone).
+        chunks = [{"choices": [{"delta": {"role": "assistant"}}]}]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1]
+            engine = _ChatEngine("http://localhost:8080")
+            result = engine.generate("m", "go", 64)
+
+        assert result.error != ""
+        assert result.tokens_generated == 0
+
 
 class TestOpenAICompatGenerateCompletions:
     def test_generate_completions_success(self):
@@ -177,13 +216,15 @@ class TestOpenAICompatGenerateCompletions:
             patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
             patch("asiai.engines.openai_compat.time") as mock_time,
         ):
-            mock_time.monotonic.side_effect = [0.0, 0.1, 2.0]
+            # t0, "def " (first), "foo():", " pass" (last), elapsed-at-end.
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5, 1.9, 2.0]
             engine = _CompletionsEngine("http://localhost:8080")
             result = engine.generate("model-b", "Write code", 512)
 
         assert result.text == "def foo(): pass"
         assert result.tokens_generated == 80
-        assert result.tok_per_sec == 42.11  # 80 / (2.0 - 0.1) generation only
+        # Unified decode rate: (80-1) tokens over the [first, last] span (1.9-0.1).
+        assert result.tok_per_sec == 43.89
         assert result.ttft_ms == 100.0
         assert result.engine == "test_completions"
 

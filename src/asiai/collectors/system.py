@@ -5,6 +5,7 @@ Uses native commands (sysctl, vm_stat, pmset) — no external dependencies.
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import re
 import subprocess
@@ -158,11 +159,60 @@ def collect_memory() -> MemoryInfo:
     return result
 
 
+# Apple Silicon thermal pressure via notifyd (no sudo). The Intel sysctl OID
+# machdep.xcpm.cpu_thermal_level is dead on M-series, so this is the only live
+# signal. OSThermalPressureLevel: 0 nominal, 1 moderate, 2 heavy, 3 trapping,
+# 4 sleeping — mapped to an approximate speed_limit for the throttle gates.
+_THERMAL_NOTIFY_KEY = b"com.apple.system.thermalpressurelevel"
+_THERMAL_LEVEL_MAP = {
+    0: ("nominal", 100),
+    1: ("fair", 80),
+    2: ("serious", 50),
+    3: ("critical", 25),
+    4: ("critical", 10),
+}
+
+
+def _thermal_via_notifyd() -> ThermalInfo | None:
+    """Read OSThermalPressureLevel from notifyd (Apple Silicon, no sudo).
+
+    Returns None when the channel is unavailable (non-Darwin, or the register
+    call fails) so the caller can fall back to the legacy sysctl/pmset path.
+    """
+    try:
+        libc = ctypes.CDLL(None)
+        libc.notify_register_check.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+        libc.notify_register_check.restype = ctypes.c_uint32
+        libc.notify_get_state.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_uint64)]
+        libc.notify_get_state.restype = ctypes.c_uint32
+        libc.notify_cancel.argtypes = [ctypes.c_int]
+        libc.notify_cancel.restype = ctypes.c_uint32
+
+        token = ctypes.c_int(0)
+        if libc.notify_register_check(_THERMAL_NOTIFY_KEY, ctypes.byref(token)) != 0:
+            return None
+        try:
+            state = ctypes.c_uint64(0)
+            if libc.notify_get_state(token.value, ctypes.byref(state)) != 0:
+                return None
+            level, speed = _THERMAL_LEVEL_MAP.get(int(state.value), ("unknown", -1))
+            return ThermalInfo(level=level, speed_limit=speed) if speed >= 0 else None
+        finally:
+            libc.notify_cancel(token.value)
+    except Exception:
+        logger.debug("notifyd thermal read failed", exc_info=True)
+        return None
+
+
 def collect_thermal() -> ThermalInfo:
-    """Thermal pressure via sysctl and pmset."""
+    """Thermal pressure via notifyd (Apple Silicon) with sysctl/pmset fallback."""
+    notify_result = _thermal_via_notifyd()
+    if notify_result is not None:
+        return notify_result
+
     result = ThermalInfo()
 
-    # Method 1: sysctl (available on recent macOS)
+    # Method 1: sysctl (Intel / older macOS — dead OID on Apple Silicon)
     try:
         out = subprocess.run(
             ["sysctl", "-n", "machdep.xcpm.cpu_thermal_level"],
@@ -298,7 +348,11 @@ class ProcessInfo:
     name: str = ""
     cpu_pct: float = 0.0
     mem_pct: float = 0.0
-    rss_bytes: int = 0  # physical footprint (includes Metal/GPU), fallback to RSS
+    phys_footprint_bytes: int = 0  # ri_phys_footprint (dirty+compressed+iokit/Metal,
+    # EXCLUDES clean file-backed mmap); falls back to RSS when rusage fails.
+    resident_bytes: int = 0  # true RSS (ps resident_size): counts resident
+    # file-backed mmap pages too, so it captures GGUF weights that phys_footprint
+    # excludes — the honest, cross-family RAM figure on Apple Silicon UMA.
 
 
 # ---------------------------------------------------------------------------
@@ -374,13 +428,49 @@ def collect_engine_processes() -> list[ProcessInfo]:
                     totals[key] = ProcessInfo(name=key)
                 totals[key].cpu_pct += float(cols[2].replace(",", "."))
                 totals[key].mem_pct += float(cols[3].replace(",", "."))
-                # Prefer phys_footprint (includes Metal/GPU), fallback to RSS
+                # Capture BOTH metrics per process: phys_footprint (dirty +
+                # compressed + iokit/Metal, excludes clean file-backed mmap) and
+                # the true RSS (resident_size from ps, KB), which DOES count the
+                # resident GGUF weight pages that phys_footprint omits.
                 pid = int(cols[1])
+                rss = int(cols[5]) * 1024
                 phys = _get_phys_footprint(pid)
-                totals[key].rss_bytes += phys if phys > 0 else int(cols[5]) * 1024
+                totals[key].phys_footprint_bytes += phys if phys > 0 else rss
+                totals[key].resident_bytes += rss
                 break
 
     return list(totals.values())
+
+
+def _engine_match_key(engine_name: str | None) -> str:
+    """Canonical key to match an engine against ``collect_engine_processes()``.
+
+    Aux llama.cpp instances (``llamacpp-aux``, ``llamacpp-aux-N``) alias to the
+    ``llamacpp`` key the collector emits; everything else is lowercased with
+    ``-``/``_`` stripped. This is the single source of truth for engine-name
+    normalization (the collector produces the keys, so the matcher lives here).
+    """
+    if not engine_name:
+        return ""
+    name = "llamacpp" if engine_name.startswith("llamacpp-aux") else engine_name
+    return name.lower().replace("-", "").replace("_", "")
+
+
+def find_engine_process(engine_name: str | None) -> ProcessInfo | None:
+    """The aggregated ProcessInfo for ``engine_name``, matched by canonical key.
+
+    Use this instead of ``p.name == engine_name``: the collector emits canonical
+    keys ('llamacpp', 'mlxlm', 'lmstudio', 'vllm_mlx') that differ from adapter
+    names ('llamacpp-aux', 'mlx-lm', 'vllm-mlx'), so a direct equality misses
+    MLX/aux engines. ``None`` when no name or no matching process.
+    """
+    target = _engine_match_key(engine_name)
+    if not target:
+        return None
+    for p in collect_engine_processes():
+        if _engine_match_key(p.name) == target:
+            return p
+    return None
 
 
 def collect_uptime() -> int:

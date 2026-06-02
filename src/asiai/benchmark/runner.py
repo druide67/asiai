@@ -6,6 +6,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
+from asiai.benchmark.output_gates import check_degenerate
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
 from asiai.benchmark.quality_gates import (
     MemoryWatcher,
@@ -14,11 +15,11 @@ from asiai.benchmark.quality_gates import (
 )
 from asiai.collectors.gpu import collect_gpu
 from asiai.collectors.system import (
-    collect_engine_processes,
     collect_hw_chip,
     collect_memory,
     collect_os_version,
     collect_thermal,
+    find_engine_process,
 )
 from asiai.engines.base import InferenceEngine
 
@@ -160,6 +161,7 @@ def run_benchmark(
     *,
     slots: list[BenchmarkSlot] | None = None,
     progress_cb: object | None = None,
+    extra_body: dict | None = None,
 ) -> BenchmarkRun:
     """Run benchmarks across engines for a given model, or across arbitrary slots.
 
@@ -254,191 +256,221 @@ def run_benchmark(
     # parity with agentic/burst (standard previously had only the one-shot
     # pre-check above). Daemon thread, observational: surfaces an error if
     # swap/swapouts grow past threshold during the runs. Stopped after the loop.
-    mem_watcher = MemoryWatcher()
-    mem_watcher.__enter__()
+    # Continuous memory-pressure watcher around the whole bench loop, for
+    # parity with agentic/burst (standard previously had only the one-shot
+    # pre-check above). Daemon thread, observational: surfaces an error if
+    # swap/swapouts grow past threshold during the runs. The `with` guarantees
+    # the watcher thread is joined even if a slot raises mid-loop.
+    with MemoryWatcher() as mem_watcher:
+        slots_run = 0
+        prev_model = ""
+        prev_engine = None
+        for slot in slots:
+            engine = slot.engine
+            slot_model = slot.model
 
-    slots_run = 0
-    prev_model = ""
-    prev_engine = None
-    for slot in slots:
-        engine = slot.engine
-        slot_model = slot.model
+            if not engine.is_reachable():
+                run.errors.append(f"{engine.name}: not reachable")
+                continue
 
-        if not engine.is_reachable():
-            run.errors.append(f"{engine.name}: not reachable")
-            continue
-
-        # Unload previous engine's model to free memory
-        if prev_engine is not None and prev_engine != engine:
-            if progress_cb:
-                progress_cb(f"Unloading model from {prev_engine.name}...")
-            unloaded = prev_engine.unload_model(prev_model)
-            if not unloaded:
-                logger.info("Engine %s does not support model unloading", prev_engine.name)
-            # Adaptive cooldown: wait for memory pressure to normalize (max 30s)
-            waited = 0
-            while waited < 30:
-                mem_check = collect_memory()
-                if mem_check.pressure == "normal":
-                    break
-                if progress_cb and waited == 0:
-                    progress_cb("Waiting for memory pressure to normalize...")
-                time.sleep(2)
-                waited += 2
-            time.sleep(max(0, 5 - waited))  # minimum 5s total cooldown
-        elif slots_run > 0:
-            # Same engine, different model — lighter cooldown
-            time.sleep(3)
-
-        # Pre-check: verify the model exists on this engine
-        check = _check_model_availability(engine, slot_model)
-        if not check["found"]:
-            run.errors.append(check["error"])
-            continue
-
-        # Resolve engine-specific model name
-        engine_model = check.get("resolved_name", slot_model)
-        vram_bytes = check.get("vram_bytes", 0)
-        model_format = check.get("model_format", "")
-        model_quantization = check.get("model_quantization", "")
-
-        # Capture engine version for reproducibility
-        try:
-            engine_ver = engine.version()
-        except Exception:
-            engine_ver = ""
-
-        # Measure model load time (cold load on first access)
-        load_time_ms = 0.0
-        try:
-            load_time_ms = engine.measure_load_time(engine_model)
-        except Exception as e:
-            logger.debug("load_time failed for %s: %s", engine.name, e)
-
-        # Re-read VRAM after load (model may have been auto-loaded by measure_load_time)
-        vram_estimated = False
-        if vram_bytes == 0:
-            try:
-                for m in engine.list_running():
-                    if _model_matches(m.name, engine_model) and m.size_vram > 0:
-                        vram_bytes = m.size_vram
+            # Unload previous engine's model to free memory
+            if prev_engine is not None and prev_engine != engine:
+                if progress_cb:
+                    progress_cb(f"Unloading model from {prev_engine.name}...")
+                unloaded = prev_engine.unload_model(prev_model)
+                if not unloaded:
+                    logger.info("Engine %s does not support model unloading", prev_engine.name)
+                # Adaptive cooldown: wait for memory pressure to normalize (max 30s)
+                waited = 0
+                while waited < 30:
+                    mem_check = collect_memory()
+                    if mem_check.pressure == "normal":
                         break
+                    if progress_cb and waited == 0:
+                        progress_cb("Waiting for memory pressure to normalize...")
+                    time.sleep(2)
+                    waited += 2
+                time.sleep(max(0, 5 - waited))  # minimum 5s total cooldown
+            elif slots_run > 0:
+                # Same engine, different model — lighter cooldown
+                time.sleep(3)
+
+            # Pre-check: verify the model exists on this engine
+            check = _check_model_availability(engine, slot_model)
+            if not check["found"]:
+                run.errors.append(check["error"])
+                continue
+
+            # Resolve engine-specific model name
+            engine_model = check.get("resolved_name", slot_model)
+            vram_bytes = check.get("vram_bytes", 0)
+            model_format = check.get("model_format", "")
+            model_quantization = check.get("model_quantization", "")
+
+            # Capture engine version for reproducibility
+            try:
+                engine_ver = engine.version()
+            except Exception:
+                engine_ver = ""
+
+            # Measure model load time (cold load on first access)
+            load_time_ms = 0.0
+            try:
+                load_time_ms = engine.measure_load_time(engine_model)
             except Exception as e:
-                logger.debug("VRAM re-read failed for %s: %s", engine.name, e)
+                logger.debug("load_time failed for %s: %s", engine.name, e)
 
-        # Fallback: use process physical footprint as VRAM estimate
-        if vram_bytes == 0:
-            from asiai.collectors.system import collect_engine_processes
+            # Re-read VRAM after load (model may have been auto-loaded by measure_load_time)
+            vram_estimated = False
+            if vram_bytes == 0:
+                try:
+                    for m in engine.list_running():
+                        if _model_matches(m.name, engine_model) and m.size_vram > 0:
+                            vram_bytes = m.size_vram
+                            break
+                except Exception as e:
+                    logger.debug("VRAM re-read failed for %s: %s", engine.name, e)
 
-            procs = collect_engine_processes()
-            engine_proc = next((p for p in procs if p.name == engine.name), None)
-            if engine_proc and engine_proc.rss_bytes > 0:
-                vram_bytes = engine_proc.rss_bytes
-                vram_estimated = True
-                logger.info(
-                    "VRAM fallback for %s: %d bytes (physical footprint)",
+            # Fallback: use process physical footprint as VRAM estimate
+            if vram_bytes == 0:
+                engine_proc = find_engine_process(engine.name)
+                if engine_proc and engine_proc.phys_footprint_bytes > 0:
+                    vram_bytes = engine_proc.phys_footprint_bytes
+                    vram_estimated = True
+                    logger.info(
+                        "VRAM fallback for %s: %d bytes (physical footprint)",
+                        engine.name,
+                        vram_bytes,
+                    )
+
+            # Warmup: a short non-timed generation to prime JIT/decode kernels.
+            # MLX lazy-compiles its decode kernels on the first generated token,
+            # so max_tokens=1 (prefill only) leaves the first MEASURED run paying
+            # that one-off cost — use >=32 tokens to force the decode path. Warn
+            # (not debug) on failure since a skipped warmup skews the first run.
+            logger.info("Warmup run for %s on %s", engine_model, engine.name)
+            try:
+                engine.generate(engine_model, "Hello", max_tokens=32, extra_body=extra_body)
+            except Exception as e:
+                logger.warning(
+                    "warmup failed for %s: %s — first measured run may be skewed",
                     engine.name,
-                    vram_bytes,
+                    e,
                 )
 
-        # Warmup: one short non-timed generation to prime JIT/caches
-        logger.info("Warmup run for %s on %s", engine_model, engine.name)
-        try:
-            engine.generate(engine_model, "Hello", max_tokens=1)
-        except Exception as e:
-            logger.debug("warmup failed for %s: %s", engine.name, e)
+            # Per-engine power/thermal probe (shared brick). IOReport is always
+            # sampled (no sudo); powermetrics is cross-validated only when --power
+            # is set and passwordless sudo was confirmed above. start() opens a
+            # fresh window per engine (discards the stale IOReport sample and
+            # starts powermetrics) AFTER the warmup, so warmup energy is excluded.
+            probe = PowerThermalProbe(cross_validate=power and not power_unavailable)
+            probe.start()
 
-        # Per-engine power/thermal probe (shared brick). IOReport is always
-        # sampled (no sudo); powermetrics is cross-validated only when --power
-        # is set and passwordless sudo was confirmed above. start() opens a
-        # fresh window per engine (discards the stale IOReport sample and
-        # starts powermetrics) AFTER the warmup, so warmup energy is excluded.
-        probe = PowerThermalProbe(cross_validate=power and not power_unavailable)
-        probe.start()
+            results_before = len(run.results)
 
-        results_before = len(run.results)
+            # try/finally guarantees the probe (powermetrics subprocess +
+            # IOReport window) is torn down even if a run raises, so an orphaned
+            # subprocess can't corrupt the next engine's measurement window.
+            try:
+                for prompt in prompts:
+                    for run_index in range(runs):
+                        logger.info(
+                            "Benchmarking %s on %s [%s] run %d/%d",
+                            engine_model,
+                            engine.name,
+                            prompt.name,
+                            run_index + 1,
+                            runs,
+                        )
+                        _run_single(
+                            engine,
+                            engine_model,
+                            prompt,
+                            ts,
+                            vram_bytes,
+                            run,
+                            run_index,
+                            load_time_ms,
+                            engine_version=engine_ver,
+                            model_format=model_format,
+                            model_quantization=model_quantization,
+                            hw_chip=hw_chip,
+                            os_version=os_version,
+                            context_size=context_size,
+                            gpu_cores=gpu_cores,
+                            ram_gb=ram_gb,
+                            vram_estimated=vram_estimated,
+                            ollama_runner_type=ollama_runner_type,
+                            extra_body=extra_body,
+                        )
 
-        for prompt in prompts:
-            for run_index in range(runs):
-                logger.info(
-                    "Benchmarking %s on %s [%s] run %d/%d",
-                    engine_model,
-                    engine.name,
-                    prompt.name,
-                    run_index + 1,
-                    runs,
-                )
-                _run_single(
-                    engine,
-                    engine_model,
-                    prompt,
-                    ts,
-                    vram_bytes,
-                    run,
-                    run_index,
-                    load_time_ms,
-                    engine_version=engine_ver,
-                    model_format=model_format,
-                    model_quantization=model_quantization,
-                    hw_chip=hw_chip,
-                    os_version=os_version,
-                    context_size=context_size,
-                    gpu_cores=gpu_cores,
-                    ram_gb=ram_gb,
-                    vram_estimated=vram_estimated,
-                    ollama_runner_type=ollama_runner_type,
-                )
-
-        # Stop the probe and annotate this engine's results. read_aggregate()
-        # applies the IOReport/powermetrics precedence and returns the locked
-        # leaderboard fields; we keep the historical contract that power_watts
-        # is absent (not 0) when no source reported, and that
-        # tok_per_sec_per_watt is only set when tok/s > 0.
-        reading = probe.read_aggregate()
-        probe.close()
-        gpu_watts = reading["gpu_watts"]
-        if gpu_watts > 0:
-            for result in run.results[results_before:]:
-                result["power_watts"] = gpu_watts
-                result["power_watts_ioreport"] = reading["power_watts_ioreport"]
-                result["power_watts_powermetrics"] = reading["power_watts_powermetrics"]
-                result["power_source"] = reading["power_source"]
+                # Stop the probe and annotate this engine's results.
+                # read_aggregate() applies the IOReport/powermetrics precedence
+                # and returns the locked leaderboard fields; we keep the
+                # historical contract that power_watts is absent (not 0) when no
+                # source reported, and tok_per_sec_per_watt only when tok/s > 0.
+                reading = probe.read_aggregate()
+            finally:
+                probe.close()
+            gpu_watts = reading["gpu_watts"]
+            soc_watts = reading["soc_watts"]
+            energy_joules = reading["energy_joules"]
+            window_results = run.results[results_before:]
+            # Energy-per-token is an engine-window aggregate (SoC Joules over all
+            # this engine's runs / their total tokens); annotated identically on
+            # each result, like power_watts. The aggregate window spans the whole
+            # prompt×run loop (no per-token decode split in standard mode).
+            window_tokens = sum(r.get("tokens_generated", 0) for r in window_results)
+            energy_per_token_j = (
+                round(energy_joules / window_tokens, 4) if energy_joules and window_tokens else None
+            )
+            for result in window_results:
                 tok_s = result.get("tok_per_sec", 0.0)
-                if tok_s > 0:
-                    result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
+                if gpu_watts > 0:
+                    result["power_watts"] = gpu_watts
+                    result["power_watts_ioreport"] = reading["power_watts_ioreport"]
+                    result["power_watts_powermetrics"] = reading["power_watts_powermetrics"]
+                    result["power_source"] = reading["power_source"]
+                    if tok_s > 0:
+                        result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
+                if soc_watts > 0:
+                    result["soc_watts"] = soc_watts
+                    if energy_per_token_j is not None:
+                        result["energy_per_token_j"] = energy_per_token_j
+                    if tok_s > 0:
+                        result["tok_s_per_soc_watt"] = round(tok_s / soc_watts, 2)
 
-        # Check for thermal throttling during this engine's runs
-        for result in run.results[results_before:]:
-            speed_limit = result.get("thermal_speed_limit", 100)
-            if 0 < speed_limit < 100:
-                run.errors.append(
-                    f"{engine.name}: thermal throttling detected "
-                    f"(speed limit {speed_limit}%) — results may be degraded"
-                )
-                break  # One warning per engine is enough
-
-        # Thermal drift detection: warn if tok/s decreases monotonically across runs
-        if runs >= 3:
-            _check_thermal_drift(run, results_before, engine.name)
-
-        # Token ratio check: warn if generation stopped early
-        for result in run.results[results_before:]:
-            prompt_obj = next((p for p in prompts if p.name == result.get("prompt_type")), None)
-            if prompt_obj and result.get("tokens_generated", 0) > 0:
-                ratio = result["tokens_generated"] / prompt_obj.max_tokens
-                if ratio < 0.9:
+            # Check for thermal throttling during this engine's runs
+            for result in run.results[results_before:]:
+                speed_limit = result.get("thermal_speed_limit", 100)
+                if 0 < speed_limit < 100:
                     run.errors.append(
-                        f"{engine.name}/{result['prompt_type']}: generated only "
-                        f"{result['tokens_generated']}/{prompt_obj.max_tokens} tokens "
-                        f"({ratio:.0%}) — model may have stopped early"
+                        f"{engine.name}: thermal throttling detected "
+                        f"(speed limit {speed_limit}%) — results may be degraded"
                     )
                     break  # One warning per engine is enough
 
-        slots_run += 1
-        prev_model = engine_model
-        prev_engine = engine
+            # Thermal drift detection: warn if tok/s decreases monotonically across runs
+            if runs >= 3:
+                _check_thermal_drift(run, results_before, engine.name)
 
-    mem_watcher.__exit__(None, None, None)
+            # Token ratio check: warn if generation stopped early
+            for result in run.results[results_before:]:
+                prompt_obj = next((p for p in prompts if p.name == result.get("prompt_type")), None)
+                if prompt_obj and result.get("tokens_generated", 0) > 0:
+                    ratio = result["tokens_generated"] / prompt_obj.max_tokens
+                    if ratio < 0.9:
+                        run.errors.append(
+                            f"{engine.name}/{result['prompt_type']}: generated only "
+                            f"{result['tokens_generated']}/{prompt_obj.max_tokens} tokens "
+                            f"({ratio:.0%}) — model may have stopped early"
+                        )
+                        break  # One warning per engine is enough
+
+            slots_run += 1
+            prev_model = engine_model
+            prev_engine = engine
+
     if mem_watcher.result.alerted:
         run.errors.append(f"Memory pressure during benchmark: {mem_watcher.result.alert_reason}")
 
@@ -464,16 +496,16 @@ def _run_single(
     ram_gb: int = 0,
     vram_estimated: bool = False,
     ollama_runner_type: str = "",
+    extra_body: dict | None = None,
 ) -> None:
     """Run a single engine+prompt benchmark and append to run."""
     mem = collect_memory()
     thermal = collect_thermal()
 
-    gen = engine.generate(model, prompt.prompt, prompt.max_tokens)
+    gen = engine.generate(model, prompt.prompt, prompt.max_tokens, extra_body=extra_body)
 
     # Capture process-level resource usage right after generation
-    procs = collect_engine_processes()
-    engine_proc = next((p for p in procs if p.name == engine.name), None)
+    engine_proc = find_engine_process(engine.name)
 
     if gen.error:
         run.errors.append(f"{engine.name}/{prompt.name}: {gen.error}")
@@ -504,6 +536,10 @@ def _run_single(
             "prompt_type": prompt.name,
             "tokens_generated": gen.tokens_generated,
             "tok_per_sec": gen.tok_per_sec,
+            "tokens_source": gen.tokens_source,
+            "prompt_tokens": gen.prompt_tokens,
+            "prefill_tok_s": gen.prefill_tok_s,
+            "output_degenerate": check_degenerate(gen.text)["degenerate"],
             "ttft_ms": gen.ttft_ms,
             "ttft_client_ms": gen.ttft_client_ms,
             "ttft_source": "server" if gen.prompt_eval_duration_ms > 0 else "client",
@@ -516,7 +552,7 @@ def _run_single(
             "thermal_speed_limit": thermal.speed_limit,
             "proc_cpu_pct": engine_proc.cpu_pct if engine_proc else 0.0,
             "proc_mem_pct": engine_proc.mem_pct if engine_proc else 0.0,
-            "proc_rss_bytes": engine_proc.rss_bytes if engine_proc else 0,
+            "proc_rss_bytes": engine_proc.resident_bytes if engine_proc else 0,
             "run_index": run_index,
             "load_time_ms": load_time_ms,
             "engine_version": engine_version,
