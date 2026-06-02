@@ -117,15 +117,20 @@ must be the only variable that moves. These steps are mandatory, not optional:
    engine is resident (a second engine holding a model competes for GPU and
    memory bandwidth and corrupts both). Run strictly one engine at a time.
 3. **Tokenizer trap.** tok/s is only comparable at *comparable token counts*.
-   Use `usage.completion_tokens` (server-exact) as ground truth, and never
-   compare tok/s across engines whose tokenizers differ materially without
-   saying so. With an identical model (same GGUF / same MLX repo) the tokenizer
-   is identical and tok/s is directly comparable.
+   Use `usage.completion_tokens` (server-exact, `tokens_source='usage'`) as
+   ground truth, and never compare tok/s across engines whose tokenizers differ
+   materially without saying so. With an identical model (same GGUF / same MLX
+   repo) the tokenizer is identical and tok/s is directly comparable. Points with
+   `tokens_source='chunks'` (the engine didn't report usage) are lower-confidence
+   approximations — flag them, don't fold them silently into a cross-family table.
 4. **Chat-template concordance.** GGUF and MLX builds can ship different chat
    templates. Assert `prompt_tokens` agrees across engines for the same prompt —
    a divergence means a template mismatch is changing the actual input, which
    invalidates the comparison before it starts.
-5. **enable_thinking off, uniformly.** Pass
-   `--extra-body '{"chat_template_kwargs":{"enable_thinking":false}}'` to every
-   engine so Qwen3 reasoning tokens don't pollute tok/s/TTFT on some engines and
-   not others (Ollama uses `{"think": false}`).
+5. **enable_thinking off, uniformly — and verify it took.** Pass
+   `--extra-body '{"chat_template_kwargs":{"enable_thinking":false}}'` so Qwen3
+   reasoning tokens don't pollute tok/s/TTFT. The key is engine-specific and is
+   *silently ignored* by engines that don't understand it: Ollama's OpenAI-compat
+   endpoint wants `{"think": false}` instead. After the run, confirm thinking is
+   actually off (no `reasoning_content` in the output) — an engine that ignored
+   the flag looks artificially slow and is not comparable.

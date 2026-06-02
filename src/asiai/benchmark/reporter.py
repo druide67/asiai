@@ -507,15 +507,23 @@ def detect_session_type(slots: list[dict]) -> str:
 
 def _determine_winner_slots(slots: list[dict]) -> dict | None:
     """Pick winner by median tok/s from a list of slots."""
-    if len(slots) < 2:
-        return None
 
     def _primary_tok_s(data: dict) -> float:
         return data.get("median_tok_s", 0.0) or data.get("avg_tok_s", 0.0)
 
+    # Refuse to crown a slot whose output failed the deterministic validity gate
+    # (parity with _determine_winner). Slots without validity data stay rankable.
+    rankable = [
+        s
+        for s in slots
+        if s.get("output_valid_pct") is None or s["output_valid_pct"] >= DEFAULT_MIN_VALID_PCT
+    ]
+    if len(rankable) < 2:
+        return None
+
     # slots already sorted by median_tok_s desc from aggregate_slots()
-    best = slots[0]
-    second = slots[1]
+    best = rankable[0]
+    second = rankable[1]
 
     best_tok = _primary_tok_s(best)
     second_tok = _primary_tok_s(second)

@@ -308,10 +308,13 @@ def _do_single_run(
         # only added up to 2 s of inter-run dead-time.
         kv_peak = kv_sampler.result.max_kv_tokens if kv_sampler else 0
         run.kv_cache_tokens = kv_peak or None
-        # Energy per token over the decode window (SoC Joules / decode tokens).
+        # Energy per token over the decode window. Divide by (completion_tokens
+        # - 1) so the token count matches decode_tok_s's numerator over the SAME
+        # window (rebaselined at first-token), keeping
+        # energy_per_token_j ≈ soc_watts / decode_tok_s.
         decode_energy_j = reading["energy_joules"]
-        if decode_energy_j and run.completion_tokens:
-            run.energy_per_token_j = round(decode_energy_j / run.completion_tokens, 4)
+        if decode_energy_j and run.completion_tokens and run.completion_tokens > 1:
+            run.energy_per_token_j = round(decode_energy_j / (run.completion_tokens - 1), 4)
         if run.gpu_watts and run.decode_tok_s:
             run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
         if run.soc_watts and run.decode_tok_s:
@@ -438,7 +441,9 @@ def _compute_reuse(runs: list[AgenticRun]) -> dict[str, Any]:
         "note": (
             "Categorical verdict is engine-family-specific (cached_tokens reporting "
             "differs); compare reuse_fraction + reuse_corroborated_by_ttft across "
-            "families, never the verdict itself."
+            "families, never the verdict itself. reuse_fraction is raw cached/prompt: "
+            "on a prefix-test only SYS_A is cacheable, so a perfect hit ceilings near "
+            "0.8 (USER_Y is never cached), not 1.0."
         ),
     }
 

@@ -336,7 +336,12 @@ class IOReportSampler:
             )
             raw = _iorep.IOReportSimpleGetIntegerValue(item, 0)
 
-            divisor = _UNIT_DIVISORS.get(unit, 1.0)
+            divisor = _UNIT_DIVISORS.get(unit)
+            if divisor is None:
+                # Unknown / None unit label (e.g. a failed CFString conversion):
+                # skip rather than assume Joules — divisor 1.0 would inflate this
+                # rail's energy by up to 1e9x (mJ/uJ/nJ raw read as J).
+                continue
             joules = raw / divisor
             watts = joules / interval
 

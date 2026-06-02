@@ -325,7 +325,8 @@ def test_do_single_run_decode_window_and_soc_metrics():
     assert run.completion_tokens == 3
     assert run.soc_watts == 40.0  # decode-window package power
     assert run.prefill_watts == 30.0  # prefill-window package power
-    assert run.energy_per_token_j == round(200.0 / 3, 4)
+    # decode energy (200 J) over the (n-1)=2 inter-token intervals it covers
+    assert run.energy_per_token_j == round(200.0 / 2, 4)
     assert run.decode_tok_s is not None
     assert run.tok_s_per_soc_watt == round(run.decode_tok_s / 40.0, 3)
 
