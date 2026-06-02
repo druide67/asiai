@@ -92,6 +92,10 @@ def detect_early_stop(
                     "completion_tokens": completion,
                     "max_tokens_requested": requested,
                     "ratio": round(completion / requested, 3) if requested else 0.0,
+                    # finish_reason disambiguates a model that chose to stop
+                    # ('stop', a legitimate short answer) from one cut off mid-
+                    # stream ('length' here would be contradictory / a server quirk).
+                    "finish_reason": getattr(run, "finish_reason", None),
                 }
             )
     return {
@@ -621,10 +625,10 @@ def summarize_thermal(runs: list) -> dict[str, Any]:
     throttled (<100). ``observed`` is False when no run reported a limit,
     so consumers can distinguish "not throttled" from "not measured."
     """
+    # A speed_limit of -1 means "unknown/not measured" — it must NOT count as a
+    # throttle (-1 < 100), so filter it out alongside None.
     limits = [
-        getattr(r, "thermal_speed_limit", None)
-        for r in runs
-        if getattr(r, "thermal_speed_limit", None) is not None
+        sl for r in runs if (sl := getattr(r, "thermal_speed_limit", None)) is not None and sl >= 0
     ]
     if not limits:
         return {"observed": False, "min_speed_limit": None, "throttled": False}

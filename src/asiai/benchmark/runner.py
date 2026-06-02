@@ -342,12 +342,20 @@ def run_benchmark(
                         vram_bytes,
                     )
 
-            # Warmup: one short non-timed generation to prime JIT/caches
+            # Warmup: a short non-timed generation to prime JIT/decode kernels.
+            # MLX lazy-compiles its decode kernels on the first generated token,
+            # so max_tokens=1 (prefill only) leaves the first MEASURED run paying
+            # that one-off cost — use >=32 tokens to force the decode path. Warn
+            # (not debug) on failure since a skipped warmup skews the first run.
             logger.info("Warmup run for %s on %s", engine_model, engine.name)
             try:
-                engine.generate(engine_model, "Hello", max_tokens=1, extra_body=extra_body)
+                engine.generate(engine_model, "Hello", max_tokens=32, extra_body=extra_body)
             except Exception as e:
-                logger.debug("warmup failed for %s: %s", engine.name, e)
+                logger.warning(
+                    "warmup failed for %s: %s — first measured run may be skewed",
+                    engine.name,
+                    e,
+                )
 
             # Per-engine power/thermal probe (shared brick). IOReport is always
             # sampled (no sudo); powermetrics is cross-validated only when --power

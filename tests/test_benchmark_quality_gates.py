@@ -282,6 +282,18 @@ def test_summarize_thermal_throttled_when_any_below_100():
     assert result["throttled"] is True
 
 
+def test_summarize_thermal_ignores_unknown_minus_one():
+    # -1 means "not measured" — it must not be read as a throttle (-1 < 100).
+    runs = [
+        AgenticRun(phase="cold", thermal_speed_limit=-1),
+        AgenticRun(phase="warm", thermal_speed_limit=100),
+    ]
+    result = summarize_thermal(runs)
+    assert result["observed"] is True
+    assert result["min_speed_limit"] == 100
+    assert result["throttled"] is False
+
+
 # --- power/thermal probe --------------------------------------------------
 
 

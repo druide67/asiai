@@ -5,6 +5,7 @@ Uses native commands (sysctl, vm_stat, pmset) — no external dependencies.
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import re
 import subprocess
@@ -158,11 +159,60 @@ def collect_memory() -> MemoryInfo:
     return result
 
 
+# Apple Silicon thermal pressure via notifyd (no sudo). The Intel sysctl OID
+# machdep.xcpm.cpu_thermal_level is dead on M-series, so this is the only live
+# signal. OSThermalPressureLevel: 0 nominal, 1 moderate, 2 heavy, 3 trapping,
+# 4 sleeping — mapped to an approximate speed_limit for the throttle gates.
+_THERMAL_NOTIFY_KEY = b"com.apple.system.thermalpressurelevel"
+_THERMAL_LEVEL_MAP = {
+    0: ("nominal", 100),
+    1: ("fair", 80),
+    2: ("serious", 50),
+    3: ("critical", 25),
+    4: ("critical", 10),
+}
+
+
+def _thermal_via_notifyd() -> ThermalInfo | None:
+    """Read OSThermalPressureLevel from notifyd (Apple Silicon, no sudo).
+
+    Returns None when the channel is unavailable (non-Darwin, or the register
+    call fails) so the caller can fall back to the legacy sysctl/pmset path.
+    """
+    try:
+        libc = ctypes.CDLL(None)
+        libc.notify_register_check.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+        libc.notify_register_check.restype = ctypes.c_uint32
+        libc.notify_get_state.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_uint64)]
+        libc.notify_get_state.restype = ctypes.c_uint32
+        libc.notify_cancel.argtypes = [ctypes.c_int]
+        libc.notify_cancel.restype = ctypes.c_uint32
+
+        token = ctypes.c_int(0)
+        if libc.notify_register_check(_THERMAL_NOTIFY_KEY, ctypes.byref(token)) != 0:
+            return None
+        try:
+            state = ctypes.c_uint64(0)
+            if libc.notify_get_state(token.value, ctypes.byref(state)) != 0:
+                return None
+            level, speed = _THERMAL_LEVEL_MAP.get(int(state.value), ("unknown", -1))
+            return ThermalInfo(level=level, speed_limit=speed) if speed >= 0 else None
+        finally:
+            libc.notify_cancel(token.value)
+    except Exception:
+        logger.debug("notifyd thermal read failed", exc_info=True)
+        return None
+
+
 def collect_thermal() -> ThermalInfo:
-    """Thermal pressure via sysctl and pmset."""
+    """Thermal pressure via notifyd (Apple Silicon) with sysctl/pmset fallback."""
+    notify_result = _thermal_via_notifyd()
+    if notify_result is not None:
+        return notify_result
+
     result = ThermalInfo()
 
-    # Method 1: sysctl (available on recent macOS)
+    # Method 1: sysctl (Intel / older macOS — dead OID on Apple Silicon)
     try:
         out = subprocess.run(
             ["sysctl", "-n", "machdep.xcpm.cpu_thermal_level"],

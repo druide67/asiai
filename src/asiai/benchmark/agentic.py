@@ -107,6 +107,7 @@ class AgenticRun:
     engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
     engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
     kv_cache_tokens: int | None = None  # KV occupancy via /slots (≠ cached_tokens prefix-hit)
+    finish_reason: str | None = None  # SSE finish_reason ('stop' | 'length' | None)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -161,6 +162,7 @@ def _do_single_run(
     completion_chunks = 0
     last_usage: dict[str, Any] | None = None
     prefill_power: dict[str, Any] | None = None
+    finish_reason: str | None = None
 
     run = AgenticRun(
         phase=phase_name,
@@ -209,6 +211,8 @@ def _do_single_run(
                     choices = chunk.get("choices") or []
                     if not choices:
                         continue
+                    if choices[0].get("finish_reason"):
+                        finish_reason = choices[0]["finish_reason"]
                     delta = choices[0].get("delta", {}) or {}
                     # Qwen3.x thinking mode emits reasoning BEFORE content.
                     # llama.cpp uses `reasoning_content`, mlx-lm uses `reasoning`.
@@ -244,6 +248,7 @@ def _do_single_run(
 
     run.wall_total_ms = int(t_end * 1000)
     run.ttft_ms = int(first_token_time * 1000) if first_token_time else None
+    run.finish_reason = finish_reason
 
     completion_tokens = (last_usage or {}).get("completion_tokens", completion_chunks)
     run.completion_tokens = completion_tokens
