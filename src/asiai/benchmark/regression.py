@@ -141,12 +141,16 @@ def _query_baselines(
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         try:
+            # Compare only within the current metrics generation (v3: SoC power
+            # + decode-scoped formulas, 1.11.0). Older v2/v1 rows used different
+            # tok/s and power definitions, so mixing them would fabricate
+            # regressions; they are intentionally excluded from the baseline.
             query = """SELECT engine, model, prompt_type,
                               AVG(tok_per_sec) as avg_tok,
                               AVG(ttft_ms) as avg_ttft
                        FROM benchmarks
                        WHERE ts >= ? AND ts < ?
-                         AND COALESCE(metrics_version, 1) = 2
+                         AND COALESCE(metrics_version, 1) = 3
                        GROUP BY engine, model, prompt_type"""
             rows = conn.execute(query, (since, current_ts or int(time.time()))).fetchall()
 

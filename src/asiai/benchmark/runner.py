@@ -402,15 +402,32 @@ def run_benchmark(
             finally:
                 probe.close()
             gpu_watts = reading["gpu_watts"]
-            if gpu_watts > 0:
-                for result in run.results[results_before:]:
+            soc_watts = reading["soc_watts"]
+            energy_joules = reading["energy_joules"]
+            window_results = run.results[results_before:]
+            # Energy-per-token is an engine-window aggregate (SoC Joules over all
+            # this engine's runs / their total tokens); annotated identically on
+            # each result, like power_watts. The aggregate window spans the whole
+            # prompt×run loop (no per-token decode split in standard mode).
+            window_tokens = sum(r.get("tokens_generated", 0) for r in window_results)
+            energy_per_token_j = (
+                round(energy_joules / window_tokens, 4) if energy_joules and window_tokens else None
+            )
+            for result in window_results:
+                tok_s = result.get("tok_per_sec", 0.0)
+                if gpu_watts > 0:
                     result["power_watts"] = gpu_watts
                     result["power_watts_ioreport"] = reading["power_watts_ioreport"]
                     result["power_watts_powermetrics"] = reading["power_watts_powermetrics"]
                     result["power_source"] = reading["power_source"]
-                    tok_s = result.get("tok_per_sec", 0.0)
                     if tok_s > 0:
                         result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
+                if soc_watts > 0:
+                    result["soc_watts"] = soc_watts
+                    if energy_per_token_j is not None:
+                        result["energy_per_token_j"] = energy_per_token_j
+                    if tok_s > 0:
+                        result["tok_s_per_soc_watt"] = round(tok_s / soc_watts, 2)
 
             # Check for thermal throttling during this engine's runs
             for result in run.results[results_before:]:

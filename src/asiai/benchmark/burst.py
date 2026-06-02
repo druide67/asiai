@@ -110,6 +110,9 @@ class BurstSizeResult:
     duplicate_processes: list[dict[str, str]] = field(default_factory=list)
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
+    soc_watts: float | None = None  # package power over the burst (gpu+cpu+ane+dram+dcs)
+    tok_s_per_soc_watt: float | None = None  # headline efficiency (≈ tokens/Joule)
+    energy_per_token_j: float | None = None  # SoC energy per token over the burst
     thermal_speed_limit: int | None = None
     engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
     engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
@@ -354,6 +357,8 @@ def _aggregate_size(
     swapouts_delta: int,
     duplicates: list[dict[str, str]],
     gpu_watts: float | None = None,
+    soc_watts: float | None = None,
+    energy_joules: float | None = None,
     thermal_speed_limit: int | None = None,
     engine_rss_mb: float | None = None,
     engine_phys_footprint_mb: float | None = None,
@@ -400,6 +405,14 @@ def _aggregate_size(
         if gpu_watts and throughput_tokens_per_s
         else None
     )
+    tok_s_per_soc_watt = (
+        round(throughput_tokens_per_s / soc_watts, 3)
+        if soc_watts and throughput_tokens_per_s
+        else None
+    )
+    energy_per_token_j = (
+        round(energy_joules / total_tokens, 4) if energy_joules and total_tokens else None
+    )
 
     return BurstSizeResult(
         n=n,
@@ -415,6 +428,9 @@ def _aggregate_size(
         duplicate_processes=duplicates,
         gpu_watts=gpu_watts,
         tok_s_per_watt=tok_s_per_watt,
+        soc_watts=soc_watts,
+        tok_s_per_soc_watt=tok_s_per_soc_watt,
+        energy_per_token_j=energy_per_token_j,
         thermal_speed_limit=thermal_speed_limit,
         engine_rss_mb=engine_rss_mb,
         engine_phys_footprint_mb=engine_phys_footprint_mb,
@@ -489,6 +505,8 @@ def _run_one_burst_pass(
         swapouts_delta=mem_watcher.result.max_swapouts_delta,
         duplicates=duplicates_before,
         gpu_watts=reading["gpu_watts"],
+        soc_watts=reading["soc_watts"],
+        energy_joules=reading["energy_joules"],
         thermal_speed_limit=reading["thermal_speed_limit"],
         engine_rss_mb=mem_sampler.result.max_rss_mb or reading["engine_rss_mb"],
         engine_phys_footprint_mb=(

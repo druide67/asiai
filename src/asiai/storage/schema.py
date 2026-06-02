@@ -304,4 +304,16 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN ttft_client_ms REAL DEFAULT 0",
         ],
     },
+    # v1.11: SoC power (gpu+cpu+ane+dram+dcs) + energy-per-token (metrics_version 3).
+    # GPU-only power undercounts a memory-bound decode on unified memory; soc_watts
+    # is the honest package headline and energy_per_token_j its decode-scoped energy.
+    {
+        "table": "benchmarks",
+        "columns": ["soc_watts", "tok_s_per_soc_watt", "energy_per_token_j"],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN soc_watts REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN tok_s_per_soc_watt REAL DEFAULT 0",
+            "ALTER TABLE benchmarks ADD COLUMN energy_per_token_j REAL DEFAULT 0",
+        ],
+    },
 ]

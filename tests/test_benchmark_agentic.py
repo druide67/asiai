@@ -270,3 +270,61 @@ def test_samplers_stopped_on_error_path():
     kv_sampler.__exit__.assert_called()
     mem_sampler.__enter__.assert_called()
     mem_sampler.__exit__.assert_called()
+
+
+def test_do_single_run_decode_window_and_soc_metrics():
+    # The power window is split at first-token: read_power() captures the
+    # prefill slice, the final read() measures decode. soc_watts is the decode
+    # headline, energy_per_token_j uses the decode SoC energy, and the prefill
+    # SoC watts is recorded separately.
+    from unittest.mock import MagicMock
+
+    import asiai.benchmark.agentic as ag
+
+    probe = MagicMock()
+    probe.engine_name = None  # no EngineMemorySampler
+    probe.read_power.return_value = {"gpu_watts": 5.0, "soc_watts": 30.0, "energy_joules": 60.0}
+    probe.read.return_value = {
+        "gpu_watts": 8.0,
+        "soc_watts": 40.0,
+        "energy_joules": 200.0,
+        "thermal_speed_limit": 100,
+        "engine_rss_mb": 1000.0,
+        "engine_phys_footprint_mb": 500.0,
+    }
+    lines = [
+        b'data: {"choices":[{"delta":{"content":"x"}}]}',
+        b'data: {"choices":[{"delta":{"content":"y"}}]}',
+        b'data: {"choices":[{"delta":{"content":"z"}}]}',
+        b'data: {"usage":{"completion_tokens":3,"prompt_tokens":100},"choices":[]}',
+        b"data: [DONE]",
+    ]
+
+    class _Resp:
+        def __enter__(self):
+            return iter(lines)
+
+        def __exit__(self, *a):
+            return False
+
+    with (
+        patch("asiai.benchmark.agentic.KVCacheSampler", return_value=MagicMock()),
+        patch("asiai.benchmark.agentic.urllib.request.urlopen", return_value=_Resp()),
+    ):
+        run = ag._do_single_run(
+            base_url="http://x",
+            model="m",
+            phase_name="cold",
+            sys_msg="s",
+            user_msg="u",
+            max_tokens=400,
+            probe=probe,
+        )
+
+    probe.read_power.assert_called_once()  # split happened exactly at first-token
+    assert run.completion_tokens == 3
+    assert run.soc_watts == 40.0  # decode-window package power
+    assert run.prefill_watts == 30.0  # prefill-window package power
+    assert run.energy_per_token_j == round(200.0 / 3, 4)
+    assert run.decode_tok_s is not None
+    assert run.tok_s_per_soc_watt == round(run.decode_tok_s / 40.0, 3)

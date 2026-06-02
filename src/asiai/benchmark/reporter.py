@@ -322,6 +322,27 @@ def export_benchmark(
             if eff_vals:
                 engine_data["avg_tok_per_sec_per_watt"] = round(sum(eff_vals) / len(eff_vals), 2)
 
+        # SoC power + energy: the honest package figure (gpu+cpu+ane+dram+dcs) and
+        # its efficiency, the headline for a memory-bound decode where GPU-only
+        # undercounts. avg_power_watts (GPU) is kept above as a diagnostic.
+        soc_vals = [r.get("soc_watts", 0) for r in engine_results if r.get("soc_watts", 0) > 0]
+        if soc_vals:
+            engine_data["avg_soc_watts"] = round(sum(soc_vals) / len(soc_vals), 1)
+            soc_eff = [
+                r["tok_s_per_soc_watt"]
+                for r in engine_results
+                if r.get("tok_s_per_soc_watt", 0) > 0
+            ]
+            if soc_eff:
+                engine_data["avg_tok_s_per_soc_watt"] = round(sum(soc_eff) / len(soc_eff), 2)
+            ept_vals = [
+                r["energy_per_token_j"]
+                for r in engine_results
+                if r.get("energy_per_token_j", 0) > 0
+            ]
+            if ept_vals:
+                engine_data["avg_energy_per_token_j"] = round(sum(ept_vals) / len(ept_vals), 4)
+
         # Outliers
         outliers = data.get("outliers", [])
         if outliers:

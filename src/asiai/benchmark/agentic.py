@@ -99,6 +99,10 @@ class AgenticRun:
     decode_tok_s: float | None = None
     gpu_watts: float | None = None
     tok_s_per_watt: float | None = None
+    soc_watts: float | None = None  # decode-window package power (gpu+cpu+ane+dram+dcs)
+    prefill_watts: float | None = None  # package power over the prefill window
+    tok_s_per_soc_watt: float | None = None  # headline efficiency (≈ tokens/Joule)
+    energy_per_token_j: float | None = None  # decode SoC energy per token
     thermal_speed_limit: int | None = None
     engine_rss_mb: float | None = None  # true RSS peak (headline, cross-family RAM)
     engine_phys_footprint_mb: float | None = None  # phys_footprint peak (KV+runtime for GGUF)
@@ -156,6 +160,7 @@ def _do_single_run(
     first_token_time: float | None = None
     completion_chunks = 0
     last_usage: dict[str, Any] | None = None
+    prefill_power: dict[str, Any] | None = None
 
     run = AgenticRun(
         phase=phase_name,
@@ -216,6 +221,11 @@ def _do_single_run(
                     if content:
                         if first_token_time is None:
                             first_token_time = time.perf_counter() - t0
+                            # Split the power window at first-token: this call
+                            # captures the prefill slice and rebaselines IOReport
+                            # so the final read() measures decode power only.
+                            if probe is not None:
+                                prefill_power = probe.read_power()
                         completion_chunks += 1
         except urllib.error.HTTPError as e:
             body_text = e.read().decode("utf-8", errors="replace")[:500]
@@ -255,14 +265,17 @@ def _do_single_run(
     ):
         run.decode_tok_s = round((completion_tokens - 1) / (t_end - first_token_time), 2)
 
-    # Mean GPU watts over the run window (prefill + decode) + thermal state.
-    # tok/s/W uses decode_tok_s as the throughput numerator; on the short
-    # phases (400 tokens) decode dominates the window so this is a fair
-    # efficiency proxy, with the caveat that prefill power is folded in.
+    # Power is decode-scoped: the window was rebaselined at first-token (above),
+    # so soc_watts/energy_joules here cover decode only and pair cleanly with
+    # decode_tok_s. gpu_watts stays a diagnostic; soc_watts (full package incl.
+    # the DRAM controller) is the headline for a memory-bound decode on UMA.
     if probe is not None:
         reading = probe.read()
         run.gpu_watts = reading["gpu_watts"]
+        run.soc_watts = reading["soc_watts"]
         run.thermal_speed_limit = reading["thermal_speed_limit"]
+        if prefill_power is not None:
+            run.prefill_watts = prefill_power["soc_watts"]
         # RAM footprint: prefer the peak sampled mid-generation (GGUF clean
         # weight pages are reclaimable, so the post-run snapshot can dip);
         # fall back to the snapshot when the sampler caught nothing.
@@ -276,8 +289,14 @@ def _do_single_run(
         # only added up to 2 s of inter-run dead-time.
         kv_peak = kv_sampler.result.max_kv_tokens if kv_sampler else 0
         run.kv_cache_tokens = kv_peak or None
+        # Energy per token over the decode window (SoC Joules / decode tokens).
+        decode_energy_j = reading["energy_joules"]
+        if decode_energy_j and run.completion_tokens:
+            run.energy_per_token_j = round(decode_energy_j / run.completion_tokens, 4)
         if run.gpu_watts and run.decode_tok_s:
             run.tok_s_per_watt = round(run.decode_tok_s / run.gpu_watts, 3)
+        if run.soc_watts and run.decode_tok_s:
+            run.tok_s_per_soc_watt = round(run.decode_tok_s / run.soc_watts, 3)
 
     return run
 

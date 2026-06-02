@@ -120,6 +120,26 @@ class TestAggregateSize:
         assert agg.throughput_tokens_aggregate_per_s == 50.0
         assert agg.throughput_calls_per_s == 5.0
 
+    def test_soc_power_and_energy_per_token(self):
+        results = [self._mk(i, lat) for i, lat in enumerate([100.0, 200.0, 300.0, 400.0, 500.0])]
+        agg = _aggregate_size(
+            results,
+            wall_time_s=1.0,
+            swap_delta_mb=0.0,
+            swapouts_delta=0,
+            duplicates=[],
+            gpu_watts=10.0,
+            soc_watts=25.0,
+            energy_joules=20.0,
+        )
+        # 50 t/s over 25 W SoC => 2.0 tok/s/W (headline); 20 J / 50 tok => 0.4 J/tok
+        assert agg.soc_watts == 25.0
+        assert agg.tok_s_per_soc_watt == 2.0
+        assert agg.energy_per_token_j == 0.4
+        # GPU rail still recorded as a diagnostic alongside
+        assert agg.gpu_watts == 10.0
+        assert agg.tok_s_per_watt == 5.0
+
     def test_with_errors(self):
         results = [
             self._mk(0, 100.0),

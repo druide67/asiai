@@ -626,26 +626,49 @@ def render_bench(report: dict, context_size: int = 0) -> None:
                 stat_parts.append(yellow(f"{len(outliers)} outlier(s)"))
             print(f"    {display_name:<{col_w}} {', '.join(stat_parts)}")
 
-    # Power efficiency table (if power data available)
+    # Power efficiency table (if power data available). SoC (package) power is
+    # the headline — GPU-only badly undercounts a memory-bound decode on unified
+    # memory; the GPU rail is shown as a diagnostic alongside.
     has_power = any(
-        any(p.get("power_watts", 0) > 0 for p in d.get("prompt_results", [])) for _, d in items
+        any(
+            p.get("soc_watts", 0) > 0 or p.get("power_watts", 0) > 0
+            for p in d.get("prompt_results", [])
+        )
+        for _, d in items
     )
     if has_power:
         print()
         print(bold("  Power Efficiency"))
         for display_name, data in items:
             pr = data.get("prompt_results", [])
-            power_vals = [p["power_watts"] for p in pr if p.get("power_watts", 0) > 0]
-            eff_vals = [
-                p["tok_per_sec_per_watt"] for p in pr if p.get("tok_per_sec_per_watt", 0) > 0
-            ]
-            if power_vals:
-                avg_w = sum(power_vals) / len(power_vals)
+            tok_s_val = data.get("avg_tok_s", 0.0)
+            soc_vals = [p["soc_watts"] for p in pr if p.get("soc_watts", 0) > 0]
+            gpu_vals = [p["power_watts"] for p in pr if p.get("power_watts", 0) > 0]
+            if soc_vals:
+                avg_soc = sum(soc_vals) / len(soc_vals)
+                soc_eff = [
+                    p["tok_s_per_soc_watt"] for p in pr if p.get("tok_s_per_soc_watt", 0) > 0
+                ]
+                ept = [p["energy_per_token_j"] for p in pr if p.get("energy_per_token_j", 0) > 0]
+                avg_eff = sum(soc_eff) / len(soc_eff) if soc_eff else 0.0
+                line = (
+                    f"    {display_name:<{col_w}} {tok_s_val:.1f} tok/s @ {avg_soc:.1f}W SoC"
+                    f" = {avg_eff:.2f} tok/s/W"
+                )
+                if ept:
+                    line += f"  ({sum(ept) / len(ept):.3f} J/tok)"
+                if gpu_vals:
+                    line += dim(f"  [GPU {sum(gpu_vals) / len(gpu_vals):.1f}W]")
+                print(line)
+            elif gpu_vals:
+                avg_w = sum(gpu_vals) / len(gpu_vals)
+                eff_vals = [
+                    p["tok_per_sec_per_watt"] for p in pr if p.get("tok_per_sec_per_watt", 0) > 0
+                ]
                 avg_eff = sum(eff_vals) / len(eff_vals) if eff_vals else 0.0
-                tok_s_val = data.get("avg_tok_s", 0.0)
                 print(
-                    f"    {display_name:<{col_w}} {tok_s_val:.1f} tok/s @ {avg_w:.1f}W"
-                    f" = {avg_eff:.2f} tok/s/W (tok/J)"
+                    f"    {display_name:<{col_w}} {tok_s_val:.1f} tok/s @ {avg_w:.1f}W GPU"
+                    f" = {avg_eff:.2f} tok/s/W (diagnostic)"
                 )
 
     # Process metrics (if available)
