@@ -15,6 +15,7 @@ from asiai.benchmark.quality_gates import (
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
+    check_other_engines_resident,
     detect_early_stop,
     read_kv_cache_tokens,
     summarize_thermal,
@@ -715,3 +716,37 @@ def test_kv_cache_sampler_non_list_slots_graceful():
         with KVCacheSampler("http://localhost:8080", interval=0.01) as kv:
             _wait_until(lambda: calls["n"] >= 1, timeout=2.0)
     assert kv.result.max_kv_tokens == 0
+
+
+# --- SOLO clean-table: foreign engine detection ---------------------------
+
+
+def _ps_result(stdout: str):
+    return type("R", (), {"stdout": stdout})()
+
+
+def test_check_other_engines_resident_flags_foreign_engine():
+    # Target is llamacpp; an mlx-lm server is also resident => flagged.
+    ps = "  PID COMMAND\n  100 /usr/bin/python mlx_lm.server --port 8081\n  200 /bin/zsh\n"
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("llamacpp")
+    engines = {f["engine"] for f in found}
+    assert "mlx-lm" in engines
+    assert all(f["pid"] == "100" for f in found if f["engine"] == "mlx-lm")
+
+
+def test_check_other_engines_resident_excludes_target():
+    # The only resident engine IS the target => clean table.
+    ps = "  PID COMMAND\n  100 /usr/bin/python mlx_lm.server --port 8081\n"
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("mlx-lm") == []
+
+
+def test_check_other_engines_resident_dedups_shared_pattern():
+    # llamacpp and llamacpp-aux share the 'llama-server' pattern; a single
+    # llama-server process must be reported once, not twice.
+    ps = "  PID COMMAND\n  300 /opt/llama-server --port 8080\n"
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("mlx-lm")
+    pids = [f["pid"] for f in found]
+    assert pids == ["300"]

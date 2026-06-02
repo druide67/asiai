@@ -477,48 +477,53 @@ def _run_one_burst_pass(
     probe = PowerThermalProbe(engine_name=engine)
 
     probe.start()
-    mem_sampler = EngineMemorySampler(engine)
-    with MemoryWatcher() as mem_watcher, mem_sampler:
-        t0 = time.perf_counter()
-        call_results: list[BurstCallResult] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=size) as pool:
-            futures = [
-                pool.submit(
-                    _do_one_call,
-                    base_url,
-                    model,
-                    sys_msg,
-                    _make_user_prompt(i),
-                    i,
-                    max_tokens,
-                    timeout,
-                    extra_body,
-                    stream,
-                )
-                for i in range(size)
-            ]
-            # Defensive timeout: per-call urlopen has its own timeout, but a
-            # silently-dropped TCP connection (no FIN received) can leave a
-            # future never-completing. Cap the wait at per-call timeout + 30s
-            # margin so the bench never hangs indefinitely.
-            try:
-                for fut in concurrent.futures.as_completed(futures, timeout=timeout + 30):
-                    call_results.append(fut.result())
-            except concurrent.futures.TimeoutError:
-                logger.warning(
-                    "burst size=%d: as_completed hit %.0fs timeout, collecting partial results",
-                    size,
-                    timeout + 30,
-                )
-                for fut in futures:
-                    if fut.done():
-                        try:
-                            call_results.append(fut.result())
-                        except Exception as e:  # noqa: BLE001
-                            logger.debug("future raised: %s", e)
-        wall_time_s = time.perf_counter() - t0
-    reading = probe.read()
-    probe.close()
+    # try/finally guarantees the probe is torn down even if the concurrent block
+    # raises — parity with the standard runner and agentic, whose probe.close()
+    # is finally-protected too.
+    try:
+        mem_sampler = EngineMemorySampler(engine)
+        with MemoryWatcher() as mem_watcher, mem_sampler:
+            t0 = time.perf_counter()
+            call_results: list[BurstCallResult] = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=size) as pool:
+                futures = [
+                    pool.submit(
+                        _do_one_call,
+                        base_url,
+                        model,
+                        sys_msg,
+                        _make_user_prompt(i),
+                        i,
+                        max_tokens,
+                        timeout,
+                        extra_body,
+                        stream,
+                    )
+                    for i in range(size)
+                ]
+                # Defensive timeout: per-call urlopen has its own timeout, but a
+                # silently-dropped TCP connection (no FIN received) can leave a
+                # future never-completing. Cap the wait at per-call timeout + 30s
+                # margin so the bench never hangs indefinitely.
+                try:
+                    for fut in concurrent.futures.as_completed(futures, timeout=timeout + 30):
+                        call_results.append(fut.result())
+                except concurrent.futures.TimeoutError:
+                    logger.warning(
+                        "burst size=%d: as_completed hit %.0fs timeout, collecting partial results",
+                        size,
+                        timeout + 30,
+                    )
+                    for fut in futures:
+                        if fut.done():
+                            try:
+                                call_results.append(fut.result())
+                            except Exception as e:  # noqa: BLE001
+                                logger.debug("future raised: %s", e)
+            wall_time_s = time.perf_counter() - t0
+        reading = probe.read()
+    finally:
+        probe.close()
 
     call_results.sort(key=lambda r: r.call_index)
     size_result = _aggregate_size(

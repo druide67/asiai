@@ -58,6 +58,7 @@ from asiai.benchmark.quality_gates import (
     MemoryWatcher,
     PowerThermalProbe,
     check_duplicate_processes,
+    check_other_engines_resident,
     detect_early_stop,
     summarize_thermal,
 )
@@ -116,6 +117,7 @@ class AgenticRun:
     finish_reason: str | None = None  # SSE finish_reason ('stop' | 'length' | None)
     repeat: int = 0  # 0-based protocol repetition index (for >=5-run variance)
     text: str = ""  # truncated user-facing content (for output-validity gates)
+    reasoning_chars: int = 0  # reasoning_content streamed (for the enable_thinking guard)
     sys_chars: int = 0
     user_chars: int = 0
     max_tokens_requested: int = 0
@@ -172,6 +174,7 @@ def _do_single_run(
     prefill_power: dict[str, Any] | None = None
     finish_reason: str | None = None
     content_parts: list[str] = []
+    reasoning_chars = 0
 
     run = AgenticRun(
         phase=phase_name,
@@ -228,13 +231,14 @@ def _do_single_run(
                     # Both contribute to TTFT (first token emitted server-side);
                     # only the user-facing content is kept for the output gate.
                     text_content = delta.get("content") or ""
-                    content = (
-                        text_content
-                        + (delta.get("reasoning_content") or "")
-                        + (delta.get("reasoning") or "")
+                    reasoning_chunk = (delta.get("reasoning_content") or "") + (
+                        delta.get("reasoning") or ""
                     )
+                    content = text_content + reasoning_chunk
                     if text_content:
                         content_parts.append(text_content)
+                    if reasoning_chunk:
+                        reasoning_chars += len(reasoning_chunk)
                     if content:
                         if first_token_time is None:
                             first_token_time = time.perf_counter() - t0
@@ -263,6 +267,7 @@ def _do_single_run(
     run.ttft_ms = int(first_token_time * 1000) if first_token_time else None
     run.finish_reason = finish_reason
     run.text = truncate_text("".join(content_parts))
+    run.reasoning_chars = reasoning_chars
 
     completion_tokens = (last_usage or {}).get("completion_tokens", completion_chunks)
     run.completion_tokens = completion_tokens
@@ -508,6 +513,39 @@ def _summarize_output(runs: list[AgenticRun]) -> dict[str, Any]:
     }
 
 
+def _thinking_requested_off(extra_body: dict[str, Any] | None) -> bool:
+    """True if extra_body asked the model to disable thinking.
+
+    Recognises the OpenAI chat-template form
+    (``chat_template_kwargs.enable_thinking = False``) and the Ollama form
+    (``think = False``).
+    """
+    if not extra_body:
+        return False
+    ctk = extra_body.get("chat_template_kwargs") or {}
+    return ctk.get("enable_thinking") is False or extra_body.get("think") is False
+
+
+def _summarize_thinking(
+    runs: list[AgenticRun], extra_body: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Guard: did ``enable_thinking=off`` actually take?
+
+    If thinking was requested off but the engine still streamed reasoning tokens,
+    it silently ignored the key (e.g. Ollama's OpenAI endpoint wants
+    ``{"think": false}`` but got the chat_template_kwargs form). Such a run's
+    tok/s and TTFT are reasoning-polluted and NOT comparable to engines that
+    honoured the request — ``honoured=False`` flags it.
+    """
+    requested_off = _thinking_requested_off(extra_body)
+    reasoning_detected = any((r.reasoning_chars or 0) > 0 for r in runs if r.error is None)
+    return {
+        "requested_off": requested_off,
+        "reasoning_detected": reasoning_detected,
+        "honoured": (not requested_off) or (not reasoning_detected),
+    }
+
+
 def run_agentic_bench(
     base_url: str,
     engine_name: str,
@@ -558,6 +596,7 @@ def run_agentic_bench(
         selected = [p for p in selected if p.name in allowed]
 
     duplicates = [] if skip_quality_gates else check_duplicate_processes(engine_name)
+    other_engines = [] if skip_quality_gates else check_other_engines_resident(engine_name)
 
     runs: list[AgenticRun] = []
     started = int(time.time())
@@ -600,8 +639,10 @@ def run_agentic_bench(
     quality_gates: dict[str, Any] = {
         "early_stop": detect_early_stop(runs),
         "duplicate_processes": duplicates,
+        "other_engines_resident": other_engines,
         "thermal": summarize_thermal(runs),
         "output_validity": _summarize_output(runs),
+        "thinking": _summarize_thinking(runs, extra_body),
     }
     if watcher is not None:
         mw = watcher.result

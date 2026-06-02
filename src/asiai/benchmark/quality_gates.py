@@ -152,6 +152,44 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
     return matches if len(matches) > 1 else []
 
 
+def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
+    """Return inference engines OTHER than the target that have a live process.
+
+    SOLO discipline: only the engine under test should be resident. A second
+    engine still holding a model competes for GPU and memory bandwidth and
+    corrupts both sides of a comparison. Returns ``[{engine, pid, command}]`` for
+    each foreign engine process found (empty list = clean table). Best-effort:
+    never raises. The target engine and its aliases (e.g. llamacpp / llamacpp-aux
+    share one ``_engine_match_key``) are excluded; PIDs are de-duplicated so a
+    pattern shared by two registry entries is reported once.
+    """
+    target_key = _engine_match_key(target_engine)
+    try:
+        ps_out = subprocess.run(
+            ["ps", "axo", "pid,command"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.debug("ps failed: %s", e)
+        return []
+
+    lines = ps_out.splitlines()[1:]
+    found: list[dict[str, str]] = []
+    seen_pids: set[str] = set()
+    for name, pattern in _ENGINE_PROCESS_PATTERNS.items():
+        if _engine_match_key(name) == target_key:
+            continue
+        for line in lines:
+            if pattern in line:
+                parts = line.split(None, 1)
+                if len(parts) == 2 and parts[0] not in seen_pids:
+                    seen_pids.add(parts[0])
+                    found.append({"engine": name, "pid": parts[0], "command": parts[1][:200]})
+    return found
+
+
 # --- Memory pressure monitor (background thread) -------------------------
 
 DEFAULT_SWAP_DELTA_THRESHOLD_MB = 500.0

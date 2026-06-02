@@ -296,3 +296,38 @@ class TestDoOneCall:
         assert r.status_code == 200
         assert r.completion_tokens == 7
         assert r.prompt_tokens == 42
+
+
+def test_burst_probe_closed_on_exception():
+    # try/finally must tear down the probe even if the concurrent block raises
+    # (parity with the standard runner and agentic).
+    from unittest.mock import MagicMock, patch
+
+    import asiai.benchmark.burst as b
+
+    probe = MagicMock()
+    with (
+        patch("asiai.benchmark.burst.PowerThermalProbe", return_value=probe),
+        patch("asiai.benchmark.burst.EngineMemorySampler", return_value=MagicMock()),
+        patch("asiai.benchmark.burst.MemoryWatcher", return_value=MagicMock()),
+        patch("asiai.benchmark.burst.check_duplicate_processes", return_value=[]),
+        patch(
+            "asiai.benchmark.burst.concurrent.futures.ThreadPoolExecutor",
+            side_effect=RuntimeError("boom"),
+        ),
+    ):
+        try:
+            b._run_one_burst_pass(
+                base_url="http://x",
+                engine="t",
+                model="m",
+                size=2,
+                sys_msg="s",
+                max_tokens=10,
+                timeout=5,
+                extra_body=None,
+                stream=True,
+            )
+        except RuntimeError:
+            pass
+    probe.close.assert_called_once()

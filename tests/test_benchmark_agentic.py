@@ -424,3 +424,34 @@ def test_compute_reuse_excludes_early_stop_runs():
     # The only prefix run was early-stopped => no usable prefix samples.
     assert reuse["reuse_fraction"] is None
     assert reuse["cache_source"] == "absent"
+
+
+def test_thinking_requested_off_recognises_both_forms():
+    import asiai.benchmark.agentic as ag
+
+    assert ag._thinking_requested_off({"chat_template_kwargs": {"enable_thinking": False}}) is True
+    assert ag._thinking_requested_off({"think": False}) is True  # Ollama form
+    assert ag._thinking_requested_off(None) is False
+    assert ag._thinking_requested_off({"temperature": 0}) is False
+
+
+def test_thinking_guard_flags_silently_ignored_request():
+    # Requested off, but the engine still streamed reasoning => not honoured
+    # (the Ollama "ignored the OpenAI key" case).
+    import asiai.benchmark.agentic as ag
+
+    runs = [ag.AgenticRun(phase="cold", reasoning_chars=120)]
+    extra = {"chat_template_kwargs": {"enable_thinking": False}}
+    t = ag._summarize_thinking(runs, extra)
+    assert t["requested_off"] is True
+    assert t["reasoning_detected"] is True
+    assert t["honoured"] is False
+
+
+def test_thinking_guard_ok_when_no_reasoning_streamed():
+    import asiai.benchmark.agentic as ag
+
+    runs = [ag.AgenticRun(phase="cold", reasoning_chars=0)]
+    extra = {"chat_template_kwargs": {"enable_thinking": False}}
+    t = ag._summarize_thinking(runs, extra)
+    assert t["honoured"] is True
