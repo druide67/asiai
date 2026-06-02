@@ -441,12 +441,18 @@ class PowerThermalProbe:
                 logger.debug("powermetrics monitor start failed", exc_info=True)
                 self._monitor = None
 
-    def _read_ioreport_watts(self) -> float | None:
-        """Mean GPU watts (IOReport) since the last start()/read(), or None."""
+    def _read_ioreport(self) -> _ioreport.IOReportReading | None:
+        """One IOReport sample: mean watts + energy (J) per rail since the last
+        window boundary (start()/read()/read_power()), or None.
+
+        Calling this advances the delta baseline, so it must run exactly ONCE
+        per boundary — callers derive gpu_watts, soc_watts and energy from the
+        single returned reading rather than sampling again.
+        """
         if self._sampler is None:
             return None
         try:
-            return self._sampler.sample().gpu_watts
+            return self._sampler.sample()
         except Exception:  # noqa: BLE001
             logger.debug("IOReport read failed", exc_info=True)
             return None
@@ -496,22 +502,42 @@ class PowerThermalProbe:
         return None
 
     def read(self) -> dict[str, Any]:
-        """Return mean GPU watts since the last start()/read() + thermal + memory.
+        """Per-window power + thermal + memory, for agentic/burst boundaries.
 
-        Per-window shape used by agentic/burst: ``gpu_watts``,
-        ``thermal_speed_limit``, ``engine_rss_mb`` (true RSS, headline) and
-        ``engine_phys_footprint_mb`` (no powermetrics provenance fields — those
-        modes pay nothing for cross-validation). One ``ps`` snapshot feeds both
-        memory fields.
+        Reads IOReport ONCE and derives ``gpu_watts`` (diagnostic), ``soc_watts``
+        (headline: gpu+cpu+ane+dram+dcs — honest for a memory-bound decode on
+        unified memory, where GPU-only badly undercounts) and ``energy_joules``
+        (SoC energy over the window). ``thermal_speed_limit`` and the two memory
+        columns round it out (no powermetrics provenance fields — those modes
+        pay nothing for cross-validation). One ``ps`` snapshot feeds both memory
+        fields.
         """
+        io = self._read_ioreport()
         p = self._read_engine_proc()
         rss_mb = _bytes_to_mb(p.resident_bytes) if p is not None else None
         phys_mb = _bytes_to_mb(p.phys_footprint_bytes) if p is not None else None
         return {
-            "gpu_watts": self._read_ioreport_watts(),
+            "gpu_watts": io.gpu_watts if io is not None else None,
+            "soc_watts": round(io.soc_watts, 2) if io is not None else None,
+            "energy_joules": round(io.soc_joules, 3) if io is not None else None,
             "thermal_speed_limit": self._read_thermal(),
             "engine_rss_mb": rss_mb,
             "engine_phys_footprint_mb": phys_mb,
+        }
+
+    def read_power(self) -> dict[str, Any]:
+        """One IOReport sample → power only (``gpu_watts``, ``soc_watts``,
+        ``energy_joules``); no thermal/memory.
+
+        Used to split a window at first-token: the call captures the prefill
+        slice and rebaselines, so the subsequent ``read()`` measures decode
+        only. Values are None when IOReport is unavailable.
+        """
+        io = self._read_ioreport()
+        return {
+            "gpu_watts": io.gpu_watts if io is not None else None,
+            "soc_watts": round(io.soc_watts, 2) if io is not None else None,
+            "energy_joules": round(io.soc_joules, 3) if io is not None else None,
         }
 
     def read_aggregate(self) -> dict[str, Any]:
@@ -525,8 +551,15 @@ class PowerThermalProbe:
         * io>0 only      => gpu_watts=io,  source='ioreport'
         * pm>0 only      => gpu_watts=pm,  source='powermetrics'
         * neither        => gpu_watts=0.0, source=''
+
+        ``soc_watts`` and ``energy_joules`` always come from IOReport (the
+        powermetrics arm is a GPU-only cross-check), so they are reported
+        regardless of the precedence ladder above.
         """
-        io_gpu_watts = self._read_ioreport_watts() or 0.0
+        io = self._read_ioreport()
+        io_gpu_watts = (io.gpu_watts if io is not None else 0.0) or 0.0
+        io_soc_watts = round(io.soc_watts, 2) if io is not None else 0.0
+        io_soc_joules = round(io.soc_joules, 3) if io is not None else 0.0
         pm_gpu_watts = 0.0
         if self._monitor is not None:
             try:
@@ -554,6 +587,8 @@ class PowerThermalProbe:
         phys_mb = _bytes_to_mb(p.phys_footprint_bytes) if p is not None else None
         return {
             "gpu_watts": gpu_watts,
+            "soc_watts": io_soc_watts,
+            "energy_joules": io_soc_joules,
             "power_watts_ioreport": io_gpu_watts,
             "power_watts_powermetrics": pm_gpu_watts,
             "power_source": power_source,

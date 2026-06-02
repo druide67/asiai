@@ -1,9 +1,10 @@
 """Power monitoring via IOReport Energy Model (macOS, no sudo).
 
-Reads GPU, CPU, ANE and DRAM power consumption from Apple's IOReport
-framework using ctypes bindings to ``libIOReport.dylib``. This is the
-same data source as ``powermetrics`` but accessible without elevated
-privileges.
+Reads GPU, CPU, ANE, DRAM and DCS (DRAM-controller) power consumption from
+Apple's IOReport framework using ctypes bindings to ``libIOReport.dylib``.
+This is the same data source as ``powermetrics`` but accessible without
+elevated privileges. Per-rail energy (Joules) over each interval is exposed
+alongside watts so callers can compute energy-per-token.
 
 Validated on M4 Pro: <1.5% delta vs ``sudo powermetrics`` on both
 LM Studio (MLX) and Ollama (llama.cpp) under inference load.
@@ -167,13 +168,17 @@ def _unwrap_to_array(obj: ctypes.c_void_p) -> ctypes.c_void_p:
     return obj
 
 
-# Energy channel names we care about (lowercase for matching)
+# Energy channel names we care about (lowercase for matching).
+# Channel names verified by enumeration on M5 Max (`Energy Model` group):
+# GPU SRAM has no separate rail there (folded into `GPU`), and DCS is the
+# DRAM-controller subsystem (~2 W idle) that GPU-only power badly omits.
 _CHANNEL_MAP = {
     "cpu energy": "cpu",
     "gpu": "gpu",
     "gpu energy": "gpu_nj",  # nJ aggregate, converted separately
     "ane": "ane",
     "dram": "dram",
+    "dcs": "dcs",
 }
 
 # Unit divisors to convert raw energy to joules
@@ -186,17 +191,46 @@ _UNIT_DIVISORS = {
 
 @dataclass
 class IOReportReading:
-    """Raw power reading from IOReport Energy Model."""
+    """Raw power reading from IOReport Energy Model.
+
+    Watts are the mean over the sampling interval; the matching ``*_joules``
+    are the absolute energy consumed during it. ``soc_watts`` / ``soc_joules``
+    add the DRAM-controller (DCS) rail to the GPU+CPU+ANE+DRAM total — the
+    honest package figure for a memory-bound decode on unified memory, where
+    GPU-only power badly undercounts.
+    """
 
     gpu_watts: float = 0.0
     cpu_watts: float = 0.0
     ane_watts: float = 0.0
     dram_watts: float = 0.0
+    dcs_watts: float = 0.0
+    gpu_joules: float = 0.0
+    cpu_joules: float = 0.0
+    ane_joules: float = 0.0
+    dram_joules: float = 0.0
+    dcs_joules: float = 0.0
     interval_s: float = 0.0
 
     @property
     def total_watts(self) -> float:
+        """Legacy SoC estimate WITHOUT the DRAM-controller rail.
+
+        Kept for backward compatibility; new code should prefer ``soc_watts``.
+        """
         return self.gpu_watts + self.cpu_watts + self.ane_watts + self.dram_watts
+
+    @property
+    def soc_watts(self) -> float:
+        """Full package power: compute + DRAM + DRAM controller (DCS)."""
+        return self.total_watts + self.dcs_watts
+
+    @property
+    def soc_joules(self) -> float:
+        """Energy over the interval summed across all SoC rails."""
+        return (
+            self.gpu_joules + self.cpu_joules + self.ane_joules + self.dram_joules + self.dcs_joules
+        )
 
 
 class IOReportSampler:
@@ -282,10 +316,8 @@ class IOReportSampler:
 
         n = _cf.CFArrayGetCount(arr)
 
-        gpu_watts = 0.0
-        cpu_watts = 0.0
-        ane_watts = 0.0
-        dram_watts = 0.0
+        gpu_watts = cpu_watts = ane_watts = dram_watts = dcs_watts = 0.0
+        gpu_joules = cpu_joules = ane_joules = dram_joules = dcs_joules = 0.0
 
         for i in range(n):
             item = _cf.CFArrayGetValueAtIndex(arr, i)
@@ -305,26 +337,35 @@ class IOReportSampler:
             raw = _iorep.IOReportSimpleGetIntegerValue(item, 0)
 
             divisor = _UNIT_DIVISORS.get(unit, 1.0)
-            watts = (raw / divisor) / interval
+            joules = raw / divisor
+            watts = joules / interval
 
             if key == "gpu":
-                gpu_watts = watts
+                gpu_watts, gpu_joules = watts, joules
             elif key == "gpu_nj":
-                # Only use nJ aggregate if mJ channel not found
+                # Only use the nJ aggregate if the mJ channel was absent.
                 if gpu_watts == 0.0:
-                    gpu_watts = watts
+                    gpu_watts, gpu_joules = watts, joules
             elif key == "cpu":
-                cpu_watts = watts
+                cpu_watts, cpu_joules = watts, joules
             elif key == "ane":
-                ane_watts = watts
+                ane_watts, ane_joules = watts, joules
             elif key == "dram":
-                dram_watts = watts
+                dram_watts, dram_joules = watts, joules
+            elif key == "dcs":
+                dcs_watts, dcs_joules = watts, joules
 
         return IOReportReading(
             gpu_watts=round(gpu_watts, 2),
             cpu_watts=round(cpu_watts, 2),
             ane_watts=round(ane_watts, 3),
             dram_watts=round(dram_watts, 2),
+            dcs_watts=round(dcs_watts, 2),
+            gpu_joules=round(gpu_joules, 3),
+            cpu_joules=round(cpu_joules, 3),
+            ane_joules=round(ane_joules, 4),
+            dram_joules=round(dram_joules, 3),
+            dcs_joules=round(dcs_joules, 3),
             interval_s=round(interval, 3),
         )
 

@@ -19,6 +19,7 @@ from asiai.benchmark.quality_gates import (
     read_kv_cache_tokens,
     summarize_thermal,
 )
+from asiai.collectors.ioreport import IOReportReading
 
 # --- early-stop -----------------------------------------------------------
 
@@ -298,6 +299,8 @@ def test_power_thermal_probe_unavailable_returns_none():
             reading = probe.read()
         assert reading == {
             "gpu_watts": None,
+            "soc_watts": None,
+            "energy_joules": None,
             "thermal_speed_limit": None,
             "engine_rss_mb": None,
             "engine_phys_footprint_mb": None,
@@ -311,7 +314,7 @@ def test_power_thermal_probe_reads_gpu_watts_and_thermal():
         "FakeSampler",
         (),
         {
-            "sample": lambda self: type("R", (), {"gpu_watts": 24.5})(),
+            "sample": lambda self: IOReportReading(gpu_watts=24.5, cpu_watts=5.0, dcs_watts=2.5),
             "close": lambda self: None,
         },
     )()
@@ -326,6 +329,8 @@ def test_power_thermal_probe_reads_gpu_watts_and_thermal():
         probe.start()
         reading = probe.read()
     assert reading["gpu_watts"] == 24.5
+    # soc_watts adds cpu+ane+dram+dcs to the GPU rail (24.5 + 5.0 + 2.5).
+    assert reading["soc_watts"] == 32.0
     assert reading["thermal_speed_limit"] == 100
 
 
@@ -371,7 +376,10 @@ def test_power_thermal_probe_default_no_cross_validate():
     fake_sampler = type(
         "FakeSampler",
         (),
-        {"sample": lambda self: type("R", (), {"gpu_watts": 12.0})(), "close": lambda self: None},
+        {
+            "sample": lambda self: IOReportReading(gpu_watts=12.0),
+            "close": lambda self: None,
+        },
     )()
     fake_thermal = type("T", (), {"speed_limit": 100})()
     with (
@@ -388,6 +396,8 @@ def test_power_thermal_probe_default_no_cross_validate():
     # read() keeps the per-window shape (no powermetrics provenance fields).
     assert set(reading) == {
         "gpu_watts",
+        "soc_watts",
+        "energy_joules",
         "thermal_speed_limit",
         "engine_rss_mb",
         "engine_phys_footprint_mb",
@@ -399,13 +409,17 @@ def test_power_thermal_probe_default_no_cross_validate():
 
 
 class _StubSampler:
-    """Minimal IOReportSampler stand-in returning a fixed gpu_watts."""
+    """Minimal IOReportSampler stand-in returning a fixed gpu_watts.
+
+    Returns a real IOReportReading so soc_watts/soc_joules properties work;
+    with only gpu_watts set, soc_watts collapses to the GPU rail.
+    """
 
     def __init__(self, watts: float) -> None:
         self._watts = watts
 
     def sample(self):
-        return type("R", (), {"gpu_watts": self._watts})()
+        return IOReportReading(gpu_watts=self._watts)
 
     def close(self) -> None:
         pass
