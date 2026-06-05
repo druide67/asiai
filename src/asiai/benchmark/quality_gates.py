@@ -34,7 +34,10 @@ from typing import Any
 
 from asiai.collectors import ioreport as _ioreport
 from asiai.collectors import system as _system
-from asiai.collectors.system import _engine_match_key, find_engine_process
+from asiai.collectors.system import (
+    _engine_match_key,
+    find_engine_process_by_url,
+)
 
 
 def _bytes_to_mb(b: int) -> float | None:
@@ -437,8 +440,10 @@ class PowerThermalProbe:
         cross_validate: bool = False,
         power_monitor_factory: Any = None,
         engine_name: str | None = None,
+        base_url: str | None = None,
     ) -> None:
         self._engine_name = engine_name
+        self._base_url = base_url
         self._sampler: _ioreport.IOReportSampler | None = None
         if _ioreport.ioreport_available():
             try:
@@ -514,8 +519,12 @@ class PowerThermalProbe:
         return self._engine_name
 
     def _read_engine_proc(self) -> Any:
-        """The bench target engine's aggregated process info, or ``None``."""
-        return find_engine_process(self._engine_name)
+        """The bench target engine's process info, or ``None``.
+
+        Name match first, then a port fallback keyed on ``base_url`` so a
+        manually-launched / versioned-label server is still measured.
+        """
+        return find_engine_process_by_url(self._engine_name, self._base_url)
 
     def _read_engine_rss_mb(self) -> float | None:
         """True RSS (MB) of the bench target engine — the honest, cross-family RAM.
@@ -803,15 +812,29 @@ class EngineMemorySampler(_IntervalSampler):
     """
 
     def __init__(
-        self, engine_name: str | None, interval: float = DEFAULT_ENGINE_MEM_POLL_INTERVAL_SEC
+        self,
+        engine_name: str | None,
+        interval: float = DEFAULT_ENGINE_MEM_POLL_INTERVAL_SEC,
+        base_url: str | None = None,
     ):
         self.engine_name = engine_name
+        self.base_url = base_url
         self._target = _engine_match_key(engine_name)
-        super().__init__(interval, enabled=bool(self._target), sample_on_start=True)
+        port = 0
+        if base_url:
+            from asiai.engines.detect import extract_port
+
+            port = extract_port(base_url)
+        # Enable when EITHER a name target OR a URL port is available: the port
+        # fallback recovers RAM for a versioned/custom engine label that name
+        # matching alone would miss (the campaign's silent ``—`` holes).
+        super().__init__(
+            interval, enabled=bool(self._target or port), sample_on_start=True
+        )
         self.result = EngineMemoryWatchResult()
 
     def _sample_once(self) -> None:
-        p = find_engine_process(self.engine_name)
+        p = find_engine_process_by_url(self.engine_name, self.base_url)
         if p is None:
             return
         rss = _bytes_to_mb(p.resident_bytes)

@@ -86,7 +86,7 @@ Benchmark: qwen3.5
 If your engine runs on a non-standard port, asiai will usually find it automatically via process detection. You can also register it manually:
 
 ```bash
-asiai config add omlx http://localhost:8800 --label mac-mini
+asiai config add omlx http://localhost:8800 --label desktop
 ```
 
 Manually added engines are persisted and never auto-pruned. See [config](commands/config.md) for details.

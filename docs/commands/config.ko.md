@@ -34,8 +34,8 @@ Known engines (3):
 비표준 포트의 엔진을 수동 등록합니다. 수동 엔진은 자동 정리되지 않습니다.
 
 ```bash
-asiai config add omlx http://localhost:8800 --label mac-mini
-asiai config add ollama http://192.168.0.16:11434 --label mini
+asiai config add omlx http://localhost:8800 --label desktop
+asiai config add ollama http://192.0.2.10:11434 --label remote
 ```
 
 ### remove

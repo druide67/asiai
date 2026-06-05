@@ -86,7 +86,7 @@ Benchmark: qwen3.5
 如果你的引擎运行在非标准端口上，asiai 通常会通过进程检测自动找到它。你也可以手动注册：
 
 ```bash
-asiai config add omlx http://localhost:8800 --label mac-mini
+asiai config add omlx http://localhost:8800 --label desktop
 ```
 
 手动添加的引擎会被持久化保存，不会被自动清理。详见 [config](commands/config.md)。

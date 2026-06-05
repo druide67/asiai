@@ -65,7 +65,7 @@ asiai 使用三层检测级联，从最快到最彻底：
 使用 `--url` 时仅扫描指定 URL。不读写配置——适用于一次性检查。
 
 ```bash
-asiai detect --url http://192.168.0.16:11434,http://localhost:8800
+asiai detect --url http://192.0.2.10:11434,http://localhost:8800
 ```
 
 ## 另见

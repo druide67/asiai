@@ -93,7 +93,7 @@ asiai daemon start web --port 8642
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **참고:** 에이전트가 Docker 내부에서 실행되는 경우, `127.0.0.1`에 접근할 수 없습니다. 호스트의 네트워크 IP(예: `192.168.0.16`) 또는 Docker Desktop for Mac의 `host.docker.internal`을 사용하세요.
+> **참고:** 에이전트가 Docker 내부에서 실행되는 경우, `127.0.0.1`에 접근할 수 없습니다. 호스트의 네트워크 IP(예: `192.0.2.10`) 또는 Docker Desktop for Mac의 `host.docker.internal`을 사용하세요.
 
 ### 확인
 

@@ -62,6 +62,9 @@ nav:
       - Exo: engines/exo.md
   - Ollama vs LM Studio: ollama-vs-lmstudio.md
   - How to Benchmark LLMs on Mac: benchmark-llm-mac.md
+  - Agentic Benchmarks: agentic-benchmarks.md
+  - Dev-Quality Benchmarks: dev-quality-benchmarks.md
+  - Apple Silicon Inference Panel: research/comparison-panel/2026-05-apple-silicon-agentic-inference-panel.md
   - Benchmark Card: benchmark-card.md
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md

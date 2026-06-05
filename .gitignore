@@ -64,6 +64,7 @@ docs/bmad
 docs/bmad/
 docs/research/bench-method/
 docs/research/bench-m5/
+docs/upstream-reports/
 RULES.md
 RULES-global.md
 .whisper-peer
@@ -73,3 +74,8 @@ RULES-global.md
 # context. Run through an anonymization step before publishing as fixtures.
 data/bench-mtp-m4/
 data/bench-mtp-m5/
+
+# Session-captured agentic bench fixtures — contain absolute local paths and
+# Claude Code shell-snapshot IDs in their JSON/logs. Never publish unsanitised.
+# (The tracked m4/m5-*-mtp.json fixtures are path-free and stay committed.)
+tests/fixtures/agentic/sprint-bench-*/

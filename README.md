@@ -115,6 +115,13 @@ Options:
     --agentic-output FILE  Save agentic-mode results as JSON
     --agentic-skip-long    Skip phases 7-8 (50K context) to save ~10 min
     --agentic-only LIST    Run only specified phases (cold,prefix-test-1,...)
+    --code                 Dev-quality eval: tool-call, recovery, thinking, coding
+    --code-suite LIST      tool-call[-stress],recovery,thinking[,coding[-hard]]
+    --instruct             Instruction-following: IFEval-style verifiable + agentic deliverable
+    --instruct-scenario L  verifiable,research-brief[,order-control]
+    --language CODE        Multilingual retention eval (fr/de/es/it/pt/ja/ko/zh)
+    --language-suite LIST  adherence,diacritics[,fluency] (default: deterministic 2)
+    --judge-url URL        OpenAI-compat LLM judge for the 'coding'/'fluency' suites
 ```
 
 ### Agentic mode — measuring prefix cache reuse
@@ -130,6 +137,38 @@ messages to expose how the engine reuses cached prefix tokens. Reads
 (llama.cpp, mlx-lm), falls back to the TTFT ratio otherwise. Outputs a
 verdict `prefix_cache_reuse: yes | partial | no`. The metric that matters
 when your workload is multi-turn agentic with shared system prompts.
+
+### Quality modes — measuring quality, not just speed
+
+Throughput is not quality. Three deterministic modes (no LLM judge needed for the
+core signal) measure whether a model is actually usable for real work:
+
+```bash
+# Dev quality: tool-call reliability (the JSON arg-truncation / empty-object bug),
+# agentic error-recovery, thinking discipline — + an optional LLM-judged coding task.
+asiai bench --code --url http://localhost:8080 --code-output code.json
+
+# Instruction-following: IFEval-style verifiable instructions (format/length/
+# keywords/case…) + an agentic task — does the model produce the primary
+# multi-section deliverable AFTER a tool sequence, or only confirm the last step?
+asiai bench --instruct --url http://localhost:8080 --instruct-output instruct.json
+
+# Multilingual retention: did a finetune keep the base model's language?
+# Adherence (stays in the language) + diacritics (café stays café), 8 languages.
+asiai bench --language fr --url http://localhost:8080 --language-output lang.json
+```
+
+`--code` scores tool-call validity, the empty-object truncation bug, schema
+conformance and error-recovery deterministically; add `--code-suite coding`
+with `--judge-url <openai-compat-endpoint>` for an LLM-judged code-quality grade
+(no SDK is bundled; the API key is read from the environment). `--instruct` runs
+IFEval-style verifiable instructions (strict + loose, prompt- and
+instruction-level) plus a tools-then-deliverable scenario that catches a finetune
+doing the tool work but skipping the primary written output. `--language`
+measures language adherence + orthography retention — the catastrophic-forgetting
+signatures a task-specific finetune can introduce. All JSON-only and compare
+across models by diffing the output. See
+[Dev-quality benchmarks](docs/dev-quality-benchmarks.md).
 
 Cross-model comparison — benchmark multiple models in one run and get a ranked summary:
 

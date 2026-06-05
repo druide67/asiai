@@ -34,8 +34,8 @@ Known engines (3):
 Manually register an engine on a non-standard port. Manual engines are never auto-pruned.
 
 ```bash
-asiai config add omlx http://localhost:8800 --label mac-mini
-asiai config add ollama http://192.168.0.16:11434 --label mini
+asiai config add omlx http://localhost:8800 --label desktop
+asiai config add ollama http://192.0.2.10:11434 --label remote
 ```
 
 ### remove

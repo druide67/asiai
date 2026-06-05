@@ -93,7 +93,7 @@ asiai daemon start web --port 8642
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **注意：**如果 Agent 运行在 Docker 内，`127.0.0.1` 不可达。使用主机网络 IP（如 `192.168.0.16`）或 Docker Desktop for Mac 的 `host.docker.internal`。
+> **注意：**如果 Agent 运行在 Docker 内，`127.0.0.1` 不可达。使用主机网络 IP（如 `192.0.2.10`）或 Docker Desktop for Mac 的 `host.docker.internal`。
 
 ### 验证
 

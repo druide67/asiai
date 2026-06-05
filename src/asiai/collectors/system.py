@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
 import re
 import subprocess
 import time
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("asiai.collectors.system")
 
@@ -341,6 +343,64 @@ def collect_os_version() -> str:
         return ""
 
 
+def collect_power_mode() -> int | None:
+    """Return the active macOS power mode, or ``None`` when not exposed.
+
+    ``pmset -g`` (no argument) prints the *active* setting:
+    ``0`` normal, ``1`` low-power, ``2`` high-power. A sustained inference
+    bench on a laptop in mode 0 throttles the GPU ~40% versus mode 2, so this
+    is recorded with every run — a result without it can't be trusted against
+    one taken in High Power Mode. Returns ``None`` on Macs/OS that don't
+    surface ``powermode`` (older desktops), never raises.
+    """
+    try:
+        out = subprocess.run(
+            ["pmset", "-g"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        ).stdout
+    except Exception:
+        return None
+    m = re.search(r"powermode\s+(\d+)", out)
+    return int(m.group(1)) if m else None
+
+
+def collect_run_metadata(
+    *, engine_version: str = "", bench_mode: str = "", include_host: bool = False
+) -> dict[str, Any]:
+    """Self-describing run context for reproducible benchmark JSON.
+
+    Bundles the hardware/OS/power facts a result needs to be reproducible and
+    sortable downstream (machine class, chip, RAM, cores, OS, power mode) plus
+    the engine version and the bench mode, so a JSON file is self-contained —
+    no filename parsing or hardcoded version map required to read it back.
+
+    The hostname is OMITTED by default: it is identifying and these JSON files
+    are routinely shared publicly, whereas ``machine_model``/``hw_chip`` give
+    full reproducibility without leaking identity. Pass ``include_host=True``
+    only for private runs.
+    """
+    info = collect_machine_info()
+    machine_model = info.split(" — ", 1)[0] if info and info != "unknown" else ""
+    mem = collect_memory()
+    cores = collect_cpu_cores()
+    md: dict[str, Any] = {
+        "machine_model": machine_model or None,
+        "hw_chip": collect_hw_chip() or None,
+        "os_version": collect_os_version() or None,
+        "ram_gb": round(mem.total / (1024**3)) if mem.total > 0 else None,
+        "cpu_cores": cores if cores > 0 else None,
+        "powermode": collect_power_mode(),
+        "engine_version": engine_version or None,
+        "bench_mode": bench_mode or None,
+    }
+    if include_host:
+        md["host"] = os.uname().nodename
+    return md
+
+
 @dataclass
 class ProcessInfo:
     """Resource usage of an inference engine process."""
@@ -471,6 +531,95 @@ def find_engine_process(engine_name: str | None) -> ProcessInfo | None:
         if _engine_match_key(p.name) == target:
             return p
     return None
+
+
+def _pid_listening_on_port(port: int) -> int | None:
+    """PID of the process LISTENing on ``port`` (lsof ``-Fp``), or ``None``.
+
+    Engine-name-agnostic: it keys on the socket, so it works no matter how the
+    server was launched (aisctl, a bare ``nohup llama-server``, a wrapper, a
+    versioned label). This is what makes the RAM matcher robust — name matching
+    misses a custom/versioned ``engine_name`` (``llamacpp-b9430`` normalizes to
+    ``llamacppb9430`` ≠ the collector's ``llamacpp`` key), but the bench always
+    knows its ``--url``. Best-effort; never raises.
+    """
+    if not port:
+        return None
+    try:
+        out = subprocess.run(
+            ["lsof", "-i", f":{port}", "-sTCP:LISTEN", "-Fp"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except Exception as e:
+        logger.debug("lsof port %d failed: %s", port, e)
+        return None
+    for line in out.splitlines():
+        if line.startswith("p"):
+            try:
+                return int(line[1:])
+            except ValueError:
+                continue
+    return None
+
+
+def collect_process_by_pid(pid: int | None) -> ProcessInfo | None:
+    """RSS + physical footprint for a single ``pid`` (``ps`` + libproc), or ``None``.
+
+    Scope is the single listener PID — correct for the single-process engine
+    servers benched here (llama-server, ``mlx_lm.server``, omlx, …). Returns
+    ``None`` when the PID is gone or unreadable.
+    """
+    if not pid or pid <= 0:
+        return None
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "comm=,rss=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+    except Exception:
+        return None
+    if not out:
+        return None
+    # comm may contain spaces (app-bundle paths); rss (KB) is always the last field.
+    parts = out.rsplit(None, 1)
+    if len(parts) != 2:
+        return None
+    comm, rss_kb = parts
+    try:
+        rss = int(rss_kb) * 1024
+    except ValueError:
+        return None
+    phys = _get_phys_footprint(pid)
+    return ProcessInfo(
+        name=comm.rsplit("/", 1)[-1],
+        resident_bytes=rss,
+        phys_footprint_bytes=phys if phys > 0 else rss,
+    )
+
+
+def find_engine_process_by_url(
+    engine_name: str | None, base_url: str | None
+) -> ProcessInfo | None:
+    """``find_engine_process`` with a port-based fallback keyed on ``base_url``.
+
+    Name matching is tried first (it aggregates an engine's child processes);
+    when it finds nothing — the versioned/custom-label case that silently left
+    RAM unmeasured in the 2026-06 campaign — the listener PID is recovered from
+    the URL's port and measured directly. ``None`` when both miss.
+    """
+    p = find_engine_process(engine_name)
+    if p is not None:
+        return p
+    if not base_url:
+        return None
+    from asiai.engines.detect import extract_port
+
+    port = extract_port(base_url)
+    return collect_process_by_pid(_pid_listening_on_port(port)) if port else None
 
 
 def collect_uptime() -> int:

@@ -93,7 +93,7 @@ Pour l'accès distant (par ex. agent IA sur une autre machine ou depuis un conte
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **Note :** Si votre agent tourne dans Docker, `127.0.0.1` est inaccessible. Utilisez l'IP réseau de l'hôte (par ex. `192.168.0.16`) ou `host.docker.internal` sur Docker Desktop pour Mac.
+> **Note :** Si votre agent tourne dans Docker, `127.0.0.1` est inaccessible. Utilisez l'IP réseau de l'hôte (par ex. `192.0.2.10`) ou `host.docker.internal` sur Docker Desktop pour Mac.
 
 ### Vérification
 

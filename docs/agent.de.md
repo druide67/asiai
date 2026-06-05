@@ -93,7 +93,7 @@ Für Fernzugriff (z.B. KI-Agent auf einem anderen Rechner oder aus einem Docker-
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **Hinweis:** Wenn Ihr Agent in Docker läuft, ist `127.0.0.1` nicht erreichbar. Verwenden Sie die Netzwerk-IP des Hosts (z.B. `192.168.0.16`) oder `host.docker.internal` bei Docker Desktop für Mac.
+> **Hinweis:** Wenn Ihr Agent in Docker läuft, ist `127.0.0.1` nicht erreichbar. Verwenden Sie die Netzwerk-IP des Hosts (z.B. `192.0.2.10`) oder `host.docker.internal` bei Docker Desktop für Mac.
 
 ### Überprüfung
 

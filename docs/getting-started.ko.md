@@ -86,7 +86,7 @@ Benchmark: qwen3.5
 엔진이 비표준 포트에서 실행 중인 경우, asiai는 보통 프로세스 감지를 통해 자동으로 찾습니다. 수동으로 등록할 수도 있습니다:
 
 ```bash
-asiai config add omlx http://localhost:8800 --label mac-mini
+asiai config add omlx http://localhost:8800 --label desktop
 ```
 
 수동으로 추가된 엔진은 영구 저장되며 자동 삭제되지 않습니다. 자세한 내용은 [config](commands/config.md)를 참조하세요.
