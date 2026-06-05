@@ -219,8 +219,7 @@ HARD_CODING_TASKS: list[dict] = [
             "Write `evaluate(expr: str) -> float` that evaluates an arithmetic "
             "expression with + - * / , parentheses, integers and floats. No `eval`. "
             "Respect operator precedence and left-associativity.",
-            "Support unary minus (e.g. `-3`, `2 * -4`, `-(1+2)`) and arbitrary "
-            "whitespace.",
+            "Support unary minus (e.g. `-3`, `2 * -4`, `-(1+2)`) and arbitrary whitespace.",
             "Add `**` (exponentiation, RIGHT-associative, higher precedence than "
             "unary minus so `-2**2 == -4`) and `%` (modulo, same precedence as `*`).",
             "Raise a clear `ValueError` on malformed input (unbalanced parens, "
@@ -257,7 +256,7 @@ STRESS_TOOLCALL_TURNS: list[dict] = [
         "user": (
             "Use edit_file to add 6 regex constants to parser.py — one edit per "
             "constant. The replace strings contain backslashes and quotes: e.g. "
-            'patterns like `r\'\\d+\\.\\d+\'`, `r\'\\"[^\\"]*\\"\'`, `r\'[\\t\\n]+\'`.'
+            "patterns like `r'\\d+\\.\\d+'`, `r'\\\"[^\\\"]*\\\"'`, `r'[\\t\\n]+'`."
         ),
         "expected_tool": "edit_file",
         "tool_result": "Applied 6 edits to parser.py.",
@@ -270,8 +269,8 @@ STRESS_TOOLCALL_TURNS: list[dict] = [
     {
         "user": (
             "Write `fixtures.py` whose content is a multi-line string with embedded "
-            "JSON, code fences and unicode: include `{\"key\": [1, 2, {\"nested\": "
-            "\"café—naïve\"}]}` and a ```python block``` inside the file content."
+            'JSON, code fences and unicode: include `{"key": [1, 2, {"nested": '
+            '"café—naïve"}]}` and a ```python block``` inside the file content.'
         ),
         "expected_tool": "write_file",
         "tool_result": "Wrote fixtures.py (1.4 KB).",

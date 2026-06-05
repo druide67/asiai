@@ -337,8 +337,7 @@ def _continue_messages(res: ChatResult, tool_result: str) -> list[dict[str, Any]
         {"role": "assistant", "content": res.text or "", "tool_calls": assistant_tcs}
     ]
     msgs.extend(
-        {"role": "tool", "tool_call_id": atc["id"], "content": tool_result}
-        for atc in assistant_tcs
+        {"role": "tool", "tool_call_id": atc["id"], "content": tool_result} for atc in assistant_tcs
     )
     return msgs
 
@@ -360,9 +359,16 @@ def _pct(flags: list[bool]) -> float | None:
 
 
 def _run_toolcall_suite(
-    base_url: str, model: str, *, repeats: int, extra_body: dict[str, Any] | None,
-    timeout: int, on_progress: Any, turns: list[dict[str, Any]] = TOOLCALL_TURNS,
-    edit_indices: list[int] = TOOLCALL_EDIT_TURNS, system: str = TOOLCALL_SYSTEM,
+    base_url: str,
+    model: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
+    turns: list[dict[str, Any]] = TOOLCALL_TURNS,
+    edit_indices: list[int] = TOOLCALL_EDIT_TURNS,
+    system: str = TOOLCALL_SYSTEM,
     label: str = "tool-call",
 ) -> dict[str, Any]:
     per_turn: list[dict[str, Any]] = []
@@ -371,27 +377,41 @@ def _run_toolcall_suite(
         for idx, turn in enumerate(turns):
             messages.append({"role": "user", "content": turn["user"]})
             res = chat(
-                base_url, model, messages, tools=TOOLS, max_tokens=1024,
-                extra_body=extra_body, timeout=timeout,
+                base_url,
+                model,
+                messages,
+                tools=TOOLS,
+                max_tokens=1024,
+                extra_body=extra_body,
+                timeout=timeout,
             )
             schema = TOOLS_BY_NAME[turn["expected_tool"]]
             score = score_toolcall_turn(res, turn["expected_tool"], schema)
             score.update(
-                {"turn": idx, "expected_tool": turn["expected_tool"], "repeat": rep,
-                 "error": res.error}
+                {
+                    "turn": idx,
+                    "expected_tool": turn["expected_tool"],
+                    "repeat": rep,
+                    "error": res.error,
+                }
             )
             per_turn.append(score)
             messages.extend(_continue_messages(res, turn["tool_result"]))
             if on_progress:
-                on_progress(f"  [{label} r{rep + 1} t{idx + 1}/{len(turns)}] "
-                            f"{turn['expected_tool']} clean={_turn_clean(score)}")
+                on_progress(
+                    f"  [{label} r{rep + 1} t{idx + 1}/{len(turns)}] "
+                    f"{turn['expected_tool']} clean={_turn_clean(score)}"
+                )
     return _summarize_toolcall(per_turn, edit_indices)
 
 
 def _turn_clean(s: dict[str, Any]) -> bool:
     return bool(
-        s["json_valid"] and s["non_truncated"] and s["correct_tool"]
-        and s["schema_conform"] and not s["empty_object_bug"]
+        s["json_valid"]
+        and s["non_truncated"]
+        and s["correct_tool"]
+        and s["schema_conform"]
+        and not s["empty_object_bug"]
     )
 
 
@@ -420,27 +440,53 @@ def _summarize_toolcall(
 
 
 def _run_recovery_suite(
-    base_url: str, model: str, *, repeats: int, extra_body: dict[str, Any] | None,
-    timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for rep in range(repeats):
         messages: list[dict[str, Any]] = [{"role": "system", "content": RECOVERY_SYSTEM}]
         for turn in RECOVERY_CONTEXT_TURNS:
             messages.append({"role": "user", "content": turn["user"]})
-            res = chat(base_url, model, messages, tools=TOOLS, max_tokens=1024,
-                       extra_body=extra_body, timeout=timeout)
+            res = chat(
+                base_url,
+                model,
+                messages,
+                tools=TOOLS,
+                max_tokens=1024,
+                extra_body=extra_body,
+                timeout=timeout,
+            )
             messages.extend(_continue_messages(res, turn["tool_result"]))
         # Trigger turn → run_tests, then return a synthetic tool ERROR.
         messages.append({"role": "user", "content": RECOVERY_TRIGGER_TURN["user"]})
-        trig = chat(base_url, model, messages, tools=TOOLS, max_tokens=1024,
-                    extra_body=extra_body, timeout=timeout)
+        trig = chat(
+            base_url,
+            model,
+            messages,
+            tools=TOOLS,
+            max_tokens=1024,
+            extra_body=extra_body,
+            timeout=timeout,
+        )
         messages.extend(_continue_messages(trig, RECOVERY_TOOL_ERROR))
         messages.append({"role": "user", "content": RECOVERY_FIX_PROMPT})
         observed: list[ChatResult] = []
         for _ in range(RECOVERY_OBSERVE_TURNS):
-            r = chat(base_url, model, messages, tools=TOOLS, max_tokens=1024,
-                     extra_body=extra_body, timeout=timeout)
+            r = chat(
+                base_url,
+                model,
+                messages,
+                tools=TOOLS,
+                max_tokens=1024,
+                extra_body=extra_body,
+                timeout=timeout,
+            )
             observed.append(r)
             messages.extend(_continue_messages(r, "OK: applied."))
             tcs = r.tool_calls or []
@@ -448,8 +494,10 @@ def _run_recovery_suite(
                 break
         results.append(_score_recovery(observed))
         if on_progress:
-            on_progress(f"  [recovery r{rep + 1}] recovered={results[-1]['recovered']} "
-                        f"looped={results[-1]['looped']}")
+            on_progress(
+                f"  [recovery r{rep + 1}] recovered={results[-1]['recovered']} "
+                f"looped={results[-1]['looped']}"
+            )
     return _summarize_recovery(results)
 
 
@@ -497,24 +545,40 @@ def _check_thinking(check: str, res: ChatResult) -> bool:
 
 
 def _run_thinking_suite(
-    base_url: str, model: str, *, repeats: int, extra_body: dict[str, Any] | None,
-    timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     probe_results: list[dict[str, Any]] = []
     for rep in range(repeats):
         for probe in THINKING_PROBES:
             eb = _thinking_extra(extra_body, probe["enable_thinking"])
             res = chat(
-                base_url, model,
-                [{"role": "system", "content": THINKING_SYSTEM},
-                 {"role": "user", "content": probe["user"]}],
-                max_tokens=probe["max_tokens"], extra_body=eb, timeout=timeout,
+                base_url,
+                model,
+                [
+                    {"role": "system", "content": THINKING_SYSTEM},
+                    {"role": "user", "content": probe["user"]},
+                ],
+                max_tokens=probe["max_tokens"],
+                extra_body=eb,
+                timeout=timeout,
             )
             passed = _check_thinking(probe["check"], res)
-            probe_results.append({
-                "probe": probe["name"], "check": probe["check"], "passed": passed,
-                "repeat": rep, "error": res.error, "text": truncate_text(res.text or ""),
-            })
+            probe_results.append(
+                {
+                    "probe": probe["name"],
+                    "check": probe["check"],
+                    "passed": passed,
+                    "repeat": rep,
+                    "error": res.error,
+                    "text": truncate_text(res.text or ""),
+                }
+            )
             if on_progress:
                 on_progress(f"  [thinking r{rep + 1}] {probe['name']} pass={passed}")
     by_check = {p["check"]: [] for p in THINKING_PROBES}
@@ -532,8 +596,13 @@ def _run_thinking_suite(
 
 
 def _run_coding_task(
-    base_url: str, model: str, task: dict[str, Any], *,
-    extra_body: dict[str, Any] | None, timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    task: dict[str, Any],
+    *,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [{"role": "system", "content": task["system"]}]
     turns: list[dict[str, Any]] = []
@@ -542,13 +611,16 @@ def _run_coding_task(
         messages.append({"role": "user", "content": t})
         # 4096: the hard tasks regenerate a full module + tests on the last turn;
         # 2048 truncated the final answer (tests never emitted) for both models.
-        res = chat(base_url, model, messages, max_tokens=4096, extra_body=extra_body,
-                   timeout=timeout)
+        res = chat(
+            base_url, model, messages, max_tokens=4096, extra_body=extra_body, timeout=timeout
+        )
         turns.append({"user": t, "assistant": res.text or "", "error": res.error})
         messages.append({"role": "assistant", "content": res.text or ""})
         if on_progress:
-            on_progress(f"  [coding:{task['name']}] turn {i + 1}/{len(task_turns)} "
-                        f"({len(res.text or '')} chars{' ERROR' if res.error else ''})")
+            on_progress(
+                f"  [coding:{task['name']}] turn {i + 1}/{len(task_turns)} "
+                f"({len(res.text or '')} chars{' ERROR' if res.error else ''})"
+            )
     return turns
 
 
@@ -573,15 +645,25 @@ def _parse_judge_json(raw: str) -> dict[str, Any] | None:
 
 
 def _judge_coding(
-    turns: list[dict[str, Any]], *, judge_url: str, judge_model: str,
-    judge_api_key: str | None, timeout: int,
+    turns: list[dict[str, Any]],
+    *,
+    judge_url: str,
+    judge_model: str,
+    judge_api_key: str | None,
+    timeout: int,
 ) -> dict[str, Any]:
     user_block = f"{CODING_JUDGE_RUBRIC}\n\nTRANSCRIPT:\n{_render_transcript(turns)}"
     res = chat(
-        judge_url, judge_model,
-        [{"role": "system", "content": CODING_JUDGE_SYSTEM},
-         {"role": "user", "content": user_block}],
-        max_tokens=1024, temperature=0.0, api_key=judge_api_key, timeout=timeout,
+        judge_url,
+        judge_model,
+        [
+            {"role": "system", "content": CODING_JUDGE_SYSTEM},
+            {"role": "user", "content": user_block},
+        ],
+        max_tokens=1024,
+        temperature=0.0,
+        api_key=judge_api_key,
+        timeout=timeout,
         stream=False,
     )
     if res.error is not None:
@@ -589,7 +671,8 @@ def _judge_coding(
     parsed = _parse_judge_json(res.text)
     scores = (
         {c: parsed.get(c) for c in _JUDGE_CRITERIA if isinstance(parsed.get(c), (int, float))}
-        if parsed else {}
+        if parsed
+        else {}
     )
     return {
         "judge_model": judge_model,
@@ -601,9 +684,15 @@ def _judge_coding(
 
 
 def _run_coding_judged(
-    base_url: str, model: str, *, tasks: list[dict[str, Any]],
-    extra_body: dict[str, Any] | None, timeout: int,
-    judge_url: str | None, judge_model: str | None, judge_api_key: str | None,
+    base_url: str,
+    model: str,
+    *,
+    tasks: list[dict[str, Any]],
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    judge_url: str | None,
+    judge_model: str | None,
+    judge_api_key: str | None,
     on_progress: Any,
 ) -> dict[str, Any]:
     """Run each coding task → transcript, optionally judged via ``judge_url``.
@@ -615,7 +704,11 @@ def _run_coding_judged(
     task_results: list[dict[str, Any]] = []
     for task in tasks:
         transcript = _run_coding_task(
-            base_url, model, task, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            task,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
         entry: dict[str, Any] = {"task": task["name"], "transcript": transcript}
@@ -623,8 +716,11 @@ def _run_coding_judged(
             if on_progress:
                 on_progress(f"  [coding:{task['name']}] judging via {judge_model} @ {judge_url}")
             entry["judge"] = _judge_coding(
-                transcript, judge_url=judge_url, judge_model=judge_model,
-                judge_api_key=judge_api_key, timeout=timeout,
+                transcript,
+                judge_url=judge_url,
+                judge_model=judge_model,
+                judge_api_key=judge_api_key,
+                timeout=timeout,
             )
         else:
             entry["judge"] = {"skipped": "no --judge-url (transcript captured for offline judging)"}
@@ -669,36 +765,66 @@ def run_code_eval(
 
     if "tool-call" in requested:
         code_results["tool_call"] = _run_toolcall_suite(
-            base_url, model, repeats=repeats, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            repeats=repeats,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
     if "tool-call-stress" in requested:
         code_results["tool_call_stress"] = _run_toolcall_suite(
-            base_url, model, repeats=repeats, extra_body=extra_body, timeout=timeout,
-            on_progress=on_progress, turns=STRESS_TOOLCALL_TURNS,
-            edit_indices=STRESS_EDIT_TURNS, system=STRESS_TOOLCALL_SYSTEM,
+            base_url,
+            model,
+            repeats=repeats,
+            extra_body=extra_body,
+            timeout=timeout,
+            on_progress=on_progress,
+            turns=STRESS_TOOLCALL_TURNS,
+            edit_indices=STRESS_EDIT_TURNS,
+            system=STRESS_TOOLCALL_SYSTEM,
             label="tool-call-stress",
         )
     if "recovery" in requested:
         code_results["recovery"] = _run_recovery_suite(
-            base_url, model, repeats=repeats, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            repeats=repeats,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
     if "thinking" in requested:
         code_results["thinking"] = _run_thinking_suite(
-            base_url, model, repeats=repeats, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            repeats=repeats,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
     if "coding" in requested:
         code_results["coding"] = _run_coding_judged(
-            base_url, model, tasks=CODING_TASKS, extra_body=extra_body, timeout=timeout,
-            judge_url=judge_url, judge_model=judge_model, judge_api_key=judge_api_key,
+            base_url,
+            model,
+            tasks=CODING_TASKS,
+            extra_body=extra_body,
+            timeout=timeout,
+            judge_url=judge_url,
+            judge_model=judge_model,
+            judge_api_key=judge_api_key,
             on_progress=on_progress,
         )
     if "coding-hard" in requested:
         code_results["coding_hard"] = _run_coding_judged(
-            base_url, model, tasks=HARD_CODING_TASKS, extra_body=extra_body, timeout=timeout,
-            judge_url=judge_url, judge_model=judge_model, judge_api_key=judge_api_key,
+            base_url,
+            model,
+            tasks=HARD_CODING_TASKS,
+            extra_body=extra_body,
+            timeout=timeout,
+            judge_url=judge_url,
+            judge_model=judge_model,
+            judge_api_key=judge_api_key,
             on_progress=on_progress,
         )
 

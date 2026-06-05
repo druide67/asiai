@@ -190,9 +190,7 @@ def is_empty_object_bug(tc: dict[str, Any] | None, schema: dict[str, Any]) -> bo
     return False
 
 
-def score_toolcall_turn(
-    result: Any, expected_tool: str, schema: dict[str, Any]
-) -> dict[str, Any]:
+def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any]) -> dict[str, Any]:
     """Deterministic per-turn score for a turn that should emit a tool call."""
     tcs = getattr(result, "tool_calls", None) or []
     tc = tcs[0] if tcs else None

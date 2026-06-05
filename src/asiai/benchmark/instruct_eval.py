@@ -55,27 +55,42 @@ def _pct(flags: list[bool]) -> float | None:
 
 
 def _run_verifiable(
-    base_url: str, model: str, *, repeats: int, extra_body: dict[str, Any] | None,
-    timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     per_prompt: list[dict[str, Any]] = []
     for rep in range(repeats):
         for spec in VERIFIABLE_PROMPTS:
             res = chat(
-                base_url, model, [{"role": "user", "content": spec["prompt"]}],
-                max_tokens=1024, extra_body=extra_body, timeout=timeout,
+                base_url,
+                model,
+                [{"role": "user", "content": spec["prompt"]}],
+                max_tokens=1024,
+                extra_body=extra_body,
+                timeout=timeout,
             )
             scored = evaluate_prompt(res.text or "", spec["instructions"])
-            per_prompt.append({
-                "id": spec["id"], "repeat": rep, "error": res.error,
-                "prompt_strict": scored["prompt_strict"] and res.error is None,
-                "prompt_loose": scored["prompt_loose"] and res.error is None,
-                "instructions": scored["instructions"],
-            })
+            per_prompt.append(
+                {
+                    "id": spec["id"],
+                    "repeat": rep,
+                    "error": res.error,
+                    "prompt_strict": scored["prompt_strict"] and res.error is None,
+                    "prompt_loose": scored["prompt_loose"] and res.error is None,
+                    "instructions": scored["instructions"],
+                }
+            )
             if on_progress:
-                on_progress(f"  [verifiable r{rep + 1}] {spec['id']}: "
-                            f"strict={per_prompt[-1]['prompt_strict']} "
-                            f"loose={per_prompt[-1]['prompt_loose']}")
+                on_progress(
+                    f"  [verifiable r{rep + 1}] {spec['id']}: "
+                    f"strict={per_prompt[-1]['prompt_strict']} "
+                    f"loose={per_prompt[-1]['prompt_loose']}"
+                )
     all_ins = [i for p in per_prompt for i in p["instructions"]]
     return {
         "prompts_scored": len(per_prompt),
@@ -121,7 +136,9 @@ _SEARCH_DONE_NUDGE = (
 
 
 def _agentic_tool_messages(
-    res: ChatResult, searched_before: int, n_topics: int,
+    res: ChatResult,
+    searched_before: int,
+    n_topics: int,
     topics: list[tuple[str, str, str]],
 ) -> tuple[list[dict[str, Any]], int]:
     """Assistant turn + one role:tool reply per call (per-tool canned results).
@@ -139,10 +156,13 @@ def _agentic_tool_messages(
     for i, tc in enumerate(tcs):
         tc_id = tc.get("id") or f"call_{i}"
         name = tc.get("name") or ""
-        assistant_tcs.append({
-            "id": tc_id, "type": "function",
-            "function": {"name": name, "arguments": tc.get("arguments_raw") or "{}"},
-        })
+        assistant_tcs.append(
+            {
+                "id": tc_id,
+                "type": "function",
+                "function": {"name": name, "arguments": tc.get("arguments_raw") or "{}"},
+            }
+        )
         if name == "web_search":
             searched += 1
             if searched > n_topics:
@@ -164,8 +184,14 @@ def _tools_without_search(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _run_agentic_scenario(
-    base_url: str, model: str, scenario: str, *, repeats: int,
-    extra_body: dict[str, Any] | None, timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    scenario: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     cfg = AGENTIC_SCENARIOS[scenario]
     prompt, topics, sections = cfg["prompt"], cfg["topics"], cfg["sections"]
@@ -191,8 +217,15 @@ def _run_agentic_scenario(
             capped = searched >= n_sections
             search_capped = search_capped or capped
             tools = no_search_tools if capped else INSTRUCT_TOOLS
-            res = chat(base_url, model, messages, tools=tools, max_tokens=2048,
-                       extra_body=extra_body, timeout=timeout)
+            res = chat(
+                base_url,
+                model,
+                messages,
+                tools=tools,
+                max_tokens=2048,
+                extra_body=extra_body,
+                timeout=timeout,
+            )
             if res.text:
                 contents.append(res.text)
             tcs = res.tool_calls or []
@@ -204,20 +237,24 @@ def _run_agentic_scenario(
             messages.extend(tool_msgs)
         joined = "\n".join(contents)
         present = _count_named_sections(joined, sections)
-        results.append({
-            "sections_present": present,
-            "primary_delivered": present == n_sections,
-            "only_secondary": present == 0 and did_secondary,
-            "did_secondary": did_secondary,
-            "searches": searched,
-            "search_capped": search_capped,
-            "final_len": len(joined),
-            "repeat": rep,
-        })
+        results.append(
+            {
+                "sections_present": present,
+                "primary_delivered": present == n_sections,
+                "only_secondary": present == 0 and did_secondary,
+                "did_secondary": did_secondary,
+                "searches": searched,
+                "search_capped": search_capped,
+                "final_len": len(joined),
+                "repeat": rep,
+            }
+        )
         if on_progress:
-            on_progress(f"  [{scenario} r{rep + 1}] sections={present}/{n_sections} "
-                        f"delivered={results[-1]['primary_delivered']} "
-                        f"only_secondary={results[-1]['only_secondary']} searches={searched}")
+            on_progress(
+                f"  [{scenario} r{rep + 1}] sections={present}/{n_sections} "
+                f"delivered={results[-1]['primary_delivered']} "
+                f"only_secondary={results[-1]['only_secondary']} searches={searched}"
+            )
     return {
         "episodes": len(results),
         "sections_total": n_sections,
@@ -227,7 +264,8 @@ def _run_agentic_scenario(
         "pct_search_capped": _pct([r["search_capped"] for r in results]),
         "mean_sections_present": (
             round(statistics.fmean([r["sections_present"] for r in results]), 2)
-            if results else None
+            if results
+            else None
         ),
         "mean_final_len": (
             round(statistics.fmean([r["final_len"] for r in results])) if results else None
@@ -256,8 +294,14 @@ def _aggregate_scores(pure_scores: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _run_code_fidelity_scenario(
-    base_url: str, model: str, scenario: str, *, repeats: int,
-    extra_body: dict[str, Any] | None, timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    scenario: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     prompts = CODE_FIDELITY_SCENARIOS[scenario]
     scorer = _FIDELITY_SCORERS[scenario]
@@ -266,8 +310,12 @@ def _run_code_fidelity_scenario(
     for rep in range(repeats):
         for spec in prompts:
             res = chat(
-                base_url, model, [{"role": "user", "content": spec["prompt"]}],
-                max_tokens=1536, extra_body=extra_body, timeout=timeout,
+                base_url,
+                model,
+                [{"role": "user", "content": spec["prompt"]}],
+                max_tokens=1536,
+                extra_body=extra_body,
+                timeout=timeout,
             )
             pure = scorer(res.text or "", spec)
             pure_scores.append(pure)
@@ -313,20 +361,34 @@ def run_instruct_eval(
 
     if "verifiable" in requested:
         results["verifiable"] = _run_verifiable(
-            base_url, model, repeats=repeats, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            repeats=repeats,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
     for scenario in _AGENTIC_NAMES:
         if scenario in requested:
             results[scenario.replace("-", "_")] = _run_agentic_scenario(
-                base_url, model, scenario, repeats=repeats, extra_body=extra_body,
-                timeout=timeout, on_progress=on_progress,
+                base_url,
+                model,
+                scenario,
+                repeats=repeats,
+                extra_body=extra_body,
+                timeout=timeout,
+                on_progress=on_progress,
             )
     for scenario in _FIDELITY_NAMES:
         if scenario in requested:
             results[scenario.replace("-", "_")] = _run_code_fidelity_scenario(
-                base_url, model, scenario, repeats=repeats, extra_body=extra_body,
-                timeout=timeout, on_progress=on_progress,
+                base_url,
+                model,
+                scenario,
+                repeats=repeats,
+                extra_body=extra_body,
+                timeout=timeout,
+                on_progress=on_progress,
             )
 
     out = {

@@ -158,9 +158,7 @@ class TestEngineMemorySamplerPort:
             resident_bytes=20 * 1024**3,
             phys_footprint_bytes=5 * 1024**3,
         )
-        with patch(
-            "asiai.benchmark.quality_gates.find_engine_process_by_url", return_value=proc
-        ):
+        with patch("asiai.benchmark.quality_gates.find_engine_process_by_url", return_value=proc):
             s._sample_once()
         assert s.result.max_rss_mb == pytest.approx(20 * 1024, rel=0.01)
 

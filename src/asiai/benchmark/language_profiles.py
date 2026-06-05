@@ -124,7 +124,9 @@ _FR = LanguageProfile(
 # degeneracy already work from the stopword/script sets.
 
 _DE = LanguageProfile(
-    code="de", name="German", native_name="Deutsch",
+    code="de",
+    name="German",
+    native_name="Deutsch",
     stopwords=frozenset(
         "der die das und oder aber ein eine einen dem den des zu in auf mit für von "
         "ist sind war waren sein haben nicht auch noch wie wenn weil dass ich du er "
@@ -137,7 +139,9 @@ _DE = LanguageProfile(
     min_accent_density=0.0,  # German uses ä/ö/ü/ß but not on every sentence
 )
 _ES = LanguageProfile(
-    code="es", name="Spanish", native_name="Español",
+    code="es",
+    name="Spanish",
+    native_name="Español",
     stopwords=frozenset(
         "el la los las un una unos unas de del al y o pero que como para por con sin "
         "es son era eran ser estar no sí también muy aquí allí cuando donde quien "
@@ -150,7 +154,9 @@ _ES = LanguageProfile(
     min_accent_density=0.005,
 )
 _IT = LanguageProfile(
-    code="it", name="Italian", native_name="Italiano",
+    code="it",
+    name="Italian",
+    native_name="Italiano",
     stopwords=frozenset(
         "il lo la i gli le un uno una di del della e o ma che come per con senza è "
         "sono era erano essere avere non anche molto qui là quando dove chi questo "
@@ -163,7 +169,9 @@ _IT = LanguageProfile(
     min_accent_density=0.005,
 )
 _PT = LanguageProfile(
-    code="pt", name="Portuguese", native_name="Português",
+    code="pt",
+    name="Portuguese",
+    native_name="Português",
     stopwords=frozenset(
         "o a os as um uma uns umas de do da dos das e ou mas que como para por com "
         "sem é são era eram ser estar não sim também muito aqui ali quando onde quem "
@@ -176,30 +184,37 @@ _PT = LanguageProfile(
     min_accent_density=0.01,
 )
 _JA = LanguageProfile(
-    code="ja", name="Japanese", native_name="日本語", script="kana_han",
+    code="ja",
+    name="Japanese",
+    native_name="日本語",
+    script="kana_han",
     probes=(
         "日本語で、スタック（データ構造）とは何かを2文で説明してください。",
         "日本語で、分かりやすいコミットメッセージを書くための短いコツを3つ挙げてください。",
     ),
 )
 _KO = LanguageProfile(
-    code="ko", name="Korean", native_name="한국어", script="hangul",
+    code="ko",
+    name="Korean",
+    native_name="한국어",
+    script="hangul",
     probes=(
         "한국어로 스택(자료 구조)이 무엇인지 두 문장으로 설명해 주세요.",
         "한국어로 명확한 커밋 메시지를 작성하기 위한 짧은 팁 세 가지를 알려 주세요.",
     ),
 )
 _ZH = LanguageProfile(
-    code="zh", name="Chinese", native_name="中文", script="han",
+    code="zh",
+    name="Chinese",
+    native_name="中文",
+    script="han",
     probes=(
         "请用中文用两句话解释什么是栈（数据结构）。",
         "请用中文给出三条简短的建议，说明如何写清晰的提交信息。",
     ),
 )
 
-PROFILES: dict[str, LanguageProfile] = {
-    p.code: p for p in (_FR, _DE, _ES, _IT, _PT, _JA, _KO, _ZH)
-}
+PROFILES: dict[str, LanguageProfile] = {p.code: p for p in (_FR, _DE, _ES, _IT, _PT, _JA, _KO, _ZH)}
 
 # Languages with full deterministic coverage (diacritic traps + probes) today.
 FULLY_POPULATED: frozenset[str] = frozenset({"fr"})
