@@ -93,7 +93,7 @@ asiai daemon start web --port 8642
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **注意:** エージェントがDocker内で実行されている場合、`127.0.0.1` にはアクセスできません。ホストのネットワークIP（例：`192.168.0.16`）またはDocker Desktop for Macの `host.docker.internal` を使用してください。
+> **注意:** エージェントがDocker内で実行されている場合、`127.0.0.1` にはアクセスできません。ホストのネットワークIP（例：`192.0.2.10`）またはDocker Desktop for Macの `host.docker.internal` を使用してください。
 
 ### 動作確認
 

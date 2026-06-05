@@ -18,12 +18,42 @@ asiai leaderboard [options]
 |--------|-------------|
 | `--chip CHIP` | Filter by Apple Silicon chip (e.g., `M4 Pro`, `M2 Ultra`) |
 | `--model MODEL` | Filter by model name |
+| `--agentic DIR` | Render the local **decision-tier** view from a directory of `--agentic-mode` result JSON (no network) instead of the community feed |
+| `--grid` | With `--agentic`: show the full **archive grid** (every column) instead of the tier view |
 
 ## Example
 
 ```bash
 asiai leaderboard --chip "M4 Pro"
 ```
+
+### Local agentic results — decision tiers
+
+Render your own `asiai bench --agentic-mode --agentic-output` results, grouped by
+deterministic gates into tiers (★ best validated throughput · ✓ viable · ⚠ reserve
+· ✗ eliminated), per `(machine, power mode)` block:
+
+```bash
+asiai leaderboard --agentic ./my-bench-results/
+asiai leaderboard --agentic ./my-bench-results/ --grid   # full archive table
+```
+
+```
+Agentic bench — decision tiers
+  ★ best validated throughput · ✓ viable · ⚠ reserve · ✗ eliminated.
+  gates: valid≥80% · ttft≤1500ms (hard≤3000) · reuse>0.
+
+  ▰ M5 · Q4_K_S · Apple M5 Max · powermode 2
+     model · engine                 dec    peak    50K    ttft  reuse   t/s/W   RAMg  val%
+  ★ TIER 1 — winner + fast
+  ★  Qwopus-35B · llamacpp b9430 ▲MTP  123.3  127.5   83.8     67    0.8   1.590   29.0   100
+```
+
+Each row is self-describing from schema `agentic-v4`: the machine, chip, power
+mode and engine version are read from the JSON, so the table needs no filename
+parsing or hardcoded version map. Gates match the community ranking
+(`valid ≥ 80%`); `★` ranks throughput only — the final pick also weighs output
+quality. A throttled (power mode 0) run is never tiered against a High Power one.
 
 ```
   Community Leaderboard — M4 Pro

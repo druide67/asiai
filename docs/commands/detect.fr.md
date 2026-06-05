@@ -65,7 +65,7 @@ Quand plusieurs moteurs partagent un port (ex. mlx-lm et llama.cpp sur 8080), as
 Avec `--url`, seules les URL spécifiées sont scannées. Aucune config n'est lue ni écrite — utile pour des vérifications ponctuelles.
 
 ```bash
-asiai detect --url http://192.168.0.16:11434,http://localhost:8800
+asiai detect --url http://192.0.2.10:11434,http://localhost:8800
 ```
 
 ## Voir aussi

@@ -86,7 +86,7 @@ Benchmark: qwen3.5
 エンジンが標準以外のポートで動作している場合、asiaiは通常プロセス検出で自動的に見つけます。手動で登録することもできます:
 
 ```bash
-asiai config add omlx http://localhost:8800 --label mac-mini
+asiai config add omlx http://localhost:8800 --label desktop
 ```
 
 手動で追加されたエンジンは永続化され、自動削除されることはありません。詳細は[config](commands/config.md)をご覧ください。

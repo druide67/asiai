@@ -93,7 +93,7 @@ For remote access (e.g., AI agent on a different machine or from a Docker contai
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **Note:** If your agent runs inside Docker, `127.0.0.1` is unreachable. Use the host's network IP (e.g., `192.168.0.16`) or `host.docker.internal` on Docker Desktop for Mac.
+> **Note:** If your agent runs inside Docker, `127.0.0.1` is unreachable. Use the host's network IP (e.g., `192.0.2.10`) or `host.docker.internal` on Docker Desktop for Mac.
 
 ### Verify
 

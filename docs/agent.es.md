@@ -93,7 +93,7 @@ Para acceso remoto (por ejemplo, agente IA en otra máquina o desde un contenedo
 asiai daemon start web --host 0.0.0.0
 ```
 
-> **Nota:** Si tu agente se ejecuta dentro de Docker, `127.0.0.1` no es accesible. Usa la IP de red del host (por ejemplo, `192.168.0.16`) o `host.docker.internal` en Docker Desktop para Mac.
+> **Nota:** Si tu agente se ejecuta dentro de Docker, `127.0.0.1` no es accesible. Usa la IP de red del host (por ejemplo, `192.0.2.10`) o `host.docker.internal` en Docker Desktop para Mac.
 
 ### Verificar
 
