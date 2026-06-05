@@ -482,7 +482,7 @@ def test_bench_share_flag(capsys, tmp_path):
 
 
 def test_bench_share_skips_when_all_runs_failed(capsys, tmp_path):
-    """US-013: bench --share without --share-on-error skips when 0 successes."""
+    """bench --share without --share-on-error skips when 0 successes."""
     model = ModelInfo(name="gemma2:9b", size_vram=8_000_000_000, format="gguf")
     engine = _make_mock_engine("ollama", models=[model])
     engine.version.return_value = "0.17.4"
@@ -529,7 +529,7 @@ def test_bench_share_skips_when_all_runs_failed(capsys, tmp_path):
 
 
 def test_bench_share_on_error_forces_submit(capsys, tmp_path):
-    """US-013: --share-on-error opts back into submitting zero-value sessions."""
+    """--share-on-error opts back into submitting zero-value sessions."""
     model = ModelInfo(name="gemma2:9b", size_vram=8_000_000_000, format="gguf")
     engine = _make_mock_engine("ollama", models=[model])
     engine.version.return_value = "0.17.4"

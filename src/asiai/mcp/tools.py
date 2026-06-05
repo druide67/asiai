@@ -195,7 +195,7 @@ async def detect_engines(
     Args:
         urls: Optional list of URLs to scan instead of auto-detection.
              Bypasses config when provided.
-             Example: ["http://localhost:11434", "http://192.168.0.16:11434"]
+             Example: ["http://localhost:11434", "http://192.0.2.10:11434"]
     """
     from asiai.cli import _discover_engines
 

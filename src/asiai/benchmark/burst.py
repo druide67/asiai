@@ -59,10 +59,14 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
 )
+from asiai.collectors.system import collect_run_metadata
 
 logger = logging.getLogger("asiai.benchmark.burst")
 
-SCHEMA_VERSION = "burst-v1"
+# v2 (2026-06): self-describing runs — top-level machine_model, hw_chip,
+# os_version, ram_gb, cpu_cores, powermode, engine_version, bench_mode (via
+# collect_run_metadata). v1 readers ignore the extra keys; nothing was removed.
+SCHEMA_VERSION = "burst-v2"
 
 # Per-call defaults: short generations to stress concurrency over throughput.
 DEFAULT_MAX_TOKENS = 200
@@ -474,14 +478,14 @@ def _run_one_burst_pass(
 ) -> dict[str, Any]:
     """One pass of N concurrent calls. Returns aggregated stats as a dict."""
     duplicates_before = check_duplicate_processes(engine)
-    probe = PowerThermalProbe(engine_name=engine)
+    probe = PowerThermalProbe(engine_name=engine, base_url=base_url)
 
     probe.start()
     # try/finally guarantees the probe is torn down even if the concurrent block
     # raises — parity with the standard runner and agentic, whose probe.close()
     # is finally-protected too.
     try:
-        mem_sampler = EngineMemorySampler(engine)
+        mem_sampler = EngineMemorySampler(engine, base_url=base_url)
         with MemoryWatcher() as mem_watcher, mem_sampler:
             t0 = time.perf_counter()
             call_results: list[BurstCallResult] = []
@@ -611,6 +615,8 @@ def run_burst(
     extra_body: dict[str, Any] | None = None,
     stream: bool = True,
     runs: int = 1,
+    engine_version: str = "",
+    include_host: bool = False,
 ) -> dict[str, Any]:
     """Run the burst-mode benchmark over multiple burst sizes.
 
@@ -697,7 +703,7 @@ def run_burst(
 
     finished_at = int(time.time())
 
-    return {
+    out = {
         "schema_version": SCHEMA_VERSION,
         "engine": engine,
         "model": model,
@@ -712,6 +718,12 @@ def run_burst(
         "runs": runs,
         "results": results,
     }
+    out.update(
+        collect_run_metadata(
+            engine_version=engine_version, bench_mode="burst", include_host=include_host
+        )
+    )
+    return out
 
 
 def parse_burst_sizes(value: str) -> tuple[int, ...]:

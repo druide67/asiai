@@ -550,7 +550,7 @@ def expand_compare_args(
 
 
 def _run_agentic_bench(args: argparse.Namespace) -> int:
-    """Run the 8-run agentic prefix cache reuse benchmark (US-047)."""
+    """Run the 8-run agentic prefix cache reuse benchmark."""
     from asiai.benchmark.agentic import run_agentic_bench
     from asiai.benchmark.auto_restart import auto_restart_engine
     from asiai.display.formatters import dim, red, yellow
@@ -624,6 +624,11 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
                 f"compl={run.completion_tokens}"
             )
 
+    try:
+        engine_version = engine.version() or ""
+    except Exception:
+        engine_version = ""
+
     result = run_agentic_bench(
         base_url=engine.base_url,
         engine_name=engine.name,
@@ -635,6 +640,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         include_host=getattr(args, "agentic_include_host", False),
         extra_body=extra_body,
         repeats=max(1, getattr(args, "runs", 1) or 1),
+        engine_version=engine_version,
     )
 
     reuse = result.get("prefix_cache_reuse", {})
@@ -681,7 +687,7 @@ def _parse_extra_body(arg: str | None) -> dict | None:
 
 
 def _run_burst_bench(args: argparse.Namespace) -> int:
-    """Run the burst-concurrent benchmark (US-METHOD-003)."""
+    """Run the burst-concurrent benchmark."""
     import json as _json
 
     from asiai.benchmark.burst import parse_burst_sizes, run_burst
@@ -728,6 +734,11 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
         f"model={model_id} sizes={list(sizes)} max_tokens={args.burst_max_tokens}"
     )
 
+    try:
+        engine_version = engine.version() or ""
+    except Exception:
+        engine_version = ""
+
     result = run_burst(
         base_url=engine.base_url,
         engine=engine.name,
@@ -738,6 +749,7 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
         extra_body=extra_body,
         stream=not getattr(args, "burst_no_stream", False),
         runs=getattr(args, "burst_runs", 1),
+        engine_version=engine_version,
     )
 
     def _fmt(v, unit=""):
@@ -805,6 +817,393 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_code_bench(args: argparse.Namespace) -> int:
+    """Run the dev-quality suites (tool-call / recovery / thinking [+ coding judge])."""
+    import os
+
+    from asiai.benchmark.code_eval import ALL_SUITES, run_code_eval
+    from asiai.display.formatters import bold, dim, green, red, yellow
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    if not engines:
+        print(red("✗ No inference engines detected."), file=sys.stderr)
+        return 1
+    if len(engines) > 1 and not args.url:
+        print(
+            red("✗ --code requires exactly one target. Specify --url to pick one."),
+            file=sys.stderr,
+        )
+        return 1
+    engine = engines[0]
+
+    model_id = args.model
+    if not model_id:
+        running = engine.list_running()
+        if not running:
+            print(
+                red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                file=sys.stderr,
+            )
+            return 1
+        model_id = running[0].name
+
+    try:
+        extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
+    suites = [s.strip() for s in (args.code_suite or "").split(",") if s.strip()]
+    unknown = [s for s in suites if s not in ALL_SUITES]
+    if unknown:
+        print(red(f"✗ Unknown --code-suite: {', '.join(unknown)} (known: {', '.join(ALL_SUITES)})"),
+              file=sys.stderr)
+        return 1
+
+    judge_url = getattr(args, "judge_url", None)
+    judge_model = getattr(args, "judge_model", None)
+    # API key for a remote judge endpoint comes from the environment ONLY — never
+    # an argument (secrets discipline). Local judges need none.
+    judge_api_key = os.environ.get("ASIAI_JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if "coding" in suites and not (judge_url and judge_model):
+        print(yellow("  ⚠ 'coding' suite without --judge-url/--judge-model: "
+                     "transcript will be generated but not graded."))
+
+    try:
+        engine_version = engine.version() or ""
+    except Exception:
+        engine_version = ""
+
+    print(
+        f"  {dim('●')} code-mode bench {engine.name} @ {engine.base_url} "
+        f"model={model_id} suites={','.join(suites)} runs={max(1, getattr(args, 'runs', 1) or 1)}"
+    )
+    if judge_url and "coding" in suites:
+        print(f"  {dim('●')} judge: {judge_model} @ {judge_url}"
+              f"{dim(' (key from env)') if judge_api_key else ''}")
+
+    result = run_code_eval(
+        base_url=engine.base_url,
+        engine_name=engine.name,
+        model=model_id,
+        suites=suites,
+        repeats=max(1, getattr(args, "runs", 1) or 1),
+        extra_body=extra_body,
+        judge_url=judge_url,
+        judge_model=judge_model,
+        judge_api_key=judge_api_key,
+        out_path=args.code_output,
+        engine_version=engine_version,
+        on_progress=print,
+    )
+
+    cr = result.get("code_results", {})
+    print(f"\n{bold('Dev-quality results')} — {result['model']}")
+
+    def _print_toolcall(label: str, tc: dict) -> None:
+        bug = tc["count_empty_object_bug"]
+        bug_str = green(str(bug)) if bug == 0 else red(str(bug))
+        print(f"  {label:11}: clean={tc['pct_clean']}%  json_valid={tc['pct_json_valid']}%  "
+              f"non_trunc={tc['pct_non_truncated']}%  schema={tc['pct_schema_conform']}%")
+        print(f"              empty_object_bug={bug_str}  "
+              f"(edit-turns clean={tc['edit_turns_pct_clean']}%)")
+
+    if cr.get("tool_call"):
+        _print_toolcall("tool-call", cr["tool_call"])
+    if cr.get("tool_call_stress"):
+        _print_toolcall("tc-stress", cr["tool_call_stress"])
+    rec = cr.get("recovery")
+    if rec:
+        print(f"  recovery   : recovered={rec['pct_recovered']}%  looped={rec['pct_looped']}%  "
+              f"repeated_failing={rec['pct_repeated_failing_call']}%")
+    th = cr.get("thinking")
+    if th:
+        print(f"  thinking   : no_leak={th['pct_no_think_leak']}%  "
+              f"nonempty_short={th['pct_nonempty_short_budget']}%  "
+              f"off_honoured={th['pct_thinking_off_honoured']}%")
+    def _print_coding(label: str, block: dict) -> None:
+        for entry in block.get("tasks", []):
+            judge = entry.get("judge", {})
+            if judge.get("scores"):
+                sc = judge["scores"]
+                print(f"  {label}:{entry['task']}  judge={judge.get('judge_model')}  "
+                      + "  ".join(f"{k}={v}" for k, v in sc.items()))
+                if judge.get("reason"):
+                    print(f"              {dim(judge['reason'])}")
+            elif judge.get("error"):
+                print(red(f"  {label}:{entry['task']}  judge error — {judge['error']}"))
+            else:
+                print(dim(f"  {label}:{entry['task']}  transcript captured "
+                          f"({len(entry.get('transcript', []))} turns) — judge offline"))
+
+    if cr.get("coding"):
+        _print_coding("coding", cr["coding"])
+    if cr.get("coding_hard"):
+        _print_coding("coding-hard", cr["coding_hard"])
+
+    if args.code_output:
+        print(f"\nSaved {args.code_output}")
+    return 0
+
+
+def _run_language_bench(args: argparse.Namespace) -> int:
+    """Run multilingual retention/regression suites (adherence / diacritics [/ fluency])."""
+    import os
+
+    from asiai.benchmark.language_eval import ALL_SUITES, run_language_eval
+    from asiai.display.formatters import bold, dim, green, red, yellow
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    if not engines:
+        print(red("✗ No inference engines detected."), file=sys.stderr)
+        return 1
+    if len(engines) > 1 and not args.url:
+        print(red("✗ --language requires exactly one target. Specify --url to pick one."),
+              file=sys.stderr)
+        return 1
+    engine = engines[0]
+
+    model_id = args.model
+    if not model_id:
+        running = engine.list_running()
+        if not running:
+            print(red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                  file=sys.stderr)
+            return 1
+        model_id = running[0].name
+
+    try:
+        extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
+    suites = [s.strip() for s in (args.language_suite or "").split(",") if s.strip()]
+    unknown = [s for s in suites if s not in ALL_SUITES]
+    if unknown:
+        print(red(f"✗ Unknown --language-suite: {', '.join(unknown)} "
+                  f"(known: {', '.join(ALL_SUITES)})"), file=sys.stderr)
+        return 1
+
+    judge_url = getattr(args, "judge_url", None)
+    judge_model = getattr(args, "judge_model", None)
+    judge_api_key = os.environ.get("ASIAI_JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+
+    try:
+        engine_version = engine.version() or ""
+    except Exception:
+        engine_version = ""
+
+    print(f"  {dim('●')} language-mode bench {engine.name} @ {engine.base_url} "
+          f"model={model_id} lang={args.language} suites={','.join(suites)}")
+
+    try:
+        result = run_language_eval(
+            base_url=engine.base_url, engine_name=engine.name, model=model_id,
+            language=args.language, suites=suites, extra_body=extra_body,
+            judge_url=judge_url, judge_model=judge_model, judge_api_key=judge_api_key,
+            out_path=args.language_output, engine_version=engine_version, on_progress=print,
+        )
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
+    lr = result.get("language_results", {})
+    print(f"\n{bold('Language retention')} — {result['model']} · {result['language_name']}")
+    if not result["fully_populated"]:
+        print(yellow(f"  ⚠ '{result['language']}' has partial coverage "
+                     "(adherence only; diacritic traps not yet populated)."))
+    adh = lr.get("adherence")
+    if adh:
+        in_lang = adh["pct_in_language"]
+        col = green if (in_lang or 0) >= 90 else yellow if (in_lang or 0) >= 50 else red
+        print(f"  adherence : in_language={col(str(in_lang) + '%')}  "
+              f"mean_ratio={adh['mean_adherence_ratio']}  "
+              f"non_degenerate={adh['pct_non_degenerate']}%  "
+              f"accent_density={adh['mean_accent_density']}")
+    dia = lr.get("diacritics")
+    if dia:
+        if dia.get("skipped"):
+            print(dim(f"  diacritics: {dia['skipped']}"))
+        else:
+            stripped = dia["count_ascii_stripped"]
+            s_str = green("0") if stripped == 0 else red(str(stripped))
+            print(f"  diacritics: traps_passed={dia['pct_traps_passed']}%  "
+                  f"ascii_stripped={s_str}")
+    flu = lr.get("fluency")
+    if flu:
+        if flu.get("scores"):
+            print(f"  fluency   : judge={flu.get('judge_model')}  "
+                  + "  ".join(f"{k}={v}" for k, v in flu["scores"].items()
+                              if isinstance(v, (int, float))))
+        elif flu.get("error"):
+            print(red(f"  fluency   : judge error — {flu['error']}"))
+        elif flu.get("skipped"):
+            print(dim(f"  fluency   : {flu['skipped']}"))
+
+    if args.language_output:
+        print(f"\nSaved {args.language_output}")
+    return 0
+
+
+def _run_instruct_bench(args: argparse.Namespace) -> int:
+    """Run instruction-following suites (verifiable IFEval-style + agentic deliverable)."""
+    from asiai.benchmark.instruct_eval import ALL_SCENARIOS, run_instruct_eval
+    from asiai.display.formatters import bold, dim, green, red, yellow
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    if not engines:
+        print(red("✗ No inference engines detected."), file=sys.stderr)
+        return 1
+    if len(engines) > 1 and not args.url:
+        print(red("✗ --instruct requires exactly one target. Specify --url to pick one."),
+              file=sys.stderr)
+        return 1
+    engine = engines[0]
+
+    model_id = args.model
+    if not model_id:
+        running = engine.list_running()
+        if not running:
+            print(red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                  file=sys.stderr)
+            return 1
+        model_id = running[0].name
+
+    try:
+        extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
+    scenarios = [s.strip() for s in (args.instruct_scenario or "").split(",") if s.strip()]
+    unknown = [s for s in scenarios if s not in ALL_SCENARIOS]
+    if unknown:
+        print(red(f"✗ Unknown --instruct-scenario: {', '.join(unknown)} "
+                  f"(known: {', '.join(ALL_SCENARIOS)})"), file=sys.stderr)
+        return 1
+
+    try:
+        engine_version = engine.version() or ""
+    except Exception:
+        engine_version = ""
+
+    print(f"  {dim('●')} instruct-mode bench {engine.name} @ {engine.base_url} "
+          f"model={model_id} scenarios={','.join(scenarios)} "
+          f"runs={max(1, getattr(args, 'runs', 1) or 1)}")
+
+    result = run_instruct_eval(
+        base_url=engine.base_url, engine_name=engine.name, model=model_id,
+        scenarios=scenarios, repeats=max(1, getattr(args, "runs", 1) or 1),
+        extra_body=extra_body, out_path=args.instruct_output,
+        engine_version=engine_version, on_progress=print,
+    )
+
+    ir = result.get("instruct_results", {})
+    print(f"\n{bold('Instruction-following')} — {result['model']}")
+    vf = ir.get("verifiable")
+    if vf:
+        ps = vf["prompt_level_strict"]
+        col = green if (ps or 0) >= 80 else red if (ps or 0) < 50 else yellow
+        ps_str = col(str(ps) + "%")
+        print(f"  verifiable : prompt strict={ps_str} loose={vf['prompt_level_loose']}% "
+              f"· instr strict={vf['instruction_level_strict']}% "
+              f"loose={vf['instruction_level_loose']}% ({vf['prompts_scored']} prompts)")
+
+    def _print_agentic(label: str, block: dict) -> None:
+        deliv = block["pct_primary_delivered"]
+        dcol = green if (deliv or 0) >= 80 else red if (deliv or 0) < 50 else yellow
+        print(f"  {label:11}: delivered={dcol(str(deliv) + '%')}  "
+              f"sections={block['mean_sections_present']}/{block['sections_total']}  "
+              f"only_secondary={block['pct_only_secondary']}%  "
+              f"did_secondary={block['pct_did_secondary']}%")
+
+    if ir.get("research_brief"):
+        _print_agentic("research-brief", ir["research_brief"])
+    if ir.get("research_brief_deep"):
+        _print_agentic("research-brief-deep", ir["research_brief_deep"])
+    if ir.get("order_control"):
+        _print_agentic("order-control", ir["order_control"])
+
+    def _print_fidelity(label: str, block: dict) -> None:
+        metrics = {k: v for k, v in block.items() if k.startswith(("pct_", "mean_"))}
+        parts = "  ".join(f"{k}={v}" for k, v in metrics.items())
+        print(f"  {label}: {parts}  ({block['prompts_scored']} prompts)")
+
+    for key, label in (("honesty_audit", "honesty-audit"),
+                       ("multi_file_scope", "multi-file-scope"),
+                       ("constraint_preservation", "constraint-preservation")):
+        if ir.get(key):
+            _print_fidelity(label, ir[key])
+
+    if args.instruct_output:
+        print(f"\nSaved {args.instruct_output}")
+    return 0
+
+
+def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
+    """Run the thinking-config ablation (enable/preserve) on an agentic load."""
+    from asiai.benchmark.thinking_ablation import run_thinking_ablation
+    from asiai.display.formatters import bold, dim, green, red, yellow
+
+    urls = _parse_urls(args.url)
+    engines = _discover_engines(urls)
+    if not engines:
+        print(red("✗ No inference engines detected."), file=sys.stderr)
+        return 1
+    if len(engines) > 1 and not args.url:
+        print(red("✗ --thinking-ablation requires exactly one target. Specify --url."),
+              file=sys.stderr)
+        return 1
+    engine = engines[0]
+
+    model_id = args.model
+    if not model_id:
+        running = engine.list_running()
+        if not running:
+            print(red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                  file=sys.stderr)
+            return 1
+        model_id = running[0].name
+
+    try:
+        extra_body = _parse_extra_body(getattr(args, "extra_body", None))
+    except ValueError as e:
+        print(red(f"✗ {e}"), file=sys.stderr)
+        return 1
+
+    try:
+        engine_version = engine.version() or ""
+    except Exception:
+        engine_version = ""
+
+    print(f"  {dim('●')} thinking-ablation bench {engine.name} @ {engine.base_url} "
+          f"model={model_id} load=tool-call-stress")
+
+    result = run_thinking_ablation(
+        base_url=engine.base_url, engine_name=engine.name, model=model_id,
+        extra_body=extra_body, out_path=args.thinking_ablation_output,
+        engine_version=engine_version, on_progress=print,
+    )
+
+    print(f"\n{bold('Thinking ablation')} — {result['model']} (load={result['load']})")
+    for cell in result["cells"]:
+        cl = cell["pct_clean"]
+        col = green if (cl or 0) >= 80 else red if (cl or 0) < 50 else yellow
+        print(f"  {cell['config']:24}: clean={col(str(cl) + '%')}  "
+              f"lat/turn={cell['latency_ms_mean']}ms  "
+              f"ctx t1={cell['ctx_tokens_first_turn']}→tN={cell['ctx_tokens_last_turn']} "
+              f"(+{cell['ctx_growth']})  "
+              f"think_chars/turn={cell['reasoning_chars_mean']}")
+
+    if args.thinking_ablation_output:
+        print(f"\nSaved {args.thinking_ablation_output}")
+    return 0
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     """Handle 'bench' command."""
     from asiai.benchmark.regression import detect_regressions
@@ -822,13 +1221,29 @@ def cmd_bench(args: argparse.Namespace) -> int:
     db_path = args.db or DEFAULT_DB_PATH
     init_db(db_path)
 
-    # Agentic mode: 8-run prefix cache reuse protocol (US-047)
+    # Agentic mode: 8-run prefix cache reuse protocol
     if getattr(args, "agentic_mode", False):
         return _run_agentic_bench(args)
 
-    # Burst mode: N-parallel concurrent calls protocol (US-METHOD-003)
+    # Burst mode: N-parallel concurrent calls protocol
     if getattr(args, "burst_mode", False):
         return _run_burst_bench(args)
+
+    # Code mode: deterministic dev-quality suites (+ optional LLM judge)
+    if getattr(args, "code_mode", False):
+        return _run_code_bench(args)
+
+    # Language mode: multilingual retention/regression suites (+ optional judge)
+    if getattr(args, "language", None):
+        return _run_language_bench(args)
+
+    # Instruct mode: instruction-following (IFEval-style verifiable + agentic)
+    if getattr(args, "instruct", False):
+        return _run_instruct_bench(args)
+
+    # Thinking-ablation mode: enable/preserve thinking trade-off on an agentic load
+    if getattr(args, "thinking_ablation", False):
+        return _run_thinking_ablation_bench(args)
 
     # History mode
     if args.history:
@@ -1087,6 +1502,18 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
 def cmd_leaderboard(args: argparse.Namespace) -> int:
     """Handle 'leaderboard' command."""
+    # Local agentic results: render the decision-tier / archive view from a
+    # directory of agentic-bench JSON (no network), instead of the community feed.
+    agentic_dir = getattr(args, "agentic", None)
+    if agentic_dir:
+        from asiai.benchmark.agentic_report import load_agentic_dir
+        from asiai.display.cli_renderer import render_agentic_leaderboard
+
+        rows = load_agentic_dir(agentic_dir)
+        view = "grid" if getattr(args, "grid", False) else "tiered"
+        render_agentic_leaderboard(rows, view=view)
+        return 0
+
     from asiai.community import fetch_leaderboard
     from asiai.display.formatters import bold, dim, green
 
@@ -1804,8 +2231,125 @@ def main(argv: list[str] | None = None) -> int:
             "Useful for engine-specific kwargs, e.g. "
             '\'{"chat_template_kwargs":{"enable_thinking":false}}\' to disable '
             "Qwen3 thinking mode (recommended for tool-call workloads). "
-            "Applies to standard, --agentic-mode and --burst-mode runs."
+            "Applies to standard, --agentic-mode, --burst-mode and --code runs."
         ),
+    )
+    # --- code mode (dev-quality eval) ---
+    bench_parser.add_argument(
+        "--code",
+        dest="code_mode",
+        action="store_true",
+        help=(
+            "Dev-quality eval: deterministic tool-call reliability (the |items / "
+            "empty-object bug), agentic error-recovery, and thinking discipline "
+            "— plus an optional LLM-judged coding task. Mutually exclusive with "
+            "--agentic-mode / --burst-mode."
+        ),
+    )
+    bench_parser.add_argument(
+        "--code-output",
+        metavar="FILE",
+        help="Write --code results to JSON file (default: stdout summary only).",
+    )
+    bench_parser.add_argument(
+        "--code-suite",
+        default="tool-call,recovery,thinking",
+        metavar="LIST",
+        help=(
+            "Comma-separated suites to run (default: tool-call,recovery,thinking — "
+            "all deterministic). Add 'coding'/'coding-hard' for the LLM-judged "
+            "tasks (needs --judge-url). Known: tool-call, tool-call-stress, "
+            "recovery, thinking, coding, coding-hard."
+        ),
+    )
+    bench_parser.add_argument(
+        "--judge-url",
+        metavar="URL",
+        help=(
+            "OpenAI-compat base URL of an LLM judge for the 'coding' suite (a "
+            "local model or a frontier model behind a proxy). No SDK is bundled; "
+            "set the API key via the ASIAI_JUDGE_API_KEY env var, never on the "
+            "command line."
+        ),
+    )
+    bench_parser.add_argument(
+        "--judge-model",
+        metavar="MODEL",
+        help="Model id the judge endpoint accepts (required with --judge-url).",
+    )
+    # --- language mode (multilingual retention / regression eval) ---
+    bench_parser.add_argument(
+        "--language",
+        metavar="CODE",
+        help=(
+            "Multilingual retention eval for a language code (fr/de/es/it/pt/ja/ko/zh): "
+            "does the model stay in the language (adherence) and keep its orthography "
+            "(diacritics)? Deterministic + optional --judge-url fluency. Mutually "
+            "exclusive with the other bench modes."
+        ),
+    )
+    bench_parser.add_argument(
+        "--language-output",
+        metavar="FILE",
+        help="Write --language results to JSON file (default: stdout summary only).",
+    )
+    bench_parser.add_argument(
+        "--language-suite",
+        default="adherence,diacritics",
+        metavar="LIST",
+        help=(
+            "Comma-separated suites (default: adherence,diacritics — deterministic). "
+            "Add 'fluency' for the LLM-judged grade (needs --judge-url). Known: "
+            "adherence, diacritics, fluency."
+        ),
+    )
+    # --- instruct mode (instruction-following eval) ---
+    bench_parser.add_argument(
+        "--instruct",
+        action="store_true",
+        help=(
+            "Instruction-following eval: IFEval-style verifiable instructions "
+            "(format/length/keywords/case…, strict+loose) plus an agentic "
+            "tools-then-deliverable scenario (does the model produce the primary "
+            "multi-section deliverable after a tool sequence?). Deterministic, no "
+            "judge. Mutually exclusive with the other bench modes."
+        ),
+    )
+    bench_parser.add_argument(
+        "--instruct-output",
+        metavar="FILE",
+        help="Write --instruct results to JSON file (default: stdout summary only).",
+    )
+    bench_parser.add_argument(
+        "--instruct-scenario",
+        default="verifiable,research-brief",
+        metavar="LIST",
+        help=(
+            "Comma-separated scenarios (default: verifiable,research-brief). "
+            "Known: verifiable (IFEval-style), research-brief (deliverable-after-"
+            "tools), research-brief-deep (more topics + elaborate secondary, probes "
+            "depth-dependent dropping), order-control (diagnostic: secondary first, "
+            "deliverable last), honesty-audit (claimed-vs-applied edit), "
+            "multi-file-scope (change applied to all N sites), "
+            "constraint-preservation (fix without breaking a constraint)."
+        ),
+    )
+    # --- thinking-ablation mode (enable/preserve thinking trade-off) ---
+    bench_parser.add_argument(
+        "--thinking-ablation",
+        action="store_true",
+        help=(
+            "Measure the thinking-config trade-off on an agentic file-editing load: "
+            "enable-off vs enable-on+preserve-on vs enable-on+preserve-off. Reports "
+            "tool-call quality, latency/turn, and context tokens at turn N. History "
+            "carries reasoning_content so preserve_thinking has a real effect. "
+            "Deterministic. Mutually exclusive with the other bench modes."
+        ),
+    )
+    bench_parser.add_argument(
+        "--thinking-ablation-output",
+        metavar="FILE",
+        help="Write --thinking-ablation results to JSON file (default: stdout summary).",
     )
 
     # leaderboard
@@ -1814,6 +2358,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     leaderboard_parser.add_argument("--chip", help="Filter by chip (e.g. 'Apple M4 Pro')")
     leaderboard_parser.add_argument("--model", "-m", help="Filter by model name")
+    leaderboard_parser.add_argument(
+        "--agentic",
+        metavar="DIR",
+        help=(
+            "Render the decision-tier view from a directory of agentic-bench JSON "
+            "(local, no network) instead of the community feed."
+        ),
+    )
+    leaderboard_parser.add_argument(
+        "--grid",
+        action="store_true",
+        help="With --agentic: show the full archive grid (every column) instead of tiers.",
+    )
 
     # compare
     compare_parser = subparsers.add_parser(
@@ -1850,7 +2407,7 @@ def main(argv: list[str] | None = None) -> int:
     config_add_p = config_sub.add_parser("add", help="Add an engine manually")
     config_add_p.add_argument("engine_name", help="Engine type (ollama, lmstudio, omlx, ...)")
     config_add_p.add_argument("engine_url", help="Engine URL (e.g. http://localhost:8800)")
-    config_add_p.add_argument("--label", help="Optional label (e.g. mac-mini)")
+    config_add_p.add_argument("--label", help="Optional label (e.g. desktop)")
     config_remove_p = config_sub.add_parser("remove", help="Remove an engine by URL")
     config_remove_p.add_argument("engine_url", help="URL to remove")
     config_sub.add_parser("reset", help="Clear all engine configuration")

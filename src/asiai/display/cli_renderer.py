@@ -689,6 +689,213 @@ def render_bench(report: dict, context_size: int = 0) -> None:
     print()
 
 
+def _ag_num(v: float | None, nd: int = 1) -> str:
+    """Format a metric, or ``—`` when not measured (never 0)."""
+    return "—" if v is None else f"{v:.{nd}f}"
+
+
+def _ag_label(row: dict) -> str:
+    eng = row.get("engine") or "?"
+    ver = f" {row['engine_version']}" if row.get("engine_version") else ""
+    mtp = " ▲MTP" if row.get("mtp") else ""
+    return f"{row['model']} · {eng}{ver}{mtp}"
+
+
+def _ag_block_title(rows: list[dict]) -> str:
+    """``M5 · Q4_K_S · Apple M5 Max · powermode 2`` from a block's rows."""
+    r = rows[0]
+    parts = [r["machine"]]
+    quants = sorted({x["quant"] for x in rows if x.get("quant")})
+    if quants:
+        parts.append("/".join(quants))
+    if r.get("hw_chip"):
+        parts.append(r["hw_chip"])
+    pms = sorted({x["powermode"] for x in rows if x.get("powermode") is not None})
+    if pms:
+        parts.append("powermode " + "/".join(str(p) for p in pms))
+    return " · ".join(parts)
+
+
+def _render_agentic_tiered(rows: list[dict], gate) -> None:  # noqa: ANN001 — gate fn
+    """Per-machine blocks, rows tiered ★/✓/⚠/✗ by deterministic gates."""
+    print()
+    print(bold("Agentic bench — decision tiers"))
+    print(
+        dim(
+            "  ★ best validated throughput · ✓ viable · ⚠ reserve "
+            "· ✗ eliminated.  gates: valid≥80% · ttft≤1500ms "
+            "(hard≤3000) · reuse>0."
+        )
+    )
+    print(
+        dim(
+            "  ★ ranks throughput only — the final pick also weighs output "
+            "quality (dev/code eval).  “—” = not measured (≠0)."
+        )
+    )
+
+    # Block by (machine, powermode): a throttled (powermode 0) run must never
+    # be tiered against a High Power (2) one. Legacy v3 runs (powermode not
+    # recorded → None) fall into one block — the recording fix is exactly what
+    # lets v4 runs separate cleanly.
+    def _block_key(r: dict) -> tuple[str, int]:
+        return (r["machine"], r["powermode"] if r.get("powermode") is not None else -1)
+
+    for key in sorted({_block_key(r) for r in rows}):
+        blk = [r for r in rows if _block_key(r) == key]
+        for r in blk:
+            r["_v"], r["_c"] = gate(r)
+        passed = sorted([r for r in blk if r["_v"] != "✗"], key=lambda x: -(x["dec"] or 0))
+        failed = sorted([r for r in blk if r["_v"] == "✗"], key=lambda x: -(x["dec"] or 0))
+        top = passed[0]["dec"] if passed and passed[0].get("dec") else 0
+
+        label_w = max([len(_ag_label(r)) for r in blk] + [22])
+        label_w = min(label_w, 44)
+
+        print()
+        print(bold(f"  ▰ {_ag_block_title(blk)}"))
+        hdr = (
+            f"  {'':<2} {'model · engine':<{label_w}} {'dec':>7} {'peak':>7} "
+            f"{'50K':>6} {'ttft':>7} {'reuse':>6} {'t/s/W':>7} {'RAMg':>6} {'val%':>5}"
+        )
+        print(dim(hdr))
+        print(dim("  " + "─" * (len(hdr) - 2)))
+
+        # Tier the survivors: ★ = top decode; T1 = ✓ within 50% of top; T2 = ✓
+        # below; T3 = ⚠ reserve.
+        t1, t2, t3 = [], [], []
+        for r in passed:
+            if r["_v"] == "⚠":
+                t3.append(r)
+            elif top and (r["dec"] or 0) >= 0.5 * top:
+                t1.append(r)
+            else:
+                t2.append(r)
+
+        star_done = False
+        # (title, rows, colour, starable): ★ goes to the first row of the first
+        # non-empty VIABLE (✓) section — decoupled from the T1 title so it is still
+        # assigned when T1 is empty (e.g. all survivors have no measured decode and
+        # land in T2). The ⚠ reserve tier never wins the ★.
+        sections = [
+            ("★ TIER 1 — winner + fast", t1, green, True),
+            ("✓ TIER 2 — viable (slower)", t2, None, True),
+            ("⚠ TIER 3 — reserve (poor latency)", t3, yellow, False),
+        ]
+        for title, tier_rows, color, starable in sections:
+            if not tier_rows:
+                continue
+            print(bold(color(f"  {title}") if color else f"  {title}"))
+            for r in tier_rows:
+                gl = r["_v"]
+                if starable and not star_done:
+                    gl, star_done = "★", True
+                ram_g = (r["ram_peak_mb"] / 1024) if r.get("ram_peak_mb") else None
+                line = (
+                    f"  {gl:<2} {_ag_label(r):<{label_w}} {_ag_num(r['dec']):>7} "
+                    f"{_ag_num(r['peak']):>7} {_ag_num(r['long_ctx']):>6} "
+                    f"{_ag_num(r['ttft'], 0):>7} "
+                    f"{(str(r['reuse']) if r['reuse'] is not None else '—'):>6} "
+                    f"{_ag_num(r['tsw'], 3):>7} {_ag_num(ram_g):>6} {_ag_num(r['valid'], 0):>5}"
+                )
+                print(green(line) if gl == "★" else yellow(line) if gl == "⚠" else line)
+
+        if failed:
+            print(bold(red("  ✗ TIER 4 — eliminated")))
+            for r in failed:
+                cause = ", ".join(r["_c"]) if r.get("_c") else ""
+                line = (
+                    f"  ✗  {_ag_label(r):<{label_w}} {_ag_num(r['dec']):>7} "
+                    f"{'—':>7} {'—':>6} {_ag_num(r['ttft'], 0):>7} "
+                    f"{(str(r['reuse']) if r['reuse'] is not None else '—'):>6} "
+                    f"{'—':>7} {'—':>6} {_ag_num(r['valid'], 0):>5}"
+                )
+                print(dim(red(line)) + (dim(f"  → {cause}") if cause else ""))
+    print()
+    print(
+        dim(
+            "  reuse = raw cached/prompt on prefix-test runs; ≈0.80 is the protocol "
+            "ceiling (only the system prefix is cacheable), 0 = no prefix cache. "
+            "It is engine-family-specific — compare the fraction, not across families."
+        )
+    )
+    print(dim("  RAMg = peak engine RSS (GB), the figure that governs memory fit."))
+    print()
+
+
+_AG_GRID_COLS = [
+    ("machine", "mach", 5, "s"),
+    ("model", "model", 11, "s"),
+    ("quant", "quant", 8, "s"),
+    ("engine", "engine", 9, "s"),
+    ("engine_version", "ver", 7, "s"),
+    ("mtp", "MTP", 4, "mtp"),
+    ("dec", "dec", 7, "1"),
+    ("peak", "peak", 7, "1"),
+    ("long_ctx", "50K", 6, "1"),
+    ("ttft", "ttft", 7, "0"),
+    ("socw", "socW", 6, "1"),
+    ("tsw", "t/s/W", 7, "3"),
+    ("jtok", "J/tok", 6, "2"),
+    ("ram_warm_mb", "RAMwm", 7, "gb"),
+    ("ram_peak_mb", "RAMpk", 7, "gb"),
+    ("valid", "val%", 5, "0"),
+    ("reuse", "reuse", 6, "raw"),
+]
+
+
+def _ag_grid_cell(row: dict, key: str, kind: str) -> str:
+    v = row.get(key)
+    if v is None:
+        return "—"
+    if kind == "s":
+        return str(v)
+    if kind == "mtp":
+        return "on" if v else "off"
+    if kind == "raw":
+        return str(v)
+    if kind == "gb":
+        return f"{v / 1024:.1f}"
+    return f"{v:.{int(kind)}f}"
+
+
+def _render_agentic_grid(rows: list[dict]) -> None:
+    """The full archive grid — every column, sorted by machine then decode."""
+    rows = sorted(rows, key=lambda r: (r["machine"], -(r.get("dec") or 0)))
+    print()
+    print(bold("Agentic bench — full grid (archive)"))
+    header = "  " + " ".join(f"{h:>{w}}" if k != "model_id" else h for _, h, w, k in _AG_GRID_COLS)
+    print(dim(header))
+    print(dim("  " + "─" * (len(header) - 2)))
+    for r in rows:
+        cells = [f"{_ag_grid_cell(r, key, kind):>{w}}" for key, _, w, kind in _AG_GRID_COLS]
+        line = "  " + " ".join(cells)
+        mid = r.get("model_id") or ""
+        print(f"{line}  {dim(mid)}")
+    print(dim(f"  model_id (exact version) shown at end of each row.  {len(rows)} runs."))
+    print()
+
+
+def render_agentic_leaderboard(rows: list[dict], view: str = "tiered") -> None:
+    """Render agentic-bench rows as decision tiers (default) or the full grid.
+
+    ``rows`` come from :func:`asiai.benchmark.agentic_report.load_agentic_dir`.
+    ``view="tiered"`` groups rows ★/✓/⚠/✗ per machine by deterministic gate;
+    ``view="grid"`` prints the archive table with every column. Numbers are
+    verbatim; ``—`` means not measured (never 0). M4 and M5 blocks are not
+    comparable in absolute terms (different quant) — compare within a block.
+    """
+    from asiai.benchmark.agentic_report import gate
+
+    if not rows:
+        print(dim("No agentic-bench results found there."))
+        return
+    if view == "grid":
+        _render_agentic_grid(rows)
+    else:
+        _render_agentic_tiered(rows, gate)
+
+
 def render_regressions(regressions: list) -> None:
     """Render regression warnings after a benchmark run."""
     if not regressions:

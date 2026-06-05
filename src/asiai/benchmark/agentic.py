@@ -32,7 +32,6 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-import os
 import time
 import urllib.error
 import urllib.request
@@ -62,10 +61,15 @@ from asiai.benchmark.quality_gates import (
     detect_early_stop,
     summarize_thermal,
 )
+from asiai.collectors.system import collect_run_metadata
 
 logger = logging.getLogger("asiai.benchmark.agentic")
 
-SCHEMA_VERSION = "agentic-v3"
+# v4 (2026-06): self-describing runs — top-level machine_model, hw_chip,
+# os_version, ram_gb, cpu_cores, powermode, engine_version, bench_mode (via
+# collect_run_metadata) + a `footprint` summary (peak/warm engine RSS). v3
+# readers ignore the extra keys; no field was removed or renamed.
+SCHEMA_VERSION = "agentic-v4"
 
 # Caveat on token counts: other tokenizers compress differently. Llama-3
 # averages ~4.0 chars/token on the same prose; the long-context phase
@@ -187,8 +191,10 @@ def _do_single_run(
     # measured by ``probe.read()`` covers this run's prefill + decode only.
     # KVCacheSampler polls /slots during the stream to capture the KV peak.
     kv_sampler = KVCacheSampler(base_url) if probe is not None else None
+    # base_url enables the port-based RAM fallback even when the engine_name
+    # doesn't match the process by name (versioned/custom labels).
     mem_sampler = (
-        EngineMemorySampler(probe.engine_name) if probe is not None and probe.engine_name else None
+        EngineMemorySampler(probe.engine_name, base_url=base_url) if probe is not None else None
     )
 
     # An ExitStack guarantees both samplers are stopped (and their daemon
@@ -513,6 +519,33 @@ def _summarize_output(runs: list[AgenticRun]) -> dict[str, Any]:
     }
 
 
+def _summarize_footprint(runs: list[AgenticRun]) -> dict[str, Any]:
+    """Peak + warm engine RAM across the protocol (the memory-fit figures, MB).
+
+    ``engine_rss_peak_mb`` (max per-run RSS peak) is the figure that governs
+    whether a model fits; ``engine_rss_warm_mb`` (median over the warm phase) is
+    the steady-state. They diverge on lazy-KV engines (mlx-lm ~14.5 GB warm vs
+    ~26 GB peak), so both are published — use the peak for fit decisions. A
+    >500 MB floor drops spurious sub-engine matches. ``None`` when unmeasured.
+    """
+    import statistics
+
+    rss_all = [r.engine_rss_mb for r in runs if (r.engine_rss_mb or 0) > 500]
+    rss_warm = [
+        r.engine_rss_mb
+        for r in runs
+        if r.phase == "warm" and r.error is None and (r.engine_rss_mb or 0) > 500
+    ]
+    phys_all = [
+        r.engine_phys_footprint_mb for r in runs if (r.engine_phys_footprint_mb or 0) > 500
+    ]
+    return {
+        "engine_rss_peak_mb": round(max(rss_all), 1) if rss_all else None,
+        "engine_rss_warm_mb": round(statistics.median(rss_warm), 1) if rss_warm else None,
+        "engine_phys_footprint_peak_mb": round(max(phys_all), 1) if phys_all else None,
+    }
+
+
 def _thinking_requested_off(extra_body: dict[str, Any] | None) -> bool:
     """True if extra_body asked the model to disable thinking.
 
@@ -560,6 +593,7 @@ def run_agentic_bench(
     skip_quality_gates: bool = False,
     extra_body: dict[str, Any] | None = None,
     repeats: int = 1,
+    engine_version: str = "",
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -602,7 +636,11 @@ def run_agentic_bench(
     started = int(time.time())
 
     watcher = None if skip_quality_gates else MemoryWatcher()
-    probe = None if skip_quality_gates else PowerThermalProbe(engine_name=engine_name)
+    probe = (
+        None
+        if skip_quality_gates
+        else PowerThermalProbe(engine_name=engine_name, base_url=base_url)
+    )
     # Equivalent to ``with watcher`` but lets us skip cleanly when None.
     if watcher is not None:
         watcher.__enter__()
@@ -671,10 +709,18 @@ def run_agentic_bench(
         "extra_body": extra_body or {},
         "repeats": max(1, repeats),
         "phase_stats": _phase_stats(runs),
+        "footprint": _summarize_footprint(runs),
         "runs": [asdict(r) for r in runs],
     }
-    if include_host:
-        out["host"] = os.uname().nodename
+    # Self-describing metadata (machine/chip/os/ram/cores/powermode/version/mode);
+    # hostname only when include_host (it is identifying and the JSON is shared).
+    out.update(
+        collect_run_metadata(
+            engine_version=engine_version,
+            bench_mode="agentic",
+            include_host=include_host,
+        )
+    )
     if out_path:
         with open(out_path, "w") as f:
             json.dump(out, f, indent=2)

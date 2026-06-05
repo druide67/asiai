@@ -210,7 +210,7 @@ class TestAggregateSize:
 
 class TestSchemaVersion:
     def test_schema_version_value(self):
-        assert SCHEMA_VERSION == "burst-v1"
+        assert SCHEMA_VERSION == "burst-v2"
 
 
 class TestDoOneCall:
