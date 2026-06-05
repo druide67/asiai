@@ -14,8 +14,13 @@ from asiai.benchmark.thinking_ablation import (
 
 
 def _tc(name="search_code"):
-    return {"id": "c1", "name": name, "arguments_raw": '{"pattern":"x"}',
-            "arguments_parsed": {"pattern": "x"}, "parse_error": None}
+    return {
+        "id": "c1",
+        "name": name,
+        "arguments_raw": '{"pattern":"x"}',
+        "arguments_parsed": {"pattern": "x"},
+        "parse_error": None,
+    }
 
 
 def test_ablation_extra_sets_flags():
@@ -40,9 +45,13 @@ def _responder(base_url, model, messages, **kw):
     eb = kw.get("extra_body") or {}
     enable = (eb.get("chat_template_kwargs") or {}).get("enable_thinking")
     return ChatResult(
-        text="", reasoning_text=("thinking..." if enable else ""),
-        tool_calls=[_tc()], finish_reason="tool_calls",
-        prompt_tokens=100, completion_tokens=20, latency_ms=50,
+        text="",
+        reasoning_text=("thinking..." if enable else ""),
+        tool_calls=[_tc()],
+        finish_reason="tool_calls",
+        prompt_tokens=100,
+        completion_tokens=20,
+        latency_ms=50,
     )
 
 
@@ -61,8 +70,13 @@ class TestRun:
         assert set(cells) == {"enable-off", "enable-on-preserve-on", "enable-on-preserve-off"}
         for c in cells.values():
             assert c["turns"] == len(STRESS_TOOLCALL_TURNS)
-            for k in ("pct_clean", "latency_ms_mean", "ctx_tokens_first_turn",
-                      "ctx_tokens_last_turn", "reasoning_chars_mean"):
+            for k in (
+                "pct_clean",
+                "latency_ms_mean",
+                "ctx_tokens_first_turn",
+                "ctx_tokens_last_turn",
+                "reasoning_chars_mean",
+            ):
                 assert k in c
 
     def test_reasoning_only_when_enabled(self):

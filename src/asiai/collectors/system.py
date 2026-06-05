@@ -601,9 +601,7 @@ def collect_process_by_pid(pid: int | None) -> ProcessInfo | None:
     )
 
 
-def find_engine_process_by_url(
-    engine_name: str | None, base_url: str | None
-) -> ProcessInfo | None:
+def find_engine_process_by_url(engine_name: str | None, base_url: str | None) -> ProcessInfo | None:
     """``find_engine_process`` with a port-based fallback keyed on ``base_url``.
 
     Name matching is tried first (it aggregates an engine's child processes);

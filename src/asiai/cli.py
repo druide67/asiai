@@ -857,8 +857,10 @@ def _run_code_bench(args: argparse.Namespace) -> int:
     suites = [s.strip() for s in (args.code_suite or "").split(",") if s.strip()]
     unknown = [s for s in suites if s not in ALL_SUITES]
     if unknown:
-        print(red(f"✗ Unknown --code-suite: {', '.join(unknown)} (known: {', '.join(ALL_SUITES)})"),
-              file=sys.stderr)
+        print(
+            red(f"✗ Unknown --code-suite: {', '.join(unknown)} (known: {', '.join(ALL_SUITES)})"),
+            file=sys.stderr,
+        )
         return 1
 
     judge_url = getattr(args, "judge_url", None)
@@ -867,8 +869,12 @@ def _run_code_bench(args: argparse.Namespace) -> int:
     # an argument (secrets discipline). Local judges need none.
     judge_api_key = os.environ.get("ASIAI_JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if "coding" in suites and not (judge_url and judge_model):
-        print(yellow("  ⚠ 'coding' suite without --judge-url/--judge-model: "
-                     "transcript will be generated but not graded."))
+        print(
+            yellow(
+                "  ⚠ 'coding' suite without --judge-url/--judge-model: "
+                "transcript will be generated but not graded."
+            )
+        )
 
     try:
         engine_version = engine.version() or ""
@@ -880,8 +886,10 @@ def _run_code_bench(args: argparse.Namespace) -> int:
         f"model={model_id} suites={','.join(suites)} runs={max(1, getattr(args, 'runs', 1) or 1)}"
     )
     if judge_url and "coding" in suites:
-        print(f"  {dim('●')} judge: {judge_model} @ {judge_url}"
-              f"{dim(' (key from env)') if judge_api_key else ''}")
+        print(
+            f"  {dim('●')} judge: {judge_model} @ {judge_url}"
+            f"{dim(' (key from env)') if judge_api_key else ''}"
+        )
 
     result = run_code_eval(
         base_url=engine.base_url,
@@ -904,10 +912,14 @@ def _run_code_bench(args: argparse.Namespace) -> int:
     def _print_toolcall(label: str, tc: dict) -> None:
         bug = tc["count_empty_object_bug"]
         bug_str = green(str(bug)) if bug == 0 else red(str(bug))
-        print(f"  {label:11}: clean={tc['pct_clean']}%  json_valid={tc['pct_json_valid']}%  "
-              f"non_trunc={tc['pct_non_truncated']}%  schema={tc['pct_schema_conform']}%")
-        print(f"              empty_object_bug={bug_str}  "
-              f"(edit-turns clean={tc['edit_turns_pct_clean']}%)")
+        print(
+            f"  {label:11}: clean={tc['pct_clean']}%  json_valid={tc['pct_json_valid']}%  "
+            f"non_trunc={tc['pct_non_truncated']}%  schema={tc['pct_schema_conform']}%"
+        )
+        print(
+            f"              empty_object_bug={bug_str}  "
+            f"(edit-turns clean={tc['edit_turns_pct_clean']}%)"
+        )
 
     if cr.get("tool_call"):
         _print_toolcall("tool-call", cr["tool_call"])
@@ -915,27 +927,38 @@ def _run_code_bench(args: argparse.Namespace) -> int:
         _print_toolcall("tc-stress", cr["tool_call_stress"])
     rec = cr.get("recovery")
     if rec:
-        print(f"  recovery   : recovered={rec['pct_recovered']}%  looped={rec['pct_looped']}%  "
-              f"repeated_failing={rec['pct_repeated_failing_call']}%")
+        print(
+            f"  recovery   : recovered={rec['pct_recovered']}%  looped={rec['pct_looped']}%  "
+            f"repeated_failing={rec['pct_repeated_failing_call']}%"
+        )
     th = cr.get("thinking")
     if th:
-        print(f"  thinking   : no_leak={th['pct_no_think_leak']}%  "
-              f"nonempty_short={th['pct_nonempty_short_budget']}%  "
-              f"off_honoured={th['pct_thinking_off_honoured']}%")
+        print(
+            f"  thinking   : no_leak={th['pct_no_think_leak']}%  "
+            f"nonempty_short={th['pct_nonempty_short_budget']}%  "
+            f"off_honoured={th['pct_thinking_off_honoured']}%"
+        )
+
     def _print_coding(label: str, block: dict) -> None:
         for entry in block.get("tasks", []):
             judge = entry.get("judge", {})
             if judge.get("scores"):
                 sc = judge["scores"]
-                print(f"  {label}:{entry['task']}  judge={judge.get('judge_model')}  "
-                      + "  ".join(f"{k}={v}" for k, v in sc.items()))
+                print(
+                    f"  {label}:{entry['task']}  judge={judge.get('judge_model')}  "
+                    + "  ".join(f"{k}={v}" for k, v in sc.items())
+                )
                 if judge.get("reason"):
                     print(f"              {dim(judge['reason'])}")
             elif judge.get("error"):
                 print(red(f"  {label}:{entry['task']}  judge error — {judge['error']}"))
             else:
-                print(dim(f"  {label}:{entry['task']}  transcript captured "
-                          f"({len(entry.get('transcript', []))} turns) — judge offline"))
+                print(
+                    dim(
+                        f"  {label}:{entry['task']}  transcript captured "
+                        f"({len(entry.get('transcript', []))} turns) — judge offline"
+                    )
+                )
 
     if cr.get("coding"):
         _print_coding("coding", cr["coding"])
@@ -960,8 +983,10 @@ def _run_language_bench(args: argparse.Namespace) -> int:
         print(red("✗ No inference engines detected."), file=sys.stderr)
         return 1
     if len(engines) > 1 and not args.url:
-        print(red("✗ --language requires exactly one target. Specify --url to pick one."),
-              file=sys.stderr)
+        print(
+            red("✗ --language requires exactly one target. Specify --url to pick one."),
+            file=sys.stderr,
+        )
         return 1
     engine = engines[0]
 
@@ -969,8 +994,10 @@ def _run_language_bench(args: argparse.Namespace) -> int:
     if not model_id:
         running = engine.list_running()
         if not running:
-            print(red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
-                  file=sys.stderr)
+            print(
+                red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                file=sys.stderr,
+            )
             return 1
         model_id = running[0].name
 
@@ -983,8 +1010,12 @@ def _run_language_bench(args: argparse.Namespace) -> int:
     suites = [s.strip() for s in (args.language_suite or "").split(",") if s.strip()]
     unknown = [s for s in suites if s not in ALL_SUITES]
     if unknown:
-        print(red(f"✗ Unknown --language-suite: {', '.join(unknown)} "
-                  f"(known: {', '.join(ALL_SUITES)})"), file=sys.stderr)
+        print(
+            red(
+                f"✗ Unknown --language-suite: {', '.join(unknown)} (known: {', '.join(ALL_SUITES)})"
+            ),
+            file=sys.stderr,
+        )
         return 1
 
     judge_url = getattr(args, "judge_url", None)
@@ -996,15 +1027,25 @@ def _run_language_bench(args: argparse.Namespace) -> int:
     except Exception:
         engine_version = ""
 
-    print(f"  {dim('●')} language-mode bench {engine.name} @ {engine.base_url} "
-          f"model={model_id} lang={args.language} suites={','.join(suites)}")
+    print(
+        f"  {dim('●')} language-mode bench {engine.name} @ {engine.base_url} "
+        f"model={model_id} lang={args.language} suites={','.join(suites)}"
+    )
 
     try:
         result = run_language_eval(
-            base_url=engine.base_url, engine_name=engine.name, model=model_id,
-            language=args.language, suites=suites, extra_body=extra_body,
-            judge_url=judge_url, judge_model=judge_model, judge_api_key=judge_api_key,
-            out_path=args.language_output, engine_version=engine_version, on_progress=print,
+            base_url=engine.base_url,
+            engine_name=engine.name,
+            model=model_id,
+            language=args.language,
+            suites=suites,
+            extra_body=extra_body,
+            judge_url=judge_url,
+            judge_model=judge_model,
+            judge_api_key=judge_api_key,
+            out_path=args.language_output,
+            engine_version=engine_version,
+            on_progress=print,
         )
     except ValueError as e:
         print(red(f"✗ {e}"), file=sys.stderr)
@@ -1013,16 +1054,22 @@ def _run_language_bench(args: argparse.Namespace) -> int:
     lr = result.get("language_results", {})
     print(f"\n{bold('Language retention')} — {result['model']} · {result['language_name']}")
     if not result["fully_populated"]:
-        print(yellow(f"  ⚠ '{result['language']}' has partial coverage "
-                     "(adherence only; diacritic traps not yet populated)."))
+        print(
+            yellow(
+                f"  ⚠ '{result['language']}' has partial coverage "
+                "(adherence only; diacritic traps not yet populated)."
+            )
+        )
     adh = lr.get("adherence")
     if adh:
         in_lang = adh["pct_in_language"]
         col = green if (in_lang or 0) >= 90 else yellow if (in_lang or 0) >= 50 else red
-        print(f"  adherence : in_language={col(str(in_lang) + '%')}  "
-              f"mean_ratio={adh['mean_adherence_ratio']}  "
-              f"non_degenerate={adh['pct_non_degenerate']}%  "
-              f"accent_density={adh['mean_accent_density']}")
+        print(
+            f"  adherence : in_language={col(str(in_lang) + '%')}  "
+            f"mean_ratio={adh['mean_adherence_ratio']}  "
+            f"non_degenerate={adh['pct_non_degenerate']}%  "
+            f"accent_density={adh['mean_accent_density']}"
+        )
     dia = lr.get("diacritics")
     if dia:
         if dia.get("skipped"):
@@ -1030,14 +1077,16 @@ def _run_language_bench(args: argparse.Namespace) -> int:
         else:
             stripped = dia["count_ascii_stripped"]
             s_str = green("0") if stripped == 0 else red(str(stripped))
-            print(f"  diacritics: traps_passed={dia['pct_traps_passed']}%  "
-                  f"ascii_stripped={s_str}")
+            print(f"  diacritics: traps_passed={dia['pct_traps_passed']}%  ascii_stripped={s_str}")
     flu = lr.get("fluency")
     if flu:
         if flu.get("scores"):
-            print(f"  fluency   : judge={flu.get('judge_model')}  "
-                  + "  ".join(f"{k}={v}" for k, v in flu["scores"].items()
-                              if isinstance(v, (int, float))))
+            print(
+                f"  fluency   : judge={flu.get('judge_model')}  "
+                + "  ".join(
+                    f"{k}={v}" for k, v in flu["scores"].items() if isinstance(v, (int, float))
+                )
+            )
         elif flu.get("error"):
             print(red(f"  fluency   : judge error — {flu['error']}"))
         elif flu.get("skipped"):
@@ -1059,8 +1108,10 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
         print(red("✗ No inference engines detected."), file=sys.stderr)
         return 1
     if len(engines) > 1 and not args.url:
-        print(red("✗ --instruct requires exactly one target. Specify --url to pick one."),
-              file=sys.stderr)
+        print(
+            red("✗ --instruct requires exactly one target. Specify --url to pick one."),
+            file=sys.stderr,
+        )
         return 1
     engine = engines[0]
 
@@ -1068,8 +1119,10 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
     if not model_id:
         running = engine.list_running()
         if not running:
-            print(red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
-                  file=sys.stderr)
+            print(
+                red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                file=sys.stderr,
+            )
             return 1
         model_id = running[0].name
 
@@ -1082,8 +1135,13 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
     scenarios = [s.strip() for s in (args.instruct_scenario or "").split(",") if s.strip()]
     unknown = [s for s in scenarios if s not in ALL_SCENARIOS]
     if unknown:
-        print(red(f"✗ Unknown --instruct-scenario: {', '.join(unknown)} "
-                  f"(known: {', '.join(ALL_SCENARIOS)})"), file=sys.stderr)
+        print(
+            red(
+                f"✗ Unknown --instruct-scenario: {', '.join(unknown)} "
+                f"(known: {', '.join(ALL_SCENARIOS)})"
+            ),
+            file=sys.stderr,
+        )
         return 1
 
     try:
@@ -1091,15 +1149,22 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
     except Exception:
         engine_version = ""
 
-    print(f"  {dim('●')} instruct-mode bench {engine.name} @ {engine.base_url} "
-          f"model={model_id} scenarios={','.join(scenarios)} "
-          f"runs={max(1, getattr(args, 'runs', 1) or 1)}")
+    print(
+        f"  {dim('●')} instruct-mode bench {engine.name} @ {engine.base_url} "
+        f"model={model_id} scenarios={','.join(scenarios)} "
+        f"runs={max(1, getattr(args, 'runs', 1) or 1)}"
+    )
 
     result = run_instruct_eval(
-        base_url=engine.base_url, engine_name=engine.name, model=model_id,
-        scenarios=scenarios, repeats=max(1, getattr(args, "runs", 1) or 1),
-        extra_body=extra_body, out_path=args.instruct_output,
-        engine_version=engine_version, on_progress=print,
+        base_url=engine.base_url,
+        engine_name=engine.name,
+        model=model_id,
+        scenarios=scenarios,
+        repeats=max(1, getattr(args, "runs", 1) or 1),
+        extra_body=extra_body,
+        out_path=args.instruct_output,
+        engine_version=engine_version,
+        on_progress=print,
     )
 
     ir = result.get("instruct_results", {})
@@ -1109,17 +1174,21 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
         ps = vf["prompt_level_strict"]
         col = green if (ps or 0) >= 80 else red if (ps or 0) < 50 else yellow
         ps_str = col(str(ps) + "%")
-        print(f"  verifiable : prompt strict={ps_str} loose={vf['prompt_level_loose']}% "
-              f"· instr strict={vf['instruction_level_strict']}% "
-              f"loose={vf['instruction_level_loose']}% ({vf['prompts_scored']} prompts)")
+        print(
+            f"  verifiable : prompt strict={ps_str} loose={vf['prompt_level_loose']}% "
+            f"· instr strict={vf['instruction_level_strict']}% "
+            f"loose={vf['instruction_level_loose']}% ({vf['prompts_scored']} prompts)"
+        )
 
     def _print_agentic(label: str, block: dict) -> None:
         deliv = block["pct_primary_delivered"]
         dcol = green if (deliv or 0) >= 80 else red if (deliv or 0) < 50 else yellow
-        print(f"  {label:11}: delivered={dcol(str(deliv) + '%')}  "
-              f"sections={block['mean_sections_present']}/{block['sections_total']}  "
-              f"only_secondary={block['pct_only_secondary']}%  "
-              f"did_secondary={block['pct_did_secondary']}%")
+        print(
+            f"  {label:11}: delivered={dcol(str(deliv) + '%')}  "
+            f"sections={block['mean_sections_present']}/{block['sections_total']}  "
+            f"only_secondary={block['pct_only_secondary']}%  "
+            f"did_secondary={block['pct_did_secondary']}%"
+        )
 
     if ir.get("research_brief"):
         _print_agentic("research-brief", ir["research_brief"])
@@ -1133,9 +1202,11 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
         parts = "  ".join(f"{k}={v}" for k, v in metrics.items())
         print(f"  {label}: {parts}  ({block['prompts_scored']} prompts)")
 
-    for key, label in (("honesty_audit", "honesty-audit"),
-                       ("multi_file_scope", "multi-file-scope"),
-                       ("constraint_preservation", "constraint-preservation")):
+    for key, label in (
+        ("honesty_audit", "honesty-audit"),
+        ("multi_file_scope", "multi-file-scope"),
+        ("constraint_preservation", "constraint-preservation"),
+    ):
         if ir.get(key):
             _print_fidelity(label, ir[key])
 
@@ -1155,8 +1226,10 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
         print(red("✗ No inference engines detected."), file=sys.stderr)
         return 1
     if len(engines) > 1 and not args.url:
-        print(red("✗ --thinking-ablation requires exactly one target. Specify --url."),
-              file=sys.stderr)
+        print(
+            red("✗ --thinking-ablation requires exactly one target. Specify --url."),
+            file=sys.stderr,
+        )
         return 1
     engine = engines[0]
 
@@ -1164,8 +1237,10 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
     if not model_id:
         running = engine.list_running()
         if not running:
-            print(red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
-                  file=sys.stderr)
+            print(
+                red(f"✗ No model loaded on {engine.name}. Specify --model or load one."),
+                file=sys.stderr,
+            )
             return 1
         model_id = running[0].name
 
@@ -1180,24 +1255,32 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
     except Exception:
         engine_version = ""
 
-    print(f"  {dim('●')} thinking-ablation bench {engine.name} @ {engine.base_url} "
-          f"model={model_id} load=tool-call-stress")
+    print(
+        f"  {dim('●')} thinking-ablation bench {engine.name} @ {engine.base_url} "
+        f"model={model_id} load=tool-call-stress"
+    )
 
     result = run_thinking_ablation(
-        base_url=engine.base_url, engine_name=engine.name, model=model_id,
-        extra_body=extra_body, out_path=args.thinking_ablation_output,
-        engine_version=engine_version, on_progress=print,
+        base_url=engine.base_url,
+        engine_name=engine.name,
+        model=model_id,
+        extra_body=extra_body,
+        out_path=args.thinking_ablation_output,
+        engine_version=engine_version,
+        on_progress=print,
     )
 
     print(f"\n{bold('Thinking ablation')} — {result['model']} (load={result['load']})")
     for cell in result["cells"]:
         cl = cell["pct_clean"]
         col = green if (cl or 0) >= 80 else red if (cl or 0) < 50 else yellow
-        print(f"  {cell['config']:24}: clean={col(str(cl) + '%')}  "
-              f"lat/turn={cell['latency_ms_mean']}ms  "
-              f"ctx t1={cell['ctx_tokens_first_turn']}→tN={cell['ctx_tokens_last_turn']} "
-              f"(+{cell['ctx_growth']})  "
-              f"think_chars/turn={cell['reasoning_chars_mean']}")
+        print(
+            f"  {cell['config']:24}: clean={col(str(cl) + '%')}  "
+            f"lat/turn={cell['latency_ms_mean']}ms  "
+            f"ctx t1={cell['ctx_tokens_first_turn']}→tN={cell['ctx_tokens_last_turn']} "
+            f"(+{cell['ctx_growth']})  "
+            f"think_chars/turn={cell['reasoning_chars_mean']}"
+        )
 
     if args.thinking_ablation_output:
         print(f"\nSaved {args.thinking_ablation_output}")

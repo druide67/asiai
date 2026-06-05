@@ -81,10 +81,12 @@ class TestVerifiers:
         assert not verify("quotation", "no quotes", {})
 
     def test_response_language_fr(self):
-        assert verify("response_language", "Le café est une boisson que les gens aiment.",
-                      {"language": "fr"})
-        assert not verify("response_language", "The coffee is a drink that people love.",
-                          {"language": "fr"})
+        assert verify(
+            "response_language", "Le café est une boisson que les gens aiment.", {"language": "fr"}
+        )
+        assert not verify(
+            "response_language", "The coffee is a drink that people love.", {"language": "fr"}
+        )
 
     def test_registry_covers_all(self):
         # every type referenced in the dataset is in the registry

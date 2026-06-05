@@ -159,10 +159,12 @@ class TestContinueMessages:
     def test_multiple_tool_calls_all_kept(self):
         # A model emitting several calls in one turn: all must be carried + each
         # gets a matching tool reply (else the next turn sees a falsified history).
-        res = ChatResult(tool_calls=[
-            _tc("search_code", {"pattern": "a"}),
-            {"id": "c2", "name": "run_tests", "arguments_raw": "{}", "parse_error": None},
-        ])
+        res = ChatResult(
+            tool_calls=[
+                _tc("search_code", {"pattern": "a"}),
+                {"id": "c2", "name": "run_tests", "arguments_raw": "{}", "parse_error": None},
+            ]
+        )
         msgs = _continue_messages(res, "ok")
         assert len(msgs[0]["tool_calls"]) == 2
         tool_msgs = [m for m in msgs if m["role"] == "tool"]
@@ -355,8 +357,14 @@ def test_coding_suite_judged():
 
     with patch("asiai.benchmark.code_eval.chat", side_effect=fake_chat):
         out = code_eval._run_coding_judged(
-            "http://target", "m", tasks=CODING_TASKS, extra_body=None, timeout=1,
-            judge_url="http://judge", judge_model="judge-m", judge_api_key=None,
+            "http://target",
+            "m",
+            tasks=CODING_TASKS,
+            extra_body=None,
+            timeout=1,
+            judge_url="http://judge",
+            judge_model="judge-m",
+            judge_api_key=None,
             on_progress=None,
         )
     assert len(out["tasks"]) == len(CODING_TASKS)
@@ -373,14 +381,22 @@ def test_toolcall_stress_suite_runs():
     def stress_chat(base_url, model, messages, **kw):
         user = messages[-1]["content"]
         # map the stress turn's user text to its expected tool
-        tool = next((t["expected_tool"] for t in STRESS_TOOLCALL_TURNS if t["user"] == user),
-                    "search_code")
+        tool = next(
+            (t["expected_tool"] for t in STRESS_TOOLCALL_TURNS if t["user"] == user), "search_code"
+        )
         return ChatResult(tool_calls=[_tc(tool, _VALID_ARGS[tool])], finish_reason="tool_calls")
 
     with patch("asiai.benchmark.code_eval.chat", side_effect=stress_chat):
         out = code_eval._run_toolcall_suite(
-            "u", "m", repeats=1, extra_body=None, timeout=1, on_progress=None,
-            turns=STRESS_TOOLCALL_TURNS, edit_indices=STRESS_EDIT_TURNS, label="tc-stress",
+            "u",
+            "m",
+            repeats=1,
+            extra_body=None,
+            timeout=1,
+            on_progress=None,
+            turns=STRESS_TOOLCALL_TURNS,
+            edit_indices=STRESS_EDIT_TURNS,
+            label="tc-stress",
         )
     assert out["turns_scored"] == len(STRESS_TOOLCALL_TURNS)
     assert out["pct_clean"] == 100.0  # valid args for every expected tool
@@ -396,8 +412,11 @@ def test_run_code_eval_schema_and_metadata():
         patch("asiai.benchmark.code_eval.collect_run_metadata", return_value=fake_md) as md,
     ):
         out = run_code_eval(
-            "http://localhost:8080", "llamacpp", "m.gguf",
-            suites=["tool-call"], engine_version="b9430",
+            "http://localhost:8080",
+            "llamacpp",
+            "m.gguf",
+            suites=["tool-call"],
+            engine_version="b9430",
         )
     assert out["schema_version"] == "code-v1"
     assert out["dataset_version"] == "code-v1"

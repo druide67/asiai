@@ -74,7 +74,7 @@ def _fr_good_chat(base_url, model, messages, **kw):
         return ChatResult(text="sommes ; étions", finish_reason="stop")
     return ChatResult(
         text="Le versionnage du code est très utile car il garde l'historique des "
-             "modifications et permet de revenir en arrière facilement.",
+        "modifications et permet de revenir en arrière facilement.",
         finish_reason="stop",
     )
 
@@ -88,7 +88,7 @@ def _en_drift_chat(base_url, model, messages, **kw):
         return ChatResult(text="The favorite student was very old.", finish_reason="stop")
     return ChatResult(
         text="Versioning your code is very useful because it keeps the history of "
-             "changes and lets you go back easily.",
+        "changes and lets you go back easily.",
         finish_reason="stop",
     )
 
@@ -135,8 +135,9 @@ class TestRunLanguageEval:
             patch("asiai.benchmark.language_eval.chat", side_effect=_fr_good_chat),
             patch("asiai.benchmark.language_eval.collect_run_metadata", side_effect=fake_md),
         ):
-            out = run_language_eval("u", "e", "m", language="fr", suites=["adherence"],
-                                    engine_version="b9430")
+            out = run_language_eval(
+                "u", "e", "m", language="fr", suites=["adherence"], engine_version="b9430"
+            )
         assert captured["bench_mode"] == "language"
         assert captured["engine_version"] == "b9430"
         assert out["bench_mode"] == "language"
@@ -158,8 +159,7 @@ class TestRunLanguageEval:
             patch("asiai.benchmark.language_eval.chat", side_effect=_fr_good_chat),
             patch("asiai.benchmark.language_eval.collect_run_metadata", return_value={}),
         ):
-            run_language_eval("u", "e", "m", language="fr",
-                              out_path=str(tmp_path / "lang.json"))
+            run_language_eval("u", "e", "m", language="fr", out_path=str(tmp_path / "lang.json"))
         saved = json.loads((tmp_path / "lang.json").read_text())
         assert saved["language"] == "fr"
         assert saved["schema_version"] == "language-v1"

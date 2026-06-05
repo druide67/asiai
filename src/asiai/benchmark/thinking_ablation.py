@@ -60,8 +60,11 @@ def _ablation_extra(
 
 def _clean(score: dict[str, Any]) -> bool:
     return bool(
-        score["json_valid"] and score["non_truncated"] and score["correct_tool"]
-        and score["schema_conform"] and not score["empty_object_bug"]
+        score["json_valid"]
+        and score["non_truncated"]
+        and score["correct_tool"]
+        and score["schema_conform"]
+        and not score["empty_object_bug"]
     )
 
 
@@ -75,19 +78,30 @@ def _continue_with_reasoning(res: Any, tool_result: str) -> list[dict[str, Any]]
             msg["reasoning_content"] = res.reasoning_text
         return [msg]
     assistant_tcs = [
-        {"id": tc.get("id") or f"call_{i}", "type": "function",
-         "function": {"name": tc.get("name") or "", "arguments": tc.get("arguments_raw") or "{}"}}
+        {
+            "id": tc.get("id") or f"call_{i}",
+            "type": "function",
+            "function": {
+                "name": tc.get("name") or "",
+                "arguments": tc.get("arguments_raw") or "{}",
+            },
+        }
         for i, tc in enumerate(tcs)
     ]
     assistant: dict[str, Any] = {
-        "role": "assistant", "content": res.text or "", "tool_calls": assistant_tcs,
+        "role": "assistant",
+        "content": res.text or "",
+        "tool_calls": assistant_tcs,
     }
     if res.reasoning_text:
         assistant["reasoning_content"] = res.reasoning_text
-    return [assistant, *(
-        {"role": "tool", "tool_call_id": atc["id"], "content": tool_result}
-        for atc in assistant_tcs
-    )]
+    return [
+        assistant,
+        *(
+            {"role": "tool", "tool_call_id": atc["id"], "content": tool_result}
+            for atc in assistant_tcs
+        ),
+    ]
 
 
 def _mean(xs: list[Any]) -> float | None:
@@ -96,28 +110,36 @@ def _mean(xs: list[Any]) -> float | None:
 
 
 def _run_one_config(
-    base_url: str, model: str, cfg: dict[str, Any], *,
-    extra_body: dict[str, Any] | None, timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    cfg: dict[str, Any],
+    *,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     eb = _ablation_extra(extra_body, cfg["enable_thinking"], cfg["preserve_thinking"])
     messages: list[dict[str, Any]] = [{"role": "system", "content": STRESS_TOOLCALL_SYSTEM}]
     per_turn: list[dict[str, Any]] = []
     for idx, turn in enumerate(STRESS_TOOLCALL_TURNS):
         messages.append({"role": "user", "content": turn["user"]})
-        res = chat(base_url, model, messages, tools=TOOLS, max_tokens=1024,
-                   extra_body=eb, timeout=timeout)
+        res = chat(
+            base_url, model, messages, tools=TOOLS, max_tokens=1024, extra_body=eb, timeout=timeout
+        )
         score = score_toolcall_turn(
             res, turn["expected_tool"], TOOLS_BY_NAME[turn["expected_tool"]]
         )
-        per_turn.append({
-            "turn": idx,
-            "clean": _clean(score),
-            "latency_ms": res.latency_ms,
-            "prompt_tokens": res.prompt_tokens,
-            "completion_tokens": res.completion_tokens,
-            "reasoning_chars": len(res.reasoning_text or ""),
-            "error": res.error,
-        })
+        per_turn.append(
+            {
+                "turn": idx,
+                "clean": _clean(score),
+                "latency_ms": res.latency_ms,
+                "prompt_tokens": res.prompt_tokens,
+                "completion_tokens": res.completion_tokens,
+                "reasoning_chars": len(res.reasoning_text or ""),
+                "error": res.error,
+            }
+        )
         messages.extend(_continue_with_reasoning(res, turn["tool_result"]))
         if on_progress:
             on_progress(
@@ -134,9 +156,7 @@ def _run_one_config(
         "enable_thinking": cfg["enable_thinking"],
         "preserve_thinking": cfg["preserve_thinking"],
         "turns": n,
-        "pct_clean": (
-            round(100.0 * sum(1 for t in per_turn if t["clean"]) / n, 1) if n else None
-        ),
+        "pct_clean": (round(100.0 * sum(1 for t in per_turn if t["clean"]) / n, 1) if n else None),
         "latency_ms_mean": _mean([t["latency_ms"] for t in per_turn]),
         "ctx_tokens_first_turn": ctx_first,
         "ctx_tokens_last_turn": ctx_last,
@@ -164,8 +184,9 @@ def run_thinking_ablation(
     started = int(time.time())
     cfgs = configs or ABLATION_CONFIGS
     cells = [
-        _run_one_config(base_url, model, c, extra_body=extra_body, timeout=timeout,
-                        on_progress=on_progress)
+        _run_one_config(
+            base_url, model, c, extra_body=extra_body, timeout=timeout, on_progress=on_progress
+        )
         for c in cfgs
     ]
     out = {
@@ -180,7 +201,8 @@ def run_thinking_ablation(
     }
     out.update(
         collect_run_metadata(
-            engine_version=engine_version, bench_mode="thinking-ablation",
+            engine_version=engine_version,
+            bench_mode="thinking-ablation",
             include_host=include_host,
         )
     )

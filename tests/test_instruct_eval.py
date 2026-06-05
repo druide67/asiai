@@ -15,8 +15,13 @@ from asiai.benchmark.instruct_eval_scenarios import (
 
 
 def _tc(name, args):
-    return {"id": "c1", "name": name, "arguments_raw": json.dumps(args),
-            "arguments_parsed": args, "parse_error": None}
+    return {
+        "id": "c1",
+        "name": name,
+        "arguments_raw": json.dumps(args),
+        "arguments_parsed": args,
+        "parse_error": None,
+    }
 
 
 def _has_tool(messages):
@@ -32,8 +37,9 @@ class TestVerifiableFamily:
         # prompts pass, others fail — we assert the run covers all prompts and
         # produces the four leaderboard metrics.
         def chat(base_url, model, messages, **kw):
-            return ChatResult(text="here is a short lowercase answer without punctuation",
-                              finish_reason="stop")
+            return ChatResult(
+                text="here is a short lowercase answer without punctuation", finish_reason="stop"
+            )
 
         with (
             patch("asiai.benchmark.instruct_eval.chat", side_effect=chat),
@@ -42,8 +48,12 @@ class TestVerifiableFamily:
             out = run_instruct_eval("u", "e", "m", scenarios=["verifiable"])
         vf = out["instruct_results"]["verifiable"]
         assert vf["prompts_scored"] == len(VERIFIABLE_PROMPTS)
-        for k in ("prompt_level_strict", "prompt_level_loose",
-                  "instruction_level_strict", "instruction_level_loose"):
+        for k in (
+            "prompt_level_strict",
+            "prompt_level_loose",
+            "instruction_level_strict",
+            "instruction_level_loose",
+        ):
             assert k in vf and vf[k] is not None
         # the all_lowercase prompt should pass strict for this response
         low = next(p for p in vf["per_prompt"] if p["id"] == "lowercase")
@@ -60,8 +70,9 @@ class TestVerifiableFamily:
             patch("asiai.benchmark.instruct_eval.collect_run_metadata", return_value={}),
         ):
             out = run_instruct_eval("u", "e", "m", scenarios=["verifiable"])
-        choose = next(p for p in out["instruct_results"]["verifiable"]["per_prompt"]
-                      if p["id"] == "choose")
+        choose = next(
+            p for p in out["instruct_results"]["verifiable"]["per_prompt"] if p["id"] == "choose"
+        )
         assert choose["prompt_strict"] is True  # "Yes" ∈ {Yes, No}
 
 
@@ -92,8 +103,9 @@ def _regressed_chat(base_url, model, messages, **kw):
         return ChatResult(text="", tool_calls=[_tc("web_search", {"query": "energy storage"})])
     if not any("Note saved" in m.get("content", "") for m in tools_done):
         return ChatResult(text="", tool_calls=[_tc("save_note", {"title": "idea"})])
-    return ChatResult(text="Saved the most interesting item to the notes file.",
-                      finish_reason="stop")
+    return ChatResult(
+        text="Saved the most interesting item to the notes file.", finish_reason="stop"
+    )
 
 
 def _tool_names(kw):
@@ -132,7 +144,7 @@ class TestAgenticScenario:
             out = run_instruct_eval("u", "e", "m", scenarios=["research-brief"])
         rb = out["instruct_results"]["research_brief"]
         assert rb["pct_primary_delivered"] == 0.0
-        assert rb["pct_only_secondary"] == 100.0   # did the save, skipped the briefing
+        assert rb["pct_only_secondary"] == 100.0  # did the save, skipped the briefing
         assert rb["pct_did_secondary"] == 100.0
 
     def test_deep_scenario_scores_all_topics(self):
@@ -156,7 +168,7 @@ class TestAgenticScenario:
         ep = rb["per_episode"][0]
         assert ep["searches"] == len(RESEARCH_SECTIONS)  # capped, not an unbounded loop
         assert rb["pct_primary_delivered"] == 0.0
-        assert rb["pct_only_secondary"] == 100.0   # forced off search → skipped to save
+        assert rb["pct_only_secondary"] == 100.0  # forced off search → skipped to save
 
 
 class TestCountSections:
@@ -180,8 +192,7 @@ def test_schema_and_bench_mode():
         patch("asiai.benchmark.instruct_eval.chat", side_effect=_good_chat),
         patch("asiai.benchmark.instruct_eval.collect_run_metadata", side_effect=fake_md),
     ):
-        out = run_instruct_eval("u", "e", "m", scenarios=["research-brief"],
-                                engine_version="b9430")
+        out = run_instruct_eval("u", "e", "m", scenarios=["research-brief"], engine_version="b9430")
     assert out["schema_version"] == "instruct-v1"
     assert out["bench_mode"] == "instruct"
     assert captured["bench_mode"] == "instruct"
@@ -193,8 +204,9 @@ def test_writes_output(tmp_path):
         patch("asiai.benchmark.instruct_eval.chat", side_effect=_good_chat),
         patch("asiai.benchmark.instruct_eval.collect_run_metadata", return_value={}),
     ):
-        run_instruct_eval("u", "e", "m", scenarios=["research-brief"],
-                          out_path=str(tmp_path / "i.json"))
+        run_instruct_eval(
+            "u", "e", "m", scenarios=["research-brief"], out_path=str(tmp_path / "i.json")
+        )
     saved = json.loads((tmp_path / "i.json").read_text())
     assert saved["schema_version"] == "instruct-v1"
     assert "research_brief" in saved["instruct_results"]

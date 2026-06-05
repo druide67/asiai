@@ -828,9 +828,7 @@ class EngineMemorySampler(_IntervalSampler):
         # Enable when EITHER a name target OR a URL port is available: the port
         # fallback recovers RAM for a versioned/custom engine label that name
         # matching alone would miss (the campaign's silent ``—`` holes).
-        super().__init__(
-            interval, enabled=bool(self._target or port), sample_on_start=True
-        )
+        super().__init__(interval, enabled=bool(self._target or port), sample_on_start=True)
         self.result = EngineMemoryWatchResult()
 
     def _sample_once(self) -> None:

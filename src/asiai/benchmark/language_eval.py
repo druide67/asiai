@@ -86,8 +86,13 @@ def _mean(xs: list[float]) -> float | None:
 
 
 def _run_adherence(
-    base_url: str, model: str, profile: LanguageProfile, *,
-    extra_body: dict[str, Any] | None, timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    profile: LanguageProfile,
+    *,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     prompts = list(profile.probes)
     if profile.code_comment_prompt:
@@ -95,20 +100,31 @@ def _run_adherence(
     per_probe: list[dict[str, Any]] = []
     for i, prompt in enumerate(prompts):
         res: ChatResult = chat(
-            base_url, model, [{"role": "user", "content": prompt}],
-            max_tokens=512, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            [{"role": "user", "content": prompt}],
+            max_tokens=512,
+            extra_body=extra_body,
+            timeout=timeout,
         )
         ratio = _adherence_ratio(res.text or "", profile)
         degen = check_degenerate(res.text or "")["degenerate"] if res.error is None else True
         density = _accent_density(res.text or "")
-        per_probe.append({
-            "adherence_ratio": ratio, "in_language": ratio >= 0.5,
-            "degenerate": degen, "accent_density": density,
-            "error": res.error, "text": truncate_text(res.text or ""),
-        })
+        per_probe.append(
+            {
+                "adherence_ratio": ratio,
+                "in_language": ratio >= 0.5,
+                "degenerate": degen,
+                "accent_density": density,
+                "error": res.error,
+                "text": truncate_text(res.text or ""),
+            }
+        )
         if on_progress:
-            on_progress(f"  [language:adherence {i + 1}/{len(prompts)}] "
-                        f"ratio={ratio} in_lang={ratio >= 0.5} accent={density}")
+            on_progress(
+                f"  [language:adherence {i + 1}/{len(prompts)}] "
+                f"ratio={ratio} in_lang={ratio >= 0.5} accent={density}"
+            )
     clean = [p for p in per_probe if not p["error"]]
     return {
         "probes": len(per_probe),
@@ -121,33 +137,52 @@ def _run_adherence(
 
 
 def _run_diacritics(
-    base_url: str, model: str, profile: LanguageProfile, *,
-    extra_body: dict[str, Any] | None, timeout: int, on_progress: Any,
+    base_url: str,
+    model: str,
+    profile: LanguageProfile,
+    *,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
 ) -> dict[str, Any]:
     if not profile.diacritic_traps:
-        return {"skipped": f"no diacritic traps for '{profile.code}' "
-                           f"(non-Latin or not yet populated)"}
+        return {
+            "skipped": f"no diacritic traps for '{profile.code}' (non-Latin or not yet populated)"
+        }
     per_trap: list[dict[str, Any]] = []
     for i, trap in enumerate(profile.diacritic_traps):
-        res = chat(base_url, model, [{"role": "user", "content": trap["prompt"]}],
-                   max_tokens=256, extra_body=extra_body, timeout=timeout)
+        res = chat(
+            base_url,
+            model,
+            [{"role": "user", "content": trap["prompt"]}],
+            max_tokens=256,
+            extra_body=extra_body,
+            timeout=timeout,
+        )
         low = (res.text or "").lower()
         want = trap["must_contain"]
         present = [tok for tok in want if tok.lower() in low]
         # ASCII-stripped = the unaccented form is there but the accented isn't.
         stripped = [
-            tok for tok in want
-            if tok.lower() not in low and _strip_accents(tok.lower()) in low
+            tok for tok in want if tok.lower() not in low and _strip_accents(tok.lower()) in low
         ]
         passed = len(present) == len(want)
-        per_trap.append({
-            "prompt": trap["prompt"], "must_contain": want,
-            "present": present, "ascii_stripped": stripped,
-            "passed": passed, "error": res.error, "text": truncate_text(res.text or ""),
-        })
+        per_trap.append(
+            {
+                "prompt": trap["prompt"],
+                "must_contain": want,
+                "present": present,
+                "ascii_stripped": stripped,
+                "passed": passed,
+                "error": res.error,
+                "text": truncate_text(res.text or ""),
+            }
+        )
         if on_progress:
-            on_progress(f"  [language:diacritics {i + 1}/{len(profile.diacritic_traps)}] "
-                        f"passed={passed} stripped={stripped}")
+            on_progress(
+                f"  [language:diacritics {i + 1}/{len(profile.diacritic_traps)}] "
+                f"passed={passed} stripped={stripped}"
+            )
     clean = [t for t in per_trap if not t["error"]]
     return {
         "traps": len(per_trap),
@@ -164,14 +199,20 @@ def _strip_accents(s: str) -> str:
 
 
 def _run_fluency_judge(
-    adherence: dict[str, Any], profile: LanguageProfile, *,
-    judge_url: str | None, judge_model: str | None, judge_api_key: str | None, timeout: int,
+    adherence: dict[str, Any],
+    profile: LanguageProfile,
+    *,
+    judge_url: str | None,
+    judge_model: str | None,
+    judge_api_key: str | None,
+    timeout: int,
 ) -> dict[str, Any]:
     if not (judge_url and judge_model):
         return {"skipped": "no --judge-url (responses captured for offline judging)"}
     samples = "\n\n".join(
         f"PROMPT/RESPONSE {i + 1}:\n{p['text']}"
-        for i, p in enumerate(adherence.get("per_probe", [])) if not p["error"]
+        for i, p in enumerate(adherence.get("per_probe", []))
+        if not p["error"]
     )
     rubric = (
         f"Grade the assistant's {profile.name} ({profile.native_name}) on each "
@@ -181,10 +222,17 @@ def _run_fluency_judge(
         '"overall":n,"reason":"one sentence"}.'
     )
     res = chat(
-        judge_url, judge_model,
-        [{"role": "system", "content": LANGUAGE_JUDGE_SYSTEM},
-         {"role": "user", "content": f"{rubric}\n\nRESPONSES:\n{samples}"}],
-        max_tokens=512, temperature=0.0, api_key=judge_api_key, timeout=timeout, stream=False,
+        judge_url,
+        judge_model,
+        [
+            {"role": "system", "content": LANGUAGE_JUDGE_SYSTEM},
+            {"role": "user", "content": f"{rubric}\n\nRESPONSES:\n{samples}"},
+        ],
+        max_tokens=512,
+        temperature=0.0,
+        api_key=judge_api_key,
+        timeout=timeout,
+        stream=False,
     )
     if res.error is not None:
         return {"error": f"{res.error}: {res.error_body}", "judge_model": judge_model}
@@ -237,20 +285,32 @@ def run_language_eval(
     adherence = None
     if "adherence" in requested or "fluency" in requested:
         adherence = _run_adherence(
-            base_url, model, profile, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            profile,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
         if "adherence" in requested:
             results["adherence"] = adherence
     if "diacritics" in requested:
         results["diacritics"] = _run_diacritics(
-            base_url, model, profile, extra_body=extra_body, timeout=timeout,
+            base_url,
+            model,
+            profile,
+            extra_body=extra_body,
+            timeout=timeout,
             on_progress=on_progress,
         )
     if "fluency" in requested:
         results["fluency"] = _run_fluency_judge(
-            adherence or {}, profile, judge_url=judge_url, judge_model=judge_model,
-            judge_api_key=judge_api_key, timeout=timeout,
+            adherence or {},
+            profile,
+            judge_url=judge_url,
+            judge_model=judge_model,
+            judge_api_key=judge_api_key,
+            timeout=timeout,
         )
 
     out = {

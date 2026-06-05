@@ -185,9 +185,9 @@ def _loose_variants(text: str) -> list[str]:
     for base in (text, no_md):
         lines = base.split("\n")
         if len(lines) > 1:
-            add("\n".join(lines[1:]).strip())   # drop first line (a preamble/header)
+            add("\n".join(lines[1:]).strip())  # drop first line (a preamble/header)
             add("\n".join(lines[:-1]).strip())  # drop last line (a sign-off)
-        add(base.strip().strip('"').strip())    # unwrap surrounding quotes
+        add(base.strip().strip('"').strip())  # unwrap surrounding quotes
     return variants
 
 
@@ -210,11 +210,13 @@ def evaluate_prompt(response: str, instructions: list[dict[str, Any]]) -> dict[s
     per: list[dict[str, Any]] = []
     for ins in instructions:
         vtype, args = ins["type"], ins.get("args", {})
-        per.append({
-            "type": vtype,
-            "strict": verify(vtype, response, args, loose=False),
-            "loose": verify(vtype, response, args, loose=True),
-        })
+        per.append(
+            {
+                "type": vtype,
+                "strict": verify(vtype, response, args, loose=False),
+                "loose": verify(vtype, response, args, loose=True),
+            }
+        )
     return {
         "instructions": per,
         "prompt_strict": all(p["strict"] for p in per) if per else False,

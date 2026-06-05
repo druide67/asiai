@@ -536,9 +536,7 @@ def _summarize_footprint(runs: list[AgenticRun]) -> dict[str, Any]:
         for r in runs
         if r.phase == "warm" and r.error is None and (r.engine_rss_mb or 0) > 500
     ]
-    phys_all = [
-        r.engine_phys_footprint_mb for r in runs if (r.engine_phys_footprint_mb or 0) > 500
-    ]
+    phys_all = [r.engine_phys_footprint_mb for r in runs if (r.engine_phys_footprint_mb or 0) > 500]
     return {
         "engine_rss_peak_mb": round(max(rss_all), 1) if rss_all else None,
         "engine_rss_warm_mb": round(statistics.median(rss_warm), 1) if rss_warm else None,
