@@ -332,10 +332,11 @@ AGENTIC_SCENARIOS: dict[str, dict] = {
 
 
 # --- agentic: loop-search (perfectionist research loop) -----------------------
-# A perfectionist research-loop failure mode: a model that won't accept an
-# ambiguous/insufficient web_search result re-issues semantically-equivalent
-# queries until a no-progress guardrail halts it — never producing the deliverable.
-# Two ambiguity modes and a deep warmup before the trap:
+# A perfectionist research-loop failure mode (seen in agentic harnesses such as
+# NousResearch's Hermes Agent): a model that won't accept an ambiguous/insufficient
+# web_search result re-issues semantically-equivalent queries until a no-progress
+# guardrail halts it — never producing the deliverable. Two ambiguity modes and a
+# deep warmup before the trap:
 #   * "short"          — sub-1KB result inviting elaboration ("too short, no processing")
 #   * "unconfirmable"  — a plausible result that simply lacks the exact fact asked
 # The ~10-topic warmup (RESEARCH_TOPICS_DEEP) precedes the ambiguous target so the
@@ -381,7 +382,7 @@ _LOOP_SEARCH_PROMPT = (
 )
 
 LOOP_SEARCH_MAX_TURNS = 32  # 10 warmup searches + ambiguous-loop room + deliverable
-LOOP_SEARCH_DEFAULT_CAP = 5  # mirrors a typical no-progress guardrail (halt after N repeats)
+LOOP_SEARCH_DEFAULT_CAP = 5  # mirrors Hermes Agent's idempotent_no_progress_block (halt after N)
 
 # cap = redundant ambiguous searches tolerated before web_search is pulled from the
 # toolset (mirrors the prod guardrail). Exposed so the bench can also probe cap=3
