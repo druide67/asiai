@@ -419,6 +419,27 @@ opposite way from the tool-call result above — thinking-off is cleanest for at
 tool calls but suppresses written deliverables — which is why asiai sets thinking
 **per task-dimension**, not as one global switch.
 
+### Perfectionist research loop (`asiai bench --instruct loop-search`)
+
+Single-turn IFEval and research-brief saturate at 100% across these models, so
+neither surfaces the *perfectionist research loop*: a model that won't accept an
+ambiguous, unconfirmable search result and re-issues semantically-equivalent
+queries until a no-progress guardrail halts it, never delivering. A `loop-search`
+sweep (9 configs, M5, b9430, thinking on/off, two ambiguity modes) isolates it:
+
+- The **35B-A3B MoE loops to the cap** — for **both the base and the Qwopus
+  finetune, in Q4 and Q8 alike**. The higher quant does not fix it, so the loop is
+  **architectural to the A3B MoE**, not a quant artefact.
+- The **dense 27B never loops** (Q4 / Q5 / Q8): it accepts the ambiguous result
+  and writes the briefing.
+
+So the throughput leader (the MoE, ~118-123 t/s) and the agentic-fitness leader
+(the dense 27B, ~25 t/s) are *different models*. For a harness such as
+NousResearch's Hermes Agent, loop-resistance can outweigh raw decode — the fastest
+model is not always the right agent. (This is the inverse of the tool-call result,
+where the MoE finetune was the more robust agent: **fitness is per-failure-mode,
+so measure several.**)
+
 ---
 
 ## Section 6 — Operational

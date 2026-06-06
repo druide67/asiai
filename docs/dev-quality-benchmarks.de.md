@@ -54,6 +54,14 @@ es Tokens ausspuckt.
   Deliverable überspringen — deterministisch bewertet durch die Prüfung, ob die geforderten
   Abschnitte nach den Tool-Turns erscheinen. **order-control** vertauscht die Reihenfolge
   (sekundär zuerst) als Diagnostik.
+- **loop-search** — eine Mehrdeutigkeits-Suchfalle: ein tiefes Warmup über klare
+  Themen, dann eine Zieltatsache, die `web_search` nie bestätigen kann (semantische
+  Umformulierungen der Anfrage fallen auf eine Antwort zusammen). Bewertet, ob das
+  Modell die Mehrdeutigkeit akzeptiert und liefert (nüchtern) oder äquivalente
+  Anfragen erneut absetzt, bis ein No-Progress-Cap es stoppt (perfektionistisch),
+  plus ein Signal für den Kollaps der Output-Tokens. Zwei Modi (`short` Resultat
+  unter 1 KB / `unconfirmable` plausible-aber-fehlende-Tatsache). Dies ist der
+  Fehlermodus, den Single-Turn-IFEval und research-brief nicht zutage fördern.
 
 `asiai bench --language <code>` (deterministisch, 8 Sprachen):
 
@@ -114,6 +122,28 @@ algorithmische Korrektheit sind *verschiedene* Achsen — miss beide.
 Basismodells intakt gehalten (Adherence, Diakritika, kein ASCII-Stripping) — ein
 aufgabenspezifisches Finetune hat *nicht* eine andere Sprache gekostet, was zu
 verifizieren ist, anstatt es anzunehmen.
+
+### Perfektionistische Recherche-Schleife (loop-search)
+
+`research-brief` sättigt für jedes Modell hier bei 100%, diskriminiert also nicht
+die *perfektionistische Schleife*, die reale Agenten zerstört. Das `loop-search`-
+Szenario tut es. Über einen Sweep von Dense-27B- und MoE-35B-A3B-Konfigurationen (M5,
+llama.cpp b9430, Thinking on/off, beide Mehrdeutigkeitsmodi):
+
+- Das **35B-A3B MoE dreht in Schleifen** — es setzt zu einer nicht bestätigbaren
+  Tatsache immer wieder semantisch äquivalente Suchen ab, bis ein
+  No-Progress-Guardrail es stoppt, anstatt die Unsicherheit zu akzeptieren und zu
+  liefern. Es tut dies in **sowohl Q4 als auch Q8** (architektonisch, kein
+  Quant-Artefakt), für die Basis und das Opus-distillierte Finetune gleichermaßen.
+- Das **Dense-27B dreht nie in Schleifen** (Q4 / Q5 / Q8): es akzeptiert das
+  mehrdeutige Resultat und schreibt das Briefing.
+
+Für ein agentisches Harness wie den Hermes Agent von NousResearch ist dies das
+entscheidende Signal: das schleifenresistente Dense-Modell ist die sicherere
+Hauptwahl, selbst wenn ein schnelleres MoE existiert — Throughput kauft nichts,
+wenn der Agent bei einem mehrdeutigen Schritt in eine Spirale gerät. Es ist auch
+die umgekehrte Lektion des Tool-Call-Ergebnisses oben (wo das MoE-Finetune der
+*robustere* Agent war): **Eignung ist pro Fehlermodus, also miss mehrere.**
 
 ## So liest du das
 

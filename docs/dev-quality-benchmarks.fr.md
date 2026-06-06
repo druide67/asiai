@@ -54,6 +54,15 @@ quelle vitesse il émet des tokens.
   malgré tout sauter le livrable principal — noté de façon déterministe en
   vérifiant que les sections requises apparaissent après les tours d'outils.
   **order-control** inverse l'ordre (secondaire en premier) comme diagnostic.
+- **loop-search** — un piège de recherche ambiguë : un warmup approfondi sur des
+  sujets clairs, puis un fait cible que `web_search` ne peut jamais confirmer (les
+  reformulations sémantiques de la requête se ramènent à une seule réponse). Note si
+  le modèle accepte l'ambiguïté et délivre (sobre) ou réémet des requêtes
+  équivalentes jusqu'à ce qu'un plafond de non-progression l'arrête
+  (perfectionniste), plus un signal d'effondrement des tokens de sortie. Deux modes
+  (`short` résultat sous 1 Ko / `unconfirmable` fait plausible mais manquant). C'est
+  le mode d'échec que l'IFEval single-turn et le research-brief ne font pas
+  remonter.
 
 `asiai bench --language <code>` (déterministe, 8 langues) :
 
@@ -117,6 +126,28 @@ En lançant `--language fr` sur le finetune et sa base, même quant :
 français du modèle de base (adherence, diacritiques, pas de dépouillement ASCII) —
 un finetune spécifique à une tâche n'a *pas* coûté une autre langue, ce qui vaut la
 peine d'être vérifié plutôt que supposé.
+
+### Boucle de recherche perfectionniste (loop-search)
+
+`research-brief` sature à 100% pour chaque modèle ici, donc il ne discrimine pas la
+*boucle perfectionniste* qui casse les vrais agents. Le scénario `loop-search`, lui,
+le fait. Sur un balayage de configs dense 27B et MoE 35B-A3B (M5, llama.cpp b9430,
+thinking on/off, les deux modes d'ambiguïté) :
+
+- Le **MoE 35B-A3B boucle** — il réémet des recherches sémantiquement équivalentes
+  sur un fait impossible à confirmer jusqu'à ce qu'un garde-fou de non-progression
+  l'arrête, au lieu d'accepter l'incertitude et de délivrer. Il le fait en **Q4
+  comme en Q8** (c'est architectural, pas un artefact de quant), pour la base comme
+  pour le finetune distillé d'Opus.
+- Le **dense 27B ne boucle jamais** (Q4 / Q5 / Q8) : il accepte le résultat ambigu
+  et rédige le briefing.
+
+Pour un harnais agentique tel que le Hermes Agent de NousResearch, c'est le signal
+décisif : le modèle dense résistant à la boucle est le main plus sûr même quand un
+MoE plus rapide existe — le throughput n'achète rien si l'agent part en vrille sur
+une seule étape ambiguë. C'est aussi la leçon inverse du résultat d'appel d'outils
+ci-dessus (où le finetune MoE était l'agent *le plus* robuste) : **l'aptitude se
+mesure par mode d'échec, donc en mesurer plusieurs.**
 
 ## Comment lire cette page
 

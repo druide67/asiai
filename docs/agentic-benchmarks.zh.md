@@ -50,6 +50,8 @@ vllm-mlx）。MTP = 模型内置的 Multi-Token Prediction 头，用于投机解
 
 ## MacBook Pro M5 Max 128 GB · Q4
 
+<div class="wide-table" markdown>
+
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
 | **★ 第 1 档 —— 冠军 + 快速** |||||||||| |
@@ -71,10 +73,14 @@ vllm-mlx）。MTP = 模型内置的 Multi-Token Prediction 头，用于投机解
 | ✗ | ~~Qwen-27B · mlx_vlm 0.6.0~~ | ~~31.9~~ | — | 26.0 | ~~9578~~ | 0.0 | — | — | 100 |
 | ✗ | ~~Qwen-27B · vllm-mlx 0.3.0~~ | ~~20.5~~ | — | 18.1 | ~~9578~~ | — | — | 24.3 | 100 |
 
+</div>
+
 淘汰原因：mlx_vlm+MTP 未通过有效率（75%）且破坏了长上下文；两次 mlx_vlm
 运行与 vllm-mlx 的 TTFT 约 9.6 s（按 agent 每轮计无法使用）。
 
 ## Mac mini M4 Pro 64 GB · Q5
+
+<div class="wide-table" markdown>
 
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -85,11 +91,21 @@ vllm-mlx）。MTP = 模型内置的 Multi-Token Prediction 头，用于投机解
 | ✓ | Qwen-27B · llamacpp b9430 | 10.4 | 10.4 | 7.2 | 397 | 0.8 | 0.279 | 31.9 | 100 |
 | ✓ | Qwen-27B · llamacpp b9430 ▲MTP | 9.7 | 9.8 | 7.5 | 409 | 0.8 | 0.272 | 35.4 | 100 |
 
+</div>
+
 ## 关键发现
 
 - **35B-A3B MoE 在两台机器上的每一项吞吐指标上都胜过 27B 稠密模型** ——
   它每 token 仅激活 ~3B 参数，因此 decode 速度比稠密 27B 快约 ~4×，能效高约
   ~3.5×（1.5 vs ~0.4 tok/s/W）。但吞吐不等于质量 —— 见下方注意事项。
+- **吞吐不等于 agentic 适配度。** 在一项含糊搜索任务上 ——
+  即 `loop-search` 场景（`asiai bench --instruct`，见
+  [dev/code 评估](dev-quality-benchmarks.md)）—— 35B-A3B **MoE 会陷入
+  完美主义式循环**：它在一个无法解决的事实上反复发出语义等价的查询，
+  直到一个无进展护栏将其叫停，始终产不出交付物。这在 **Q4 和 Q8** 下
+  都成立（属架构性，而非量化所致），而 **稠密 27B 从不陷入循环**。对于
+  NousResearch 的 Hermes Agent 这类 agentic 框架而言，这种抗循环性可以
+  胜过 MoE 在原始 decode 上的领先 —— 即最快的模型并不总是合适的 agent。
 - **MTP 增益取决于架构 × 硬件。** 实测 decode 提升：
   MoE +38%（M5）/ +23%（M4）；稠密模型 +16%（M5）但 **−7%（M4）** —— 在较慢的
   M4 GPU 上，稠密模型的草稿开销无法被摊销。因此 MTP 是逐模型、逐机器的测量，

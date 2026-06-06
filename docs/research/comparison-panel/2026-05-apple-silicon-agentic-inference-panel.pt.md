@@ -442,6 +442,28 @@ limpo para chamadas de ferramenta atômicas mas suprime os entregáveis escritos
 por isso que o asiai define o thinking **por dimensão de tarefa**, não como um único
 interruptor global.
 
+### Loop de pesquisa perfeccionista (`asiai bench --instruct loop-search`)
+
+O IFEval de turno único e o research-brief saturam em 100% nestes modelos, então
+nenhum dos dois revela o *loop de pesquisa perfeccionista*: um modelo que não aceita um
+resultado de busca ambíguo e não-confirmável e reemite consultas semanticamente
+equivalentes até que uma guardrail de ausência-de-progresso o detenha, nunca
+entregando. Uma varredura `loop-search` (9 configs, M5, b9430, thinking on/off, dois
+modos de ambiguidade) o isola:
+
+- O **MoE 35B-A3B entra em loop até o teto** — tanto para a **base quanto para o
+  finetune Qwopus, em Q4 e Q8 igualmente**. O quant mais alto não corrige isso, então o
+  loop é **arquitetural ao MoE A3B**, não um artefato de quant.
+- O **27B denso nunca entra em loop** (Q4 / Q5 / Q8): ele aceita o resultado ambíguo e
+  escreve o briefing.
+
+Portanto o líder de throughput (o MoE, ~118-123 t/s) e o líder de aptidão agêntica (o
+27B denso, ~25 t/s) são *modelos diferentes*. Para um harness como o Hermes Agent da
+NousResearch, a resistência a loop pode superar o decode bruto — o modelo mais rápido
+nem sempre é o agente certo. (Isto é o inverso do resultado de tool call, onde o
+finetune MoE era o agente mais robusto: **a aptidão é por modo-de-falha, então meça
+vários.**)
+
 ---
 
 ## Seção 6 — Operacional

@@ -57,6 +57,8 @@ deterministico, non solo ordinate:
 
 ## MacBook Pro M5 Max 128 GB · Q4
 
+<div class="wide-table" markdown>
+
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
 | **★ Tier 1 — vincitore + veloce** |||||||||| |
@@ -78,10 +80,14 @@ deterministico, non solo ordinate:
 | ✗ | ~~Qwen-27B · mlx_vlm 0.6.0~~ | ~~31.9~~ | — | 26.0 | ~~9578~~ | 0.0 | — | — | 100 |
 | ✗ | ~~Qwen-27B · vllm-mlx 0.3.0~~ | ~~20.5~~ | — | 18.1 | ~~9578~~ | — | — | 24.3 | 100 |
 
+</div>
+
 Eliminazioni: mlx_vlm+MTP fallisce la validità (75%) e rompe il long-context; sia
 le run di mlx_vlm sia vllm-mlx hanno ~9,6 s di TTFT (inutilizzabile per turno di agente).
 
 ## Mac mini M4 Pro 64 GB · Q5
+
+<div class="wide-table" markdown>
 
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -92,12 +98,24 @@ le run di mlx_vlm sia vllm-mlx hanno ~9,6 s di TTFT (inutilizzabile per turno di
 | ✓ | Qwen-27B · llamacpp b9430 | 10.4 | 10.4 | 7.2 | 397 | 0.8 | 0.279 | 31.9 | 100 |
 | ✓ | Qwen-27B · llamacpp b9430 ▲MTP | 9.7 | 9.8 | 7.5 | 409 | 0.8 | 0.272 | 35.4 | 100 |
 
+</div>
+
 ## Risultati chiave
 
 - **Il MoE 35B-A3B batte il 27B dense su ogni asse di throughput** su entrambe le
   macchine — attiva solo ~3B parametri per token, quindi fa decode ~4× più veloce
   del 27B dense ed è ~3,5× più efficiente dal punto di vista energetico (1,5 vs ~0,4 tok/s/W).
   Il throughput però non è la qualità — vedi l'avvertenza qui sotto.
+- **Il throughput non è idoneità agentica.** Su un task di ricerca ambigua — lo
+  scenario `loop-search` (`asiai bench --instruct`, vedi
+  [valutazione dev/code](dev-quality-benchmarks.md)) — il MoE 35B-A3B **va in loop
+  perfezionistico**: ri-emette query semanticamente equivalenti su un fatto
+  irrisolvibile finché un guardrail di no-progress non lo ferma, senza mai produrre
+  il deliverable. Questo vale sia in **Q4 che in Q8** (è architetturale, non un
+  artefatto del quant), mentre il **27B dense non va mai in loop**. Per un harness
+  agentico come l'Hermes Agent di NousResearch, questa resistenza al loop può
+  superare il vantaggio di decode grezzo del MoE — cioè il modello più veloce non è
+  sempre l'agente giusto.
 - **Il guadagno con MTP dipende da architettura × hardware.** Incremento di decode
   misurato: MoE +38% (M5) / +23% (M4); dense +16% (M5) ma **−7% (M4)** — sulla GPU
   più lenta dell'M4 l'overhead della draft dense non viene ammortizzato. Quindi MTP è una

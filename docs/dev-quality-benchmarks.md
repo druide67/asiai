@@ -48,6 +48,14 @@ works, not how fast it emits tokens.
   skip the main deliverable — scored deterministically by checking the required
   sections appear after the tool turns. **order-control** swaps the order
   (secondary first) as the diagnostic.
+- **loop-search** — an ambiguous-search trap: a deep warmup over clear topics,
+  then a target fact that `web_search` can never confirm (semantic reformulations
+  of the query collapse to one answer). Scores whether the model accepts the
+  ambiguity and delivers (sober) or re-issues equivalent queries until a
+  no-progress cap halts it (perfectionist), plus an output-token-collapse signal.
+  Two modes (`short` sub-1KB result / `unconfirmable` plausible-but-missing-fact).
+  This is the failure mode that single-turn IFEval and research-brief don't
+  surface.
 
 `asiai bench --language <code>` (deterministic, 8 languages):
 
@@ -107,6 +115,26 @@ Running `--language fr` on the finetune and its base, same quant:
 French intact (adherence, diacritics, no ASCII-stripping) — a task-specific
 finetune did *not* cost another language, which is worth verifying rather than
 assuming.
+
+### Perfectionist research loop (loop-search)
+
+`research-brief` saturates at 100% for every model here, so it does not
+discriminate the *perfectionist loop* that breaks real agents. The `loop-search`
+scenario does. Across a sweep of dense 27B and MoE 35B-A3B configs (M5, llama.cpp
+b9430, thinking on/off, both ambiguity modes):
+
+- The **35B-A3B MoE loops** — it re-issues semantically-equivalent searches on an
+  unconfirmable fact until a no-progress guardrail halts it, instead of accepting
+  the uncertainty and delivering. It does so in **both Q4 and Q8** (architectural,
+  not a quant artefact), for the base and the Opus-distilled finetune alike.
+- The **dense 27B never loops** (Q4 / Q5 / Q8): it accepts the ambiguous result
+  and writes the briefing.
+
+For an agentic harness such as NousResearch's Hermes Agent this is the deciding
+signal: the loop-resistant dense model is the safer main even when a faster MoE
+exists — throughput buys nothing if the agent spirals on one ambiguous step. It is
+also the inverse lesson of the tool-call result above (where the MoE finetune was
+the *more* robust agent): **fitness is per-failure-mode, so measure several.**
 
 ## How to read this
 
