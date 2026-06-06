@@ -442,6 +442,28 @@ lo más limpio para llamadas a herramientas atómicas pero suprime los entregabl
 escritos — razón por la que asiai configura el thinking **por dimensión de tarea**,
 no como un único interruptor global.
 
+### Bucle de investigación perfeccionista (`asiai bench --instruct loop-search`)
+
+IFEval de un solo turno y research-brief se saturan al 100% en estos modelos, así que
+ninguno saca a la luz el *bucle de investigación perfeccionista*: un modelo que no acepta
+un resultado de búsqueda ambiguo e inconfirmable y reemite consultas semánticamente
+equivalentes hasta que una salvaguarda de no-progreso lo detiene, sin entregar nunca. Un
+barrido `loop-search` (9 configs, M5, b9430, thinking on/off, dos modos de ambigüedad) lo
+aísla:
+
+- El **MoE 35B-A3B entra en bucle hasta el tope** — tanto para **la base como para el
+  finetune Qwopus, en Q4 y Q8 por igual**. El quant más alto no lo arregla, así que el
+  bucle es **arquitectónico del MoE A3B**, no un artefacto del quant.
+- El **denso 27B nunca entra en bucle** (Q4 / Q5 / Q8): acepta el resultado ambiguo y
+  redacta el briefing.
+
+Así que el líder en throughput (el MoE, ~118-123 t/s) y el líder en aptitud agéntica (el
+denso 27B, ~25 t/s) son *modelos distintos*. Para un harness como el Hermes Agent de
+NousResearch, la resistencia al bucle puede pesar más que el decode bruto — el modelo más
+rápido no siempre es el agente adecuado. (Esto es el inverso del resultado de tool-call,
+donde el finetune MoE era el agente más robusto: **la aptitud es por modo de fallo, así
+que mide varios.**)
+
 ---
 
 ## Sección 6 — Operativo

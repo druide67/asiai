@@ -51,6 +51,8 @@ MTP = speculative decoding에 사용되는 모델 내장 Multi-Token Prediction 
 
 ## MacBook Pro M5 Max 128 GB · Q4
 
+<div class="wide-table" markdown>
+
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
 | **★ Tier 1 — 우승 + 빠름** |||||||||| |
@@ -72,10 +74,14 @@ MTP = speculative decoding에 사용되는 모델 내장 Multi-Token Prediction 
 | ✗ | ~~Qwen-27B · mlx_vlm 0.6.0~~ | ~~31.9~~ | — | 26.0 | ~~9578~~ | 0.0 | — | — | 100 |
 | ✗ | ~~Qwen-27B · vllm-mlx 0.3.0~~ | ~~20.5~~ | — | 18.1 | ~~9578~~ | — | — | 24.3 | 100 |
 
+</div>
+
 탈락: mlx_vlm+MTP는 유효성(75%)에 실패하고 long-context를 깨뜨린다. mlx_vlm 두 실행과
 vllm-mlx는 TTFT가 약 9.6 s(에이전트 턴당 사용 불가)다.
 
 ## Mac mini M4 Pro 64 GB · Q5
+
+<div class="wide-table" markdown>
 
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -86,12 +92,22 @@ vllm-mlx는 TTFT가 약 9.6 s(에이전트 턴당 사용 불가)다.
 | ✓ | Qwen-27B · llamacpp b9430 | 10.4 | 10.4 | 7.2 | 397 | 0.8 | 0.279 | 31.9 | 100 |
 | ✓ | Qwen-27B · llamacpp b9430 ▲MTP | 9.7 | 9.8 | 7.5 | 409 | 0.8 | 0.272 | 35.4 | 100 |
 
+</div>
+
 ## 주요 발견
 
 - **35B-A3B MoE는 두 머신 모두에서 모든 throughput 축에 걸쳐 27B 밀집형을 능가한다** —
   토큰당 약 3B 파라미터만 활성화하므로 밀집형 27B보다 약 4× 빠르게 decode하고
   약 3.5× 더 에너지 효율적이다 (1.5 vs 약 0.4 tok/s/W). 다만 throughput은 품질이
   아니다 — 아래 주의사항 참조.
+- **throughput은 에이전트 적합성이 아니다.** 모호한 검색 작업 — `loop-search`
+  시나리오(`asiai bench --instruct`, [dev/code 평가](dev-quality-benchmarks.md) 참조) —
+  에서 35B-A3B **MoE는 완벽주의적으로 루프에 빠진다**: 해결 불가능한 사실에 대해
+  의미적으로 동등한 쿼리를 무진전 가드레일이 멈출 때까지 재발행하며, 산출물을 결코
+  내놓지 않는다. 이는 **Q4와 Q8 모두에서** 나타나며(양자화 인공물이 아니라 아키텍처적),
+  반면 **dense 27B는 결코 루프에 빠지지 않는다**. NousResearch의 Hermes Agent 같은
+  에이전트 하네스에서는 이 루프 저항성이 MoE의 원시 decode 우위를 능가할 수 있다 —
+  즉 가장 빠른 모델이 항상 올바른 에이전트는 아니다.
 - **MTP 이득은 아키텍처 × 하드웨어에 따라 달라진다.** 측정된 decode 향상:
   MoE +38% (M5) / +23% (M4); 밀집형 +16% (M5) 이지만 **−7% (M4)** — 더 느린 M4
   GPU에서는 밀집형 draft 오버헤드가 상각되지 않는다. 따라서 MTP는 보편적 승리가 아니라

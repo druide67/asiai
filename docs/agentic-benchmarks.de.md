@@ -58,6 +58,8 @@ nicht bloß sortiert:
 
 ## MacBook Pro M5 Max 128 GB · Q4
 
+<div class="wide-table" markdown>
+
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
 | **★ Tier 1 — Gewinner + schnell** |||||||||| |
@@ -79,11 +81,15 @@ nicht bloß sortiert:
 | ✗ | ~~Qwen-27B · mlx_vlm 0.6.0~~ | ~~31.9~~ | — | 26.0 | ~~9578~~ | 0.0 | — | — | 100 |
 | ✗ | ~~Qwen-27B · vllm-mlx 0.3.0~~ | ~~20.5~~ | — | 18.1 | ~~9578~~ | — | — | 24.3 | 100 |
 
+</div>
+
 Eliminierungen: mlx_vlm+MTP scheitert an der Validität (75%) und bricht Long-Context;
 sowohl die mlx_vlm-Läufe als auch vllm-mlx haben ~9,6 s TTFT (pro Agent-Turn
 unbrauchbar).
 
 ## Mac mini M4 Pro 64 GB · Q5
+
+<div class="wide-table" markdown>
 
 | | model · engine · MTP | dec t/s | peak | 50K | TTFT ms | reuse | t/s/W | RAMpk GB | valid% |
 |:--|---|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -94,12 +100,24 @@ unbrauchbar).
 | ✓ | Qwen-27B · llamacpp b9430 | 10.4 | 10.4 | 7.2 | 397 | 0.8 | 0.279 | 31.9 | 100 |
 | ✓ | Qwen-27B · llamacpp b9430 ▲MTP | 9.7 | 9.8 | 7.5 | 409 | 0.8 | 0.272 | 35.4 | 100 |
 
+</div>
+
 ## Zentrale Erkenntnisse
 
 - **Das 35B-A3B MoE schlägt das 27B Dense auf jeder Throughput-Achse** auf beiden
   Maschinen — es aktiviert nur ~3B Parameter pro Token, dekodiert also ~4× schneller
   als das Dense-27B und ist ~3,5× energieeffizienter (1,5 vs. ~0,4 tok/s/W).
   Throughput ist allerdings nicht gleich Qualität — siehe den Vorbehalt unten.
+- **Throughput ist nicht gleich agentische Eignung.** Bei einer mehrdeutigen
+  Suchaufgabe — dem `loop-search`-Szenario (`asiai bench --instruct`, siehe die
+  [Dev/Code-Evaluierung](dev-quality-benchmarks.md)) — **dreht das 35B-A3B MoE
+  perfektionistisch in Schleifen**: es setzt zu einer nicht auflösbaren Tatsache
+  immer wieder semantisch äquivalente Anfragen ab, bis ein No-Progress-Guardrail
+  es stoppt, und produziert das Deliverable nie. Das gilt in **sowohl Q4 als auch
+  Q8** (architektonisch, kein Quant-Artefakt), während das **Dense-27B nie in
+  Schleifen dreht**. Für ein agentisches Harness wie den Hermes Agent von
+  NousResearch kann diese Schleifenresistenz den Roh-Decode-Vorsprung des MoE
+  überwiegen — d. h. das schnellste Modell ist nicht immer der richtige Agent.
 - **Der MTP-Gewinn hängt von Architektur × Hardware ab.** Gemessener Decode-Zuwachs:
   MoE +38% (M5) / +23% (M4); Dense +16% (M5), aber **−7% (M4)** — auf der langsameren
   M4-GPU wird der Draft-Overhead des Dense nicht amortisiert. MTP ist also eine

@@ -272,3 +272,35 @@ body {
 [data-md-color-scheme="slate"] ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
+
+/* --- Dense benchmark tables: keep ALL columns, fit width with NO horizontal scroll --- */
+/* Wrap a wide markdown table in <div class="wide-table" markdown> … </div>.
+   table-layout:fixed + width:100% forces the table into the content width; cells
+   wrap instead of overflowing, so there is no scrollbar. */
+.md-typeset .wide-table table {
+  font-size: 0.64rem;
+  width: 100%;
+  table-layout: fixed;
+  display: table; /* override Material's block+overflow wrapper that adds the scroll */
+}
+.md-typeset .wide-table th,
+.md-typeset .wide-table td {
+  padding: 0.25em 0.3em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+/* marker column narrow, model·engine column wide, the 9 numeric columns share the rest */
+.md-typeset .wide-table th:first-child,
+.md-typeset .wide-table td:first-child {
+  width: 2.5rem;
+  text-align: left;
+  /* section-title rows ("Tier 1 — …") put their text in this first cell with the
+     rest empty; let it overflow onto those empty cells instead of wrapping vertically */
+  white-space: nowrap;
+  overflow: visible;
+}
+.md-typeset .wide-table th:nth-child(2),
+.md-typeset .wide-table td:nth-child(2) {
+  width: 22%;
+}

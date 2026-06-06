@@ -416,6 +416,28 @@ entgegengesetzte Richtung zum Tool-Call-Ergebnis oben — Thinking-off ist am sa
 Tool-Calls, unterdrückt aber schriftliche Deliverables — weshalb asiai Thinking
 **pro Aufgaben-Dimension** setzt, nicht als einen globalen Schalter.
 
+### Perfektionistische Recherche-Schleife (`asiai bench --instruct loop-search`)
+
+Single-Turn-IFEval und research-brief sättigen über diese Modelle hinweg bei 100%,
+sodass keines die *perfektionistische Recherche-Schleife* zutage fördert: ein Modell,
+das ein mehrdeutiges, nicht bestätigbares Suchresultat nicht akzeptieren will und
+semantisch äquivalente Anfragen erneut absetzt, bis ein No-Progress-Guardrail es
+stoppt, ohne je zu liefern. Ein `loop-search`-Sweep (9 Konfigurationen, M5, b9430,
+Thinking on/off, zwei Mehrdeutigkeitsmodi) isoliert sie:
+
+- Das **35B-A3B MoE dreht bis zum Cap in Schleifen** — für **sowohl die Basis als
+  auch das Qwopus-Finetune, in Q4 und Q8 gleichermaßen**. Der höhere Quant behebt es
+  nicht, die Schleife ist also **architektonisch zum A3B MoE**, kein Quant-Artefakt.
+- Das **Dense-27B dreht nie in Schleifen** (Q4 / Q5 / Q8): es akzeptiert das
+  mehrdeutige Resultat und schreibt das Briefing.
+
+Der Throughput-Spitzenreiter (das MoE, ~118-123 t/s) und der Spitzenreiter der
+agentischen Eignung (das Dense-27B, ~25 t/s) sind also *verschiedene Modelle*. Für
+ein Harness wie den Hermes Agent von NousResearch kann Schleifenresistenz den
+Roh-Decode überwiegen — das schnellste Modell ist nicht immer der richtige Agent.
+(Dies ist die Umkehrung des Tool-Call-Ergebnisses, wo das MoE-Finetune der robustere
+Agent war: **Eignung ist pro Fehlermodus, also miss mehrere.**)
+
 ---
 
 ## Section 6 — Operational

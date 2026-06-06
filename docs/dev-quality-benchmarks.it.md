@@ -57,6 +57,14 @@ davvero, non quanto velocemente emette token.
   deliverable principale — valutato deterministicamente verificando che le
   sezioni richieste compaiano dopo i turni di tool. **order-control** scambia
   l'ordine (prima il secondario) come diagnostica.
+- **loop-search** — una trappola di ricerca ambigua: un warmup approfondito su
+  argomenti chiari, poi un fatto target che `web_search` non può mai confermare (le
+  riformulazioni semantiche della query collassano a un'unica risposta). Valuta se
+  il modello accetta l'ambiguità e consegna (sobrio) o ri-emette query equivalenti
+  finché un cap di no-progress non lo ferma (perfezionista), più un segnale di
+  collasso dei token di output. Due modalità (`short`, risultato sotto 1 KB /
+  `unconfirmable`, fatto plausibile ma mancante). È il fallimento che né l'IFEval
+  single-turn né research-brief fanno emergere.
 
 `asiai bench --language <code>` (deterministico, 8 lingue):
 
@@ -122,6 +130,28 @@ Eseguendo `--language fr` sul finetune e sulla sua base, stesso quant:
 intatto il francese del modello base (adherence, diacritici, nessuna rimozione
 degli accenti ASCII) — un finetune task-specifico *non* è costato un'altra lingua,
 cosa che vale la pena verificare anziché dare per scontata.
+
+### Loop di ricerca perfezionistico (loop-search)
+
+`research-brief` satura al 100% per ogni modello qui, quindi non discrimina il
+*loop perfezionistico* che manda in crisi gli agenti reali. Lo scenario
+`loop-search` sì. Su uno sweep di configurazioni dense 27B e MoE 35B-A3B (M5,
+llama.cpp b9430, thinking on/off, entrambe le modalità di ambiguità):
+
+- Il **MoE 35B-A3B va in loop** — ri-emette ricerche semanticamente equivalenti su
+  un fatto non confermabile finché un guardrail di no-progress non lo ferma, invece
+  di accettare l'incertezza e consegnare. Lo fa sia in **Q4 che in Q8**
+  (architetturale, non un artefatto del quant), tanto per il base quanto per il
+  finetune distillato da Opus.
+- Il **27B dense non va mai in loop** (Q4 / Q5 / Q8): accetta il risultato ambiguo
+  e scrive il briefing.
+
+Per un harness agentico come l'Hermes Agent di NousResearch questo è il segnale
+decisivo: il modello dense resistente al loop è il main più sicuro anche quando
+esiste un MoE più veloce — il throughput non vale nulla se l'agente entra in spirale
+su un singolo passo ambiguo. È anche la lezione inversa del risultato sulle tool
+call sopra (dove il finetune MoE era l'agente *più* robusto): **l'idoneità è
+per-modalità-di-fallimento, quindi misurane diverse.**
 
 ## Come leggere questa pagina
 

@@ -329,3 +329,85 @@ AGENTIC_SCENARIOS: dict[str, dict] = {
         "max_turns": INSTRUCT_MAX_TURNS_DEEP,
     },
 }
+
+
+# --- agentic: loop-search (perfectionist research loop) -----------------------
+# A perfectionist research-loop failure mode (seen in agentic harnesses such as
+# NousResearch's Hermes Agent): a model that won't accept an ambiguous/insufficient
+# web_search result re-issues semantically-equivalent queries until a no-progress
+# guardrail halts it — never producing the deliverable. Two ambiguity modes and a
+# deep warmup before the trap:
+#   * "short"          — sub-1KB result inviting elaboration ("too short, no processing")
+#   * "unconfirmable"  — a plausible result that simply lacks the exact fact asked
+# The ~10-topic warmup (RESEARCH_TOPICS_DEEP) precedes the ambiguous target so the
+# loop hits at depth (the real fail was turn ~#9 after ~25 min), not cold-start. Any
+# query mentioning the target keywords is treated as the SAME request — semantic
+# reformulations ("confirmed" / "2026" / "30 June") collapse to one ambiguous answer.
+
+LOOP_SEARCH_TARGET_HEADER = "## Transfer"
+# Specific enough that warmup queries (energy, space, health…) never match, but
+# broad enough to catch the model's semantic reformulations of the transfer query.
+LOOP_SEARCH_TARGET_KEYWORDS = [
+    "falinor",
+    "transfer",
+    "transfert",
+    "signing",
+    "signed",
+    "rumour",
+    "rumor",
+]
+LOOP_SEARCH_AMBIGUOUS_RESULTS = {
+    "short": (
+        "Result too short to process (under 1KB, no usable content). "
+        "Snippet only: 'Falinor linked with a move.'"
+    ),
+    "unconfirmable": (
+        "Top result (a sports blog): the club has been active this window and several names "
+        "circulate among fans; the page covers squad needs and past signings but states no "
+        "official confirmation either way for any specific player."
+    ),
+}
+
+_LOOP_SEARCH_PROMPT = (
+    "Write a markdown briefing with one `## <Topic>` section (2-3 sentences) per topic, "
+    "researching each with web_search first:\n"
+    + "\n".join(t[0] for t in RESEARCH_TOPICS_DEEP)
+    + "\n"
+    + LOOP_SEARCH_TARGET_HEADER
+    + "\n\n"
+    "For the final `## Transfer` section, use web_search to state whether the rumoured "
+    "transfer of player D. Falinor is OFFICIALLY CONFIRMED. If web_search does not confirm "
+    "it, write exactly `Not officially confirmed` and move on — do NOT re-search the same "
+    "thing. Your final answer must contain ALL sections."
+)
+
+LOOP_SEARCH_MAX_TURNS = 32  # 10 warmup searches + ambiguous-loop room + deliverable
+LOOP_SEARCH_DEFAULT_CAP = 5  # mirrors Hermes Agent's idempotent_no_progress_block (halt after N)
+
+# cap = redundant ambiguous searches tolerated before web_search is pulled from the
+# toolset (mirrors the prod guardrail). Exposed so the bench can also probe cap=3
+# (threshold ablation) by overriding it.
+LOOP_SEARCH_SCENARIOS: dict[str, dict] = {
+    "loop-search-short": {
+        "prompt": _LOOP_SEARCH_PROMPT,
+        "warmup_topics": RESEARCH_TOPICS_DEEP,
+        "warmup_sections": RESEARCH_SECTIONS_DEEP,
+        "target_header": LOOP_SEARCH_TARGET_HEADER,
+        "target_keywords": LOOP_SEARCH_TARGET_KEYWORDS,
+        "ambiguous_result": LOOP_SEARCH_AMBIGUOUS_RESULTS["short"],
+        "mode": "short",
+        "cap": LOOP_SEARCH_DEFAULT_CAP,
+        "max_turns": LOOP_SEARCH_MAX_TURNS,
+    },
+    "loop-search-unconfirmable": {
+        "prompt": _LOOP_SEARCH_PROMPT,
+        "warmup_topics": RESEARCH_TOPICS_DEEP,
+        "warmup_sections": RESEARCH_SECTIONS_DEEP,
+        "target_header": LOOP_SEARCH_TARGET_HEADER,
+        "target_keywords": LOOP_SEARCH_TARGET_KEYWORDS,
+        "ambiguous_result": LOOP_SEARCH_AMBIGUOUS_RESULTS["unconfirmable"],
+        "mode": "unconfirmable",
+        "cap": LOOP_SEARCH_DEFAULT_CAP,
+        "max_turns": LOOP_SEARCH_MAX_TURNS,
+    },
+}
