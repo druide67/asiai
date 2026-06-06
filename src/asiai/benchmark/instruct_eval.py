@@ -30,6 +30,7 @@ from asiai.benchmark.instruct_eval_scenarios import (
     DATASET_VERSION,
     INSTRUCT_AGENTIC_SYSTEM,
     INSTRUCT_TOOLS,
+    LOOP_SEARCH_SCENARIOS,
     VERIFIABLE_PROMPTS,
 )
 from asiai.benchmark.instruct_verifiers import evaluate_prompt
@@ -43,7 +44,8 @@ _FIDELITY_SCORERS = {
     "constraint-preservation": score_constraint,
 }
 _FIDELITY_NAMES = tuple(_FIDELITY_SCORERS)
-ALL_SCENARIOS = ("verifiable", *_AGENTIC_NAMES, *_FIDELITY_NAMES)
+_LOOP_SEARCH_NAMES = tuple(LOOP_SEARCH_SCENARIOS)
+ALL_SCENARIOS = ("verifiable", *_AGENTIC_NAMES, *_FIDELITY_NAMES, *_LOOP_SEARCH_NAMES)
 DEFAULT_SCENARIOS = ("verifiable", "research-brief")
 
 
@@ -274,6 +276,147 @@ def _run_agentic_scenario(
     }
 
 
+# --- family: loop-search (perfectionist research loop) ------------------------
+
+
+def _is_target_query(query: str, keywords: list[str]) -> bool:
+    q = query.lower()
+    return any(k in q for k in keywords)
+
+
+def _run_loop_search_scenario(
+    base_url: str,
+    model: str,
+    scenario: str,
+    *,
+    repeats: int,
+    extra_body: dict[str, Any] | None,
+    timeout: int,
+    on_progress: Any,
+) -> dict[str, Any]:
+    """Probe the perfectionist research-loop failure mode.
+
+    A deep warmup (clear topics) then an ambiguous target whose ``web_search`` always
+    returns the same insufficient result regardless of phrasing. Measures whether the
+    model accepts it and delivers (sober) or re-issues semantically-equivalent queries
+    until the cap pulls ``web_search`` (perfectionist — the failure). Tracks the
+    ``output_tokens`` collapse seen when a model spirals on a sub-task, via
+    ``min_completion_tokens``. See ``LOOP_SEARCH_SCENARIOS``.
+    """
+    cfg = LOOP_SEARCH_SCENARIOS[scenario]
+    prompt = cfg["prompt"]
+    warmup_topics, warmup_sections = cfg["warmup_topics"], cfg["warmup_sections"]
+    target_header, target_keywords = cfg["target_header"], cfg["target_keywords"]
+    ambiguous_result, cap, max_turns = cfg["ambiguous_result"], cfg["cap"], cfg["max_turns"]
+    all_sections = [*warmup_sections, target_header]
+    n_sections = len(all_sections)
+    no_search_tools = _tools_without_search(INSTRUCT_TOOLS)
+    results: list[dict[str, Any]] = []
+    for rep in range(repeats):
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": INSTRUCT_AGENTIC_SYSTEM},
+            {"role": "user", "content": prompt},
+        ]
+        contents: list[str] = []
+        ambiguous_count = 0
+        completion_per_turn: list[int] = []
+        did_secondary = False
+        for _ in range(max_turns):
+            # Pull web_search once the ambiguous target has been searched `cap` times
+            # (mirrors the prod no-progress guardrail). Warmup searches never count.
+            capped = ambiguous_count >= cap
+            tools = no_search_tools if capped else INSTRUCT_TOOLS
+            res = chat(
+                base_url,
+                model,
+                messages,
+                tools=tools,
+                max_tokens=2048,
+                extra_body=extra_body,
+                timeout=timeout,
+            )
+            if res.text:
+                contents.append(res.text)
+            if res.completion_tokens is not None:
+                completion_per_turn.append(res.completion_tokens)
+            tcs = res.tool_calls or []
+            if not tcs:
+                break
+            assistant_tcs: list[dict[str, Any]] = []
+            tool_msgs: list[dict[str, Any]] = []
+            for i, tc in enumerate(tcs):
+                tc_id = tc.get("id") or f"call_{i}"
+                name = tc.get("name") or ""
+                assistant_tcs.append(
+                    {
+                        "id": tc_id,
+                        "type": "function",
+                        "function": {"name": name, "arguments": tc.get("arguments_raw") or "{}"},
+                    }
+                )
+                if name == "web_search":
+                    args = tc.get("arguments_parsed") or {}
+                    query = str(args.get("query", ""))
+                    if _is_target_query(query, target_keywords):
+                        ambiguous_count += 1
+                        result = ambiguous_result
+                    else:
+                        result = _canned_search(query, warmup_topics)
+                elif name == "save_note":
+                    did_secondary = True
+                    result = "Note saved to the notes file."
+                else:
+                    result = "OK."
+                tool_msgs.append({"role": "tool", "tool_call_id": tc_id, "content": result})
+            messages.append(
+                {"role": "assistant", "content": res.text or "", "tool_calls": assistant_tcs}
+            )
+            messages.extend(tool_msgs)
+        joined = "\n".join(contents)
+        present = _count_named_sections(joined, all_sections)
+        target_done = _count_named_sections(joined, [target_header]) == 1
+        hit_cap = ambiguous_count >= cap
+        delivered = present == n_sections
+        min_out = min(completion_per_turn) if completion_per_turn else None
+        first_out = completion_per_turn[0] if completion_per_turn else None
+        results.append(
+            {
+                "ambiguous_loop_count": ambiguous_count,
+                "hit_cap": hit_cap,
+                "sections_present": present,
+                "target_section_written": target_done,
+                "delivered": delivered,
+                "accepted_ambiguous": delivered and not hit_cap,
+                "did_secondary": did_secondary,
+                "min_completion_tokens": min_out,
+                "first_completion_tokens": first_out,
+                "repeat": rep,
+            }
+        )
+        if on_progress:
+            on_progress(
+                f"  [{scenario} r{rep + 1}] loop={ambiguous_count} hit_cap={hit_cap} "
+                f"delivered={delivered} sections={present}/{n_sections} min_out={min_out}"
+            )
+    min_outs = [
+        r["min_completion_tokens"] for r in results if r["min_completion_tokens"] is not None
+    ]
+    loop_counts = [r["ambiguous_loop_count"] for r in results]
+    return {
+        "episodes": len(results),
+        "sections_total": n_sections,
+        "cap": cap,
+        "mode": cfg["mode"],
+        "pct_hit_cap": _pct([r["hit_cap"] for r in results]),
+        "pct_accepted_ambiguous": _pct([r["accepted_ambiguous"] for r in results]),
+        "pct_delivered": _pct([r["delivered"] for r in results]),
+        "pct_target_written": _pct([r["target_section_written"] for r in results]),
+        "mean_loop_count": (round(statistics.fmean(loop_counts), 2) if loop_counts else None),
+        "mean_min_completion_tokens": (round(statistics.fmean(min_outs), 1) if min_outs else None),
+        "per_episode": results,
+    }
+
+
 # --- family: code-fidelity (honesty-audit / multi-file-scope / constraint) ----
 
 
@@ -382,6 +525,17 @@ def run_instruct_eval(
     for scenario in _FIDELITY_NAMES:
         if scenario in requested:
             results[scenario.replace("-", "_")] = _run_code_fidelity_scenario(
+                base_url,
+                model,
+                scenario,
+                repeats=repeats,
+                extra_body=extra_body,
+                timeout=timeout,
+                on_progress=on_progress,
+            )
+    for scenario in _LOOP_SEARCH_NAMES:
+        if scenario in requested:
+            results[scenario.replace("-", "_")] = _run_loop_search_scenario(
                 base_url,
                 model,
                 scenario,

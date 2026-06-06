@@ -178,6 +178,68 @@ class TestCountSections:
         assert _count_named_sections("no headers", RESEARCH_SECTIONS) == 0
 
 
+# --- loop-search (perfectionist research loop) --------------------------------
+
+
+def _is_ambiguous_result(content: str) -> bool:
+    c = content.lower()
+    return "too short to process" in c or "no official confirmation" in c
+
+
+class TestLoopSearch:
+    def test_sober_model_accepts_and_delivers(self):
+        # One transfer search, accepts the ambiguous result, writes the full briefing.
+        full = "\n".join(f"{h}\nfinding." for h in [*RESEARCH_SECTIONS_DEEP, "## Transfer"])
+        calls = {"n": 0}
+
+        def chat(base_url, model, messages, **kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return ChatResult(
+                    text="",
+                    tool_calls=[_tc("web_search", {"query": "Falinor transfer confirmed?"})],
+                    completion_tokens=200,
+                )
+            return ChatResult(text=full, finish_reason="stop", completion_tokens=300)
+
+        with (
+            patch("asiai.benchmark.instruct_eval.chat", side_effect=chat),
+            patch("asiai.benchmark.instruct_eval.collect_run_metadata", return_value={}),
+        ):
+            out = run_instruct_eval("u", "e", "m", scenarios=["loop-search-short"])
+        r = out["instruct_results"]["loop_search_short"]
+        assert r["pct_hit_cap"] == 0.0
+        assert r["pct_accepted_ambiguous"] == 100.0
+        assert r["pct_delivered"] == 100.0
+        assert r["mean_loop_count"] == 1.0
+        assert r["cap"] == 5
+
+    def test_perfectionist_loops_to_cap_and_skips_deliverable(self):
+        # Re-searches the transfer while web_search is offered; once the cap pulls it,
+        # emits only a partial section — the faithful perfectionist failure.
+        def chat(base_url, model, messages, **kw):
+            names = {(t.get("function") or {}).get("name") for t in (kw.get("tools") or [])}
+            if "web_search" in names:
+                return ChatResult(
+                    text="",
+                    tool_calls=[_tc("web_search", {"query": "Falinor transfer 30 June confirmed"})],
+                    completion_tokens=70,
+                )
+            return ChatResult(text="## Transfer\nstill checking.", finish_reason="stop")
+
+        with (
+            patch("asiai.benchmark.instruct_eval.chat", side_effect=chat),
+            patch("asiai.benchmark.instruct_eval.collect_run_metadata", return_value={}),
+        ):
+            out = run_instruct_eval("u", "e", "m", scenarios=["loop-search-unconfirmable"])
+        r = out["instruct_results"]["loop_search_unconfirmable"]
+        assert r["pct_hit_cap"] == 100.0
+        assert r["mean_loop_count"] == 5.0  # capped at the configured cap
+        assert r["pct_accepted_ambiguous"] == 0.0
+        assert r["pct_delivered"] == 0.0
+        assert r["mode"] == "unconfirmable"
+
+
 # --- orchestrator -------------------------------------------------------------
 
 
