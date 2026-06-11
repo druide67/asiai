@@ -110,12 +110,22 @@ def _run_adherence(
         ratio = _adherence_ratio(res.text or "", profile)
         degen = check_degenerate(res.text or "")["degenerate"] if res.error is None else True
         density = _accent_density(res.text or "")
+        # Accent-density floor (announced in the module docstring): clean
+        # target-language text at near-zero accent density means the model
+        # answered in ASCII-stripped orthography. Only meaningful when the
+        # answer IS in-language and non-degenerate.
+        stripped = (
+            density < profile.min_accent_density
+            if profile.min_accent_density is not None and ratio >= 0.5 and not degen
+            else False
+        )
         per_probe.append(
             {
                 "adherence_ratio": ratio,
                 "in_language": ratio >= 0.5,
                 "degenerate": degen,
                 "accent_density": density,
+                "accent_stripped": stripped,
                 "error": res.error,
                 "text": truncate_text(res.text or ""),
             }
@@ -132,6 +142,7 @@ def _run_adherence(
         "mean_adherence_ratio": _mean([p["adherence_ratio"] for p in clean]),
         "pct_non_degenerate": _pct([not p["degenerate"] for p in clean]),
         "mean_accent_density": _mean([p["accent_density"] for p in clean]),
+        "pct_accent_stripped": _pct([p["accent_stripped"] for p in clean]),
         "per_probe": per_probe,
     }
 
