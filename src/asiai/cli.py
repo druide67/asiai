@@ -1376,6 +1376,13 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Parse prompt types (explicit --prompts overrides --quick)
     if args.prompts:
         prompt_names = [p.strip() for p in args.prompts.split(",")]
+        from asiai.benchmark.prompts import PROMPTS
+
+        unknown = [p for p in prompt_names if p not in PROMPTS]
+        if unknown:
+            print(f"{red('✗')} Unknown prompt(s): {', '.join(unknown)}")
+            print(f"  Available: {', '.join(PROMPTS)}")
+            return 1
 
     runs = max(1, min(getattr(args, "runs", 1), 100))
     power = getattr(args, "power", False)

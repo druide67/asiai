@@ -58,7 +58,7 @@ def check_and_alert(
             "source": _get_source_version(),
         }
 
-        sent = _send_webhook(webhook_url, payload)
+        sent, http_status = _send_webhook(webhook_url, payload)
 
         record = {
             "ts": ts,
@@ -67,7 +67,7 @@ def check_and_alert(
             "message": alert["message"],
             "details": json.dumps(alert["details"]),
             "webhook_sent": sent,
-            "webhook_status": alert.get("_http_status"),
+            "webhook_status": http_status,
         }
         store_alert(db_path, record)
         fired.append(payload)
@@ -144,17 +144,18 @@ def _should_fire(alert_type: str, db_path: str, cooldown: int = DEFAULT_COOLDOWN
     return len(recent) == 0
 
 
-def _send_webhook(url: str, payload: dict, timeout: int = 10) -> bool:
+def _send_webhook(url: str, payload: dict, timeout: int = 10) -> tuple[bool, int | None]:
     """POST JSON payload to webhook URL. Fire-and-forget.
 
-    Returns True if HTTP 2xx, False otherwise.
+    Returns ``(sent, http_status)``: sent is True iff HTTP 2xx; the status
+    is recorded in the alert row (None when no HTTP exchange happened).
     """
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         logger.warning("Webhook URL must use http(s), ignoring: %s", url)
-        return False
+        return False, None
 
     try:
         data = json.dumps(payload).encode("utf-8")
@@ -165,13 +166,13 @@ def _send_webhook(url: str, payload: dict, timeout: int = 10) -> bool:
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return 200 <= resp.status < 300
+            return 200 <= resp.status < 300, resp.status
     except urllib.error.HTTPError as e:
         logger.warning("Webhook HTTP error %d: %s", e.code, url)
-        return False
+        return False, e.code
     except (urllib.error.URLError, OSError, ValueError) as e:
         logger.warning("Webhook error: %s (%s)", e, url)
-        return False
+        return False, None
 
 
 def _get_source_version() -> str:
