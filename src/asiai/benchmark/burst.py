@@ -509,8 +509,10 @@ def _run_one_burst_pass(
                 # silently-dropped TCP connection (no FIN received) can leave a
                 # future never-completing. Cap the wait at per-call timeout + 30s
                 # margin so the bench never hangs indefinitely.
+                consumed: set[concurrent.futures.Future] = set()
                 try:
                     for fut in concurrent.futures.as_completed(futures, timeout=timeout + 30):
+                        consumed.add(fut)
                         call_results.append(fut.result())
                 except concurrent.futures.TimeoutError:
                     logger.warning(
@@ -518,12 +520,32 @@ def _run_one_burst_pass(
                         size,
                         timeout + 30,
                     )
-                    for fut in futures:
+                    for i, fut in enumerate(futures):
+                        if fut in consumed:
+                            continue
                         if fut.done():
                             try:
                                 call_results.append(fut.result())
                             except Exception as e:  # noqa: BLE001
                                 logger.debug("future raised: %s", e)
+                        else:
+                            # Never-completing call: count it as an error so n
+                            # and errors_count reflect what really happened
+                            # instead of silently shrinking the sample.
+                            fut.cancel()
+                            call_results.append(
+                                BurstCallResult(
+                                    call_index=i,
+                                    ok=False,
+                                    status_code=0,
+                                    latency_ms=0.0,
+                                    ttft_ms=None,
+                                    completion_tokens=0,
+                                    prompt_tokens=None,
+                                    error="timeout/never-completed",
+                                    output_valid=False,
+                                )
+                            )
             wall_time_s = time.perf_counter() - t0
         reading = probe.read()
     finally:
@@ -578,6 +600,27 @@ def _aggregate_passes(passes: list[dict[str, Any]]) -> dict[str, Any]:
                 out.append(float(v))
         return out
 
+    def _extract_present(key: str) -> list[float]:
+        """Like _extract but skips passes where the metric is None/absent
+        (power probe unavailable, footprint sampler off)."""
+        return [float(p[key]) for p in passes if isinstance(p.get(key), (int, float))]
+
+    def _agg_optional(key: str) -> dict[str, float] | None:
+        values = _extract_present(key)
+        return _agg(values) if values else None
+
+    # Warnings must survive aggregation: union of duplicate processes (by
+    # pid) and merged error summaries, otherwise --burst-runs > 1 hides
+    # everything the gates caught.
+    seen_pids: set[str] = set()
+    duplicate_processes: list[dict[str, str]] = []
+    for p in passes:
+        for proc in p.get("duplicate_processes") or []:
+            if proc.get("pid") not in seen_pids:
+                seen_pids.add(proc.get("pid", ""))
+                duplicate_processes.append(proc)
+    error_summary = sorted({e for p in passes for e in (p.get("error_summary") or [])})
+
     return {
         "n_passes": n,
         "n": passes[0]["n"],
@@ -596,8 +639,18 @@ def _aggregate_passes(passes: list[dict[str, Any]]) -> dict[str, Any]:
         "throughput_calls_per_s": _agg(_extract(["throughput_calls_per_s"])),
         "throughput_tokens_aggregate_per_s": _agg(_extract(["throughput_tokens_aggregate_per_s"])),
         "errors_count": _agg(_extract(["errors_count"])),
+        "error_summary": error_summary,
         "memory_pressure_swap_delta_mb": _agg(_extract(["memory_pressure_swap_delta_mb"])),
         "memory_pressure_swapouts_delta": _agg(_extract(["memory_pressure_swapouts_delta"])),
+        "duplicate_processes": duplicate_processes,
+        "gpu_watts": _agg_optional("gpu_watts"),
+        "soc_watts": _agg_optional("soc_watts"),
+        "tok_s_per_watt": _agg_optional("tok_s_per_watt"),
+        "tok_s_per_soc_watt": _agg_optional("tok_s_per_soc_watt"),
+        "energy_per_token_j": _agg_optional("energy_per_token_j"),
+        "output_valid_pct": _agg_optional("output_valid_pct"),
+        "engine_rss_mb": _agg_optional("engine_rss_mb"),
+        "engine_phys_footprint_mb": _agg_optional("engine_phys_footprint_mb"),
         "passes": passes,
     }
 
