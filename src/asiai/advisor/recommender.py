@@ -172,7 +172,9 @@ def _from_local(
             group_idx=idx,
         )
         runs = stats["runs"]
-        confidence = "high" if runs >= 5 else ("medium" if runs >= 1 else "low")
+        # Groups always have >= 1 run by construction; "low" is reserved for
+        # the catalog fallback in _from_catalog.
+        confidence = "high" if runs >= 5 else "medium"
         results.append(
             Recommendation(
                 engine=engine,
