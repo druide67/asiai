@@ -2545,12 +2545,15 @@ def main(argv: list[str] | None = None) -> int:
     add_auth_subparser(subparsers)
 
     # Discover sub-CLI plugins (skip for --version / --help to preserve cold-start).
-    _fast_path = argv is not None and bool(set(argv[:2]) & {"--version", "--help", "-h", "version"})
+    # Normalize argv first: the console entry point calls main() with no
+    # argument, which used to disable this fast path for every real CLI run.
+    effective_argv = sys.argv[1:] if argv is None else argv
+    _fast_path = bool(set(effective_argv[:2]) & {"--version", "--help", "-h", "version"})
     plugin_commands: dict = {}
     if not _fast_path:
         _load_subcommand_plugins(subparsers, plugin_commands)
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(effective_argv)
 
     if args.command is None:
         parser.print_help()
