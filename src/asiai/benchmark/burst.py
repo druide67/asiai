@@ -489,7 +489,12 @@ def _run_one_burst_pass(
         with MemoryWatcher() as mem_watcher, mem_sampler:
             t0 = time.perf_counter()
             call_results: list[BurstCallResult] = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=size) as pool:
+            # No `with` on the pool: the context manager's shutdown(wait=True)
+            # would re-block on the very futures the defensive timeout just
+            # gave up on, hanging the bench it exists to protect.
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=size)
+            timed_out = False
+            try:
                 futures = [
                     pool.submit(
                         _do_one_call,
@@ -515,6 +520,7 @@ def _run_one_burst_pass(
                         consumed.add(fut)
                         call_results.append(fut.result())
                 except concurrent.futures.TimeoutError:
+                    timed_out = True
                     logger.warning(
                         "burst size=%d: as_completed hit %.0fs timeout, collecting partial results",
                         size,
@@ -546,6 +552,10 @@ def _run_one_burst_pass(
                                     output_valid=False,
                                 )
                             )
+            finally:
+                # On timeout, abandon the stuck worker threads (daemonic
+                # enough for a CLI: they hold no state worth waiting for).
+                pool.shutdown(wait=not timed_out, cancel_futures=True)
             wall_time_s = time.perf_counter() - t0
         reading = probe.read()
     finally:

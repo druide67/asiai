@@ -608,11 +608,16 @@ def render_bench(report: dict, context_size: int = 0) -> None:
         for display_name, data in items:
             if data.get("runs_count", 1) < 2:
                 continue
-            ci_lo = data.get("ci95_lower", 0)
-            ci_hi = data.get("ci95_upper", 0)
+            ci_lo = data.get("ci95_lower")
+            ci_hi = data.get("ci95_upper")
             p90 = data.get("p90_tok_s", 0)
             p90_ttft = data.get("p90_ttft_ms", 0)
-            stat_parts = [f"95% CI: [{ci_lo:.1f}, {ci_hi:.1f}] tok/s"]
+            # ci95 is null when there are no repeated runs to estimate noise
+            # from — show n/a rather than a fake zero-width interval.
+            if ci_lo is not None and ci_hi is not None:
+                stat_parts = [f"95% CI: [{ci_lo:.1f}, {ci_hi:.1f}] tok/s"]
+            else:
+                stat_parts = ["95% CI: n/a (single run)"]
             if p90 > 0:
                 stat_parts.append(f"P90: {p90:.1f} tok/s")
             if p90_ttft > 0:
