@@ -57,8 +57,6 @@ SERVICES: dict[str, ServiceProfile] = {
 # Backward-compatibility aliases (monitor profile)
 LABEL = SERVICES["monitor"].label
 PLIST_PATH = SERVICES["monitor"].plist_path
-LOG_PATH = SERVICES["monitor"].log_path
-ERR_LOG_PATH = SERVICES["monitor"].err_log_path
 
 
 def _find_asiai_command() -> list[str]:

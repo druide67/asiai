@@ -580,17 +580,6 @@ def get_agent_info() -> dict:
     return _load_agent_json()
 
 
-def fetch_agent_count(api_url: str = "") -> dict:
-    """Fetch agent count from community API.
-
-    Returns:
-        Dict with ``registered``, ``active_24h``, ``active_7d`` keys, or empty dict.
-    """
-    url = f"{api_url or get_api_url()}/agent-count"
-    data = _safe_get(url)
-    return data if isinstance(data, dict) else {}
-
-
 def fetch_leaderboard(
     chip: str = "",
     model: str = "",

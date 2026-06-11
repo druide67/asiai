@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -89,21 +89,4 @@ class EngineVersionReport:
             "source": self.source,
             "notes": self.notes,
             "version_scheme": self.version_scheme,
-        }
-
-
-# Kept for symmetry / future use; report lists are the primary return type.
-@dataclass
-class VersionSnapshot:
-    """Aggregate of every engine's version report at a point in time."""
-
-    polled_at: int = 0
-    check_upstream: bool = False
-    engines: list[EngineVersionReport] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "polled_at": self.polled_at,
-            "check_upstream": self.check_upstream,
-            "engines": [e.to_dict() for e in self.engines],
         }
