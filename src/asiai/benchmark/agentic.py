@@ -592,6 +592,7 @@ def run_agentic_bench(
     extra_body: dict[str, Any] | None = None,
     repeats: int = 1,
     engine_version: str = "",
+    on_repeat: Any = None,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -615,6 +616,13 @@ def run_agentic_bench(
         repeats: Number of times to repeat the whole protocol (default 1). Use
             >=5 for variance: each repetition's runs are tagged with ``repeat``
             and ``phase_stats`` reports per-phase median + CV across them.
+        on_repeat: Optional callback ``on_repeat(repeat_idx)`` invoked at the
+            START of each repetition AFTER the first (idx >= 1). The caller
+            wires this to an engine restart when ``--agentic-auto-restart`` is
+            set, so the ``cold`` phase of every repetition is genuinely cold —
+            otherwise repeats 2..N start with the prefix cache already warmed
+            by the previous repetition, biasing the cold/prefix verdict. When
+            no restart is wired, ``cold_warm_repeats`` flags the contamination.
 
     Returns the result dict with ``schema_version``, ``runs``, ``repeats``,
     ``phase_stats``, ``prefix_cache_reuse_verdict``, ``quality_gates``, and
@@ -643,7 +651,17 @@ def run_agentic_bench(
     if watcher is not None:
         watcher.__enter__()
     try:
+        cold_warm_repeats = False
         for repeat_idx in range(max(1, repeats)):
+            if repeat_idx >= 1:
+                if on_repeat is not None:
+                    # Caller restarts the engine here (auto-restart): keeps the
+                    # cold phase genuinely cold across repetitions.
+                    on_repeat(repeat_idx)
+                else:
+                    # No restart wired — repeats 2..N start warm. Flag it so
+                    # downstream consumers don't read the later cold runs as cold.
+                    cold_warm_repeats = True
             for phase in selected:
                 logger.info("[%s] starting (repeat %d/%d)", phase.name, repeat_idx + 1, repeats)
                 run = _do_single_run(
@@ -706,6 +724,10 @@ def run_agentic_bench(
         "quality_gates": quality_gates,
         "extra_body": extra_body or {},
         "repeats": max(1, repeats),
+        # True when repeats>1 ran without an inter-repeat restart: the cold
+        # phase of repeats 2..N was warmed by the previous repetition, so the
+        # prefix-cache verdict rests on repeat 0's cold run only.
+        "cold_warm_repeats": cold_warm_repeats,
         "phase_stats": _phase_stats(runs),
         "footprint": _summarize_footprint(runs),
         "runs": [asdict(r) for r in runs],

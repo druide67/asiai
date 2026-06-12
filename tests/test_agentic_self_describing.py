@@ -221,6 +221,46 @@ def test_agentic_recording_v4_and_metadata(tmp_path):
     assert fp["engine_rss_warm_mb"] == 20000.0  # warm phase present
 
 
+def test_repeats_without_restart_flags_cold_contamination():
+    """repeats>1 with no on_repeat restart → repeats 2..N start warm; the
+    result flags it instead of silently presenting them as cold."""
+    with (
+        patch("asiai.benchmark.agentic._do_single_run", side_effect=_fake_single),
+        patch("asiai.benchmark.agentic.time.sleep"),
+    ):
+        out = run_agentic_bench(
+            base_url="http://localhost:8080",
+            engine_name="llamacpp",
+            model="m.gguf",
+            pause=0,
+            only=["cold"],
+            repeats=3,
+            skip_quality_gates=True,
+        )
+    assert out["cold_warm_repeats"] is True
+
+
+def test_repeats_with_restart_callback_stays_cold():
+    """on_repeat (auto-restart) fires once per extra repeat and clears the flag."""
+    seen: list[int] = []
+    with (
+        patch("asiai.benchmark.agentic._do_single_run", side_effect=_fake_single),
+        patch("asiai.benchmark.agentic.time.sleep"),
+    ):
+        out = run_agentic_bench(
+            base_url="http://localhost:8080",
+            engine_name="llamacpp",
+            model="m.gguf",
+            pause=0,
+            only=["cold"],
+            repeats=3,
+            skip_quality_gates=True,
+            on_repeat=seen.append,
+        )
+    assert seen == [1, 2]  # called before repeats 2 and 3, not before repeat 1
+    assert out["cold_warm_repeats"] is False
+
+
 def test_burst_recording_v2_and_metadata():
     from asiai.benchmark.burst import run_burst
 
