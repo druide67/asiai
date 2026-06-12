@@ -108,14 +108,21 @@ def store_snapshot(db_path: str, snap: dict) -> None:
 
 
 def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
-    """Delete entries older than `days` days. Returns number of deleted rows."""
+    """Delete old high-volume time-series rows. Returns number of deleted rows.
+
+    Purges ONLY the monitoring series that grow without bound:
+    ``metrics`` (one row per monitor tick) and ``benchmark_process`` (per-run
+    process samples, 7-day window). ``benchmarks`` and ``models`` are
+    deliberately KEPT forever — they are the benchmark history the advisor
+    and leaderboard read, and a years-long campaign record the user expects
+    to persist. (Before, this also wiped benchmarks/models, which would have
+    silently discarded the whole campaign history on the first purge.)
+    """
     cutoff = int(time.time()) - (days * 86400)
     # Process metrics have shorter retention (7 days)
     proc_cutoff = int(time.time()) - (7 * 86400)
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute("DELETE FROM benchmarks WHERE ts < ?", (cutoff,))
-        conn.execute("DELETE FROM models WHERE ts < ?", (cutoff,))
         conn.execute("DELETE FROM benchmark_process WHERE ts < ?", (proc_cutoff,))
         cursor = conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
         conn.commit()
