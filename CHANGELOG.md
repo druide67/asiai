@@ -5,6 +5,148 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased](https://github.com/druide67/asiai/compare/v1.13.0...HEAD)
+
+Audit follow-up (2026-06-11/12). Correctness, hardening and accuracy; no
+breaking changes.
+
+### Added
+
+- Language bench: the documented accent-density floor is now implemented —
+  `accent_stripped` per probe and `pct_accent_stripped` in the summary flag
+  in-language answers that dropped their diacritics.
+- Engine docs for vMLX and Rapid-MLX (the two adapters previously missing
+  a page).
+
+### Changed
+
+- Benchmark CI95 reports `null` for a single run instead of a fake
+  zero-width interval; the t-quantile uses the degrees of freedom pooled
+  across prompt groups, consistent with the pooled standard deviation.
+- Recommendation advisor compares only `metrics_version: 3` rows (the
+  1.11.0 metrics generation) and its percentile is aligned on the
+  reporter's linear interpolation, so p99 agrees across both surfaces.
+- Docs accuracy: engine count corrected to 9 (adds vMLX + Rapid-MLX),
+  manifest versions to 1.13.0, and the bench-modes page reframed as three
+  *performance* modes plus four *quality* modes.
+
+### Fixed
+
+- Standard-runner SSE parser ignored `delta.reasoning` (mlx-lm spelling),
+  starting the TTFT clock late and miscounting throughput under thinking
+  mode.
+- Burst mode: the timeout path double-counted already-consumed futures
+  (inflating `n` and percentiles), silently dropped never-completing calls
+  (now synthetic errors), and the pool context manager re-blocked on the
+  abandoned futures — the very hang the timeout existed to prevent.
+- The duplicate-process gate was inert for the `mlx-lm` / `omlx` / aux
+  engine spellings (keys now normalized; patterns corrected).
+- The IOReport power sampler leaked CoreFoundation objects on every
+  sample — unbounded growth in the long-lived `asiai web` daemon — and
+  raced across threads. All Create/Copy-rule objects are now released and
+  `sample()`/`close()` are lock-guarded.
+- `/api/v1/snapshot`, `/status` and `/metrics` ran the full (subprocess +
+  per-engine HTTP) collection on the event loop; now off-loaded with
+  `asyncio.to_thread`.
+- 90-day retention is finally enforced: `purge_old()` is wired at monitor
+  start. Benchmark history is exempt and kept forever.
+- Agentic repeats: the cold phase is no longer contaminated by the
+  previous repetition's cache.
+- Fleet: `upsert_node` no longer wipes a stored `auth_token` on update;
+  the `poll_all` aggregate timeout is no longer neutralized by the pool's
+  blocking shutdown.
+- `daemon_stop` surfaces a launchctl failure instead of reporting
+  "stopped".
+- Smaller correctness fixes: webhook HTTP status recorded, `engines.json`
+  read-modify-write under a file lock, `--prompts` validated against known
+  names, loopback TCP connection double-count, MCP tools moved off the
+  event loop.
+
+### Tests
+
+- The suite is now hermetic: an autouse fixture isolates every
+  user-facing path (DB, configs, fleet/auth state, daemon plists, cards,
+  audit log) to a throwaway home, and a guard test (`test_hermetic.py`)
+  fails loudly if a future change re-exposes a real path. Running the
+  suite no longer migrates the real `metrics.db`.
+
+## [1.13.0](https://github.com/druide67/asiai/compare/v1.12.0...v1.13.0) — 2026-06-07
+
+### Added
+
+- `asiai bench --instruct` loop-search scenarios — a perfectionist
+  research-loop instruction-following evaluation (#27).
+
+## [1.12.0](https://github.com/druide67/asiai/compare/v1.11.0...v1.12.0) — 2026-06-05
+
+### Added
+
+- Quality bench modes — `asiai bench --code`, `--language`, `--instruct`,
+  `--thinking-ablation`: deterministic correctness and language-retention
+  evaluations that need no LLM judge for the core signal (#25).
+- Apple Silicon agentic inference comparison panel (research page).
+
+## [1.11.0](https://github.com/druide67/asiai/compare/v1.10.0...v1.11.0) — 2026-06-02
+
+Major benchmark instrumentation overhaul (`metrics_version: 3`).
+
+### Added
+
+- SoC (full package) power as the headline, with per-rail energy in the
+  IOReport probe and decode-scoped energy across all modes.
+- Deterministic output-validity gates, a cross-family-safe prefix-cache
+  reuse signal, a SOLO clean-table gate, an `enable_thinking` guard, and
+  the burst-mode probe.
+- Agentic ≥5-run variance with a Student-t confidence interval, a live
+  thermal signal, and decode warmup.
+
+### Changed
+
+- Unified samplers with an `ExitStack` / try-finally probe lifecycle,
+  corrected token counting on a single decode formula, and a shared
+  engine registry. Adversarial-review findings addressed.
+
+## [1.10.0](https://github.com/druide67/asiai/compare/v1.9.1...v1.10.0) — 2026-06-01
+
+### Added
+
+- Unified power / thermal / memory instrumentation across every bench
+  mode (#20).
+- Per-engine memory footprint and KV-cache occupancy, with RSS as the
+  cross-family headline and `phys_footprint` as a second column
+  (#18, #19).
+
+## [1.9.1](https://github.com/druide67/asiai/compare/v1.9.0...v1.9.1) — 2026-05-30
+
+### Fixed
+
+- Rapid-MLX is now a managed engine; fleet poll timeout honored;
+  `asiai versions` show-all output (#17).
+
+## [1.9.0](https://github.com/druide67/asiai/compare/v1.8.0...v1.9.0) — 2026-05-30
+
+### Added
+
+- `asiai versions` — running / installed / available engine versions,
+  plus `aisctl upgrade` integration and a `/versions` web page (#15).
+
+## [1.8.0](https://github.com/druide67/asiai/compare/v1.6.0...v1.8.0) — 2026-05-28
+
+No 1.7.0 release was tagged.
+
+### Added
+
+- Fleet Phase 2 — authenticated cross-host writes (#13).
+- Fleet Phase 1 — `/fleet` page and `/api/v1/fleet/*` endpoints, config,
+  parallel polling, and CLI.
+- Rapid-MLX engine adapter and `asiai bench --burst-mode`
+  (US-METHOD-003).
+
+### Fixed
+
+- Fleet: dropped `0.0.0.0` from the TrustedHost allowlist (bandit B104);
+  de-flaked the MemoryWatcher tests with active polling.
+
 ## [1.6.0](https://github.com/druide67/asiai/compare/v1.5.0...v1.6.0) — 2026-05-20
 
 ### Added — Agentic Bench Mode
@@ -71,6 +213,81 @@ prefixes.
 ### Tests
 
 51 tests in the agentic suite (15 + 14 + 9 + 13). `ruff` clean.
+
+## [1.5.0](https://github.com/druide67/asiai/compare/v1.4.1...v1.5.0) — 2026-04-01
+
+### Added
+
+- TurboQuant KV cache support — `--kv-cache` flag, detection, and a card
+  chip — plus TurboQuant branding on benchmark cards.
+- TurboQuant benchmark page (Llama 70B at 6.3 tok/s on M4 Pro 64 GB).
+
+## [1.4.1](https://github.com/druide67/asiai/compare/v1.4.0...v1.4.1) — 2026-03-31
+
+### Added
+
+- Full i18n translations for all 35 documentation pages in 8 languages.
+
+### Changed
+
+- Unified "Precision Instrument" brand identity; WCAG accessibility pass;
+  Mermaid diagrams.
+
+### Fixed
+
+- hreflang URLs on translated pages; remaining GEO/AEO meta-description
+  gaps.
+
+## [1.4.0](https://github.com/druide67/asiai/compare/v1.3.0...v1.4.0) — 2026-03-28
+
+### Added
+
+- Model unloading between benchmarks, with gate checks and adaptive
+  cooldown.
+- Universal VRAM estimate via `ri_phys_footprint` (footprint-based, all
+  engines).
+- Power metrics on the web Monitor and History pages.
+
+## [1.3.0](https://github.com/druide67/asiai/compare/v1.2.0...v1.3.0) — 2026-03-27
+
+### Added
+
+- Redesigned web dashboard with self-hosted fonts and a demo video.
+
+### Fixed
+
+- Dashboard crash on `Undefined` values; winner display.
+
+## [1.2.0](https://github.com/druide67/asiai/compare/v1.1.1...v1.2.0) — 2026-03-24
+
+### Added
+
+- Continuous power monitoring via IOReport without sudo, dual-source
+  power in benchmarks with cross-validation, and always-on power.
+- Bench page improvements — model dropdown and compare mode.
+
+### Changed
+
+- SEO: unique meta descriptions across all doc pages; homepage title,
+  version, and Twitter card fixes.
+
+## [1.1.1](https://github.com/druide67/asiai/compare/v1.1.0...v1.1.1) — 2026-03-22
+
+### Fixed
+
+- Packaging hotfix; no functional change.
+
+## [1.1.0](https://github.com/druide67/asiai/compare/v1.0.1...v1.1.0) — 2026-03-22
+
+### Added
+
+- Cross-model benchmark comparison (`asiai bench --compare`).
+- GitHub social preview image.
+
+### Fixed
+
+- Community client handles 429 rate-limit and 409 duplicate responses
+  gracefully.
 
 ## [1.0.1](https://github.com/druide67/asiai/compare/v1.0.0...v1.0.1) — 2026-03-13
 
@@ -215,6 +432,15 @@ prefixes.
 ### Fixed
 
 - `--context-size` overflow: input tokens + max_tokens no longer exceeds the target context window
+
+## [0.3.2](https://github.com/druide67/asiai/compare/v0.3.0...v0.3.2) — 2026-03-04
+
+### Fixed
+
+- Case-insensitive model matching for mlx-lm paths.
+- Regression detection compares only matching prompt types.
+- sudo capability check uses `powermetrics` directly instead of
+  `sudo -n true`.
 
 ## [0.3.0](https://github.com/druide67/asiai/compare/v0.2.0...v0.3.0) — 2026-03-04
 
