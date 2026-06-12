@@ -62,7 +62,7 @@ asiai bench --quick --card --share    # Bench + shareable card in ~15 seconds
 
 ### `asiai detect`
 
-Auto-detect running inference engines across 7 ports.
+Auto-detect running inference engines across all known engine ports.
 
 ```
 $ asiai detect
