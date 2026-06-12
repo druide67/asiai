@@ -1,7 +1,11 @@
 # Benchmark modes
 
-`asiai bench` has three modes, each answering a different question, all built on
-one shared instrumentation brick (`asiai.benchmark.quality_gates`).
+`asiai bench` has three **performance** modes, each answering a different
+question, all built on one shared instrumentation brick
+(`asiai.benchmark.quality_gates`). The four **quality** modes — `--code`,
+`--language`, `--instruct`, `--thinking-ablation` — answer "is the output
+*correct*?" rather than "how fast?" and are documented in
+[Quality benchmarks](dev-quality-benchmarks.md).
 
 | Mode | Flag | Question it answers |
 |------|------|---------------------|
@@ -52,7 +56,7 @@ applicable.
 ## Shared instrumentation brick
 
 `asiai.benchmark.quality_gates` is the single source of truth, consumed by all
-three modes:
+three performance modes:
 
 - `PowerThermalProbe` — IOReport (no sudo) window sampler.
   - `read()` → `{gpu_watts, soc_watts, energy_joules, thermal_speed_limit, …}`

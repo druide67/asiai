@@ -1,8 +1,8 @@
 # asiai
-# Version: 1.6.0
-# Last-updated: 2026-04-25
+# Version: 1.13.0
+# Last-updated: 2026-06-12
 
-> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). It auto-detects 8 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo, TurboQuant), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
+> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). It auto-detects 9 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, vMLX, Rapid-MLX, Exo), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
 
 asiai is designed for both human operators and AI agents managing local LLM infrastructure. If you are an AI agent with MCP support, configure `asiai mcp` as an MCP server for native tool access. Otherwise, start with the Agent Integration Guide and use `GET /api/status` for a quick health check.
 

@@ -4,7 +4,7 @@ description: "Common questions about asiai: supported engines, Apple Silicon req
 type: faq
 faq:
   - q: "What is asiai?"
-    a: "asiai is an open-source CLI tool that benchmarks and monitors LLM inference engines on Apple Silicon Macs. It supports 7 engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo) and measures tok/s, TTFT, power consumption, and VRAM usage."
+    a: "asiai is an open-source CLI tool that benchmarks and monitors LLM inference engines on Apple Silicon Macs. It supports 9 engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, vMLX, Rapid-MLX, Exo) and measures tok/s, TTFT, power consumption, and VRAM usage."
   - q: "What is the fastest LLM engine on Apple Silicon?"
     a: "In benchmarks on M4 Pro 64GB with Qwen3-Coder-30B, LM Studio (MLX backend) achieves 102 tok/s vs Ollama's 70 tok/s — 46% faster for token generation. However, Ollama has lower time-to-first-token latency."
   - q: "Does asiai work on Intel Macs?"
@@ -35,7 +35,7 @@ faq:
 
 **What is asiai?**
 
-asiai is an open-source CLI tool that benchmarks and monitors LLM inference engines on Apple Silicon Macs. It supports 7 engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo) and measures tok/s, TTFT, power consumption, and VRAM usage with zero dependencies.
+asiai is an open-source CLI tool that benchmarks and monitors LLM inference engines on Apple Silicon Macs. It supports 9 engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, vMLX, Rapid-MLX, Exo) and measures tok/s, TTFT, power consumption, and VRAM usage with zero dependencies.
 
 **Does asiai work on Intel Macs or Linux?**
 
