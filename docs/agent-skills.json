@@ -10,7 +10,9 @@
     "pipx": "pipx install asiai",
     "homebrew": "brew install druide67/tap/asiai"
   },
-  "platforms": ["macos-arm64"],
+  "platforms": [
+    "macos-arm64"
+  ],
   "requirements": {
     "macos": ">=14.0",
     "apple_silicon": "M1|M2|M3|M4|M5",
@@ -112,6 +114,24 @@
       "description": "Remove the local agent registration (delete stored X-Agent-Id and X-Agent-Token credentials). Used to opt out of community agent registry.",
       "invoke": "asiai unregister",
       "docs": "https://asiai.dev/agent/"
+    },
+    {
+      "name": "manage-fleet",
+      "description": "Push write commands to remote asiai nodes and poll their health (Phase 2 fleet manager over loopback/LAN).",
+      "invoke": "asiai fleet",
+      "docs": "https://asiai.dev/fleet-mode/"
+    },
+    {
+      "name": "show-versions",
+      "description": "Show running / installed / available versions of each inference engine and of asiai's own components.",
+      "invoke": "asiai versions",
+      "docs": "https://asiai.dev/versions-mode/"
+    },
+    {
+      "name": "manage-auth",
+      "description": "Manage API tokens that authenticate fleet write commands (create, list, revoke).",
+      "invoke": "asiai auth",
+      "docs": "https://asiai.dev/fleet-mode/"
     }
   ],
   "related": {
