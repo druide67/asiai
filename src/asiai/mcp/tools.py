@@ -45,7 +45,8 @@ async def check_inference_health(ctx: Context) -> dict:
     from asiai.collectors.system import collect_memory, collect_thermal
 
     app_ctx = _get_ctx(ctx)
-    statuses = collect_engines_status(app_ctx.engines)
+    # Engine probes are blocking HTTP round-trips — keep them off the loop.
+    statuses = await asyncio.to_thread(collect_engines_status, app_ctx.engines)
 
     engines_up: dict[str, bool] = {}
     for es in statuses:
@@ -61,9 +62,9 @@ async def check_inference_health(ctx: Context) -> dict:
     else:
         status = "error"
 
-    mem = collect_memory()
-    thermal = collect_thermal()
-    gpu = collect_gpu()
+    mem = await asyncio.to_thread(collect_memory)
+    thermal = await asyncio.to_thread(collect_thermal)
+    gpu = await asyncio.to_thread(collect_gpu)
 
     return {
         "status": status,
@@ -102,11 +103,11 @@ async def get_inference_snapshot(ctx: Context) -> dict:
     from asiai.storage.db import store_engine_status, store_snapshot
 
     app_ctx = _get_ctx(ctx)
-    snapshot = collect_full_snapshot(app_ctx.engines)
+    snapshot = await asyncio.to_thread(collect_full_snapshot, app_ctx.engines)
 
-    store_snapshot(app_ctx.db_path, snapshot)
+    await asyncio.to_thread(store_snapshot, app_ctx.db_path, snapshot)
     if snapshot.get("engines_status"):
-        store_engine_status(app_ctx.db_path, snapshot["engines_status"])
+        await asyncio.to_thread(store_engine_status, app_ctx.db_path, snapshot["engines_status"])
 
     return snapshot
 
@@ -133,10 +134,15 @@ async def list_models(ctx: Context) -> dict:
     app_ctx = _get_ctx(ctx)
     result: dict = {"engines": []}
 
-    for engine in app_ctx.engines:
+    def _collect_engines() -> None:
+        # Blocking HTTP probes per engine — runs in a worker thread.
+        for engine in app_ctx.engines:
+            _collect_one(engine)
+
+    def _collect_one(engine) -> None:
         try:
             if not engine.is_reachable():
-                continue
+                return
             running = engine.list_running()
             entry = {
                 "engine": engine.name,
@@ -156,6 +162,8 @@ async def list_models(ctx: Context) -> dict:
             result["engines"].append(entry)
         except Exception as e:
             logger.warning("Engine %s error: %s", engine.name, e)
+
+    await asyncio.to_thread(_collect_engines)
 
     all_models = []
     for eng in result["engines"]:
@@ -535,7 +543,7 @@ async def diagnose(ctx: Context) -> dict:
     from asiai.doctor import run_checks
 
     app_ctx = _get_ctx(ctx)
-    checks = run_checks(app_ctx.db_path)
+    checks = await asyncio.to_thread(run_checks, app_ctx.db_path)
 
     results = []
     summary: dict[str, int] = {"ok": 0, "warn": 0, "fail": 0}

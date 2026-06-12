@@ -30,6 +30,8 @@ def tmp_fleet(tmp_path, monkeypatch):
 def client(tmp_path, tmp_fleet):
     state = AppState(engines=[], db_path=str(tmp_path / "bench.db"))
     app = create_app(state)
+    # Reset rate limiter between tests so the suite is order-independent.
+    fleet_routes._rate_limiter.reset()
     return TestClient(app)
 
 

@@ -33,9 +33,15 @@ def count_tcp_connections(port: int) -> int:
         )
         if out.returncode != 0 or not out.stdout:
             return 0
-        # lsof output has a header line; each subsequent line is a connection
-        lines = out.stdout.strip().splitlines()
-        return max(0, len(lines) - 1)
+        # lsof lists BOTH endpoints of a loopback connection (client and
+        # server socket), so counting raw lines double-counts local clients.
+        # Keep only the server side: lines whose LOCAL address is :PORT
+        # (i.e. ":PORT->" before the arrow).
+        lines = out.stdout.strip().splitlines()[1:]  # drop header
+        server_side = [ln for ln in lines if f":{port}->" in ln]
+        # Remote (non-loopback) connections only ever show the server side,
+        # so this filter is exact for them too.
+        return len(server_side)
     except Exception as e:
         logger.debug("lsof TCP count on port %d failed: %s", port, e)
         return 0

@@ -140,7 +140,7 @@ class PowerMonitor:
                 try:
                     self._process.kill()
                     self._process.wait(timeout=3)
-                except OSError as e:
+                except (OSError, subprocess.TimeoutExpired) as e:
                     logger.debug("powermetrics kill failed: %s", e)
             except OSError as e:
                 logger.debug("powermetrics terminate failed: %s", e)

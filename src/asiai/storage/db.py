@@ -84,6 +84,9 @@ def store_snapshot(db_path: str, snap: dict) -> None:
                 snap.get("power_source", ""),
             ),
         )
+        # Same replace semantics as the metrics row above: re-storing a
+        # snapshot at an identical ts must not duplicate the model rows.
+        conn.execute("DELETE FROM models WHERE ts = ?", (snap["ts"],))
         for model in snap.get("models", []):
             conn.execute(
                 """INSERT INTO models
