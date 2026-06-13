@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased](https://github.com/druide67/asiai/compare/v1.13.0...HEAD)
+## [1.14.0](https://github.com/druide67/asiai/compare/v1.13.0...v1.14.0) — 2026-06-13
 
 Audit follow-up (2026-06-11/12). Correctness, hardening and accuracy; no
 breaking changes.
