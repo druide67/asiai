@@ -247,7 +247,10 @@ def upsert_node(
             if entry.get("nickname") == nickname:
                 entry["asiai_url"] = asiai_url
                 entry["role"] = role
-                entry["auth_token"] = auth_token
+                # None means "not provided" on an update — re-registering a
+                # node without --auth-token must not wipe the stored token.
+                if auth_token is not None:
+                    entry["auth_token"] = auth_token
                 save_fleet(config)
                 return entry
 

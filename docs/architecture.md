@@ -65,6 +65,6 @@ AI agent → stdio/SSE/HTTP → FastMCP → tool call
 
 1. **Zero dependencies for core** — CLI, collectors, engines, storage use only stdlib Python. Optional extras (`[web]`, `[tui]`, `[mcp]`) add dependencies only when needed.
 2. **Shared Data Layer** — The same SQLite database serves CLI, web, MCP, and Prometheus. No separate data stores.
-3. **Adapter pattern** — All 7 engines implement `InferenceEngine` ABC. Adding a new engine = 1 file + register in `detect.py`.
+3. **Adapter pattern** — All 9 engines implement `InferenceEngine` ABC. Adding a new engine = 1 file + register in `detect.py`.
 4. **Lazy imports** — Each CLI command imports its dependencies locally, keeping startup time fast.
 5. **macOS-native** — `ioreg` for GPU, `launchd` for daemons, `lsof` for inference activity. No Linux abstractions.

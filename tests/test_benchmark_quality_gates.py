@@ -146,6 +146,31 @@ def test_duplicate_subprocess_error_returns_empty():
     assert result == []
 
 
+def test_duplicate_detected_for_adapter_spelled_names():
+    # Adapter names ("mlx-lm", "llamacpp-aux-2") are normalized to the
+    # canonical map keys — the gate used to be inert for these spellings.
+    fake = _fake_ps_out(
+        [
+            "100 /usr/bin/python mlx_lm.server --port 8081",
+            "101 /usr/bin/python mlx_lm.server --port 8082",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        assert len(check_duplicate_processes("mlx-lm")) == 2
+        assert len(check_duplicate_processes("mlxlm")) == 2
+
+    fake_aux = _fake_ps_out(
+        [
+            "200 /opt/homebrew/bin/llama-server --port 8091",
+            "201 /opt/homebrew/bin/llama-server --port 8091",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake_aux
+        assert len(check_duplicate_processes("llamacpp-aux-2")) == 2
+
+
 # --- MemoryWatcher --------------------------------------------------------
 
 
@@ -727,12 +752,13 @@ def _ps_result(stdout: str):
 
 def test_check_other_engines_resident_flags_foreign_engine():
     # Target is llamacpp; an mlx-lm server is also resident => flagged.
+    # The map keys are canonical match keys, so the report says "mlxlm".
     ps = "  PID COMMAND\n  100 /usr/bin/python mlx_lm.server --port 8081\n  200 /bin/zsh\n"
     with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
         found = check_other_engines_resident("llamacpp")
     engines = {f["engine"] for f in found}
-    assert "mlx-lm" in engines
-    assert all(f["pid"] == "100" for f in found if f["engine"] == "mlx-lm")
+    assert "mlxlm" in engines
+    assert all(f["pid"] == "100" for f in found if f["engine"] == "mlxlm")
 
 
 def test_check_other_engines_resident_excludes_target():

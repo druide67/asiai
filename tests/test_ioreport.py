@@ -121,6 +121,7 @@ def _can_create_sampler() -> bool:
         return False
 
 
+@pytest.mark.apple_silicon
 @pytest.mark.skipif(
     not _can_create_sampler(),
     reason="IOReport not available (CI VM or non-Apple Silicon)",

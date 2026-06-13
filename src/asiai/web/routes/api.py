@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING
 
@@ -54,7 +55,9 @@ def _get_or_refresh_snapshot(state: AppState) -> dict:
 async def api_snapshot(request: Request) -> JSONResponse:
     """Full system + engine snapshot. Cached 5s."""
     state = request.app.state.app_state
-    snapshot = _get_or_refresh_snapshot(state)
+    # Collection shells out + HTTP-probes every engine (~6s cold on a loaded
+    # host) — keep it off the event loop, same as monitor.py and fleet.py.
+    snapshot = await asyncio.to_thread(_get_or_refresh_snapshot, state)
     return JSONResponse(snapshot)
 
 
@@ -69,7 +72,8 @@ async def api_status(request: Request) -> JSONResponse:
     else:
         from asiai.collectors.snapshot import collect_full_snapshot
 
-        snapshot = collect_full_snapshot(
+        snapshot = await asyncio.to_thread(
+            collect_full_snapshot,
             state.engines,
             ioreport_sampler=state.ioreport_sampler,
         )
@@ -110,7 +114,7 @@ async def api_status(request: Request) -> JSONResponse:
 async def api_metrics(request: Request) -> Response:
     """Prometheus exposition format endpoint."""
     state = request.app.state.app_state
-    snapshot = _get_or_refresh_snapshot(state)
+    snapshot = await asyncio.to_thread(_get_or_refresh_snapshot, state)
 
     # Get latest benchmark results if available
     benchmarks = None

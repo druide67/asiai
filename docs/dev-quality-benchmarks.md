@@ -65,7 +65,24 @@ works, not how fast it emits tokens.
 - **diacritics** — trap prompts whose correct answer must contain specific
   accented tokens (`café`, `préféré`); an ASCII-stripped answer fails.
 
-All three modes are JSON-only and compare across models by diffing the output.
+`asiai bench --thinking-ablation` (cost/benefit of the thinking config):
+
+Runs one representative multi-turn agentic file-editing load (the tool-call-stress
+turns, which accumulate context) under three thinking configurations and reports
+the trade-off that decides the production setting:
+
+- **enable-off** — no reasoning generated (preserve is moot).
+- **enable-on-preserve-on** — reasoning kept in multi-turn history: coherent
+  across turns, but context grows.
+- **enable-on-preserve-off** — reasoning generated each turn but stripped from
+  history: cheaper context, fresher each turn, less loop amplification.
+
+Per config it reports tool-call quality, latency per turn, and prompt (context)
+tokens at turn N. The history is rebuilt *with* `reasoning_content` so
+`preserve_thinking` has a real effect (without that, preserve on vs off would be
+a no-op). Schema `thinking-ablation-v1`; takes a single `--url` target.
+
+All four modes are JSON-only and compare across models by diffing the output.
 
 ## Worked example — Qwen3.6-35B-A3B vs Qwopus3.6-35B-A3B vs Qwen3.6-27B dense
 

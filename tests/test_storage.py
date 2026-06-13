@@ -143,6 +143,35 @@ class TestPurge:
         finally:
             os.unlink(path)
 
+    def test_purge_keeps_benchmark_history(self):
+        """purge_old must NOT touch benchmarks — that history is kept forever
+        (advisor + leaderboard read it; a campaign record spans years)."""
+        path = _make_db()
+        now = int(time.time())
+        try:
+            old = now - 400 * 86400  # well past any retention window
+            store_benchmark(
+                path,
+                [
+                    {
+                        "ts": old,
+                        "engine": "ollama",
+                        "model": "qwen3:4b",
+                        "prompt_type": "code",
+                        "tok_per_sec": 42.0,
+                        "ttft_ms": 100.0,
+                    }
+                ],
+            )
+            purge_old(path, days=90)
+            conn = sqlite3.connect(path)
+            cur = conn.execute("SELECT COUNT(*) FROM benchmarks WHERE ts = ?", (old,))
+            kept = cur.fetchone()[0]
+            conn.close()
+            assert kept == 1, "old benchmark was wrongly purged"
+        finally:
+            os.unlink(path)
+
 
 class TestMigrations:
     def test_v02_db_migrates_to_v03(self):

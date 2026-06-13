@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/specification/main/schema/server-card.json",
   "name": "asiai",
-  "version": "1.6.0",
+  "version": "1.13.0",
   "description": "Apple Silicon LLM inference benchmark and monitoring — exposes 11 read-only tools and 3 resources to query local inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, vLLM-MLX, Exo, TurboQuant) on Mac M1–M5.",
   "homepage": "https://asiai.dev",
   "repository": "https://github.com/druide67/asiai",

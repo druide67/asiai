@@ -238,7 +238,7 @@ class TestSendWebhook:
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch("asiai.alerting.urllib.request.urlopen", return_value=mock_resp):
-            assert _send_webhook("https://example.com/hook", {"test": 1}) is True
+            assert _send_webhook("https://example.com/hook", {"test": 1}) == (True, 200)
 
     def test_http_error(self):
         from urllib.error import HTTPError
@@ -247,7 +247,7 @@ class TestSendWebhook:
             "asiai.alerting.urllib.request.urlopen",
             side_effect=HTTPError("url", 500, "err", {}, None),
         ):
-            assert _send_webhook("https://example.com/hook", {"test": 1}) is False
+            assert _send_webhook("https://example.com/hook", {"test": 1}) == (False, 500)
 
     def test_connection_error(self):
         from urllib.error import URLError
@@ -256,10 +256,10 @@ class TestSendWebhook:
             "asiai.alerting.urllib.request.urlopen",
             side_effect=URLError("connection refused"),
         ):
-            assert _send_webhook("https://example.com/hook", {"test": 1}) is False
+            assert _send_webhook("https://example.com/hook", {"test": 1}) == (False, None)
 
     def test_invalid_url(self):
-        assert _send_webhook("not-a-url", {"test": 1}) is False
+        assert _send_webhook("not-a-url", {"test": 1}) == (False, None)
 
 
 # ---------------------------------------------------------------------------
@@ -274,14 +274,14 @@ class TestCheckAndAlert:
     def test_no_transition_returns_empty(self, db):
         prev = _snap()
         cur = _snap()
-        with patch("asiai.alerting._send_webhook", return_value=True):
+        with patch("asiai.alerting._send_webhook", return_value=(True, 200)):
             result = check_and_alert(cur, prev, "https://example.com/hook", db)
         assert result == []
 
     def test_fires_on_transition(self, db):
         prev = _snap(mem_pressure="normal")
         cur = _snap(mem_pressure="warn")
-        with patch("asiai.alerting._send_webhook", return_value=True) as mock_send:
+        with patch("asiai.alerting._send_webhook", return_value=(True, 200)) as mock_send:
             result = check_and_alert(cur, prev, "https://example.com/hook", db)
         assert len(result) == 1
         assert result[0]["alert"] == "mem_pressure_warn"
@@ -293,16 +293,17 @@ class TestCheckAndAlert:
     def test_stores_alert_in_db(self, db):
         prev = _snap(mem_pressure="normal")
         cur = _snap(mem_pressure="warn")
-        with patch("asiai.alerting._send_webhook", return_value=True):
+        with patch("asiai.alerting._send_webhook", return_value=(True, 200)):
             check_and_alert(cur, prev, "https://example.com/hook", db)
         alerts = query_alert_history(db, hours=1)
         assert len(alerts) == 1
         assert alerts[0]["alert_type"] == "mem_pressure_warn"
+        assert alerts[0]["webhook_status"] == 200
 
     def test_cooldown_prevents_second_fire(self, db):
         prev = _snap(mem_pressure="normal")
         cur = _snap(mem_pressure="warn")
-        with patch("asiai.alerting._send_webhook", return_value=True):
+        with patch("asiai.alerting._send_webhook", return_value=(True, 200)):
             check_and_alert(cur, prev, "https://example.com/hook", db)
             result = check_and_alert(cur, prev, "https://example.com/hook", db)
         assert result == []
@@ -310,7 +311,7 @@ class TestCheckAndAlert:
     def test_webhook_failure_still_stores(self, db):
         prev = _snap(mem_pressure="normal")
         cur = _snap(mem_pressure="warn")
-        with patch("asiai.alerting._send_webhook", return_value=False):
+        with patch("asiai.alerting._send_webhook", return_value=(False, None)):
             check_and_alert(cur, prev, "https://example.com/hook", db)
         alerts = query_alert_history(db, hours=1)
         assert len(alerts) == 1

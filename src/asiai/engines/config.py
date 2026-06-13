@@ -12,10 +12,25 @@ import os
 import tempfile
 import time
 
+from asiai._filelock import file_lock
+
 logger = logging.getLogger("asiai.engines.config")
 
 CONFIG_DIR = os.path.expanduser("~/.config/asiai")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "engines.json")
+LOCK_PATH = CONFIG_PATH + ".lock"
+
+
+def _config_lock():
+    """Serialize load→mutate→save sequences on engines.json.
+
+    Two concurrent asiai processes (monitor tick + a bench discovering the
+    same engine) would otherwise lose one side's update. The cache is
+    self-healing so a lost update is not fatal — but it's also free to
+    avoid.
+    """
+    return file_lock(LOCK_PATH, parent_dir=CONFIG_DIR)
+
 
 # Stale auto-discovered engines are pruned after 7 days.
 STALE_THRESHOLD_SECONDS = 7 * 24 * 3600
@@ -77,44 +92,46 @@ def upsert_engine(
     label: str = "",
 ) -> None:
     """Add or update an engine entry. Updates last_seen timestamp."""
-    config = load_config()
-    now = int(time.time())
+    with _config_lock():
+        config = load_config()
+        now = int(time.time())
 
-    for entry in config["engines"]:
-        if entry["url"] == url:
-            entry["engine"] = engine
-            entry["version"] = version
-            entry["last_seen"] = now
-            # Don't downgrade manual to auto
-            if source == "manual" or entry.get("source") != "manual":
-                entry["source"] = source
-            if label:
-                entry["label"] = label
-            save_config(config)
-            return
+        for entry in config["engines"]:
+            if entry["url"] == url:
+                entry["engine"] = engine
+                entry["version"] = version
+                entry["last_seen"] = now
+                # Don't downgrade manual to auto
+                if source == "manual" or entry.get("source") != "manual":
+                    entry["source"] = source
+                if label:
+                    entry["label"] = label
+                save_config(config)
+                return
 
-    config["engines"].append(
-        {
-            "url": url,
-            "engine": engine,
-            "version": version,
-            "last_seen": now,
-            "source": source,
-            "label": label,
-        }
-    )
-    save_config(config)
+        config["engines"].append(
+            {
+                "url": url,
+                "engine": engine,
+                "version": version,
+                "last_seen": now,
+                "source": source,
+                "label": label,
+            }
+        )
+        save_config(config)
 
 
 def remove_engine(url: str) -> bool:
     """Remove an engine by URL. Returns True if found and removed."""
-    config = load_config()
-    before = len(config["engines"])
-    config["engines"] = [e for e in config["engines"] if e["url"] != url]
-    if len(config["engines"]) < before:
-        save_config(config)
-        return True
-    return False
+    with _config_lock():
+        config = load_config()
+        before = len(config["engines"])
+        config["engines"] = [e for e in config["engines"] if e["url"] != url]
+        if len(config["engines"]) < before:
+            save_config(config)
+            return True
+        return False
 
 
 def prune_stale(threshold: int = STALE_THRESHOLD_SECONDS) -> int:
@@ -122,21 +139,22 @@ def prune_stale(threshold: int = STALE_THRESHOLD_SECONDS) -> int:
 
     Returns number of entries pruned. Manual entries are never pruned.
     """
-    config = load_config()
-    now = int(time.time())
-    cutoff = now - threshold
+    with _config_lock():
+        config = load_config()
+        now = int(time.time())
+        cutoff = now - threshold
 
-    before = len(config["engines"])
-    config["engines"] = [
-        e
-        for e in config["engines"]
-        if e.get("source") == "manual" or e.get("last_seen", 0) >= cutoff
-    ]
-    pruned = before - len(config["engines"])
-    if pruned > 0:
-        save_config(config)
-        logger.info("Pruned %d stale engine(s)", pruned)
-    return pruned
+        before = len(config["engines"])
+        config["engines"] = [
+            e
+            for e in config["engines"]
+            if e.get("source") == "manual" or e.get("last_seen", 0) >= cutoff
+        ]
+        pruned = before - len(config["engines"])
+        if pruned > 0:
+            save_config(config)
+            logger.info("Pruned %d stale engine(s)", pruned)
+        return pruned
 
 
 def reset_config() -> bool:

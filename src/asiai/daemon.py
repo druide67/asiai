@@ -57,8 +57,6 @@ SERVICES: dict[str, ServiceProfile] = {
 # Backward-compatibility aliases (monitor profile)
 LABEL = SERVICES["monitor"].label
 PLIST_PATH = SERVICES["monitor"].plist_path
-LOG_PATH = SERVICES["monitor"].log_path
-ERR_LOG_PATH = SERVICES["monitor"].err_log_path
 
 
 def _find_asiai_command() -> list[str]:
@@ -173,12 +171,19 @@ def daemon_stop(service: str = "monitor") -> dict:
     profile = SERVICES[service]
     try:
         if os.path.exists(profile.plist_path):
-            subprocess.run(
+            proc = subprocess.run(
                 ["launchctl", "unload", profile.plist_path],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
+            if proc.returncode != 0:
+                # Removing the plist anyway would leave the job loaded with
+                # no file to unload it from — surface the failure instead.
+                return {
+                    "status": "error",
+                    "message": f"launchctl unload failed: {proc.stderr.strip() or proc.returncode}",
+                }
             os.remove(profile.plist_path)
         return {"status": "stopped", "service": service}
     except (OSError, subprocess.SubprocessError) as e:

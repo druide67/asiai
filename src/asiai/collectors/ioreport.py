@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import threading
 import time
 from dataclasses import dataclass
 
@@ -35,6 +36,9 @@ _iorep = None
 _cf = None
 _dict_tid: int = 0
 _available: bool | None = None
+# Interned CFString for the IOReportChannels dictionary key — created once
+# (a per-sample _cfstr() here used to leak one CFString per cycle).
+_key_ioreport_channels: ctypes.c_void_p | None = None
 
 
 def ioreport_available() -> bool:
@@ -140,7 +144,13 @@ def _load_libs() -> None:
 
     _cf.CFDictionaryGetTypeID.restype = ctypes.c_ulong
 
+    _cf.CFRelease.argtypes = [ctypes.c_void_p]
+    _cf.CFRelease.restype = None
+
     _dict_tid = _cf.CFDictionaryGetTypeID()
+
+    global _key_ioreport_channels
+    _key_ioreport_channels = _cfstr("IOReportChannels")
 
 
 def _cfstr(s: str) -> ctypes.c_void_p:
@@ -161,10 +171,20 @@ def _cfstr_to_str(cfs: ctypes.c_void_p) -> str | None:
     return None
 
 
+def _cfrelease(obj) -> None:
+    """CFRelease a Create/Copy-rule object; safe on NULL/None."""
+    if obj:
+        _cf.CFRelease(obj)
+
+
 def _unwrap_to_array(obj: ctypes.c_void_p) -> ctypes.c_void_p:
-    """Extract IOReportChannels CFArray from a CFDictionary result."""
+    """Extract IOReportChannels CFArray from a CFDictionary result.
+
+    The returned array follows the Get rule (owned by ``obj``) — callers
+    must not release it, and must keep ``obj`` alive while using it.
+    """
     if _cf.CFGetTypeID(obj) == _dict_tid:
-        return _cf.CFDictionaryGetValue(obj, _cfstr("IOReportChannels"))
+        return _cf.CFDictionaryGetValue(obj, _key_ioreport_channels)
     return obj
 
 
@@ -252,13 +272,22 @@ class IOReportSampler:
     def __init__(self) -> None:
         _load_libs()
 
-        channels = _iorep.IOReportCopyChannelsInGroup(
-            _cfstr("Energy Model"),
-            None,
-            0,
-            0,
-            0,
-        )
+        # Serializes sample()/close(): the instance is shared across threads
+        # (web SSE connections + API routes hit one singleton), and the
+        # read-modify-write of _prev_sample/_prev_time must not interleave.
+        self._lock = threading.Lock()
+
+        group_name = _cfstr("Energy Model")
+        try:
+            channels = _iorep.IOReportCopyChannelsInGroup(
+                group_name,
+                None,
+                0,
+                0,
+                0,
+            )
+        finally:
+            _cfrelease(group_name)
         if not channels:
             raise RuntimeError("IOReportCopyChannelsInGroup returned NULL")
 
@@ -270,6 +299,9 @@ class IOReportSampler:
             0,
             None,
         )
+        # The subscription keeps what it needs in _sub_channels; the
+        # Copy-rule channel list is ours to release.
+        _cfrelease(channels)
         if not self._subscription:
             raise RuntimeError("IOReportCreateSubscription returned NULL")
 
@@ -288,6 +320,10 @@ class IOReportSampler:
 
     def sample(self) -> IOReportReading:
         """Take a new sample and return watts since previous sample."""
+        with self._lock:
+            return self._sample_locked()
+
+    def _sample_locked(self) -> IOReportReading:
         now_sample = _iorep.IOReportCreateSamples(
             self._subscription,
             self._sub_channels,
@@ -297,6 +333,7 @@ class IOReportSampler:
         interval = now_time - self._prev_time
 
         if not now_sample or interval <= 0:
+            _cfrelease(now_sample)
             return IOReportReading()
 
         delta = _iorep.IOReportCreateSamplesDelta(
@@ -304,12 +341,18 @@ class IOReportSampler:
             now_sample,
             None,
         )
+        _cfrelease(self._prev_sample)
         self._prev_sample = now_sample
         self._prev_time = now_time
 
         if not delta:
             return IOReportReading()
+        try:
+            return self._read_delta(delta, interval)
+        finally:
+            _cfrelease(delta)
 
+    def _read_delta(self, delta, interval: float) -> IOReportReading:
         arr = _unwrap_to_array(delta)
         if not arr:
             return IOReportReading()
@@ -375,10 +418,14 @@ class IOReportSampler:
         )
 
     def close(self) -> None:
-        """Release resources."""
-        self._subscription = None
-        self._sub_channels = ctypes.c_void_p()
-        self._prev_sample = None
+        """Release the subscription, its channel dictionary and the baseline sample."""
+        with self._lock:
+            _cfrelease(self._prev_sample)
+            self._prev_sample = None
+            _cfrelease(self._sub_channels)
+            self._sub_channels = ctypes.c_void_p()
+            _cfrelease(self._subscription)
+            self._subscription = None
         logger.debug("IOReport sampler closed")
 
     def __enter__(self) -> IOReportSampler:

@@ -114,6 +114,11 @@ def _from_local(
         return []
 
     rows = query_benchmarks(db_path, model=model_filter)
+    # Only compare rows produced by the same metrics definition: tok/s and
+    # TTFT changed scope in the 1.11.0 instrumentation overhaul
+    # (metrics_version 3). Mixing generations would rank apples against
+    # oranges; with no v3 rows the advisor falls back to community data.
+    rows = [r for r in rows if r.get("metrics_version") == 3]
     if not rows:
         return []
 
@@ -165,14 +170,13 @@ def _from_local(
             use_case,
             tok_norm=tok_norms[idx],
             stability=stats["stability"],
-            med_ttft=stats["med_ttft"],
-            p99_ttft=stats["p99_ttft"],
-            med_tok=stats["med_tok"],
             all_group_stats=group_stats,
             group_idx=idx,
         )
         runs = stats["runs"]
-        confidence = "high" if runs >= 5 else ("medium" if runs >= 1 else "low")
+        # Groups always have >= 1 run by construction; "low" is reserved for
+        # the catalog fallback in _from_catalog.
+        confidence = "high" if runs >= 5 else "medium"
         results.append(
             Recommendation(
                 engine=engine,
@@ -323,9 +327,6 @@ def _score_use_case(
     *,
     tok_norm: float,
     stability: float,
-    med_ttft: float,
-    p99_ttft: float,
-    med_tok: float,
     all_group_stats: list[tuple[tuple[str, str], dict]],
     group_idx: int,
 ) -> float:
@@ -402,9 +403,20 @@ def _median(values: list[float]) -> float:
 
 
 def _percentile(values: list[float], pct: int) -> float:
-    """Return the *pct*-th percentile of *values* (nearest-rank method)."""
+    """Return the *pct*-th percentile of *values* (linear interpolation).
+
+    Same definition as ``benchmark.reporter._percentile`` — the advisor and
+    the reporter must agree on what a p99 means over the same rows (this
+    used to be nearest-rank here, giving different p99s on identical data).
+    """
     if not values:
         return 0.0
     sorted_v = sorted(values)
-    k = max(0, min(len(sorted_v) - 1, int(len(sorted_v) * pct / 100)))
-    return sorted_v[k]
+    n = len(sorted_v)
+    if n == 1:
+        return sorted_v[0]
+    k = (pct / 100) * (n - 1)
+    lo = int(k)
+    hi = min(lo + 1, n - 1)
+    frac = k - lo
+    return sorted_v[lo] + frac * (sorted_v[hi] - sorted_v[lo])

@@ -101,13 +101,16 @@ def aggregate_results(results: list[dict]) -> dict:
     return {"model": model, "engines": engines, "winner": winner}
 
 
-def _stddev(values: list[float]) -> float:
-    """Compute sample standard deviation (Bessel's correction, N-1)."""
-    if len(values) < 2:
-        return 0.0
-    mean = sum(values) / len(values)
-    variance = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
-    return round(math.sqrt(variance), 2)
+def _group_tok_by_prompt(results: list[dict]) -> dict[str, list[float]]:
+    """Positive tok/s values grouped by prompt_type (shared by the pooled
+    stddev and the CI95 degrees of freedom, which must agree)."""
+    by_prompt: dict[str, list[float]] = {}
+    for r in results:
+        pt = r.get("prompt_type", "unknown")
+        tok_s = r.get("tok_per_sec", 0.0)
+        if tok_s > 0:
+            by_prompt.setdefault(pt, []).append(tok_s)
+    return by_prompt
 
 
 def _pooled_stddev(results: list[dict]) -> float:
@@ -117,12 +120,7 @@ def _pooled_stddev(results: list[dict]) -> float:
     then returns sqrt(mean(variances)). This captures run-to-run noise
     without mixing in inter-prompt variance.
     """
-    by_prompt: dict[str, list[float]] = {}
-    for r in results:
-        pt = r.get("prompt_type", "unknown")
-        tok_s = r.get("tok_per_sec", 0.0)
-        if tok_s > 0:
-            by_prompt.setdefault(pt, []).append(tok_s)
+    by_prompt = _group_tok_by_prompt(results)
 
     variances: list[float] = []
     for values in by_prompt.values():
@@ -231,15 +229,20 @@ def _compute_stats(prompt_results: list[dict], data: dict) -> dict:
     data["runs_count"] = _count_runs(pr)
     data["stability"] = _classify_stability(data["avg_tok_s"], data["std_dev_tok_s"])
 
-    if tok_values and len(tok_values) >= 2:
+    # CI95 on the mean, consistent with the POOLED stddev above: the degrees
+    # of freedom are sum over prompt groups of (n_g - 1), not n - 1. With no
+    # repeated runs there is no noise estimate — emit null rather than a
+    # zero-width interval that fakes perfect precision.
+    pooled_df = sum(len(g) - 1 for g in _group_tok_by_prompt(pr).values() if len(g) >= 2)
+    if tok_values and pooled_df >= 1 and data["std_dev_tok_s"] > 0:
         n = len(tok_values)
-        se = data["std_dev_tok_s"] / math.sqrt(n) if n > 0 else 0.0
-        t = _t95(n - 1)
+        se = data["std_dev_tok_s"] / math.sqrt(n)
+        t = _t95(pooled_df)
         data["ci95_lower"] = round(data["avg_tok_s"] - t * se, 1)
         data["ci95_upper"] = round(data["avg_tok_s"] + t * se, 1)
     else:
-        data["ci95_lower"] = data["avg_tok_s"]
-        data["ci95_upper"] = data["avg_tok_s"]
+        data["ci95_lower"] = None
+        data["ci95_upper"] = None
 
     data["p50_tok_s"] = data["median_tok_s"]
     data["p90_tok_s"] = round(_percentile(tok_values, 90), 1) if tok_values else 0.0

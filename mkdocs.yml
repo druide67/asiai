@@ -59,17 +59,23 @@ nav:
       - llama.cpp: engines/llamacpp.md
       - oMLX: engines/omlx.md
       - vllm-mlx: engines/vllm-mlx.md
+      - vMLX: engines/vmlx.md
+      - Rapid-MLX: engines/rapidmlx.md
       - Exo: engines/exo.md
   - Ollama vs LM Studio: ollama-vs-lmstudio.md
   - How to Benchmark LLMs on Mac: benchmark-llm-mac.md
+  - Benchmark Modes: bench-modes.md
   - Agentic Benchmarks: agentic-benchmarks.md
   - Dev-Quality Benchmarks: dev-quality-benchmarks.md
+  - Fleet Mode: fleet-mode.md
+  - Versions: versions-mode.md
   - Apple Silicon Inference Panel: research/comparison-panel/2026-05-apple-silicon-agentic-inference-panel.md
   - Benchmark Card: benchmark-card.md
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md
   - Benchmark Best Practices: benchmark-best-practices.md
   - TurboQuant on Apple Silicon: turboquant.md
+  - Known Issues: known-issues.md
   - FAQ: faq.md
 
 hooks:

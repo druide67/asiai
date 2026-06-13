@@ -16,7 +16,7 @@
     {
       "guid": "asiai",
       "name": "asiai",
-      "description": "Multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). Auto-detects 8 inference engines, runs reproducible benchmarks, exposes an MCP server with 11 tools, publishes a community leaderboard.",
+      "description": "Multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). Auto-detects 9 inference engines, runs reproducible benchmarks, exposes an MCP server with 11 tools, publishes a community leaderboard.",
       "webpageUrl": {
         "url": "https://asiai.dev",
         "wellKnown": "https://asiai.dev/llms.txt"

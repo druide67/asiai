@@ -111,19 +111,23 @@ def detect_early_stop(
 
 # --- Duplicate process detection -----------------------------------------
 
-# Engine name → ps command substring. Patterns must be unique enough that
-# the matcher won't false-positive on a different engine (e.g. "ollama"
-# alone would match "ollama serve" but also a directory named "ollama").
+# Canonical engine match key (collectors.system._engine_match_key) → ps
+# command substring. Keys MUST be canonical: adapter names ("mlx-lm",
+# "vllm-mlx", "llamacpp-aux-2") are normalized before lookup, so the gate
+# fires for every spelling the caller may use. Patterns must be unique
+# enough that the matcher won't false-positive on a different engine
+# (e.g. "ollama" alone would match "ollama serve" but also a directory
+# named "ollama").
 _ENGINE_PROCESS_PATTERNS = {
     "ollama": "ollama serve",
     "llamacpp": "llama-server",
-    "llamacpp-aux": "llama-server",
     "lmstudio": "LM Studio",
-    "mlx-lm": "mlx_lm.server",
-    "omlx": "mlx_omni_server",
+    "mlxlm": "mlx_lm.server",
+    # jundot/omlx — NOT mlx-omni-server (different project).
+    "omlx": "omlx serve",
     "vmlx": "vmlx serve",
-    "turboquant": "turbo-server",
-    "vllm-mlx": "vllm-mlx",
+    "turboquant": "llama-server-turboquant",
+    "vllmmlx": "vllm-mlx",
     "rapidmlx": "rapid-mlx",
 }
 
@@ -134,7 +138,8 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
     The single-process case (the expected one) returns an empty list so
     consumers can treat a non-empty return as "abnormal."
     """
-    pattern = _ENGINE_PROCESS_PATTERNS.get(engine_name, engine_name)
+    key = _system._engine_match_key(engine_name)
+    pattern = _ENGINE_PROCESS_PATTERNS.get(key, engine_name)
     try:
         ps_out = subprocess.run(
             ["ps", "axo", "pid,command"],

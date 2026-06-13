@@ -255,10 +255,6 @@ def run_benchmark(
     # Continuous memory-pressure watcher around the whole bench loop, for
     # parity with agentic/burst (standard previously had only the one-shot
     # pre-check above). Daemon thread, observational: surfaces an error if
-    # swap/swapouts grow past threshold during the runs. Stopped after the loop.
-    # Continuous memory-pressure watcher around the whole bench loop, for
-    # parity with agentic/burst (standard previously had only the one-shot
-    # pre-check above). Daemon thread, observational: surfaces an error if
     # swap/swapouts grow past threshold during the runs. The `with` guarantees
     # the watcher thread is joined even if a slot raises mid-loop.
     with MemoryWatcher() as mem_watcher:

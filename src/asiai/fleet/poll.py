@@ -215,7 +215,11 @@ def poll_all(
     workers = min(max_workers, n)
     results_by_idx: dict[int, NodePoll] = {}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+    # No `with` on the pool: the context manager's shutdown(wait=True) would
+    # re-block on the very futures the aggregate timeout abandoned.
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    timed_out = False
+    try:
         future_to_idx = {
             pool.submit(
                 poll_one,
@@ -230,6 +234,7 @@ def poll_all(
                 i = future_to_idx[fut]
                 results_by_idx[i] = fut.result()
         except concurrent.futures.TimeoutError:
+            timed_out = True
             logger.warning(
                 "fleet poll hit %.1fs aggregate timeout, collecting partial results",
                 timeout + 5,
@@ -240,6 +245,8 @@ def poll_all(
                         results_by_idx[i] = fut.result()
                     except Exception as e:  # noqa: BLE001
                         logger.debug("future raised: %s", e)
+    finally:
+        pool.shutdown(wait=not timed_out, cancel_futures=True)
 
     # Fill in dummy NodePoll for nodes whose future never completed.
     now = int(time.time())

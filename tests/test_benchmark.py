@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import statistics
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +14,6 @@ from asiai.benchmark.reporter import (
     _determine_winner_slots,
     _percentile,
     _pooled_stddev,
-    _stddev,
     aggregate_results,
     aggregate_slots,
     build_report,
@@ -751,22 +751,6 @@ class TestLoadTime:
         assert run.results[0]["load_time_ms"] == 0.0
 
 
-class TestStddev:
-    def test_stddev_known_values(self):
-        # stddev of [10, 10, 10] = 0
-        assert _stddev([10, 10, 10]) == 0.0
-
-    def test_stddev_spread(self):
-        # [10, 20] -> mean=15, var=50/(2-1)=50, stddev=sqrt(50)=7.07 (Bessel's N-1)
-        assert _stddev([10, 20]) == 7.07
-
-    def test_stddev_single_value(self):
-        assert _stddev([42.0]) == 0.0
-
-    def test_stddev_empty(self):
-        assert _stddev([]) == 0.0
-
-
 class TestClassifyStability:
     def test_stable(self):
         assert _classify_stability(100.0, 2.0) == "stable"  # CV = 2%
@@ -855,9 +839,10 @@ class TestPooledStddev:
         pooled = _pooled_stddev(results)
         # Intra-prompt stddev for each group is 1.0 (Bessel's N-1)
         assert pooled <= 1.0
-        # The old _stddev would give ~10.8 (mixing inter-prompt variance)
+        # A plain stddev over all values would give ~10.8 (mixing
+        # inter-prompt variance)
         all_tok = [r["tok_per_sec"] for r in results]
-        old_stddev = _stddev(all_tok)
+        old_stddev = statistics.stdev(all_tok)
         assert old_stddev > 5.0  # Much higher because of inter-prompt spread
         assert pooled < old_stddev
 
@@ -869,7 +854,7 @@ class TestPooledStddev:
             {"prompt_type": "code", "tok_per_sec": 46.0, "run_index": 2},
         ]
         pooled = _pooled_stddev(results)
-        regular = _stddev([45.0, 47.0, 46.0])
+        regular = round(statistics.stdev([45.0, 47.0, 46.0]), 2)
         assert pooled == regular
 
     def test_single_run_returns_zero(self):

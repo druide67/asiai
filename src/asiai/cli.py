@@ -181,6 +181,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     from asiai.storage.db import (
         DEFAULT_DB_PATH,
         init_db,
+        purge_old,
         query_compare,
         query_history,
         store_snapshot,
@@ -192,6 +193,15 @@ def cmd_monitor(args: argparse.Namespace) -> int:
 
     # Initialize DB
     init_db(db_path)
+
+    # Enforce the documented retention once per monitor session: this is the
+    # production call site the README's "90-day retention" promised but that
+    # nothing ever made. Only the high-volume metrics/process series are
+    # pruned — benchmark history is kept (see purge_old). Best-effort.
+    try:
+        purge_old(db_path)
+    except Exception:  # noqa: BLE001 — retention must never break monitoring
+        pass
 
     if args.history:
         # Parse hours from period string (e.g. "24h", "1h", "48")
@@ -629,6 +639,16 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     except Exception:
         engine_version = ""
 
+    # With --agentic-auto-restart, restart between repetitions too, so each
+    # repeat's cold phase is genuinely cold (not warmed by the previous one).
+    on_repeat = None
+    if getattr(args, "agentic_auto_restart", False):
+
+        def on_repeat(repeat_idx: int) -> None:
+            print(f"  {dim('●')} aisctl restart {engine.name} (repeat {repeat_idx + 1})...")
+            ok, msg = auto_restart_engine(engine.name, engine.base_url)
+            print(f"  {dim('●')} {msg}" if ok else yellow(f"  ⚠ restart skipped: {msg}"))
+
     result = run_agentic_bench(
         base_url=engine.base_url,
         engine_name=engine.name,
@@ -641,6 +661,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         extra_body=extra_body,
         repeats=max(1, getattr(args, "runs", 1) or 1),
         engine_version=engine_version,
+        on_repeat=on_repeat,
     )
 
     reuse = result.get("prefix_cache_reuse", {})
@@ -1376,6 +1397,13 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Parse prompt types (explicit --prompts overrides --quick)
     if args.prompts:
         prompt_names = [p.strip() for p in args.prompts.split(",")]
+        from asiai.benchmark.prompts import PROMPTS
+
+        unknown = [p for p in prompt_names if p not in PROMPTS]
+        if unknown:
+            print(f"{red('✗')} Unknown prompt(s): {', '.join(unknown)}")
+            print(f"  Available: {', '.join(PROMPTS)}")
+            return 1
 
     runs = max(1, min(getattr(args, "runs", 1), 100))
     power = getattr(args, "power", False)
@@ -2538,12 +2566,15 @@ def main(argv: list[str] | None = None) -> int:
     add_auth_subparser(subparsers)
 
     # Discover sub-CLI plugins (skip for --version / --help to preserve cold-start).
-    _fast_path = argv is not None and bool(set(argv[:2]) & {"--version", "--help", "-h", "version"})
+    # Normalize argv first: the console entry point calls main() with no
+    # argument, which used to disable this fast path for every real CLI run.
+    effective_argv = sys.argv[1:] if argv is None else argv
+    _fast_path = bool(set(effective_argv[:2]) & {"--version", "--help", "-h", "version"})
     plugin_commands: dict = {}
     if not _fast_path:
         _load_subcommand_plugins(subparsers, plugin_commands)
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(effective_argv)
 
     if args.command is None:
         parser.print_help()

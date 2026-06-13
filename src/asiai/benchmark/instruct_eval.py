@@ -430,7 +430,9 @@ def _aggregate_scores(pure_scores: list[dict[str, Any]]) -> dict[str, Any]:
         vals = [p[k] for p in pure_scores]
         if all(isinstance(v, bool) for v in vals):
             agg[f"pct_{k}"] = _pct(vals)
-        elif all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals):
+        elif all(
+            v is None or (isinstance(v, (int, float)) and not isinstance(v, bool)) for v in vals
+        ):
             nums = [v for v in vals if v is not None]
             agg[f"mean_{k}"] = round(statistics.fmean(nums), 3) if nums else None
     return agg

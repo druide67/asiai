@@ -70,7 +70,7 @@ def _parse_mtp(stem: str) -> bool:
     return "mtp" in s and "-off" not in s
 
 
-def _machine_label(hw_chip: str | None, ram_gb: int | None, stem: str) -> str:
+def _machine_label(hw_chip: str | None, stem: str) -> str:
     """Machine block label (e.g. ``M5``) from the recorded chip, stem fallback."""
     if hw_chip:
         m = re.search(r"\bM(\d+)\b", hw_chip)
@@ -124,7 +124,7 @@ def summarize_agentic(data: dict, stem: str = "") -> dict[str, Any]:
     decs = [r.get("decode_tok_s") for r in runs if (r.get("decode_tok_s") or 0) > 0]
 
     return {
-        "machine": _machine_label(data.get("hw_chip"), data.get("ram_gb"), stem),
+        "machine": _machine_label(data.get("hw_chip"), stem),
         "hw_chip": data.get("hw_chip"),
         "model": _parse_model(stem, model_id),
         "quant": parse_quant(model_id),

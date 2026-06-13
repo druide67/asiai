@@ -147,9 +147,12 @@ class OpenAICompatEngine(InferenceEngine):
                         delta = choices[0].get("delta", {}) or {}
                         content = delta.get("content") or ""
                         # Qwen3/3.5/3.6 thinking mode emits reasoning tokens in
-                        # delta.reasoning_content. Counted in throughput (they are
-                        # real decode work), excluded from `text` (clean output).
-                        reasoning = delta.get("reasoning_content") or ""
+                        # delta.reasoning_content (llama.cpp) or delta.reasoning
+                        # (mlx-lm). Counted in throughput (they are real decode
+                        # work), excluded from `text` (clean output).
+                        reasoning = (delta.get("reasoning_content") or "") + (
+                            delta.get("reasoning") or ""
+                        )
                     else:
                         content = choices[0].get("text", "") or ""
                         reasoning = ""

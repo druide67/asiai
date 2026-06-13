@@ -1,8 +1,8 @@
 # asiai
-# Version: 1.6.0
-# Last-updated: 2026-04-25
+# Version: 1.13.0
+# Last-updated: 2026-06-12
 
-> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). It auto-detects 8 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo, TurboQuant), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
+> asiai is a multi-engine LLM benchmark and monitoring CLI for Apple Silicon Macs (M1–M5). It auto-detects 9 inference engines (Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, vMLX, Rapid-MLX, Exo), runs reproducible benchmarks with streaming TTFT and energy metrics, provides real-time GPU/CPU/ANE power monitoring via IOReport (no sudo), GPU observability via ioreg, and exposes a REST API with Prometheus-compatible metrics. Built with zero dependencies (Python stdlib only). Apache 2.0 licensed.
 
 asiai is designed for both human operators and AI agents managing local LLM infrastructure. If you are an AI agent with MCP support, configure `asiai mcp` as an MCP server for native tool access. Otherwise, start with the Agent Integration Guide and use `GET /api/status` for a quick health check.
 
@@ -10,7 +10,7 @@ asiai is designed for both human operators and AI agents managing local LLM infr
 
 - [/mcp-server.json](https://asiai.dev/mcp-server.json): MCP Server Card — 11 tools, 3 resources, transports stdio/SSE/streamable-http
 - [/.well-known/agent-card.json](https://asiai.dev/.well-known/agent-card.json): A2A Agent Card with `supportedInterfaces` (3 MCP transports)
-- [/.well-known/agent-skills.json](https://asiai.dev/.well-known/agent-skills.json): Agent Skills manifest mapping all 16 CLI subcommands
+- [/.well-known/agent-skills.json](https://asiai.dev/.well-known/agent-skills.json): Agent Skills manifest mapping all 19 CLI subcommands
 - [/openapi.json](https://asiai.dev/openapi.json): OpenAPI 3.1 spec for the public Community API at api.asiai.dev/api/v1
 - [/.well-known/api-catalog](https://asiai.dev/.well-known/api-catalog): IETF API Catalog linkset
 - [/llms-full.txt](https://asiai.dev/llms-full.txt): Concatenated English documentation (one-shot agent context)
