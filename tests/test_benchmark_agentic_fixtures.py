@@ -10,7 +10,10 @@ the detectors give the expected verdict on real data captured in the wild.
 
 from __future__ import annotations
 
+import getpass
 import json
+import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -46,13 +49,66 @@ def test_fixture_files_exist():
     assert expected.issubset(present), f"missing fixtures: {expected - present}"
 
 
-def test_fixtures_no_personal_paths():
-    """Anonymization gate — no absolute home paths or hostnames leak through."""
-    for fp in FIXTURE_DIR.glob("*.json"):
-        text = fp.read_text()
-        assert "/Users/" not in text, f"{fp.name}: absolute home path leaked"
-        assert ".local" not in text, f"{fp.name}: hostname suffix leaked"
-        assert "192.168." not in text, f"{fp.name}: LAN IP leaked"
+# Substrings that must never appear in a *published* (git-tracked) fixture:
+# absolute home paths, RFC-1918 LAN IPs, hostname suffixes, Claude Code internals.
+_FORBIDDEN_SUBSTRINGS = (
+    "/Users/",
+    "/home/",
+    ".local",
+    "192.168.",
+    "10.0.",
+    "172.16.",
+    "/.claude/",
+)
+
+
+def _tracked_fixture_files() -> list[Path]:
+    """Every git-tracked file under the fixture dir, recursive, any extension.
+
+    Session-captured fixtures that carry local paths live in gitignored
+    sub-dirs (see .gitignore ``sprint-bench-*``) and are intentionally
+    excluded — they are never published, so scanning them would only
+    produce false failures. Falls back to a non-recursive json+log glob
+    when git is unavailable (e.g. running from an unpacked sdist)."""
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-z"],
+            capture_output=True,
+            text=True,
+            cwd=FIXTURE_DIR,
+            check=True,
+        ).stdout
+        files = [FIXTURE_DIR / p for p in out.split("\0") if p]
+        if files:
+            return files
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass
+    return sorted(FIXTURE_DIR.glob("*.json")) + sorted(FIXTURE_DIR.glob("*.log"))
+
+
+def test_fixtures_no_personal_data():
+    """Anonymization gate — no home paths, LAN IPs, Claude Code internals, or
+    the capturing user's login name leak through any *published* fixture.
+
+    Scans every git-tracked file under the fixture tree (json, log, nested),
+    not just top-level ``*.json``: the previous gate silently missed both the
+    ``sprint-bench-*`` sub-dirs and the ``*.log`` captures."""
+    user = getpass.getuser()
+    scanned = 0
+    for fp in _tracked_fixture_files():
+        if not fp.is_file():
+            continue
+        scanned += 1
+        text = fp.read_text(errors="ignore")
+        for marker in _FORBIDDEN_SUBSTRINGS:
+            assert marker not in text, f"{fp}: leaked {marker!r}"
+        # The capturing username, as a whole word. Guarded on length to
+        # avoid false positives on very short/generic CI logins.
+        if len(user) >= 3:
+            assert not re.search(rf"\b{re.escape(user)}\b", text), (
+                f"{fp}: leaked capturing username {user!r}"
+            )
+    assert scanned > 0, "anonymization gate scanned no fixtures — glob/git path broken"
 
 
 @pytest.mark.parametrize(

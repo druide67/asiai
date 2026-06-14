@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.14.1](https://github.com/druide67/asiai/compare/v1.14.0...v1.14.1) — 2026-06-13
+
+OSS hygiene. No functional change.
+
+### Changed
+
+- Test fixtures use a neutral `testuser` login in simulated `ps` output
+  instead of a personal username.
+- The agentic-fixture anonymization gate now scans every git-tracked file
+  under the fixtures tree (recursive, any extension) rather than only the
+  top-level `*.json`, and rejects home paths (`/Users/`, `/home/`), RFC-1918
+  LAN IPs, Claude Code internals (`/.claude/`) and the capturing user's login
+  name. It previously missed nested session captures and `.log` files.
+
 ## [1.14.0](https://github.com/druide67/asiai/compare/v1.13.0...v1.14.0) — 2026-06-13
 
 Audit follow-up (2026-06-11/12). Correctness, hardening and accuracy; no
