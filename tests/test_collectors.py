@@ -157,7 +157,7 @@ class TestEngineProcesses:
         """ps aux with French locale uses comma as decimal separator."""
         ps_output = (
             "USER       PID  %CPU %MEM      VSZ    RSS   TT  STAT STARTED      TIME COMMAND\n"
-            "jmn      12345   3,4  1,2  1234567  65432   ??  S    10:00AM   0:01.23 ollama serve\n"
+            "testuser 12345 3,4  1,2  1234567  65432   ??  S    10:00AM   0:01.23 ollama serve\n"
         )
         with patch("asiai.collectors.system.subprocess.run") as mock:
             mock.return_value = _mock_run(ps_output)
@@ -172,7 +172,7 @@ class TestEngineProcesses:
         """ps aux with English locale uses dot as decimal separator."""
         ps_output = (
             "USER       PID  %CPU %MEM      VSZ    RSS   TT  STAT STARTED      TIME COMMAND\n"
-            "jmn      12345   3.4  1.2  1234567  65432   ??  S    10:00AM   0:01.23 ollama serve\n"
+            "testuser 12345 3.4  1.2  1234567  65432   ??  S    10:00AM   0:01.23 ollama serve\n"
         )
         with patch("asiai.collectors.system.subprocess.run") as mock:
             mock.return_value = _mock_run(ps_output)
@@ -189,7 +189,7 @@ class TestEngineProcesses:
         """No engine processes found should return empty list."""
         ps_output = (
             "USER       PID  %CPU %MEM      VSZ    RSS   TT  STAT STARTED      TIME COMMAND\n"
-            "jmn      12345   1.0  0.5  1234567  65432   ??  S    10:00AM   0:01.23 /usr/bin/zsh\n"
+            "testuser 12345 1.0  0.5  1234567  65432   ??  S    10:00AM   0:01.23 /usr/bin/zsh\n"
         )
         with patch("asiai.collectors.system.subprocess.run") as mock:
             mock.return_value = _mock_run(ps_output)
