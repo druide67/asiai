@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from urllib.error import URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
@@ -34,19 +36,53 @@ class OpenAICompatEngine(InferenceEngine):
         data, _ = http_get_json(f"{self.base_url}/v1/models")
         return data is not None
 
+    def _is_local(self) -> bool:
+        """True if this engine runs on the same host (loopback base URL).
+
+        Exact hostname compare (via ``urlsplit``), not a substring match: a remote host that
+        merely contains the token — ``http://localhost.example.com`` — must NOT be treated as
+        local (that would realpath its model-id path against THIS filesystem)."""
+        host = (urlsplit(self.base_url).hostname or "").lower()
+        return host in ("127.0.0.1", "localhost", "::1")
+
+    def _display_name(self, model_id: str) -> str:
+        """Turn the engine-reported model id into a human-readable model name.
+
+        llama.cpp reports the ``--model`` path as the id; with the common asiai layout that is
+        a symlink (``…/active.gguf``) which surfaces as a useless ``active.gguf``. For a LOCAL
+        engine, resolve the symlink to the real GGUF filename. A REMOTE engine's path must NOT
+        be ``realpath``'d against THIS filesystem (it could resolve to the wrong local file), so
+        we only take its basename. Non-path ids (LM Studio model names) pass through unchanged.
+        """
+        if not model_id.startswith("/"):
+            return model_id
+        if self._is_local():
+            real = os.path.realpath(model_id)
+            return os.path.basename(real if os.path.exists(real) else model_id)
+        return os.path.basename(model_id)
+
     def list_running(self) -> list[ModelInfo]:
         data, _ = http_get_json(f"{self.base_url}/v1/models")
         if data is None:
             return []
         models = []
         for m in data.get("data", []):
+            # llama.cpp's /v1/models exposes the real model size under meta.size; prefer it
+            # over the per-process footprint estimate below (identical across co-loaded models
+            # and wrong). Absent (LM Studio / mlx-lm) -> 0 -> the estimate fills in.
+            meta = m.get("meta") or {}
+            try:
+                size = int(meta.get("size") or 0)
+            except (TypeError, ValueError):
+                size = 0  # tolerate a non-numeric meta.size rather than abort the listing
             models.append(
                 ModelInfo(
-                    name=m.get("id", "unknown"),
+                    name=self._display_name(m.get("id", "unknown")),
                     format=self._model_format,
+                    size_vram=size,
                 )
             )
-        # Enrich with process footprint when engine doesn't report VRAM
+        # Enrich with process footprint when neither the engine VRAM nor meta.size is reported.
         if models and all(m.size_vram == 0 for m in models):
             try:
                 from asiai.collectors.system import find_engine_process

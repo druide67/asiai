@@ -100,6 +100,78 @@ class TestOpenAICompatListRunning:
             engine = _ChatEngine("http://localhost:8080")
             assert engine.list_running() == []
 
+    def test_list_running_resolves_local_symlink(self, tmp_path):
+        """llama.cpp reports the --model path; a LOCAL symlinked active model must surface as
+        the real GGUF filename, not the useless 'active.gguf'."""
+        real = tmp_path / "Qwen3.6-35B-A3B-UD-Q4_K_S.gguf"
+        real.write_bytes(b"gguf")
+        link = tmp_path / "active.gguf"
+        link.symlink_to(real)
+        data = {"data": [{"id": str(link)}]}
+        with patch(
+            "asiai.engines.openai_compat.http_get_json",
+            return_value=(data, {}),
+        ):
+            models = _ChatEngine("http://127.0.0.1:8080").list_running()
+        assert models[0].name == "Qwen3.6-35B-A3B-UD-Q4_K_S.gguf"
+
+    def test_list_running_remote_path_basename_not_resolved(self, tmp_path):
+        """A REMOTE engine's path must NOT be realpath'd against THIS filesystem (could resolve
+        to a wrong local file) — only its basename is taken."""
+        real = tmp_path / "local-decoy.gguf"
+        real.write_bytes(b"gguf")
+        link = tmp_path / "active.gguf"
+        link.symlink_to(real)
+        data = {"data": [{"id": str(link)}]}
+        with patch(
+            "asiai.engines.openai_compat.http_get_json",
+            return_value=(data, {}),
+        ):
+            models = _ChatEngine("http://192.0.2.1:8080").list_running()
+        assert models[0].name == "active.gguf"  # basename only, not the resolved decoy
+
+    def test_list_running_prefers_meta_size(self):
+        """meta.size (real model size) wins over the per-process footprint estimate."""
+        data = {"data": [{"id": "model-a", "meta": {"size": 21_377_327_616}}]}
+        with patch(
+            "asiai.engines.openai_compat.http_get_json",
+            return_value=(data, {}),
+        ):
+            models = _ChatEngine("http://localhost:8080").list_running()
+        assert models[0].size_vram == 21_377_327_616
+
+    def test_is_local_exact_hostname_not_substring(self):
+        """A remote host merely CONTAINING a loopback token is not local (no realpath leak)."""
+        assert _ChatEngine("http://127.0.0.1:8080")._is_local()
+        assert _ChatEngine("http://localhost:8080")._is_local()
+        assert _ChatEngine("http://[::1]:8080")._is_local()
+        assert not _ChatEngine("http://localhost.example.com:8080")._is_local()
+        assert not _ChatEngine("http://127.0.0.1.evil.com:8080")._is_local()
+        assert not _ChatEngine("http://192.0.2.1:8080")._is_local()
+
+    def test_list_running_dangling_local_symlink_falls_back_to_basename(self, tmp_path):
+        """A local symlink whose target is missing degrades to the basename, never crashes."""
+        link = tmp_path / "active.gguf"
+        link.symlink_to(tmp_path / "missing-target.gguf")  # dangling
+        data = {"data": [{"id": str(link)}]}
+        with patch(
+            "asiai.engines.openai_compat.http_get_json",
+            return_value=(data, {}),
+        ):
+            models = _ChatEngine("http://127.0.0.1:8080").list_running()
+        assert models[0].name == "active.gguf"
+
+    def test_list_running_tolerates_non_numeric_meta_size(self):
+        """A non-numeric meta.size must not abort the listing (size falls back to 0)."""
+        data = {"data": [{"id": "model-a", "meta": {"size": "21G"}}]}
+        with patch(
+            "asiai.engines.openai_compat.http_get_json",
+            return_value=(data, {}),
+        ):
+            models = _ChatEngine("http://localhost:8080").list_running()
+        assert models[0].name == "model-a"
+        assert models[0].size_vram == 0
+
     def test_list_available_always_empty(self):
         engine = _ChatEngine("http://localhost:8080")
         assert engine.list_available() == []
