@@ -510,7 +510,9 @@ class TestAppCreation:
     def test_cards_route_mounted(self, app_state):
         """Verify /cards/ is mounted as a static files directory."""
         app = create_app(app_state)
-        route_names = [r.name for r in app.routes]
+        # Starlette ≥1.1 adds route objects (e.g. _IncludedRouter) that carry no `.name`;
+        # read it defensively so the assertion never trips over an unrelated route type.
+        route_names = [getattr(r, "name", None) for r in app.routes]
         assert "cards" in route_names
 
     def test_css_has_new_bench_classes(self, client):
