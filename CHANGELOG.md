@@ -5,9 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.14.1](https://github.com/druide67/asiai/compare/v1.14.0...v1.14.1) — 2026-06-13
+## [1.14.1](https://github.com/druide67/asiai/compare/v1.14.0...v1.14.1) — 2026-06-24
 
-OSS hygiene. No functional change.
+OSS hygiene and a web dashboard fix.
+
+### Fixed
+
+- Web dashboard "models loaded" panel: a local engine that reports a
+  symlinked `--model` path (e.g. `active.gguf`) now resolves to the real
+  GGUF filename, and model sizes use the engine-reported `meta.size` rather
+  than an identical-per-model footprint estimate. A remote engine surfaces
+  the path basename only — its path is never `realpath`'d against the local
+  filesystem.
 
 ### Changed
 
