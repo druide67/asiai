@@ -70,6 +70,7 @@ nav:
   - Fleet Mode: fleet-mode.md
   - Versions: versions-mode.md
   - Apple Silicon Inference Panel: research/comparison-panel/2026-05-apple-silicon-agentic-inference-panel.md
+  - AgentWorld-35B World-Model: research/comparison-panel/2026-06-qwen-agentworld-35b.md
   - Benchmark Card: benchmark-card.md
   - Methodology: methodology.md
   - Metrics Spec: metrics-spec.md
