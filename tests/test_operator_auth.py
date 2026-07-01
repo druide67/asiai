@@ -147,6 +147,33 @@ class TestLoginCode:
         mode = stat.S_IMODE(os.stat(operator_auth.LOGIN_CODE_PATH).st_mode)
         assert mode == 0o600
 
+    def test_clamp_login_ttl(self):
+        assert operator_auth.clamp_login_ttl(600) == operator_auth.MAX_LOGIN_CODE_TTL
+        assert operator_auth.clamp_login_ttl(0.5) == 1.0
+        assert operator_auth.clamp_login_ttl(-5) == 1.0
+        assert operator_auth.clamp_login_ttl(60) == 60.0
+
+
+class TestLoginCLI:
+    def test_cli_reports_effective_ttl_not_raw(self, tmp_state, capsys):
+        import argparse
+
+        from asiai.auth import cli as auth_cli
+
+        args = argparse.Namespace(action="login", ttl=600.0, json=True)
+        rc = auth_cli.cmd_auth(args)
+        assert rc == 0
+        out = capsys.readouterr().out
+        import json as _json
+
+        payload = _json.loads(out)
+        # Reported expiry must be the clamped value (300), not the raw 600.
+        assert payload["expires_in"] == int(operator_auth.MAX_LOGIN_CODE_TTL)
+        # And the minted code is really the clamped one on disk.
+        with open(operator_auth.LOGIN_CODE_PATH) as f:
+            disk = _json.load(f)
+        assert disk["expires_at"] - disk["created_at"] <= operator_auth.MAX_LOGIN_CODE_TTL
+
 
 class TestSessionStore:
     def test_create_and_get(self):
@@ -209,12 +236,38 @@ class TestLoginRoutes:
         csrf = _login(client)
         assert csrf
 
-    def test_login_rate_limited(self, client):
-        for _ in range(5):
+    def test_login_rate_limited_on_failures(self, client):
+        for _ in range(10):
             client.post("/login", headers=_common_headers(), data={"code": "aop_wrong"})
         resp = client.post("/login", headers=_common_headers(), data={"code": "aop_wrong"})
         assert resp.status_code == 429
         assert "Retry-After" in resp.headers
+
+    def test_valid_code_bypasses_failure_throttle(self, client):
+        # Exhaust the failure budget with junk from the same (loopback) IP.
+        for _ in range(20):
+            client.post("/login", headers=_common_headers(), data={"code": "aop_wrong"})
+        # A freshly minted VALID code must still log the operator in —
+        # the throttle counts failures only and never locks out a real
+        # code (finding: shared-loopback login-window DoS).
+        code = operator_auth.create_login_code()
+        resp = client.post(
+            "/login",
+            headers=_common_headers(),
+            data={"code": code},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert operator_auth.SESSION_COOKIE in resp.cookies
+
+    def test_successful_login_does_not_consume_budget(self, client):
+        # Two back-to-back valid logins; neither charges the throttle, so
+        # a subsequent single wrong attempt is still a plain 401, not 429.
+        for _ in range(3):
+            code = operator_auth.create_login_code()
+            client.post("/login", headers=_common_headers(), data={"code": code})
+        resp = client.post("/login", headers=_common_headers(), data={"code": "aop_wrong"})
+        assert resp.status_code == 401
 
     def test_session_info_unauthenticated(self, client):
         info = client.get("/api/v1/operator/session", headers=_common_headers()).json()

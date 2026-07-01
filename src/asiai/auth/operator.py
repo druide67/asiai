@@ -64,6 +64,17 @@ def _new_login_code() -> str:
     return LOGIN_CODE_PREFIX + secrets.token_urlsafe(24)
 
 
+def clamp_login_ttl(ttl: float) -> float:
+    """Clamp a requested code TTL to ``[1, MAX_LOGIN_CODE_TTL]`` seconds.
+
+    Exposed so the CLI reports the *effective* expiry rather than the raw
+    request — a code minted with ``--ttl 600`` really dies at
+    ``MAX_LOGIN_CODE_TTL``, and telling the operator otherwise sends them
+    to a login that fails past the true window.
+    """
+    return min(max(float(ttl), 1.0), MAX_LOGIN_CODE_TTL)
+
+
 def create_login_code(ttl: float = DEFAULT_LOGIN_CODE_TTL) -> str:
     """Generate a single-use login code and persist its salted hash.
 
@@ -71,7 +82,7 @@ def create_login_code(ttl: float = DEFAULT_LOGIN_CODE_TTL) -> str:
     Writing the 0o600 file is the shell-boundary proof: only this user
     can mint a code the web edge will accept.
     """
-    ttl = min(max(float(ttl), 1.0), MAX_LOGIN_CODE_TTL)
+    ttl = clamp_login_ttl(ttl)
     code = _new_login_code()
     now = time.time()
     payload = {

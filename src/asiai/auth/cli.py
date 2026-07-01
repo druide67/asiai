@@ -137,15 +137,19 @@ def _cmd_login(args: argparse.Namespace) -> int:
     """Mint a single-use operator login code for the web dashboard."""
     from asiai.auth import operator as operator_auth
 
+    # Report the EFFECTIVE (clamped) TTL, not the raw request — the code
+    # really dies at the clamped value, so an over-range --ttl must not
+    # promise a longer window than the operator actually gets.
+    effective_ttl = int(operator_auth.clamp_login_ttl(args.ttl))
     try:
         code = operator_auth.create_login_code(ttl=args.ttl)
     except OSError as e:
         print(red(f"✗ failed to write login code: {e}"), file=sys.stderr)
         return 1
     if args.json:
-        print(_json.dumps({"code": code, "expires_in": int(args.ttl)}))
+        print(_json.dumps({"code": code, "expires_in": effective_ttl}))
         return 0
-    print(green(f"✓ one-time operator login code (valid {int(args.ttl)}s, single use):"))
+    print(green(f"✓ one-time operator login code (valid {effective_ttl}s, single use):"))
     print()
     print(f"    {bold(code)}")
     print()

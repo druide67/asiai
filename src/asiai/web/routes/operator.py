@@ -1,9 +1,10 @@
 """Operator login/logout routes + the session dependencies for write routes.
 
 Flow (see :mod:`asiai.auth.operator`): the operator runs ``asiai auth
-login`` in a trusted shell, pastes the single-use code into ``GET
-/login``, and receives a server-side session behind an ``HttpOnly;
-SameSite=Lax`` cookie. Browser-facing write routes take
+login`` in a trusted shell, then submits the single-use code through the
+login form (``GET /login`` renders the form; the code is posted to
+``POST /login``, never placed in a URL) and receives a server-side
+session behind an ``HttpOnly; SameSite=Lax`` cookie. Browser-facing write routes take
 :func:`require_operator` (or :func:`require_operator_csrf` for
 form/HTMX posts) as a dependency; the node-to-node Bearer path is
 untouched.
@@ -28,9 +29,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Login attempts are keyed by peer IP: 5/min is generous for a human
-# pasting a code and stops a same-LAN curl from grinding at the form.
-_login_rate_limiter = TokenRateLimiter(limit=5, window_seconds=60.0)
+# Failed login attempts are throttled to bound scrypt CPU cost + log
+# spam from a grinder. It counts FAILURES ONLY (see login_submit): a
+# valid single-use code always authenticates regardless of the budget,
+# so a flood of junk from a shared loopback IP can never lock out the
+# real operator — the login-window DoS that keeping the code file on
+# wrong attempts was designed to avoid. Keyed by peer IP (meaningful
+# when bound to the LAN; on loopback all clients collapse to one bucket,
+# which is fine because the budget only ever gates further failures).
+_login_rate_limiter = TokenRateLimiter(limit=10, window_seconds=60.0)
 
 
 def _client_ip(request: Request) -> str:
@@ -96,8 +103,35 @@ async def login_page(request: Request):
 
 @router.post("/login")
 async def login_submit(request: Request, code: str = Form(default="")):
-    """Verify a single-use login code and open an operator session."""
+    """Verify a single-use login code and open an operator session.
+
+    A valid code is checked FIRST and always wins — the rate limit
+    throttles only failed attempts, so a grinder sharing the operator's
+    (loopback) IP cannot lock the operator out of a working code.
+    """
     ip = _client_ip(request)
+
+    if operator_auth.consume_login_code(code.strip()):
+        session_id, session = _session_store(request).create()
+        audit.log_event(
+            actor_type=audit.ACTOR_OPERATOR,
+            event="login",
+            source_ip=ip,
+            status="ok",
+            http_status=303,
+        )
+        response = RedirectResponse("/", status_code=303)
+        response.set_cookie(
+            operator_auth.SESSION_COOKIE,
+            session_id,
+            max_age=int(session.expires_at - session.created_at),
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    # Failed attempt: now (and only now) charge the throttle budget.
     allowed, _remaining, retry_after = _login_rate_limiter.check(ip)
     if not allowed:
         audit.log_event(
@@ -114,41 +148,21 @@ async def login_submit(request: Request, code: str = Form(default="")):
             headers={"Retry-After": str(int(retry_after) + 1)},
         )
 
-    if not operator_auth.consume_login_code(code.strip()):
-        audit.log_event(
-            actor_type=audit.ACTOR_OPERATOR,
-            event="login",
-            source_ip=ip,
-            status="denied",
-            http_status=401,
-            error="invalid_or_expired_code",
-        )
-        templates = request.app.state.templates
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            {"nav_active": "login", "error": "Invalid or expired code."},
-            status_code=401,
-        )
-
-    session_id, session = _session_store(request).create()
     audit.log_event(
         actor_type=audit.ACTOR_OPERATOR,
         event="login",
         source_ip=ip,
-        status="ok",
-        http_status=303,
+        status="denied",
+        http_status=401,
+        error="invalid_or_expired_code",
     )
-    response = RedirectResponse("/", status_code=303)
-    response.set_cookie(
-        operator_auth.SESSION_COOKIE,
-        session_id,
-        max_age=int(session.expires_at - session.created_at),
-        httponly=True,
-        samesite="lax",
-        path="/",
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {"nav_active": "login", "error": "Invalid or expired code."},
+        status_code=401,
     )
-    return response
 
 
 @router.post("/logout")
