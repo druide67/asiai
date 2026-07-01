@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.15.0](https://github.com/druide67/asiai/compare/v1.14.1...v1.15.0) — 2026-07-02
+
+Fleet groundwork: one shared write-command spec, and a human operator
+login for the dashboard. Purely additive — no breaking changes.
+
+### Added
+
+- `asiai.fleet.command_spec` — the single source of truth for fleet
+  write-command timeouts and the command whitelist. Each command has one
+  authoritative work budget; the edge/client HTTP deadlines are *derived*
+  (budget + a margin per hop), so the nesting invariant
+  `client > edge > loopback` holds by construction and the layers can no
+  longer drift apart and kill a long-running command mid-write.
+- Operator login for the web dashboard (`asiai auth login` + `/login`):
+  ephemeral shell-bound authentication. The CLI mints a single-use,
+  short-TTL, high-entropy code (only its salted hash touches disk); the
+  operator pastes it into the login form and receives a server-side
+  session behind an `HttpOnly; SameSite=Lax` cookie, with per-form CSRF
+  and failure-only rate limiting. No human password is ever stored.
+  Browser-facing write routes can now depend on
+  `require_operator` / `require_operator_csrf`; the node-to-node Bearer
+  path is unchanged.
+- Audit log entries carry an `actor_type` field
+  (`machine` / `operator` / `loopback`) so a human click and an
+  orchestrator push are always distinguishable.
+- Research: Qwen-AgentWorld-35B world-model evaluation brief (docs, 9
+  locales).
+
 ## [1.14.1](https://github.com/druide67/asiai/compare/v1.14.0...v1.14.1) — 2026-06-24
 
 OSS hygiene and a web dashboard fix.
