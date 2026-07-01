@@ -43,6 +43,7 @@ from asiai.auth import audit, loopback
 from asiai.auth import config as auth_config
 from asiai.auth.ratelimit import TokenRateLimiter
 from asiai.fleet import config as fleet_config
+from asiai.fleet.command_spec import ALLOWED_COMMANDS, edge_timeout
 from asiai.fleet.poll import (
     ERROR_DNS,
     ERROR_HTTP_4XX,
@@ -111,21 +112,11 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 # ``EnvironmentVariables`` dict.
 AISCTL_SERVE_URL = os.environ.get("ASIAI_AISCTL_SERVE_URL", "http://127.0.0.1:8898")
 
-# Commands the LAN-facing write endpoint will forward to ``aisctl serve``.
-# Each value is the upstream timeout in seconds for that command.
-# ``install`` / ``uninstall`` / ``upgrade`` get a longer budget because
-# they shell out to Homebrew + LaunchDaemon orchestration.
-COMMAND_TIMEOUTS: dict[str, float] = {
-    "purge": 15.0,
-    "load": 180.0,
-    "unload": 30.0,
-    "stop": 30.0,
-    "start": 60.0,
-    "restart": 60.0,
-    "install": 180.0,
-    "uninstall": 60.0,
-    "upgrade": 300.0,
-}
+# Command whitelist + timeouts now come from the single shared source
+# (asiai.fleet.command_spec). The edge waits ``edge_timeout(cmd)`` = the loopback
+# work budget + one hop margin, so it never abandons a command ``aisctl serve``
+# is still legitimately running (SB, 2026-07-01: the old hand-maintained edge map
+# was INVERTED — 300s edge vs 600s loopback upgrade — and killed live upgrades).
 
 # Engine name regex (LAN-facing defense in depth; ``aisctl serve`` also
 # validates against the live manifest registry). Matches the family
@@ -181,8 +172,8 @@ def _validate_command_payload(
     if not isinstance(payload, dict):
         return (None, {}, "body must be a JSON object")
     command = payload.get("command")
-    if not isinstance(command, str) or command not in COMMAND_TIMEOUTS:
-        allowed = sorted(COMMAND_TIMEOUTS)
+    if not isinstance(command, str) or command not in ALLOWED_COMMANDS:
+        allowed = sorted(ALLOWED_COMMANDS)
         return (None, {}, f"command must be one of: {', '.join(allowed)}")
     raw_args = payload.get("args") or {}
     if not isinstance(raw_args, dict):
@@ -531,7 +522,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             status_code=503,
         )
 
-    timeout = COMMAND_TIMEOUTS.get(command, 60.0)
+    timeout = edge_timeout(command)
     fleet_metrics.aisctl_inflight_inc()
     try:
         status, body = await asyncio.to_thread(_proxy_to_aisctl, command, args, internal, timeout)
