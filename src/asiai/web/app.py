@@ -158,6 +158,13 @@ def create_app(state: AppState) -> FastAPI:
     app.state.app_state = state
     app.state.templates = templates
 
+    # Operator sessions (ephemeral shell-bound login). In-memory by
+    # design: asiai web is a single uvicorn process and a restart
+    # logging the operator out is the intended revoke-everything lever.
+    from asiai.auth.operator import OperatorSessionStore
+
+    app.state.operator_sessions = OperatorSessionStore()
+
     # Register routes
     from asiai.web.routes import register_routes
 

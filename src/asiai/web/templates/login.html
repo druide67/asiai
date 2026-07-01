@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}asiai — Operator login{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Operator login</h2>
+    <p>Write actions require an operator session, bootstrapped from your shell.</p>
+</div>
+
+<div class="card" style="max-width: 32rem; padding: 1.5rem;">
+    <ol style="font-size: 0.875rem; opacity: 0.8; margin: 0 0 1rem 1.25rem; padding: 0;">
+        <li>In a terminal on this machine, run <code>asiai auth login</code>.</li>
+        <li>Paste the one-time code below (valid ~60&nbsp;s, single use).</li>
+    </ol>
+
+    {% if error %}
+    <p style="color: var(--red); font-size: 0.875rem; margin-bottom: 0.75rem;">
+        {{ error }}
+    </p>
+    {% endif %}
+
+    <form method="post" action="/login">
+        <input
+            type="password"
+            name="code"
+            placeholder="aop_…"
+            autocomplete="off"
+            autofocus
+            required
+            style="width: 100%; font-family: 'Geist Mono', monospace; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem;"
+        >
+        <button type="submit" class="btn">Sign in</button>
+    </form>
+</div>
+{% endblock %}
