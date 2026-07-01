@@ -23,6 +23,12 @@ logger = logging.getLogger("asiai.auth.audit")
 
 AUDIT_DIR = os.path.expanduser("~/.local/share/asiai")
 AUDIT_PATH = os.path.join(AUDIT_DIR, "fleet-audit.jsonl")
+
+# Credential audiences for the ``actor_type`` audit field, so a human
+# click and an orchestrator push are always distinguishable in the log.
+ACTOR_MACHINE = "machine"  # asai_ Bearer tokens (node-to-node)
+ACTOR_OPERATOR = "operator"  # web dashboard session (a human)
+ACTOR_LOOPBACK = "loopback"  # aint_ shared secret (web -> aisctl serve)
 ROTATE_BYTES = 10 * 1024 * 1024  # 10 MB
 # Number of rotated backups to keep (``.1`` is the most recent, ``.N`` the
 # oldest). Two backups makes the audit log ~30 MB worst case while

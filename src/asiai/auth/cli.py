@@ -133,6 +133,32 @@ def _cmd_revoke(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_login(args: argparse.Namespace) -> int:
+    """Mint a single-use operator login code for the web dashboard."""
+    from asiai.auth import operator as operator_auth
+
+    try:
+        code = operator_auth.create_login_code(ttl=args.ttl)
+    except OSError as e:
+        print(red(f"✗ failed to write login code: {e}"), file=sys.stderr)
+        return 1
+    if args.json:
+        print(_json.dumps({"code": code, "expires_in": int(args.ttl)}))
+        return 0
+    print(green(f"✓ one-time operator login code (valid {int(args.ttl)}s, single use):"))
+    print()
+    print(f"    {bold(code)}")
+    print()
+    print(
+        dim(
+            "  Paste it into the dashboard login form:\n"
+            "    http://127.0.0.1:8899/login  (or your asiai web URL)\n"
+            "  Running 'asiai auth login' again replaces any pending code."
+        )
+    )
+    return 0
+
+
 def cmd_auth(args: argparse.Namespace) -> int:
     """Dispatch ``asiai auth <action>`` to the matching handler."""
     action = getattr(args, "action", None)
@@ -142,10 +168,11 @@ def cmd_auth(args: argparse.Namespace) -> int:
         "create": _cmd_create,
         "rotate": _cmd_rotate,
         "revoke": _cmd_revoke,
+        "login": _cmd_login,
     }
     handler = handlers.get(action)
     if handler is None:
-        print(red("usage: asiai auth {init,list,create,rotate,revoke}"), file=sys.stderr)
+        print(red("usage: asiai auth {init,list,create,rotate,revoke,login}"), file=sys.stderr)
         return 2
     return handler(args)
 
@@ -185,3 +212,15 @@ def add_auth_subparser(subparsers: argparse._SubParsersAction) -> None:
     p_revoke = auth_sub.add_parser("revoke", help="Revoke a token without replacing it.")
     p_revoke.add_argument("token_id")
     p_revoke.add_argument("--json", action="store_true")
+
+    p_login = auth_sub.add_parser(
+        "login",
+        help="Mint a single-use code to log into the web dashboard as operator.",
+    )
+    p_login.add_argument(
+        "--ttl",
+        type=float,
+        default=60.0,
+        help="Code validity in seconds (default: 60, max: 300).",
+    )
+    p_login.add_argument("--json", action="store_true")

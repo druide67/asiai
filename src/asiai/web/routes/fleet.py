@@ -146,6 +146,15 @@ _MAX_BODY_BYTES = 64 * 1024
 _rate_limiter = TokenRateLimiter(limit=30, window_seconds=60.0)
 
 
+def _audit_machine(**fields: Any) -> None:
+    """Audit an event on the machine (Bearer) write path.
+
+    Stamps ``actor_type`` so these entries are always distinguishable
+    from operator-session (human) events in the shared audit log.
+    """
+    audit.log_event(actor_type=audit.ACTOR_MACHINE, **fields)
+
+
 def _redact_args(args: dict[str, Any]) -> dict[str, Any]:
     """Strip plausible secret-bearing keys from audit log args."""
     if not isinstance(args, dict):
@@ -349,7 +358,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
         # Reject before we even spend bytes reading the body — the
         # nickname goes into the audit log, and a CRLF/ANSI-injected
         # value could compromise a downstream log viewer.
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=None,
             nickname="<invalid>",
@@ -369,7 +378,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
 
     raw = await request.body()
     if len(raw) > _MAX_BODY_BYTES:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=None,
             nickname=nickname,
@@ -383,7 +392,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
 
     secret = _extract_bearer(request)
     if not secret:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=None,
             nickname=nickname,
@@ -404,7 +413,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
     # secret. Both branches still produce an audit log entry.
     all_tokens = auth_config.list_tokens()
     if not all_tokens:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=None,
             nickname=nickname,
@@ -424,7 +433,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
 
     token_id = auth_config.verify_token(secret)
     if not token_id:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=None,
             nickname=nickname,
@@ -441,7 +450,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
 
     allowed, _remaining, retry_after = _rate_limiter.check(token_id)
     if not allowed:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=token_id,
             nickname=nickname,
@@ -461,7 +470,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
     try:
         payload = _json.loads(raw.decode("utf-8")) if raw else {}
     except (ValueError, UnicodeDecodeError):
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=token_id,
             nickname=nickname,
@@ -475,7 +484,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
 
     command, args, err = _validate_command_payload(payload)
     if err is not None or command is None:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=token_id,
             nickname=nickname,
@@ -495,7 +504,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
 
     internal = loopback.read_token()
     if not internal:
-        audit.log_event(
+        _audit_machine(
             source_ip=ip,
             token_id=token_id,
             nickname=nickname,
@@ -530,7 +539,7 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
         fleet_metrics.aisctl_inflight_dec()
 
     duration_ms = int((time.monotonic() - started) * 1000)
-    audit.log_event(
+    _audit_machine(
         source_ip=ip,
         token_id=token_id,
         nickname=nickname,
