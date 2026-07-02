@@ -79,3 +79,6 @@ data/bench-mtp-m5/
 # Claude Code shell-snapshot IDs in their JSON/logs. Never publish unsanitised.
 # (The tracked m4/m5-*-mtp.json fixtures are path-free and stay committed.)
 tests/fixtures/agentic/sprint-bench-*/
+
+# MTP titration campaign outputs — contain local paths/hostnames, never commit
+.mtp_sweep_out/
