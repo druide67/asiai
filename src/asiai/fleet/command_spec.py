@@ -42,6 +42,17 @@ WORK_BUDGET: dict[str, float] = {
 # so the timeout map and the allowlist can never disagree.
 ALLOWED_COMMANDS: frozenset[str] = frozenset(WORK_BUDGET)
 
+# Blast-radius classification, consumed by the operator (human) write path. A
+# DESTRUCTIVE command mutates installed state or degrades the whole machine
+# (plist rewrite, package upgrade, memory purge) and is never auto-reverted —
+# the dashboard demands a typed confirmation (the target nickname), verified
+# SERVER-side, before forwarding one. REVERSIBLE commands (start/stop level)
+# get live buttons. The machine path is orchestrator-gated instead and does
+# not consume this split. ``tests/test_command_spec.py`` enforces that the
+# two sets partition ALLOWED_COMMANDS exactly.
+DESTRUCTIVE_COMMANDS: frozenset[str] = frozenset({"purge", "install", "uninstall", "upgrade"})
+REVERSIBLE_COMMANDS: frozenset[str] = ALLOWED_COMMANDS - DESTRUCTIVE_COMMANDS
+
 # Seconds each HTTP hop waits BEYOND the layer it calls (network + handler
 # overhead + a safety cushion). Applied once per hop outward.
 HOP_MARGIN: float = 30.0
