@@ -578,6 +578,67 @@ class TestLlamaCppEngine:
             engine = LlamaCppEngine("http://localhost:8080")
             assert engine.version() == "0.0.4567"
 
+    def _patch_running(self, models_id, props):
+        """Patch /v1/models (parent adapter) + /props (llamacpp) responses."""
+        models_resp = {"data": [{"id": models_id}]}
+
+        def compat_get(url, timeout=5):
+            if "/v1/models" in url:
+                return models_resp, {}
+            return None, {}
+
+        def cpp_get(url, timeout=5):
+            if "/props" in url:
+                return props, {}
+            return None, {}
+
+        return (
+            patch("asiai.engines.openai_compat.http_get_json", side_effect=compat_get),
+            patch("asiai.engines.llamacpp.http_get_json", side_effect=cpp_get),
+        )
+
+    def test_preset_symlink_resolved_to_real_model(self, tmp_path):
+        # Preset-managed instances load a stable symlink; the operator must
+        # see the real model filename, not "active.gguf".
+        real = tmp_path / "Qwen3-4B-Instruct-UD-Q5_K_XL.gguf"
+        real.write_bytes(b"gguf")
+        link = tmp_path / "active.gguf"
+        link.symlink_to(real)
+        p1, p2 = self._patch_running("active.gguf", {"model_path": str(link)})
+        with p1, p2:
+            models = LlamaCppEngine("http://localhost:8090").list_running()
+        assert models[0].name == "Qwen3-4B-Instruct-UD-Q5_K_XL.gguf"
+
+    def test_custom_alias_untouched_by_symlink_resolution(self, tmp_path):
+        # A deliberate --alias is an operator choice — never rewritten.
+        real = tmp_path / "model.gguf"
+        real.write_bytes(b"gguf")
+        link = tmp_path / "active.gguf"
+        link.symlink_to(real)
+        p1, p2 = self._patch_running("my-prod-model", {"model_path": str(link)})
+        with p1, p2:
+            models = LlamaCppEngine("http://localhost:8090").list_running()
+        assert models[0].name == "my-prod-model"
+
+    def test_remote_model_path_kept_as_reported(self):
+        # A --url engine reports a path from ANOTHER machine: it does not
+        # exist locally, so the reported name must survive untouched.
+        p1, p2 = self._patch_running(
+            "active.gguf", {"model_path": "/nonexistent/elsewhere/active.gguf"}
+        )
+        with p1, p2:
+            models = LlamaCppEngine("http://localhost:8090").list_running()
+        assert models[0].name == "active.gguf"
+
+    def test_plain_file_model_path_untouched(self, tmp_path):
+        # Not a symlink → nothing to resolve.
+        real = tmp_path / "model.gguf"
+        real.write_bytes(b"gguf")
+        p1, p2 = self._patch_running("model.gguf", {"model_path": str(real)})
+        with p1, p2:
+            models = LlamaCppEngine("http://localhost:8090").list_running()
+        assert models[0].name == "model.gguf"
+
     def test_generate_uses_chat_mode(self):
         chunks = [
             {"choices": [{"delta": {"content": "hello"}}], "usage": {"completion_tokens": 10}},
