@@ -34,6 +34,7 @@ class TestMergeLifecycleStates:
                     "display": "llama.cpp aux #1 (port 8090)",
                     "port": 8090,
                     "state": "running",
+                    "model": "Qwen3-4B.gguf",
                 }
             ],
         )
@@ -43,6 +44,7 @@ class TestMergeLifecycleStates:
         # this card must target llamacpp-aux-1, never the detection alias.
         assert out[0]["engine_id"] == "llamacpp-aux-1"
         assert out[0]["display_hint"].startswith("llama.cpp aux")
+        assert out[0]["model"] == "Qwen3-4B.gguf"  # propagated from the node
 
     def test_unmatched_manifest_appended_as_stopped_entry(self, monkeypatch):
         monkeypatch.setattr(
@@ -62,6 +64,7 @@ class TestMergeLifecycleStates:
             assert e["reachable"] is False
             assert e["models"] == []
             assert e["engine_id"] == e["name"]
+            assert "model" in e  # None when the node reports none
 
     def test_mixed_join_and_append(self, monkeypatch):
         monkeypatch.setattr(

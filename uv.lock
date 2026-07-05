@@ -35,7 +35,7 @@ wheels = [
 
 [[package]]
 name = "asiai"
-version = "1.17.3"
+version = "1.17.4"
 source = { editable = "." }
 
 [package.optional-dependencies]

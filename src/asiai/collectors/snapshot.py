@@ -242,6 +242,7 @@ def _merge_lifecycle_states(statuses: list[dict]) -> list[dict]:
         # on an aux card would command the base-manifest engine instead.
         s["engine_id"] = m.get("name")
         s["display_hint"] = m.get("display") or ""
+        s["model"] = m.get("model")
         matched_ports.add(port)
 
     for port, m in sorted(by_port.items()):
@@ -252,6 +253,7 @@ def _merge_lifecycle_states(statuses: list[dict]) -> list[dict]:
                 "name": m.get("name") or "engine",
                 "engine_id": m.get("name"),
                 "display_hint": m.get("display") or "",
+                "model": m.get("model"),
                 "url": f"http://127.0.0.1:{port}",
                 "reachable": False,
                 "state": m.get("state"),
