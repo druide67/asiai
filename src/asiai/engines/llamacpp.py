@@ -7,6 +7,7 @@ It exposes an OpenAI-compatible API on port 8080 by default, plus /health and /p
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 
 from asiai.engines.detect import http_get_json
@@ -58,19 +59,52 @@ class LlamaCppEngine(OpenAICompatEngine):
         return False
 
     def list_running(self) -> list:
-        """List running models, enriched with context_length from /props."""
+        """List running models, enriched with context_length from /props.
+
+        Preset-managed instances load a stable symlink (``active.gguf``)
+        and the API reports that alias, which tells an operator nothing —
+        resolve it to the real model filename when possible.
+        """
         models = super().list_running()
-        # Enrich with context length from /props
         ctx_len = 0
+        alias = ""
+        resolved = ""
         data, _ = http_get_json(f"{self.base_url}/props")
         if data and isinstance(data, dict):
             gen_settings = data.get("default_generation_settings", {})
             if isinstance(gen_settings, dict):
                 ctx_len = gen_settings.get("n_ctx", 0)
-        if ctx_len > 0:
-            for m in models:
+            alias, resolved = self._resolve_model_symlink(data.get("model_path"))
+        for m in models:
+            if ctx_len > 0:
                 m.context_length = ctx_len
+            # Only rewrite the DEFAULT alias (the file's own basename): a
+            # custom --alias is an operator choice and must stay untouched.
+            if resolved and m.name == alias:
+                m.name = resolved
         return models
+
+    @staticmethod
+    def _resolve_model_symlink(model_path: object) -> tuple[str, str]:
+        """``(default_alias, real_filename)`` behind a model-path symlink.
+
+        The collector runs on the same host as a locally-detected engine,
+        so resolving the path is legitimate; for a remote ``--url`` engine
+        the path does not exist locally and both values stay empty (the
+        reported name is kept). Never raises.
+        """
+        if not isinstance(model_path, str) or not model_path:
+            return ("", "")
+        try:
+            if not os.path.islink(model_path):
+                return ("", "")
+            real_base = os.path.basename(os.path.realpath(model_path))
+        except OSError:
+            return ("", "")
+        alias = os.path.basename(model_path)
+        if not real_base or real_base == alias:
+            return ("", "")
+        return (alias, real_base)
 
     def scrape_metrics(self) -> dict:
         """Scrape llama.cpp /metrics for inference activity."""

@@ -80,6 +80,39 @@
     }
 }
 
+/* ── Thin scrollbars (design spec §scrollbar) ──────────────── */
+
+.fl-master-list,
+.fl-detail-body,
+.fl-drawer-body,
+.fl-modal {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fl-border) transparent;
+}
+
+.fl-master-list::-webkit-scrollbar,
+.fl-detail-body::-webkit-scrollbar,
+.fl-drawer-body::-webkit-scrollbar,
+.fl-modal::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.fl-master-list::-webkit-scrollbar-thumb,
+.fl-detail-body::-webkit-scrollbar-thumb,
+.fl-drawer-body::-webkit-scrollbar-thumb,
+.fl-modal::-webkit-scrollbar-thumb {
+    background: var(--fl-border);
+    border-radius: 4px;
+}
+
+.fl-master-list::-webkit-scrollbar-track,
+.fl-detail-body::-webkit-scrollbar-track,
+.fl-drawer-body::-webkit-scrollbar-track,
+.fl-modal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 /* ── Cockpit layout (inside .main-content) ─────────────────── */
 
 .fl-cockpit {
@@ -142,6 +175,9 @@
     font-family: inherit;
     color: inherit;
     transition: border-color var(--duration) var(--ease);
+    /* The master list is a height-capped flex column: without this the
+       cards SHRINK to fit and their last row overflows the border. */
+    flex: none;
 }
 
 .fl-node:hover { border-color: var(--fl-border-hover); }
@@ -1190,7 +1226,9 @@
         width: 100%;
         border-right: none;
         border-bottom: 1px solid var(--fl-border-subtle);
-        max-height: 300px;
+        /* Enough for ~2 node cards without scrolling; caps the column so
+           the detail panel stays reachable on a large fleet. */
+        max-height: min(48vh, 420px);
     }
 
     .fl-node-row3 { flex-wrap: wrap; row-gap: 4px; }
