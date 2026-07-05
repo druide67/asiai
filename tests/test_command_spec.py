@@ -58,3 +58,12 @@ def test_inner_tool_timeout_never_nonpositive_for_small_budgets() -> None:
 def test_unknown_command_raises(fn) -> None:
     with pytest.raises(KeyError, match="unknown fleet write command"):
         fn("rm-rf-slash")
+
+
+def test_destructive_reversible_partition() -> None:
+    """The two blast-radius sets partition ALLOWED_COMMANDS exactly — a new
+    WORK_BUDGET entry MUST be classified here or this test fails loudly."""
+    assert cs.DESTRUCTIVE_COMMANDS | cs.REVERSIBLE_COMMANDS == cs.ALLOWED_COMMANDS
+    assert not (cs.DESTRUCTIVE_COMMANDS & cs.REVERSIBLE_COMMANDS)
+    # The live-button set the strategy doc names, plus start (reversible by nature).
+    assert cs.REVERSIBLE_COMMANDS == {"start", "stop", "restart", "unload", "load"}

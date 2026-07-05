@@ -29,7 +29,10 @@ is done by running ``--code`` on each and diffing the JSON.
 
 from __future__ import annotations
 
+import hashlib
+import itertools
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -120,6 +123,7 @@ class ChatResult:
     latency_ms: int | None = None
     error: str | None = None
     error_body: str | None = None
+    timings: dict[str, Any] | None = None  # llama.cpp final-chunk timings (MTP draft counters)
 
 
 def _finalize_tool_calls(acc: dict[int, ToolCall]) -> list[dict[str, Any]]:
@@ -204,6 +208,10 @@ def chat(
     }
     if stream:
         payload["stream_options"] = {"include_usage": True}
+    # MTP titration telemetry: llama.cpp already emits the draft-counter block in
+    # the final chunk's "timings" (verified on b9850 — appears without any request
+    # flag), so the payload is left byte-identical to the pre-patch version. The
+    # sink (below) reads res.timings; nothing about the request changes.
     if tools is not None:
         payload["tools"] = tools
     if tool_choice is not None:
@@ -223,7 +231,57 @@ def chat(
     t0 = time.time()
     out = _chat_stream(req, timeout, result) if stream else _chat_nonstream(req, timeout, result)
     out.latency_ms = round((time.time() - t0) * 1000)
+    _mtp_sink(out, messages, model)
     return out
+
+
+_mtp_seq = itertools.count()
+
+
+def _mtp_sink(res: ChatResult, messages: list[dict[str, Any]], model: str) -> None:
+    """Append one JSONL telemetry line per chat() call when ASIAI_MTP_SINK is set.
+
+    Strictly additive: reads the MTP draft counters llama.cpp reports in
+    ``res.timings`` and writes them to a sidecar file. Touches no existing
+    metric and no generation behaviour. ``prompt_id`` is the sha1 of the first
+    user message (stable across multi-turn continuations of one scenario, so
+    the acceptance analysis can aggregate per prompt). ``n_max`` / ``domain`` /
+    ``run_tag`` come from the launch environment. Must never raise — telemetry
+    failure cannot be allowed to break a bench run.
+    """
+    sink = os.environ.get("ASIAI_MTP_SINK")
+    if not sink:
+        return
+    try:
+        first_user = next((m.get("content") or "" for m in messages if m.get("role") == "user"), "")
+        if isinstance(first_user, list):  # multimodal content parts
+            first_user = json.dumps(first_user, ensure_ascii=False)
+        pid = hashlib.sha1(first_user.encode("utf-8", "replace")).hexdigest()[:12]
+        t = res.timings or {}
+        row = {
+            "ts": time.time(),
+            "prompt_id": pid,
+            "prompt_preview": first_user[:80],
+            "seq": next(_mtp_seq),
+            "draft_n": t.get("draft_n"),
+            "draft_n_accepted": t.get("draft_n_accepted"),
+            "finish_reason": res.finish_reason,
+            "completion_tokens": res.completion_tokens,
+            "prompt_tokens": res.prompt_tokens,  # §6 context-regime control
+            "prompt_n": t.get("prompt_n"),  # engine-side prompt token count
+            "cache_n": t.get("cache_n"),  # engine-side cached (prefix-hit) tokens
+            "predicted_per_second": t.get("predicted_per_second"),
+            "predicted_n": t.get("predicted_n"),
+            "latency_ms": res.latency_ms,
+            "n_max": os.environ.get("ASIAI_MTP_N"),
+            "domain": os.environ.get("ASIAI_MTP_DOMAIN"),
+            "run_tag": os.environ.get("ASIAI_MTP_RUN"),
+            "model": model,
+        }
+        with open(sink, "a") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 — telemetry must never break a bench run
+        pass
 
 
 def _chat_nonstream(req: urllib.request.Request, timeout: int, result: ChatResult) -> ChatResult:
@@ -241,6 +299,7 @@ def _chat_nonstream(req: urllib.request.Request, timeout: int, result: ChatResul
     usage = data.get("usage") or {}
     result.prompt_tokens = usage.get("prompt_tokens")
     result.completion_tokens = usage.get("completion_tokens")
+    result.timings = data.get("timings")
     choices = data.get("choices") or []
     if not choices:
         result.error = "no_choices"
@@ -256,6 +315,7 @@ def _chat_stream(req: urllib.request.Request, timeout: int, result: ChatResult) 
     reasoning_parts: list[str] = []
     tool_acc: dict[int, ToolCall] = {}
     last_usage: dict[str, Any] | None = None
+    last_timings: dict[str, Any] | None = None
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             for raw in resp:
@@ -271,6 +331,8 @@ def _chat_stream(req: urllib.request.Request, timeout: int, result: ChatResult) 
                     continue
                 if chunk.get("usage"):
                     last_usage = chunk["usage"]
+                if chunk.get("timings"):
+                    last_timings = chunk["timings"]
                 choices = chunk.get("choices") or []
                 if not choices:
                     continue
@@ -302,6 +364,7 @@ def _chat_stream(req: urllib.request.Request, timeout: int, result: ChatResult) 
     if last_usage:
         result.prompt_tokens = last_usage.get("prompt_tokens")
         result.completion_tokens = last_usage.get("completion_tokens")
+    result.timings = last_timings
     return result
 
 

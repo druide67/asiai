@@ -8,13 +8,18 @@ Phase 1 (read-only):
 
 Phase 2 (writes, this module):
 
-- ``POST /api/v1/fleet/{nickname}/command`` — execute a whitelisted
-  write (``purge``, ``stop``, ``restart``, ``unload``, ``install``,
-  ``uninstall``, ``upgrade``) on the local node after Bearer auth +
-  per-token rate limit + audit log. The route proxies to
-  ``aisctl serve`` on the loopback interface (``127.0.0.1:8898``); the
-  fleet write surface is therefore disabled if ``aisctl serve`` is not
-  running on the node.
+- ``POST /api/v1/fleet/{nickname}/command`` — machine path: execute a
+  whitelisted write (the ``asiai.fleet.command_spec.ALLOWED_COMMANDS``
+  set — start/stop/restart/load/unload/purge/install/uninstall/upgrade)
+  on the local node after Bearer auth + per-token rate limit + audit
+  log. The route proxies to ``aisctl serve`` on the loopback interface
+  (``127.0.0.1:8898``); the fleet write surface is therefore disabled
+  if ``aisctl serve`` is not running on the node.
+- ``POST /fleet/{nickname}/action`` — operator (human) path: same-origin
+  proxy for the dashboard's live buttons. Authenticates the operator
+  session + CSRF, re-verifies the typed confirmation for destructive
+  verbs, then forwards to the target node's machine edge holding the
+  node Bearer server-side. Forwards only — never executes locally.
 
 The synchronous parallel poll lives in ``asiai.fleet.poll`` and uses a
 ThreadPoolExecutor + urllib (stdlib only). FastAPI handlers wrap any
@@ -25,25 +30,33 @@ responsive.
 from __future__ import annotations
 
 import asyncio
+import http.client
 import json as _json
 import logging
 import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from asiai.auth import audit, loopback
 from asiai.auth import config as auth_config
+from asiai.auth.operator import OperatorSession
 from asiai.auth.ratelimit import TokenRateLimiter
 from asiai.fleet import config as fleet_config
-from asiai.fleet.command_spec import ALLOWED_COMMANDS, edge_timeout
+from asiai.fleet.command_spec import (
+    ALLOWED_COMMANDS,
+    DESTRUCTIVE_COMMANDS,
+    client_timeout,
+    edge_timeout,
+)
 from asiai.fleet.poll import (
     ERROR_DNS,
     ERROR_HTTP_4XX,
@@ -57,6 +70,7 @@ from asiai.fleet.poll import (
     poll_all,
 )
 from asiai.web import fleet_metrics
+from asiai.web.routes.operator import require_operator_csrf
 
 logger = logging.getLogger("asiai.web.routes.fleet")
 
@@ -283,6 +297,11 @@ def _proxy_to_aisctl(
         return (502, {"error": "aisctl_serve_unreachable"})
     except TimeoutError:
         return (504, {"error": "aisctl_serve_timeout"})
+    except http.client.HTTPException as e:
+        # Garbled upstream (parity with _forward_to_node): urllib propagates
+        # these unwrapped; keep the response deliberately coarse, never a 500.
+        logger.warning("aisctl serve protocol error: %s", e)
+        return (502, {"error": "aisctl_serve_protocol_error"})
     except OSError as e:
         logger.warning("aisctl proxy I/O error: %s", e)
         return (502, {"error": "aisctl_serve_io_error"})
@@ -566,6 +585,369 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
         "duration_ms": duration_ms,
     }
     return JSONResponse(response_body, status_code=status)
+
+
+# ---------------------------------------------------------------------------
+# Operator (human) write surface — the same-origin proxy (É2 / strategy M4b)
+# ---------------------------------------------------------------------------
+#
+# The browser NEVER talks to a remote node: CSP ``connect-src 'self'`` forbids
+# it, and the node Bearer must never reach the DOM. Instead the dashboard's own
+# origin exposes ``POST /fleet/{nickname}/action``; this route authenticates
+# the HUMAN (operator session + CSRF), then forwards to the target node's
+# machine edge (``POST /api/v1/fleet/{nickname}/command``) holding the node's
+# Bearer server-side — the exact request shape ``aisctl fleet push`` sends, so
+# the machine path stays untouched. The proxy FORWARDS, it never executes:
+# execution stays behind the target node's own edge → loopback → helper funnel.
+
+# Max bytes accepted back from a node's edge (mirrors aisctl fleet push).
+_MAX_FORWARD_RESPONSE_BYTES = 1024 * 1024
+
+# Rate limit for the human path, keyed on a single bucket ON PURPOSE: one
+# operator per dashboard by design (single session store, single human), and
+# the ceiling stays BELOW the machine edge's 30/min so a runaway front-end
+# script cannot exhaust the node token's own budget. Do NOT key this by
+# session id — N concurrent sessions would multiply the ceiling to 20*N/min
+# and defeat that cap; a second session throttling the first is the accepted
+# trade-off (review 2026-07-05).
+_operator_rate_limiter = TokenRateLimiter(limit=20, window_seconds=60.0)
+_OPERATOR_RATE_KEY = "operator"
+
+# Concurrent-forward cap. Long-budget commands (upgrade: 660s at client tier)
+# would otherwise pin threads of the process-wide asyncio.to_thread pool —
+# shared with every read endpoint — for minutes each. A burst of slow
+# forwards must degrade the WRITE surface (503 busy), never the dashboard's
+# reads. 4 mirrors aisctl serve's own MAX_CONCURRENT.
+_MAX_CONCURRENT_FORWARDS = 4
+_forward_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FORWARDS)
+
+
+def _audit_operator(**fields: Any) -> None:
+    """Audit an event on the operator (human session) write path."""
+    audit.log_event(actor_type=audit.ACTOR_OPERATOR, **fields)
+
+
+def _forward_to_node(
+    node: dict[str, Any],
+    command: str,
+    args: dict[str, Any],
+    timeout: float,
+) -> tuple[int, dict[str, Any]]:
+    """POST a validated command to a node's machine edge. ``(status, body)``.
+
+    Server-side replica of ``aisctl fleet push``'s ``_do_push``: node URL and
+    Bearer come from the fleet registry (never from the browser), and the
+    ``Origin`` header is set to the node's own URL on purpose — the remote
+    edge's same-origin middleware rejects cross-origin POSTs, and a machine
+    client asserts its legitimacy by presenting a matching Origin.
+    """
+    url = str(node.get("asiai_url", "")).rstrip("/")
+    token = node.get("auth_token") or ""
+    quoted = urllib.parse.quote(str(node.get("nickname", "_")), safe="")
+    payload = _json.dumps({"command": command, "args": args}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{url}/api/v1/fleet/{quoted}/command",
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "Origin": url,
+            "User-Agent": "asiai-web/operator-proxy",
+        },
+    )
+    try:
+        # nosec B310 — URL scheme is validated (http/https) by the fleet
+        # registry before a node can be saved; not browser-controlled.
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            raw = resp.read(_MAX_FORWARD_RESPONSE_BYTES + 1)
+            if len(raw) > _MAX_FORWARD_RESPONSE_BYTES:
+                return (502, {"error": "node_response_oversized"})
+            try:
+                body = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                return (502, {"error": "node_response_parse_error"})
+            return (resp.status, body if isinstance(body, dict) else {"data": body})
+    except urllib.error.HTTPError as e:
+        try:
+            raw = e.read(_MAX_FORWARD_RESPONSE_BYTES + 1)
+            body = _json.loads(raw.decode("utf-8")) if raw else {}
+            if not isinstance(body, dict):
+                body = {"data": body}
+        except (ValueError, UnicodeDecodeError, OSError):
+            body = {"error": "node_http_error"}
+        return (e.code, body)
+    except urllib.error.URLError as e:
+        # A connect-phase timeout arrives WRAPPED in URLError (urllib wraps
+        # OSError during request(), not during getresponse()) — classify it
+        # as 504 like a read timeout, not as unreachable.
+        if isinstance(e.reason, TimeoutError):
+            return (504, {"error": "node_timeout"})
+        # Coarse public detail; the full reason stays in local logs (same
+        # rationale as _proxy_to_aisctl: no topology leak in responses).
+        logger.warning("fleet node %s unreachable: %s", node.get("nickname"), e)
+        return (502, {"error": "node_unreachable"})
+    except TimeoutError:
+        return (504, {"error": "node_timeout"})
+    except http.client.HTTPException as e:
+        # Non-HTTP or garbled upstream (e.g. an asiai_url mistakenly pointing
+        # at a TLS or binary port -> BadStatusLine). urllib propagates these
+        # UNWRAPPED from getresponse(); without this clause they would escape
+        # as a raw 500 instead of the deliberately coarse 502.
+        logger.warning("fleet node %s protocol error: %s", node.get("nickname"), e)
+        return (502, {"error": "node_protocol_error"})
+    except OSError as e:
+        logger.warning("fleet forward I/O error: %s", e)
+        return (502, {"error": "node_io_error"})
+
+
+@router.post("/fleet/{nickname}/action")
+async def fleet_operator_action(
+    nickname: str,
+    request: Request,
+    session: OperatorSession = Depends(require_operator_csrf),  # noqa: B008
+) -> JSONResponse:
+    """Execute a fleet write as the logged-in HUMAN operator (same-origin proxy).
+
+    Authentication: operator session cookie + CSRF token (header
+    ``X-CSRF-Token`` or form field ``_csrf``) — ``require_operator_csrf``.
+
+    Request body (JSON)::
+
+        {"command": "<start|stop|...>", "args": {"engine": "..."},
+         "confirm": "<nickname>"}          # required for destructive commands
+
+    DESTRUCTIVE commands (purge/install/uninstall/upgrade) additionally
+    require ``confirm`` to equal the target nickname — the UI's typed
+    confirmation is re-verified server-side, so a scripted or replayed
+    request cannot skip it.
+
+    Errors: 401 (no session), 403 (bad CSRF), 404 (unknown node), 400
+    (bad payload / missing confirmation), 409 (node has no auth_token),
+    429 (rate limit), 503 (forward slots busy), 502/504 (node edge
+    unreachable or timed out).
+    """
+    started = time.monotonic()
+    ip = _client_ip(request)
+
+    if not _NICKNAME_RE.match(nickname):
+        _audit_operator(
+            source_ip=ip,
+            nickname="<invalid>",
+            command=None,
+            status="denied",
+            http_status=400,
+            error="invalid_nickname",
+        )
+        fleet_metrics.record(
+            command=None, status="denied", error="invalid_nickname", token_id="operator"
+        )
+        return JSONResponse(
+            {
+                "error": "bad_nickname",
+                "detail": "nickname must match [a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}",
+            },
+            status_code=400,
+        )
+
+    allowed, _remaining, retry_after = _operator_rate_limiter.check(_OPERATOR_RATE_KEY)
+    if not allowed:
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=None,
+            status="denied",
+            http_status=429,
+            error="rate_limited",
+        )
+        fleet_metrics.record(
+            command=None, status="denied", error="rate_limited", token_id="operator"
+        )
+        resp = JSONResponse(
+            {"error": "rate_limited", "retry_after": round(retry_after, 1)},
+            status_code=429,
+        )
+        resp.headers["Retry-After"] = str(int(retry_after) + 1)
+        return resp
+
+    raw = await request.body()
+    if len(raw) > _MAX_BODY_BYTES:
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=None,
+            status="denied",
+            http_status=413,
+            error="body_too_large",
+        )
+        fleet_metrics.record(
+            command=None, status="denied", error="body_too_large", token_id="operator"
+        )
+        return JSONResponse({"error": "body_too_large"}, status_code=413)
+    try:
+        payload = _json.loads(raw.decode("utf-8")) if raw else {}
+    except (ValueError, UnicodeDecodeError):
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=None,
+            status="error",
+            http_status=400,
+            error="invalid_json",
+        )
+        fleet_metrics.record(
+            command=None, status="error", error="invalid_json", token_id="operator"
+        )
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    command, args, err = _validate_command_payload(payload)
+    if err is not None or command is None:
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=payload.get("command") if isinstance(payload, dict) else None,
+            args=_redact_args(payload.get("args") or {}) if isinstance(payload, dict) else {},
+            status="error",
+            http_status=400,
+            error=err or "bad_payload",
+        )
+        fleet_metrics.record(
+            command=payload.get("command") if isinstance(payload, dict) else None,
+            status="error",
+            error="bad_payload",
+            token_id="operator",
+        )
+        return JSONResponse({"error": "bad_payload", "detail": err}, status_code=400)
+
+    # Server-side typed confirmation for destructive verbs: the UI modal's
+    # "type the nickname" is re-checked HERE, so it cannot be bypassed by
+    # calling the API directly with a stolen session.
+    if command in DESTRUCTIVE_COMMANDS:
+        confirm = payload.get("confirm") if isinstance(payload, dict) else None
+        if confirm != nickname:
+            _audit_operator(
+                source_ip=ip,
+                nickname=nickname,
+                command=command,
+                args=_redact_args(args),
+                status="denied",
+                http_status=400,
+                error="confirmation_required",
+            )
+            fleet_metrics.record(
+                command=command,
+                status="denied",
+                error="confirmation_required",
+                token_id="operator",
+            )
+            return JSONResponse(
+                {
+                    "error": "confirmation_required",
+                    "detail": (
+                        f"'{command}' is destructive: the request body must carry "
+                        '"confirm": "<nickname>" matching the target node'
+                    ),
+                },
+                status_code=400,
+            )
+
+    node = next(
+        (n for n in fleet_config.get_nodes() if n.get("nickname") == nickname),
+        None,
+    )
+    if node is None:
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=command,
+            args=_redact_args(args),
+            status="denied",
+            http_status=404,
+            error="unknown_node",
+        )
+        fleet_metrics.record(
+            command=command, status="denied", error="unknown_node", token_id="operator"
+        )
+        return JSONResponse({"error": "unknown_node"}, status_code=404)
+    if not node.get("auth_token") or not node.get("asiai_url"):
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=command,
+            args=_redact_args(args),
+            status="denied",
+            http_status=409,
+            error="node_not_writable",
+        )
+        fleet_metrics.record(
+            command=command, status="denied", error="node_not_writable", token_id="operator"
+        )
+        return JSONResponse(
+            {
+                "error": "node_not_writable",
+                "detail": (
+                    "node has no auth_token/url in the fleet registry; add one with "
+                    "'asiai fleet add <nick> --url ... --auth-token ...'"
+                ),
+            },
+            status_code=409,
+        )
+
+    # Bound concurrent forwards: a long-budget forward (upgrade: 660s) pins a
+    # thread of the shared to_thread pool; saturation must answer 503 on the
+    # WRITE surface instead of starving the co-hosted read endpoints. The
+    # locked() pre-check has a benign race (a competing request may slip in
+    # between check and acquire — it then briefly waits instead of 503ing).
+    if _forward_semaphore.locked():
+        _audit_operator(
+            source_ip=ip,
+            nickname=nickname,
+            command=command,
+            args=_redact_args(args),
+            status="denied",
+            http_status=503,
+            error="forwards_busy",
+        )
+        fleet_metrics.record(
+            command=command, status="denied", error="forwards_busy", token_id="operator"
+        )
+        return JSONResponse(
+            {
+                "error": "forwards_busy",
+                "detail": f"{_MAX_CONCURRENT_FORWARDS} forwards already in flight; retry shortly",
+            },
+            status_code=503,
+        )
+
+    # Two hops out from the loopback budget (proxy → edge → loopback).
+    timeout = client_timeout(command)
+    async with _forward_semaphore:
+        status, body = await asyncio.to_thread(_forward_to_node, node, command, args, timeout)
+
+    duration_ms = int((time.monotonic() - started) * 1000)
+    _audit_operator(
+        source_ip=ip,
+        nickname=nickname,
+        command=command,
+        args=_redact_args(args),
+        status="ok" if status < 400 else "error",
+        http_status=status,
+        duration_ms=duration_ms,
+        exit_code=body.get("exit_code") if isinstance(body, dict) else None,
+        error=body.get("error") if isinstance(body, dict) and status >= 400 else None,
+    )
+    fleet_metrics.record(
+        command=command,
+        status="ok" if status < 400 else "error",
+        duration_ms=duration_ms,
+        error=(body.get("error") if isinstance(body, dict) and status >= 400 else None),
+        token_id="operator",
+    )
+
+    return JSONResponse(
+        {**body, "command": command, "nickname": nickname, "duration_ms": duration_ms},
+        status_code=status,
+    )
 
 
 @router.get("/fleet")
