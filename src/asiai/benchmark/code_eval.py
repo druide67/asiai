@@ -256,7 +256,11 @@ def _mtp_sink(res: ChatResult, messages: list[dict[str, Any]], model: str) -> No
         first_user = next((m.get("content") or "" for m in messages if m.get("role") == "user"), "")
         if isinstance(first_user, list):  # multimodal content parts
             first_user = json.dumps(first_user, ensure_ascii=False)
-        pid = hashlib.sha1(first_user.encode("utf-8", "replace")).hexdigest()[:12]
+        # Non-cryptographic: a stable short id for a prompt, so a multi-turn
+        # scenario's continuations group together in the sink. No security use.
+        pid = hashlib.sha1(
+            first_user.encode("utf-8", "replace"), usedforsecurity=False
+        ).hexdigest()[:12]
         t = res.timings or {}
         row = {
             "ts": time.time(),
