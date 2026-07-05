@@ -1256,7 +1256,15 @@
                 if (m.quantization) bits.push(m.quantization);
                 var ctx = fmtCtx(m.context_length);
                 if (ctx) bits.push('ctx ' + ctx);
-                modelLine = el('div', { cls: 'fl-card-model', text: bits.join(' · '), title: bits.join(' · ') });
+                var line = bits.join(' · ');
+                // Multi-model engines (ollama, LM Studio): show the count,
+                // full list in the tooltip.
+                var full = line;
+                if (models.length > 1) {
+                    line += ' · +' + (models.length - 1) + ' more';
+                    full = models.map(function (x) { return x.name; }).join('\n');
+                }
+                modelLine = el('div', { cls: 'fl-card-model', text: line, title: full });
             } else {
                 modelLine = el('div', { cls: 'fl-card-model faint', text: 'no model loaded' });
             }
@@ -1335,12 +1343,16 @@
             var repair = st === 'unhealthy' || st === 'degraded';
             actions.appendChild(actionButton('Restart', repair ? 'accent' : 'ghost', confirmHandler('restart')));
             actions.appendChild(actionButton('Stop', 'ghost', confirmHandler('stop')));
+        } else if (st === 'not_installed') {
+            // Starting an unprovisioned engine would just fail: the honest
+            // verb is install (destructive → typed confirmation).
+            actions.appendChild(actionButton('Install', 'accent', confirmHandler('install')));
         } else {
             actions.appendChild(actionButton('Start', 'primary', confirmHandler('start')));
         }
 
         // Overflow ⋯ menu
-        if (st !== 'loading' && nodeWritable) {
+        if (st !== 'loading' && st !== 'not_installed' && nodeWritable) {
             var locked = !state.session.authenticated;
             var moreBtn = el('button', {
                 cls: 'fl-more' + (state.menuOpen === key ? ' open' : '') + (locked ? ' locked' : ''),
@@ -1474,9 +1486,42 @@
 
         // Engine cards grid
         if (engines.length) {
-            var grid = el('div', { cls: 'fl-engines' });
-            engines.forEach(function (e) { grid.appendChild(engineCard(node, e)); });
-            host.appendChild(grid);
+            // Operational priority: what needs attention first, dormant
+            // manifests last (and folded away below).
+            var ORDER = {
+                unhealthy: 0, degraded: 0, loading: 1, running: 2,
+                loaded: 3, stopped: 4, disabled: 5, not_installed: 9,
+            };
+            var sorted = engines.slice().sort(function (a, b) {
+                var sa = engineStateOf(node.nickname, a, node.ok);
+                var sb = engineStateOf(node.nickname, b, node.ok);
+                var d = (ORDER[sa] !== undefined ? ORDER[sa] : 8) - (ORDER[sb] !== undefined ? ORDER[sb] : 8);
+                if (d !== 0) return d;
+                return engineLabel(a) < engineLabel(b) ? -1 : 1;
+            });
+            var active = [];
+            var dormant = [];
+            sorted.forEach(function (e) {
+                var st = engineStateOf(node.nickname, e, node.ok);
+                (st === 'not_installed' ? dormant : active).push(e);
+            });
+
+            if (active.length) {
+                var grid = el('div', { cls: 'fl-engines' });
+                active.forEach(function (e) { grid.appendChild(engineCard(node, e)); });
+                host.appendChild(grid);
+            }
+            if (dormant.length) {
+                var details = el('details', { cls: 'fl-dormant' });
+                details.appendChild(el('summary', {
+                    cls: 'fl-dormant-summary',
+                    text: dormant.length + ' engine' + (dormant.length > 1 ? 's' : '') + ' not installed on this node',
+                }));
+                var dgrid = el('div', { cls: 'fl-engines' });
+                dormant.forEach(function (e) { dgrid.appendChild(engineCard(node, e)); });
+                details.appendChild(dgrid);
+                host.appendChild(details);
+            }
         } else {
             host.appendChild(el('div', { cls: 'fl-empty', text: 'No engines reported by this node.' }));
         }

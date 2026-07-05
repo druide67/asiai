@@ -1205,6 +1205,29 @@
     padding: 1px 6px;
 }
 
+/* ── Dormant engines fold (not_installed) ──────────────────── */
+
+.fl-dormant { margin-top: 16px; }
+
+.fl-dormant-summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--fl-text-faint);
+    padding: 8px 2px;
+}
+
+.fl-dormant-summary::-webkit-details-marker { display: none; }
+.fl-dormant-summary::before { content: '▸ '; color: var(--fl-text-disabled); }
+.fl-dormant[open] .fl-dormant-summary::before { content: '▾ '; }
+.fl-dormant-summary:hover { color: var(--fl-text-dim); }
+
+.fl-dormant .fl-engines { margin-top: 8px; }
+
 /* ── Lock icon helper ──────────────────────────────────────── */
 
 .fl-lock { display: inline-flex; flex: none; }
