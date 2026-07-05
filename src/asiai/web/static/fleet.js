@@ -143,6 +143,11 @@
 
     function snapshotStateOf(engine, nodeOk) {
         if (!nodeOk) return 'stopped';
+        // Rich lifecycle state from an aisctl-serve-equipped node; fall back
+        // to the reachable/unreachable split for nodes that don't report it.
+        if (typeof engine.state === 'string' && BADGE_LABEL[engine.state]) {
+            return engine.state;
+        }
         return engine.reachable ? 'running' : 'stopped';
     }
 
@@ -168,8 +173,21 @@
     var BADGE_LABEL = {
         running: 'RUNNING', unhealthy: 'UNHEALTHY', loading: 'LOADING',
         stopped: 'STOPPED', disabled: 'STANDBY', not_installed: 'NOT INSTALLED',
-        degraded: 'DEGRADED',
+        degraded: 'DEGRADED', loaded: 'LOADED',
     };
+
+    function engineLabel(engine) {
+        // Manifest name when the node reports one (aisctl serve): it
+        // distinguishes the N homonymous "llamacpp" detection entries.
+        return engine.engine_id || engine.name;
+    }
+
+    function engineActionTarget(engine) {
+        // The write funnel validates against MANIFEST names: acting on a
+        // detection alias ("llamacpp") would command the base-manifest
+        // engine, not the aux instance this card displays.
+        return engine.engine_id || engine.name;
+    }
 
     var RAM_PALETTE = ['#06b6d4', '#3b82f6', '#8b5cf6', '#a855f7', '#ec4899', '#22d3ee', '#818cf8'];
 
@@ -394,7 +412,7 @@
     function confirmAction(node, engine, command) {
         if (!state.session.authenticated) { openLoginModal(); return; }
         var nick = node.nickname;
-        var engineName = engine ? engine.name : null;
+        var engineName = engine ? engineActionTarget(engine) : null;
 
         if (DESTRUCTIVE[command]) {
             openTypeToConfirm(nick, engineName, command, node);
@@ -992,11 +1010,11 @@
             if (gb(ram) <= 0.05) return;
             var color = RAM_PALETTE[idx % RAM_PALETTE.length];
             idx += 1;
-            var seg = el('span', { title: e.name + ' · ' + fmtGB(ram) + ' GB' });
+            var seg = el('span', { title: engineLabel(e) + ' · ' + fmtGB(ram) + ' GB' });
             seg.style.width = Math.min(100, (ram / total) * 100) + '%';
             seg.style.background = color;
             bar.appendChild(seg);
-            legend.push({ name: e.name, ram: ram, color: color });
+            legend.push({ name: engineLabel(e), ram: ram, color: color });
         });
         return { bar: bar, legend: legend };
     }
@@ -1045,7 +1063,7 @@
             engines.forEach(function (e) {
                 var st = engineStateOf(node.nickname, e, node.ok);
                 if (st === 'running') running += 1;
-                squares.push(el('span', { cls: 'fl-sq st-' + st, title: e.name + ' · ' + BADGE_LABEL[st].toLowerCase() }));
+                squares.push(el('span', { cls: 'fl-sq st-' + st, title: engineLabel(e) + ' · ' + BADGE_LABEL[st].toLowerCase() }));
             });
 
             var row2, row3meta;
@@ -1122,11 +1140,16 @@
         var downNodes = [];
         var loadingKeys = Object.keys(state.pending);
         var serving = 0, nodesUp = 0;
+        var sickEngines = [];
         (state.snapshot.nodes || []).forEach(function (node) {
             if (!node.ok) { downNodes.push(node.nickname); return; }
             nodesUp += 1;
             enginesOf(node).forEach(function (e) {
-                if (engineStateOf(node.nickname, e, true) === 'running') serving += 1;
+                var st = engineStateOf(node.nickname, e, true);
+                if (st === 'running') serving += 1;
+                if (st === 'unhealthy' || st === 'degraded') {
+                    sickEngines.push(engineLabel(e) + ' on ' + node.nickname);
+                }
             });
         });
 
@@ -1146,6 +1169,10 @@
             variant = 'unhealthy'; dotCls = 'unhealthy';
             title = downNodes.length + ' node' + (downNodes.length > 1 ? 's' : '') + ' unreachable — ' + downNodes.join(', ');
             sub = 'poll failed · check the node or its asiai_url';
+        } else if (sickEngines.length) {
+            variant = 'unhealthy'; dotCls = 'unhealthy';
+            title = sickEngines.length + ' engine' + (sickEngines.length > 1 ? 's' : '') + ' unhealthy — ' + sickEngines[0];
+            sub = 'process alive · API not responding';
         } else if (loadingKeys.length) {
             variant = 'loading'; dotCls = 'loading';
             title = 'Command in flight — ' + loadingKeys[0];
@@ -1198,17 +1225,21 @@
     function engineCard(node, engine) {
         var nick = node.nickname;
         var st = engineStateOf(nick, engine, node.ok);
-        var key = engineKey(nick, engine.name);
+        var key = engineKey(nick, engineLabel(engine));
         var models = Array.isArray(engine.models) ? engine.models : [];
 
         var header = el('div', { cls: 'fl-card-header' }, [
             el('span', { cls: 'fl-dot st-' + st }),
-            el('span', { cls: 'fl-card-name', text: engine.name, title: engine.name }),
+            el('span', {
+                cls: 'fl-card-name',
+                text: engineLabel(engine),
+                title: engine.display_hint || engineLabel(engine),
+            }),
             el('span', { cls: 'fl-badge st-' + st, text: BADGE_LABEL[st] }),
         ]);
 
         var modelLine;
-        if (st === 'running' || st === 'loading' || st === 'unhealthy') {
+        if (st === 'running' || st === 'loading' || st === 'unhealthy' || st === 'degraded') {
             if (models.length) {
                 var m = models[0];
                 var bits = [m.name];
@@ -1219,6 +1250,9 @@
             } else {
                 modelLine = el('div', { cls: 'fl-card-model faint', text: 'no model loaded' });
             }
+        } else if (typeof engine.state === 'string') {
+            // Rich lifecycle state: the engine is genuinely not serving.
+            modelLine = el('div', { cls: 'fl-card-model empty', text: '—' });
         } else {
             modelLine = el('div', {
                 cls: 'fl-card-model empty',
@@ -1287,8 +1321,9 @@
                 text: 'Node unreachable',
                 attrs: { disabled: 'disabled' },
             }));
-        } else if (st === 'running' || st === 'unhealthy') {
-            actions.appendChild(actionButton('Restart', st === 'unhealthy' ? 'accent' : 'ghost', confirmHandler('restart')));
+        } else if (st === 'running' || st === 'unhealthy' || st === 'degraded') {
+            var repair = st === 'unhealthy' || st === 'degraded';
+            actions.appendChild(actionButton('Restart', repair ? 'accent' : 'ghost', confirmHandler('restart')));
             actions.appendChild(actionButton('Stop', 'ghost', confirmHandler('stop')));
         } else {
             actions.appendChild(actionButton('Start', 'primary', confirmHandler('start')));
