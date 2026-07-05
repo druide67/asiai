@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}asiai — Audit journal{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/fleet.css?v=1.0.0">
+{% endblock %}
+
+{% block content %}
+<div class="fl-journal-head">
+    <h2>Audit journal</h2>
+    <span class="sub">every write action — who, what, when, verdict</span>
+    <span class="fmt">JSONL · append-only</span>
+</div>
+
+<div id="fl-root" data-fl-page="journal">
+    <div id="fl-journal">
+        <div class="fl-journal-state">Loading journal…</div>
+    </div>
+</div>
+
+<div class="fl-toasts" id="fl-toasts" aria-live="polite"></div>
+<div id="fl-overlays"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/fleet.js?v=1.0.0"></script>
+{% endblock %}

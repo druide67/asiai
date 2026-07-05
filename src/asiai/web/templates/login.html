@@ -1,35 +1,52 @@
 {% extends "base.html" %}
 {% block title %}asiai — Operator login{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/fleet.css?v=1.0.0">
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2>Operator login</h2>
     <p>Write actions require an operator session, bootstrapped from your shell.</p>
 </div>
 
-<div class="card" style="max-width: 32rem; padding: 1.5rem;">
-    <ol style="font-size: 0.875rem; opacity: 0.8; margin: 0 0 1rem 1.25rem; padding: 0;">
-        <li>In a terminal on this machine, run <code>asiai auth login</code>.</li>
-        <li>Paste the one-time code below (valid ~60&nbsp;s, single use).</li>
-    </ol>
+<div class="card" style="max-width: 30rem; padding: 22px 24px;">
+    <div class="fl-login-header">
+        <span class="fl-login-icon">
+            <svg width="12" height="14" viewBox="0 0 10 12" fill="none"><rect y="5" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        </span>
+        <div>
+            <h3 class="fl-modal-title">Operator session required</h3>
+            <div class="fl-login-sub">Write actions are bootstrapped from your shell.</div>
+        </div>
+    </div>
 
-    {% if error %}
-    <p style="color: var(--red); font-size: 0.875rem; margin-bottom: 0.75rem;">
-        {{ error }}
-    </p>
-    {% endif %}
+    <div class="fl-terminal">
+        <div><span class="prompt">$ </span><span class="cmd">asiai auth login</span></div>
+        <div class="hint">&rarr; one-time code &middot; valid 60&nbsp;s &middot; single use</div>
+        <div class="code">aop_&hellip;</div>
+    </div>
 
     <form method="post" action="/login">
+        <div class="fl-confirm-label">Paste code</div>
         <input
+            class="fl-input{% if error %} error{% endif %}"
             type="password"
             name="code"
-            placeholder="aop_…"
+            placeholder="aop_&hellip;"
             autocomplete="off"
             autofocus
             required
-            style="width: 100%; font-family: 'Geist Mono', monospace; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem;"
         >
-        <button type="submit" class="btn">Sign in</button>
+        {% if error %}
+        <div class="fl-form-error">{{ error }} Run <code>asiai auth login</code> again.</div>
+        {% endif %}
+        <div class="fl-modal-footer">
+            <button type="submit" class="fl-btn primary">Open session</button>
+        </div>
     </form>
+
+    <div class="fl-footnote">HttpOnly cookie &middot; SameSite=Lax &middot; failed attempts rate-limited</div>
 </div>
 {% endblock %}
