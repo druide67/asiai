@@ -31,7 +31,12 @@
         auditEvents: null,
         auditFilter: { actor: 'all', window: 'all' },
         refreshTimer: null,
+        lastPollOk: null,   // Date.now() of the last successful snapshot fetch
     };
+
+    // A cockpit must never present dead data as live: past this age the
+    // banner degrades to an explicit staleness warning.
+    var STALE_MS = 30000;
 
     // ── tiny DOM builder ────────────────────────────────────────
 
@@ -110,6 +115,15 @@
         return new Date(ts * 1000).toTimeString().slice(0, 8);
     }
 
+    function timeWithDate(ts) {
+        // Drawer entries can span weeks: prefix a short date for anything
+        // that is not from today (client clock, like the rest of the UI).
+        var d = new Date(ts * 1000);
+        var hm = d.toTimeString().slice(0, 5);
+        if (d.toDateString() === new Date().toDateString()) return d.toTimeString().slice(0, 8);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + hm;
+    }
+
     function sessionLeft() {
         if (!state.session.expiresAt) return '';
         var mins = Math.max(0, Math.floor((state.session.expiresAt * 1000 - Date.now()) / 60000));
@@ -184,7 +198,8 @@
                     closeOverlay();
                     return refreshSession().then(function () {
                         toast('ok', 'Operator session opened', 'all write actions unlocked');
-                        renderAll();
+                        if (state.page === 'journal') loadJournalPage();
+                        else renderAll();
                     });
                 }
                 if (r.status === 429) {
@@ -215,15 +230,30 @@
 
     function refreshSnapshot() {
         return fetch('/api/v1/fleet/snapshot')
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('snapshot http ' + r.status);
+                return r.json();
+            })
             .then(function (snap) {
                 state.snapshot = snap;
-                if (!state.selected && snap.nodes && snap.nodes.length) {
-                    state.selected = snap.nodes[0].nickname;
+                state.lastPollOk = Date.now();
+                var nicknames = (snap.nodes || []).map(function (n) { return n.nickname; });
+                // Re-sync a stale selection so the master highlight and the
+                // detail panel never silently diverge.
+                if (nicknames.length && nicknames.indexOf(state.selected) === -1) {
+                    state.selected = nicknames[0];
                 }
                 renderAll();
             })
-            .catch(function () { /* transient poll failure — keep last snapshot */ });
+            .catch(function () {
+                // Keep the last snapshot but re-render: past STALE_MS the
+                // banner must degrade instead of claiming "nominal" forever.
+                renderAll();
+            });
+    }
+
+    function snapshotIsStale() {
+        return state.lastPollOk !== null && Date.now() - state.lastPollOk > STALE_MS;
     }
 
     function selectedNode() {
@@ -237,7 +267,12 @@
     function enginesOf(node) {
         if (!node || !node.ok || !node.snapshot) return [];
         var engines = node.snapshot.engines_status;
-        return Array.isArray(engines) ? engines : [];
+        if (!Array.isArray(engines)) return [];
+        // A node could ship a malformed entry; one bad element must not
+        // throw mid-render and freeze the whole cockpit.
+        return engines.filter(function (e) {
+            return e && typeof e === 'object' && typeof e.name === 'string';
+        });
     }
 
     // ── actions (the write funnel) ──────────────────────────────
@@ -255,15 +290,21 @@
         });
     }
 
+    var LONG_COMMANDS = { install: true, upgrade: true, load: true };
+
     function runAction(nick, engineName, command, extraArgs, confirmValue) {
         var key = engineKey(nick, engineName || command);
+        if (state.pending[key]) return;  // double-submit guard
         var args = {};
         if (engineName) args.engine = engineName;
         if (extraArgs) Object.keys(extraArgs).forEach(function (k) { args[k] = extraArgs[k]; });
 
         state.pending[key] = command;
         renderAll();
-        var progress = toast('progress', titleFor(command, engineName, nick) + '…', 'forwarding to ' + nick);
+        var progressSub = LONG_COMMANDS[command]
+            ? 'forwarding to ' + nick + ' · may take several minutes'
+            : 'forwarding to ' + nick;
+        var progress = toast('progress', titleFor(command, engineName, nick) + '…', progressSub);
 
         postAction(nick, command, args, confirmValue)
             .then(function (r) {
@@ -300,8 +341,11 @@
         var key = engineKey(nick, engineName || command);
         var secs = body && body.duration_ms ? (body.duration_ms / 1000).toFixed(1) + ' s' : '';
         var assume = null;
-        if (command === 'stop' || command === 'unload' || command === 'uninstall') assume = 'stopped';
-        if (command === 'start' || command === 'restart' || command === 'load') assume = 'running';
+        if (command === 'stop' || command === 'uninstall') assume = 'stopped';
+        // unload keeps the engine RUNNING (only the model is dropped)
+        if (command === 'start' || command === 'restart' || command === 'load' || command === 'unload') {
+            assume = 'running';
+        }
         if (assume) state.fresh[key] = { assume: assume, expires: Date.now() + OPTIMISTIC_MS };
 
         var subs = {
@@ -585,23 +629,55 @@
 
     function overlayHost() { return document.getElementById('fl-overlays'); }
 
+    var _restoreFocus = null;
+
     function closeOverlay() {
         var host = overlayHost();
         if (host) host.textContent = '';
         document.removeEventListener('keydown', escListener);
+        document.removeEventListener('keydown', trapListener);
+        if (_restoreFocus && document.contains(_restoreFocus)) _restoreFocus.focus();
+        _restoreFocus = null;
     }
 
     function escListener(e) { if (e.key === 'Escape') closeOverlay(); }
+
+    function _focusables(container) {
+        return container.querySelectorAll(
+            'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        );
+    }
+
+    // aria-modal promises containment: cycle Tab inside the open overlay so
+    // the keyboard cannot reach (and activate) the action buttons behind it.
+    function trapListener(e) {
+        if (e.key !== 'Tab') return;
+        var host = overlayHost();
+        if (!host || !host.firstChild) return;
+        var items = _focusables(host);
+        if (!items.length) return;
+        var first = items[0];
+        var last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && (document.activeElement === last || !host.contains(document.activeElement))) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
 
     function openModal(children) {
         var host = overlayHost();
         if (!host) return null;
         host.textContent = '';
+        _restoreFocus = document.activeElement;
         var card = el('div', { cls: 'fl-modal', attrs: { role: 'dialog', 'aria-modal': 'true' } }, children);
         var overlay = el('div', { cls: 'fl-modal-overlay' }, [card]);
         overlay.addEventListener('click', function (e) { if (e.target === overlay) closeOverlay(); });
         host.appendChild(overlay);
         document.addEventListener('keydown', escListener);
+        document.addEventListener('keydown', trapListener);
         return { card: card };
     }
 
@@ -612,7 +688,15 @@
     function toast(kind, title, sub) {
         var host = toastsHost();
         if (!host) return null;
-        while (host.children.length >= MAX_TOASTS) host.removeChild(host.firstChild);
+        while (host.children.length >= MAX_TOASTS) {
+            // Never evict an in-flight progress toast: it is the only trace
+            // of a long-running command. Prefer the oldest finished toast.
+            var victim = null;
+            for (var i = 0; i < host.children.length; i++) {
+                if (!host.children[i].querySelector('.fl-spinner')) { victim = host.children[i]; break; }
+            }
+            host.removeChild(victim || host.firstChild);
+        }
         var lead = kind === 'progress'
             ? el('span', { cls: 'fl-spinner' })
             : el('span', { cls: 'fl-dot ' + (kind === 'ok' ? 'ok' : kind === 'err' ? 'err' : 'info') });
@@ -640,6 +724,7 @@
         return fetch('/api/v1/fleet/audit?limit=' + (limit || 100))
             .then(function (r) {
                 if (r.status === 401) return { unauthorized: true };
+                if (!r.ok) return { error: true };
                 return r.json();
             });
     }
@@ -671,7 +756,7 @@
         if (note) line2.push(el('span', { cls: 'fl-audit-note', text: note }));
 
         return el('div', { cls: 'fl-audit-entry' }, [
-            el('span', { cls: 'fl-audit-time', text: ev.ts ? timeHMS(ev.ts) : '' }),
+            el('span', { cls: 'fl-audit-time', text: ev.ts ? timeWithDate(ev.ts) : '' }),
             el('span', { cls: 'fl-audit-dot ' + dotCls }),
             el('div', { cls: 'fl-audit-content' }, [
                 el('div', { cls: 'fl-audit-line1' }, [
@@ -705,7 +790,9 @@
         ]);
         host.appendChild(backdrop);
         host.appendChild(drawer);
+        _restoreFocus = document.activeElement;
         document.addEventListener('keydown', escListener);
+        document.addEventListener('keydown', trapListener);
 
         fetchAudit(20).then(function (data) {
             body.textContent = '';
@@ -713,12 +800,15 @@
                 body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'Operator session required to read the journal.' }));
                 return;
             }
-            var events = data.events || [];
-            if (!events.length) {
+            if (data.error || !Array.isArray(data.events)) {
+                body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'Could not load the journal.' }));
+                return;
+            }
+            if (!data.events.length) {
                 body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'No write actions recorded yet.' }));
                 return;
             }
-            events.forEach(function (ev) { body.appendChild(auditEntry(ev)); });
+            data.events.forEach(function (ev) { body.appendChild(auditEntry(ev)); });
         }).catch(function () {
             body.textContent = '';
             body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'Could not load the journal.' }));
@@ -726,6 +816,20 @@
     }
 
     // ── journal full page ───────────────────────────────────────
+
+    function loadJournalPage() {
+        state.auditEvents = null;
+        renderJournalPage();
+        fetchAudit(500).then(function (data) {
+            state.auditEvents = data;
+            renderJournalPage();
+        }).catch(function () {
+            // A load failure must never render as an empty journal: an
+            // operator checking after an incident would read "no actions".
+            state.auditEvents = { error: true };
+            renderJournalPage();
+        });
+    }
 
     function renderJournalPage() {
         var root = document.getElementById('fl-journal');
@@ -739,10 +843,29 @@
         if (state.auditEvents.unauthorized) {
             var msg = el('div', { cls: 'fl-journal-state' });
             msg.appendChild(document.createTextNode('The journal is operator-only. '));
-            var link = el('a', { text: 'Open an operator session', attrs: { href: '/login' } });
+            // Same auth path as the cockpit: contextual modal, no page bounce.
+            var link = el('a', {
+                text: 'Open an operator session',
+                attrs: { href: '#' },
+                on: {
+                    click: function (e) { e.preventDefault(); openLoginModal(); },
+                },
+            });
             msg.appendChild(link);
             msg.appendChild(document.createTextNode(' to read it.'));
             root.appendChild(msg);
+            return;
+        }
+        if (state.auditEvents.error || !Array.isArray(state.auditEvents.events)) {
+            var errMsg = el('div', { cls: 'fl-journal-state' });
+            errMsg.appendChild(document.createTextNode('Could not load the journal — the audit read failed. '));
+            var retry = el('a', {
+                text: 'Retry',
+                attrs: { href: '#' },
+                on: { click: function (e) { e.preventDefault(); loadJournalPage(); } },
+            });
+            errMsg.appendChild(retry);
+            root.appendChild(errMsg);
             return;
         }
 
@@ -782,6 +905,13 @@
             return;
         }
 
+        if (events.length >= 500) {
+            root.appendChild(el('div', {
+                cls: 'fl-day-label',
+                text: 'Showing the last 500 events — older entries live in the JSONL file on the node',
+            }));
+        }
+
         var byDay = {};
         var dayOrder = [];
         shown.forEach(function (ev) {
@@ -805,7 +935,7 @@
                 var status = ev.status || 'ok';
                 var actorType = ev.actor_type || 'machine';
                 var row = el('div', { cls: 'fl-journal-row' }, [
-                    el('span', { cls: 'time', text: ev.ts ? timeHMS(ev.ts) : '' }),
+                    el('span', { cls: 'time', text: ev.ts ? timeHMS(ev.ts) : '' }),  // day label carries the date
                     el('span', { cls: 'actor' }, [
                         el('span', { cls: 'fl-actor ' + actorType, text: actorType === 'machine' ? 'machine · fleet' : actorType }),
                     ]),
@@ -1001,6 +1131,17 @@
         });
 
         var variant, dotCls, title, sub;
+        if (snapshotIsStale()) {
+            var age = Math.round((Date.now() - state.lastPollOk) / 1000);
+            variant = 'unhealthy'; dotCls = 'unhealthy';
+            title = 'Fleet snapshot is stale — polling is failing';
+            sub = 'last successful poll ' + age + ' s ago · data below may be dead';
+            host.className = 'fl-banner ' + variant;
+            host.appendChild(el('span', { cls: 'fl-dot ' + dotCls }));
+            host.appendChild(el('span', { cls: 'fl-banner-title', text: title }));
+            host.appendChild(el('span', { cls: 'fl-banner-sub', text: sub }));
+            return;
+        }
         if (downNodes.length) {
             variant = 'unhealthy'; dotCls = 'unhealthy';
             title = downNodes.length + ' node' + (downNodes.length > 1 ? 's' : '') + ' unreachable — ' + downNodes.join(', ');
@@ -1321,11 +1462,19 @@
             renderJournalPage();
             return;
         }
+        // Full re-render every poll: preserve the scroll positions the
+        // operator is actually using, or a 10 s tick yanks them to the top.
+        var masterList = document.getElementById('fl-master-list');
+        var detailBody = document.getElementById('fl-detail-body');
+        var masterScroll = masterList ? masterList.scrollTop : 0;
+        var detailScroll = detailBody ? detailBody.scrollTop : 0;
         renderMaster();
         renderSessionFooter();
         renderBanner();
         renderDetail();
         renderNavAlert();
+        if (masterList) masterList.scrollTop = masterScroll;
+        if (detailBody) detailBody.scrollTop = detailScroll;
     }
 
     // ── boot ────────────────────────────────────────────────────
@@ -1337,13 +1486,7 @@
 
         if (state.page === 'journal') {
             refreshSession();
-            fetchAudit(500).then(function (data) {
-                state.auditEvents = data;
-                renderJournalPage();
-            }).catch(function () {
-                state.auditEvents = { events: [] };
-                renderJournalPage();
-            });
+            loadJournalPage();
             return;
         }
 
@@ -1352,7 +1495,9 @@
 
         refreshSession().then(refreshSnapshot);
         state.refreshTimer = setInterval(refreshSnapshot, REFRESH_MS);
-        setInterval(renderSessionFooter, 60000);
+        // Re-poll the session itself (not just the countdown): expiry or a
+        // logout in another tab must re-lock the buttons within a minute.
+        setInterval(refreshSession, 60000);
         document.addEventListener('click', function () {
             if (state.menuOpen !== null) { state.menuOpen = null; renderAll(); }
         });

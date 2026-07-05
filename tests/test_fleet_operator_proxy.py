@@ -365,6 +365,8 @@ class TestAuditJournal:
             )
         resp = client.get("/api/v1/fleet/audit", headers=_common_headers())
         assert resp.status_code == 200
+        # source IPs / token ids must never persist in a shared browser cache
+        assert resp.headers["Cache-Control"] == "no-store"
         body = resp.json()
         commands = [e.get("command") for e in body["events"] if e.get("command")]
         assert commands[:3] == ["cmd-2", "cmd-1", "cmd-0"]

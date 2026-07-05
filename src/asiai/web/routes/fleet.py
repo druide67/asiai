@@ -1022,7 +1022,12 @@ async def api_fleet_audit(
     """
     limit = max(1, min(limit, _AUDIT_TAIL_MAX))
     events = await asyncio.to_thread(_read_audit_tail, limit)
-    return JSONResponse({"events": events, "count": len(events)})
+    # no-store: source IPs, token ids and the command history must not
+    # outlive the operator session in a shared browser's disk cache.
+    return JSONResponse(
+        {"events": events, "count": len(events)},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/fleet")
@@ -1037,7 +1042,7 @@ async def page_fleet(request: Request):
     return templates.TemplateResponse(
         request,
         "fleet.html",
-        {"request": request, "nodes": nodes},
+        {"request": request, "nodes": nodes, "nav_active": "fleet"},
     )
 
 
