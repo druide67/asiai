@@ -141,18 +141,28 @@
 
     function engineKey(nick, engineName) { return nick + '/' + engineName; }
 
+    var LIVE_STATES = { running: true, unhealthy: true, degraded: true, loading: true };
+
     function snapshotStateOf(engine, nodeOk) {
         if (!nodeOk) return 'stopped';
         // Rich lifecycle state from an aisctl-serve-equipped node; fall back
         // to the reachable/unreachable split for nodes that don't report it.
         if (typeof engine.state === 'string' && BADGE_LABEL[engine.state]) {
+            if (!LIVE_STATES[engine.state] && engine.reachable) {
+                // launchd says stopped/not_installed but the API answers:
+                // the engine serves OUTSIDE launchd (a desktop app, a hand-
+                // launched server). Observed reality wins over paper state.
+                return 'running';
+            }
             return engine.state;
         }
         return engine.reachable ? 'running' : 'stopped';
     }
 
     function engineStateOf(nick, engine, nodeOk) {
-        var key = engineKey(nick, engine.name);
+        // Same key the card and runAction use (the manifest name when
+        // known), or the optimistic LOADING would miss homonymous cards.
+        var key = engineKey(nick, engineLabel(engine));
         if (state.pending[key]) return 'loading';
         var fresh = state.fresh[key];
         if (fresh) {
