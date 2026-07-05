@@ -183,7 +183,7 @@
     var BADGE_LABEL = {
         running: 'RUNNING', unhealthy: 'UNHEALTHY', loading: 'LOADING',
         stopped: 'STOPPED', disabled: 'STANDBY', not_installed: 'NOT INSTALLED',
-        degraded: 'DEGRADED', loaded: 'LOADED',
+        degraded: 'DEGRADED', loaded: 'LOADED', available: 'AVAILABLE',
     };
 
     function engineLabel(engine) {
@@ -1269,8 +1269,11 @@
                 modelLine = el('div', { cls: 'fl-card-model faint', text: 'no model loaded' });
             }
         } else if (typeof engine.state === 'string') {
-            // Rich lifecycle state: the engine is genuinely not serving.
-            modelLine = el('div', { cls: 'fl-card-model empty', text: '—' });
+            // Rich lifecycle state: not serving. When the node reports what
+            // the installed plist WOULD load (aisrv >= 0.8), show it.
+            modelLine = engine.model
+                ? el('div', { cls: 'fl-card-model faint', text: 'preset: ' + engine.model, title: engine.model })
+                : el('div', { cls: 'fl-card-model empty', text: '—' });
         } else {
             modelLine = el('div', {
                 cls: 'fl-card-model empty',
@@ -1343,7 +1346,7 @@
             var repair = st === 'unhealthy' || st === 'degraded';
             actions.appendChild(actionButton('Restart', repair ? 'accent' : 'ghost', confirmHandler('restart')));
             actions.appendChild(actionButton('Stop', 'ghost', confirmHandler('stop')));
-        } else if (st === 'not_installed') {
+        } else if (st === 'not_installed' || st === 'available') {
             // Starting an unprovisioned engine would just fail: the honest
             // verb is install (destructive → typed confirmation).
             actions.appendChild(actionButton('Install', 'accent', confirmHandler('install')));
@@ -1490,7 +1493,7 @@
             // manifests last (and folded away below).
             var ORDER = {
                 unhealthy: 0, degraded: 0, loading: 1, running: 2,
-                loaded: 3, stopped: 4, disabled: 5, not_installed: 9,
+                loaded: 3, stopped: 4, disabled: 5, available: 6, not_installed: 9,
             };
             var sorted = engines.slice().sort(function (a, b) {
                 var sa = engineStateOf(node.nickname, a, node.ok);
