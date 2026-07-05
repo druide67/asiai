@@ -194,11 +194,14 @@ async def operator_session_info(request: Request) -> JSONResponse:
     """
     session = _current_session(request)
     if session is None:
-        return JSONResponse({"authenticated": False})
+        return JSONResponse({"authenticated": False}, headers={"Cache-Control": "no-store"})
+    # no-store: this response carries the CSRF token — it must never land
+    # in a shared browser's disk cache and outlive the session.
     return JSONResponse(
         {
             "authenticated": True,
             "expires_at": int(session.expires_at),
             "csrf_token": session.csrf_secret,
-        }
+        },
+        headers={"Cache-Control": "no-store"},
     )

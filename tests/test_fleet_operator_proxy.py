@@ -344,3 +344,77 @@ class TestForwardErrorMapping:
         status, body = fleet_routes._forward_to_node(self._node(), "stop", {"engine": "x"}, 30.0)
         assert status == 504
         assert body["error"] == "node_timeout"
+
+
+# --- audit journal read (GET /api/v1/fleet/audit) ---------------------------------
+
+
+class TestAuditJournal:
+    def test_requires_operator_401(self, client):
+        resp = client.get("/api/v1/fleet/audit", headers=_common_headers())
+        assert resp.status_code == 401
+
+    def test_events_newest_first(self, client, tmp_audit):
+        _login(client)
+        for i in range(3):
+            audit.log_event(
+                actor_type=audit.ACTOR_OPERATOR,
+                nickname="node-a",
+                command=f"cmd-{i}",
+                status="ok",
+            )
+        resp = client.get("/api/v1/fleet/audit", headers=_common_headers())
+        assert resp.status_code == 200
+        # source IPs / token ids must never persist in a shared browser cache
+        assert resp.headers["Cache-Control"] == "no-store"
+        body = resp.json()
+        commands = [e.get("command") for e in body["events"] if e.get("command")]
+        assert commands[:3] == ["cmd-2", "cmd-1", "cmd-0"]
+        assert body["count"] == len(body["events"])
+
+    def test_limit_clamped_and_applied(self, client, tmp_audit):
+        _login(client)
+        for i in range(10):
+            audit.log_event(actor_type=audit.ACTOR_MACHINE, command=f"cmd-{i}", status="ok")
+        resp = client.get("/api/v1/fleet/audit?limit=3", headers=_common_headers())
+        events = resp.json()["events"]
+        # login predates the 10 commands, so the 3 newest are cmd-9/8/7
+        assert [e["command"] for e in events] == ["cmd-9", "cmd-8", "cmd-7"]
+        # out-of-range limits clamp instead of erroring
+        low = client.get("/api/v1/fleet/audit?limit=0", headers=_common_headers())
+        assert low.status_code == 200
+        big = client.get("/api/v1/fleet/audit?limit=99999", headers=_common_headers())
+        assert big.status_code == 200
+
+    def test_corrupt_lines_skipped(self, client, tmp_audit):
+        _login(client)
+        audit.log_event(actor_type=audit.ACTOR_OPERATOR, command="good", status="ok")
+        with open(tmp_audit, "a") as f:
+            f.write("{not json\n")
+            f.write('"a bare string"\n')
+        audit.log_event(actor_type=audit.ACTOR_OPERATOR, command="good-2", status="ok")
+        resp = client.get("/api/v1/fleet/audit", headers=_common_headers())
+        commands = [e.get("command") for e in resp.json()["events"] if e.get("command")]
+        assert commands[:2] == ["good-2", "good"]
+
+    def test_missing_file_empty(self, client, tmp_audit, monkeypatch):
+        # A session must exist, but its login event lands in the audit file;
+        # point the reader at a path that was never created instead.
+        _login(client)
+        monkeypatch.setattr(audit, "AUDIT_PATH", str(tmp_audit) + ".nowhere")
+        resp = client.get("/api/v1/fleet/audit", headers=_common_headers())
+        assert resp.status_code == 200
+        assert resp.json() == {"events": [], "count": 0}
+
+    def test_rotation_straddle(self, client, tmp_audit):
+        """When the current file has fewer lines than the limit, the tail
+        completes from the most recent rotated backup (.1)."""
+        _login(client)
+        backup = str(tmp_audit) + ".1"
+        with open(backup, "w") as f:
+            f.write(json.dumps({"ts": 1, "command": "old-1", "status": "ok"}) + "\n")
+            f.write(json.dumps({"ts": 2, "command": "old-2", "status": "ok"}) + "\n")
+        audit.log_event(actor_type=audit.ACTOR_OPERATOR, command="new-1", status="ok")
+        resp = client.get("/api/v1/fleet/audit?limit=10", headers=_common_headers())
+        commands = [e.get("command") for e in resp.json()["events"] if e.get("command")]
+        assert commands[:3] == ["new-1", "old-2", "old-1"]

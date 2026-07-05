@@ -1,35 +1,60 @@
 {% extends "base.html" %}
 {% block title %}asiai — Fleet{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/fleet.css?v=1.0.2">
+{% endblock %}
+
 {% block content %}
+{% if not nodes %}
 <div class="page-header">
     <h2>Fleet</h2>
-    <p>Multi-host observability — polls each configured node's <code>/api/v1/snapshot</code> in parallel.</p>
+    <p>Multi-host cockpit — status, memory and write actions for every registered node.</p>
 </div>
-
-{% if not nodes %}
-<div class="card" style="padding: 2rem; text-align: center;">
-    <p style="margin-bottom: 1rem;">No nodes configured yet.</p>
-    <p style="font-size: 0.875rem; opacity: 0.7;">
+<div class="card fl-empty" style="max-width: 36rem;">
+    <p style="margin-bottom: 0.75rem;">No nodes configured yet.</p>
+    <p>
         Run <code>asiai fleet add &lt;nickname&gt; --url &lt;asiai_url&gt;</code>
         on this host to register a remote <code>asiai web</code> instance,
-        then reload this page.
+        then reload this page. Add <code>--auth-token</code> to unlock
+        write actions for that node.
     </p>
 </div>
 {% else %}
+<div class="fl-cockpit" id="fl-root" data-fl-page="fleet">
+    <!-- Master column: node list + session -->
+    <aside class="fl-master" aria-label="Fleet nodes">
+        <div class="fl-master-header">
+            <h2 class="fl-master-title">Fleet</h2>
+            <div class="fl-master-sub" id="fl-master-sub">polling…</div>
+        </div>
+        <div class="fl-master-list" id="fl-master-list"></div>
+        <div class="fl-master-footer" id="fl-master-footer"></div>
+    </aside>
 
-<div style="margin-bottom: 1rem; font-size: 0.875rem; opacity: 0.7;">
-    <span>Auto-refresh every 10 seconds.</span>
-    <span style="margin-left: 1rem;">Last poll: <span id="fleet-polled-at">{{ snapshot.polled_at }}</span></span>
+    <!-- Detail panel: banner + selected node -->
+    <section class="fl-detail" aria-label="Node detail">
+        <div class="fl-topbar">
+            <div class="fl-banner nominal" id="fl-banner">
+                <span class="fl-dot nominal"></span>
+                <span class="fl-banner-title">Polling fleet…</span>
+            </div>
+            <button class="fl-journal-btn" id="fl-journal-open" type="button">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.6" stroke="currentColor" stroke-width="1.3"/><path d="M7 4.2V7l2 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <span>Journal</span>
+            </button>
+        </div>
+        <div class="fl-detail-body" id="fl-detail-body">
+            <div class="fl-empty">Loading fleet snapshot…</div>
+        </div>
+    </section>
 </div>
 
-<div id="fleet-grid-wrap"
-     hx-get="/fleet/grid-fragment"
-     hx-trigger="every 10s"
-     hx-target="#fleet-grid-wrap"
-     hx-swap="innerHTML">
-    {% include "partials/fleet_grid.html" %}
-</div>
-
+<div class="fl-toasts" id="fl-toasts" aria-live="polite"></div>
+<div id="fl-overlays"></div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if nodes %}<script src="/static/fleet.js?v=1.0.1"></script>{% endif %}
 {% endblock %}

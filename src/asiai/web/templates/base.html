@@ -28,6 +28,7 @@
     <!-- asiai styles & charts -->
     <link rel="stylesheet" href="/static/style.css?v=2.0.0">
     <script src="/static/charts.js"></script>
+    {% block head %}{% endblock %}
 </head>
 <body>
     <div class="layout">
@@ -72,6 +73,12 @@
                     <a href="/fleet" class="{% if nav_active == 'fleet' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor" opacity="0.6"/><circle cx="4" cy="12" r="2" fill="currentColor" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.4"/><path d="M4 4 L12 4 M4 4 L4 12 M12 4 L4 12" stroke="currentColor" stroke-width="0.5" opacity="0.3"/></svg></span>
                         <span>Fleet</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/journal" class="{% if nav_active == 'journal' %}active{% endif %}">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M8 4.8V8l2.2 1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                        <span>Journal</span>
                     </a>
                 </li>
                 <li>

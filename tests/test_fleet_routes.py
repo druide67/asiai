@@ -149,30 +149,30 @@ class TestFleetPage:
         assert resp.status_code == 200
         assert "No nodes configured" in resp.text
 
-    def test_page_with_nodes_renders_cards(self, client, monkeypatch):
+    def test_page_with_nodes_renders_cockpit_shell(self, client):
+        # The cockpit is client-rendered from /api/v1/fleet/snapshot: the
+        # page must ship the shell (master column + detail panel hooks)
+        # and NOT block on a server-side poll.
         fleet_config.upsert_node("alpha", "http://192.0.2.1:8899")
-        monkeypatch.setattr(
-            fleet_routes,
-            "poll_all",
-            lambda nodes, timeout=5.0: [
-                _fake_poll_one_ok(n["nickname"], n["asiai_url"]) for n in nodes
-            ],
-        )
         resp = client.get("/fleet")
         assert resp.status_code == 200
-        assert "alpha" in resp.text
-        assert "ollama" in resp.text
+        assert 'id="fl-root"' in resp.text
+        assert 'id="fl-master-list"' in resp.text
+        assert "fleet.js" in resp.text
+        assert "No nodes configured" not in resp.text
 
 
 class TestFleetXssRegression:
-    """Jinja2 autoescape is ON by default; this test guards against a
-    future PR that would add ``|safe`` or disable autoescape and turn the
-    /fleet page into a stored-XSS sink via the nickname or error fields."""
+    """The cockpit shell must never interpolate poll data server-side.
 
-    def test_xss_in_error_message_is_escaped(self, client, monkeypatch):
-        # nickname goes through _validate_nickname (regex), so it cannot
-        # contain "<". But the `error` field is uncontrolled (comes from
-        # the remote response) — that's the realistic XSS vector.
+    Node poll data (nicknames, engine names, remote error strings) is
+    attacker-influenced; it reaches the DOM only through fleet.js, which
+    renders exclusively via createElement/textContent. This test guards
+    against a future PR routing poll results back through the Jinja
+    template, where a ``|safe`` or autoescape change could turn /fleet
+    into a stored-XSS sink again."""
+
+    def test_poll_data_never_rendered_server_side(self, client, monkeypatch):
         fleet_config.upsert_node("alpha", "http://192.0.2.1:8899")
 
         def fake_poll(nodes, timeout=5.0):
@@ -190,29 +190,26 @@ class TestFleetXssRegression:
 
         monkeypatch.setattr(fleet_routes, "poll_all", fake_poll)
         resp = client.get("/fleet")
-        # The literal <script> tag must NEVER appear unescaped in the
-        # rendered HTML. Either autoescape produces &lt;script&gt; or
-        # Jinja's HTML-escape strips it entirely.
-        assert "<script>alert" not in resp.text
-        assert "&lt;script&gt;" in resp.text or "alert" not in resp.text
-
-
-class TestFleetGridFragment:
-    def test_fragment_returns_html_not_json(self, client, monkeypatch):
-        # Regression: the /fleet HTMX auto-refresh must hit an HTML
-        # endpoint, not the JSON snapshot endpoint, otherwise raw JSON
-        # would be swapped into the DOM on every 10s tick.
-        fleet_config.upsert_node("alpha", "http://192.0.2.1:8899")
-        monkeypatch.setattr(
-            fleet_routes,
-            "poll_all",
-            lambda nodes, timeout=5.0: [
-                _fake_poll_one_ok(n["nickname"], n["asiai_url"]) for n in nodes
-            ],
-        )
-        resp = client.get("/fleet/grid-fragment")
         assert resp.status_code == 200
-        assert "text/html" in resp.headers.get("content-type", "")
-        assert "<div" in resp.text
-        assert "alpha" in resp.text
-        assert "ollama" in resp.text
+        assert "<script>alert" not in resp.text
+        # The page renders the shell only — poll payloads stay in JSON.
+        assert "alert" not in resp.text
+
+
+class TestFleetGridFragmentRemoved:
+    def test_fragment_route_is_gone(self, client):
+        # The HTMX grid fragment was replaced by the client-rendered
+        # cockpit (2026-07); a leftover route would resurrect the
+        # server-side rendering path the XSS regression test guards.
+        resp = client.get("/fleet/grid-fragment")
+        assert resp.status_code == 404
+
+
+class TestJournalPage:
+    def test_page_renders_shell(self, client):
+        # The page shell is public; the DATA behind it
+        # (/api/v1/fleet/audit) requires an operator session.
+        resp = client.get("/journal")
+        assert resp.status_code == 200
+        assert 'data-fl-page="journal"' in resp.text
+        assert "fleet.js" in resp.text
