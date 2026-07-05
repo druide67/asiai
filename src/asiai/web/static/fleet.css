@@ -142,6 +142,9 @@
     font-family: inherit;
     color: inherit;
     transition: border-color var(--duration) var(--ease);
+    /* The master list is a height-capped flex column: without this the
+       cards SHRINK to fit and their last row overflows the border. */
+    flex: none;
 }
 
 .fl-node:hover { border-color: var(--fl-border-hover); }
