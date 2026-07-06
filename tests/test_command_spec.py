@@ -65,5 +65,14 @@ def test_destructive_reversible_partition() -> None:
     WORK_BUDGET entry MUST be classified here or this test fails loudly."""
     assert cs.DESTRUCTIVE_COMMANDS | cs.REVERSIBLE_COMMANDS == cs.ALLOWED_COMMANDS
     assert not (cs.DESTRUCTIVE_COMMANDS & cs.REVERSIBLE_COMMANDS)
-    # The live-button set the strategy doc names, plus start (reversible by nature).
-    assert cs.REVERSIBLE_COMMANDS == {"start", "stop", "restart", "unload", "load"}
+    # The live-button set the strategy doc names, plus start (reversible by
+    # nature) and the cold-standby pair (enable/disable, each other's undo).
+    assert cs.REVERSIBLE_COMMANDS == {
+        "start",
+        "stop",
+        "restart",
+        "unload",
+        "load",
+        "enable",
+        "disable",
+    }

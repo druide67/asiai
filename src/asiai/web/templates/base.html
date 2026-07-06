@@ -16,6 +16,7 @@
     @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('/static/fonts/GeistMono-Bold.woff2') format('woff2'); }
     </style>
 
+    {% block vendors %}
     <!-- htmx (local vendor, no CDN dependency) -->
     <script src="/static/vendor/htmx-2.0.4.min.js"></script>
 
@@ -25,9 +26,12 @@
     <!-- ApexCharts -->
     <script src="/static/vendor/apexcharts-3.54.1.min.js"></script>
 
-    <!-- asiai styles & charts -->
-    <link rel="stylesheet" href="/static/style.css?v=2.0.0">
     <script src="/static/charts.js"></script>
+    {% endblock %}
+
+    <!-- asiai styles -->
+    <link rel="stylesheet" href="/static/style.css?v=2.0.0">
+    <link rel="stylesheet" href="/static/shell.css?v=1.0.0">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -73,6 +77,7 @@
                     <a href="/fleet" class="{% if nav_active == 'fleet' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor" opacity="0.6"/><circle cx="4" cy="12" r="2" fill="currentColor" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.4"/><path d="M4 4 L12 4 M4 4 L4 12 M12 4 L4 12" stroke="currentColor" stroke-width="0.5" opacity="0.3"/></svg></span>
                         <span>Fleet</span>
+                        <span class="sh-attn-dot" id="sh-fleet-attn" hidden aria-label="Fleet needs attention"></span>
                     </a>
                 </li>
                 <li>
@@ -98,6 +103,18 @@
 
         <!-- Main content -->
         <main class="main-content">
+            {% if nav_active not in ('fleet', 'login') %}
+            <!-- Global shell topbar — filled by shell.js, hidden until it has data.
+                 The fleet cockpit keeps its own master column and session footer. -->
+            <header class="sh-topbar" id="sh-topbar" hidden>
+                <div class="sh-node">
+                    <label class="sh-node-label" for="sh-node-select">Node</label>
+                    <select id="sh-node-select" class="sh-node-select" aria-label="Fleet node"></select>
+                    <a id="sh-node-open" class="sh-node-open" href="/fleet" title="Open the selected node in the Fleet cockpit">Fleet &rarr;</a>
+                </div>
+                <div class="sh-session" id="sh-session"></div>
+            </header>
+            {% endif %}
             {% block content %}{% endblock %}
         </main>
     </div>
@@ -156,6 +173,7 @@
     });
     </script>
 
+    <script src="/static/shell.js?v=1.0.0" defer></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -267,9 +267,13 @@
                 state.lastPollOk = Date.now();
                 var nicknames = (snap.nodes || []).map(function (n) { return n.nickname; });
                 // Re-sync a stale selection so the master highlight and the
-                // detail panel never silently diverge.
+                // detail panel never silently diverge. First resolution
+                // honors the node picked in the global shell topbar
+                // (localStorage key shared with shell.js).
                 if (nicknames.length && nicknames.indexOf(state.selected) === -1) {
-                    state.selected = nicknames[0];
+                    var preferred = null;
+                    try { preferred = localStorage.getItem('asiai-fleet-node'); } catch (e) { /* private mode */ }
+                    state.selected = nicknames.indexOf(preferred) !== -1 ? preferred : nicknames[0];
                 }
                 renderAll();
             })
@@ -374,6 +378,8 @@
         if (command === 'start' || command === 'restart' || command === 'load' || command === 'unload') {
             assume = 'running';
         }
+        if (command === 'disable') assume = 'disabled';
+        if (command === 'enable') assume = 'stopped'; // un-parked but not started
         if (assume) state.fresh[key] = { assume: assume, expires: Date.now() + OPTIMISTIC_MS };
 
         var subs = {
@@ -386,6 +392,8 @@
             install: 'installed on ' + nick,
             uninstall: 'removed from ' + nick,
             upgrade: 'upgraded on ' + nick + (secs ? ' · ' + secs : ''),
+            disable: 'parked in cold standby on ' + nick,
+            enable: 'standby cleared on ' + nick + ' — use Start to serve',
         };
         toast('ok', titleFor(command, engineName, nick), subs[command] || ('done · ' + nick));
     }
@@ -447,6 +455,13 @@
             bodyText = '';
         } else if (command === 'unload') {
             bodyText = 'Unloads the model' + (freed ? ' and frees ' + freed : '') + ' — the engine keeps running.';
+        } else if (command === 'disable') {
+            bodyText = conns > 0
+                ? ''
+                : 'Stops the engine and parks it in cold standby — it will NOT come back at reboot until enabled.'
+                    + (freed ? ' Frees ' + freed + ' on ' + nick + '.' : '');
+        } else if (command === 'enable') {
+            bodyText = 'Clears the standby override so the engine can run again. Does not start it — use Start for both at once.';
         }
 
         var children = [
@@ -455,7 +470,7 @@
         ];
         if (bodyText) children.push(el('div', { cls: 'fl-modal-body', text: bodyText }));
 
-        if (conns > 0 && (command === 'stop' || command === 'restart')) {
+        if (conns > 0 && (command === 'stop' || command === 'restart' || command === 'disable')) {
             children.push(el('div', { cls: 'fl-blast' }, [
                 el('div', {
                     cls: 'fl-blast-title',
@@ -473,7 +488,7 @@
 
         var confirmVariant = command === 'start' ? 'primary'
             : command === 'restart' ? 'accent'
-            : command === 'stop' ? (conns > 0 ? 'danger' : 'ghost')
+            : command === 'stop' || command === 'disable' ? (conns > 0 ? 'danger' : 'ghost')
             : 'ghost';
         var confirmLabel = command.charAt(0).toUpperCase() + command.slice(1);
 
@@ -1100,6 +1115,7 @@
                     click: function () {
                         state.selected = node.nickname;
                         state.menuOpen = null;
+                        try { localStorage.setItem('asiai-fleet-node', node.nickname); } catch (e) { /* private mode */ }
                         renderAll();
                     },
                 },
@@ -1379,6 +1395,18 @@
                         confirmAction(node, engine, 'unload');
                     }));
                 }
+                // Cold standby (launchd override, survives reboots) — both
+                // reversible: disable stops a running engine THEN parks it;
+                // enable un-parks without starting (Start does both at once).
+                if (st === 'disabled') {
+                    menu.appendChild(menuItem('Enable (exit standby)', false, function () {
+                        confirmAction(node, engine, 'enable');
+                    }));
+                } else if (st === 'running' || st === 'stopped' || st === 'loaded' || st === 'unhealthy' || st === 'degraded') {
+                    menu.appendChild(menuItem('Standby (disable)', false, function () {
+                        confirmAction(node, engine, 'disable');
+                    }));
+                }
                 menu.appendChild(menuItem('Purge node memory', true, function () {
                     confirmAction(node, null, 'purge');
                 }));
@@ -1530,23 +1558,10 @@
         }
     }
 
-    // ── nav alert dot (sidebar Fleet item) ──────────────────────
-
-    function renderNavAlert() {
-        var link = document.querySelector('.sidebar-nav a[href="/fleet"]');
-        if (!link) return;
-        var existing = link.querySelector('.fl-nav-alert');
-        var alert = false;
-        (state.snapshot && state.snapshot.nodes || []).forEach(function (node) {
-            if (!node.ok) alert = true;
-            enginesOf(node).forEach(function (e) {
-                var st = engineStateOf(node.nickname, e, node.ok);
-                if (st === 'unhealthy' || st === 'degraded') alert = true;
-            });
-        });
-        if (alert && !existing) link.appendChild(el('span', { cls: 'fl-nav-alert' }));
-        if (!alert && existing) existing.remove();
-    }
+    // The sidebar Fleet-item alert dot is owned by the global shell
+    // (shell.js #sh-fleet-attn, fed by /api/v1/fleet/health-summary) —
+    // fleet.js used to render its own from the cockpit snapshot, which
+    // doubled the dot on /fleet with a diverging data source.
 
     // ── top-level render ────────────────────────────────────────
 
@@ -1565,7 +1580,6 @@
         renderSessionFooter();
         renderBanner();
         renderDetail();
-        renderNavAlert();
         if (masterList) masterList.scrollTop = masterScroll;
         if (detailBody) detailBody.scrollTop = detailScroll;
     }

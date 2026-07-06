@@ -33,6 +33,11 @@ WORK_BUDGET: dict[str, float] = {
     "stop": 60.0,
     "start": 120.0,
     "restart": 120.0,
+    # Cold standby, both reversible: ``enable`` clears the launchd override
+    # (no engine start); ``disable`` sets it THEN stops a possibly-running
+    # engine, so it carries the stop budget with mlock-unload margin.
+    "enable": 60.0,
+    "disable": 120.0,
     "install": 300.0,
     "uninstall": 120.0,
     "upgrade": 600.0,

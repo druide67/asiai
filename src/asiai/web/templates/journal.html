@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block title %}asiai — Audit journal{% endblock %}
 
+{# Vanilla-JS page: htmx/SSE/ApexCharts are dead weight here #}
+{% block vendors %}{% endblock %}
+
 {% block head %}
-<link rel="stylesheet" href="/static/fleet.css?v=1.0.6">
+<link rel="stylesheet" href="/static/fleet.css?v=1.0.7">
 {% endblock %}
 
 {% block content %}
@@ -23,5 +26,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/fleet.js?v=1.0.5"></script>
+<script src="/static/fleet.js?v=1.1.0"></script>
 {% endblock %}
