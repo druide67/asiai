@@ -1,0 +1,127 @@
+/* Global shell — topbar (node switcher + operator session) and the
+ * cross-page fleet alert dot. Consumes the theme tokens of style.css
+ * only (no duplicated hex values — design-system convergence rule). */
+
+.sh-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0.9rem;
+    margin-bottom: 1.25rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+
+.sh-node {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.sh-node-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.68rem;
+}
+
+.sh-node-select {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0.3rem 0.55rem;
+    font: inherit;
+    max-width: 14rem;
+}
+
+.sh-node-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.sh-node-open {
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.sh-node-open:hover,
+.sh-node-open:focus-visible {
+    text-decoration: underline;
+}
+
+.sh-session {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.sh-session-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex: none;
+}
+
+.sh-session-dot.on {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+
+.sh-session a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.sh-session a:hover,
+.sh-session a:focus-visible {
+    text-decoration: underline;
+}
+
+.sh-logout {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-secondary);
+    font: inherit;
+    padding: 0.2rem 0.55rem;
+    cursor: pointer;
+}
+
+.sh-logout:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
+.sh-logout:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+/* Attention dot on the Fleet nav item — franc alarms only (unhealthy/degraded
+ * engines, unreachable nodes), fed by /api/v1/fleet/health-summary. The name
+ * deliberately avoids the word "alert": the /fleet XSS regression guard
+ * asserts that word never appears in server-rendered HTML. */
+.sh-attn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+    margin-left: auto;
+    flex: none;
+}
+
+@media (max-width: 720px) {
+    .sh-topbar {
+        flex-wrap: wrap;
+    }
+}

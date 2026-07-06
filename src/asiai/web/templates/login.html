@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}asiai — Operator login{% endblock %}
 
+{# Vanilla form page: htmx/SSE/ApexCharts are dead weight here #}
+{% block vendors %}{% endblock %}
+
 {% block head %}
 <link rel="stylesheet" href="/static/fleet.css?v=1.0.6">
 {% endblock %}

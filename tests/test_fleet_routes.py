@@ -122,6 +122,97 @@ class TestFleetSnapshotEndpoint:
         assert call_count["n"] == 1
 
 
+class TestHealthSummaryEndpoint:
+    """Reduced alert feed for the cross-page nav dot (global shell)."""
+
+    def test_empty_fleet(self, client):
+        resp = client.get("/api/v1/fleet/health-summary")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["unhealthy_engines"] == 0
+        assert body["unreachable_nodes"] == 0
+        assert body["total_nodes"] == 0
+        # An alert must never be served stale from a browser/proxy cache.
+        assert resp.headers["cache-control"] == "no-store"
+
+    def test_counts_franc_alarms_only(self, client, monkeypatch):
+        fleet_config.upsert_node("alpha", "http://192.0.2.1:8899")
+        fleet_config.upsert_node("beta", "http://192.0.2.2:8899")
+
+        def fake_poll(nodes, timeout=5.0):
+            return [
+                NodePoll(
+                    nickname="alpha",
+                    url="http://192.0.2.1:8899",
+                    ok=True,
+                    latency_ms=5.0,
+                    snapshot={
+                        "engines_status": [
+                            {"name": "a", "state": "unhealthy"},
+                            {"name": "b", "state": "degraded"},
+                            # Dormant/foreign states are NOT alarms:
+                            {"name": "c", "state": "stopped"},
+                            {"name": "d", "state": "available"},
+                            {"name": "e"},  # no rich state at all
+                        ]
+                    },
+                    error=None,
+                    reached_at=1700000000,
+                ),
+                NodePoll(
+                    nickname="beta",
+                    url="http://192.0.2.2:8899",
+                    ok=False,
+                    latency_ms=0.0,
+                    snapshot=None,
+                    error="ConnectionRefusedError",
+                    reached_at=1700000000,
+                ),
+            ]
+
+        monkeypatch.setattr(fleet_routes, "poll_all", fake_poll)
+        resp = client.get("/api/v1/fleet/health-summary")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["unhealthy_engines"] == 2
+        assert body["unreachable_nodes"] == 1
+        assert body["total_nodes"] == 2
+
+
+class TestGlobalShell:
+    """The Lot-1 shell: topbar on regular pages, none on the cockpit/login,
+    per-page vendor payloads (audit finding: htmx/SSE/ApexCharts were dead
+    weight on cockpit/journal/login)."""
+
+    def test_fleet_page_has_no_topbar_and_no_vendors(self, client):
+        resp = client.get("/fleet")
+        assert resp.status_code == 200
+        assert "sh-topbar" not in resp.text
+        assert "apexcharts" not in resp.text
+        assert "htmx" not in resp.text
+        # The shell script still loads (it feeds the nav alert dot).
+        assert "shell.js" in resp.text
+        assert "sh-fleet-attn" in resp.text
+
+    def test_login_page_has_no_topbar_and_no_vendors(self, client):
+        resp = client.get("/login")
+        assert resp.status_code == 200
+        assert "sh-topbar" not in resp.text
+        assert "apexcharts" not in resp.text
+
+    def test_regular_page_keeps_topbar_and_vendors(self, client):
+        from unittest.mock import patch as mock_patch
+
+        with mock_patch("asiai.web.routes.dashboard._get_snapshot", return_value={}):
+            resp = client.get("/")
+        assert resp.status_code == 200
+        assert "sh-topbar" in resp.text
+        assert "sh-node-select" in resp.text
+        assert "sh-session" in resp.text
+        assert "apexcharts" in resp.text
+        assert "shell.js" in resp.text
+
+
 class TestFleetCommandSurface:
     """Smoke tests for the Phase 2 write endpoint mounted by Phase 1.
 

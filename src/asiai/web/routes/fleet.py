@@ -351,6 +351,40 @@ async def api_fleet_snapshot(request: Request) -> JSONResponse:
     return JSONResponse(snapshot)
 
 
+@router.get("/api/v1/fleet/health-summary")
+async def api_fleet_health_summary(request: Request) -> JSONResponse:
+    """Reduced alert feed for the cross-page nav dot.
+
+    Same 10s-cached aggregate as ``/api/v1/fleet/snapshot`` (a poll of this
+    route never adds node traffic on a warm cache), reduced server-side so
+    every page can poll it cheaply: only franc alarms count — engines whose
+    rich state says unhealthy/degraded, and nodes that no longer answer.
+    """
+    state = request.app.state.app_state
+    snapshot = await asyncio.to_thread(_aggregate_fleet_snapshot, state)
+    unhealthy = 0
+    unreachable = 0
+    nodes = snapshot.get("nodes") or []
+    for node in nodes:
+        if not node.get("ok"):
+            unreachable += 1
+            continue
+        engines = (node.get("snapshot") or {}).get("engines_status") or []
+        for engine in engines:
+            if isinstance(engine, dict) and engine.get("state") in ("unhealthy", "degraded"):
+                unhealthy += 1
+    return JSONResponse(
+        {
+            "unhealthy_engines": unhealthy,
+            "unreachable_nodes": unreachable,
+            "total_nodes": len(nodes),
+            "polled_at": snapshot.get("polled_at"),
+        },
+        # An alert must never be served stale from a browser/proxy cache.
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post("/api/v1/fleet/{nickname}/command")
 async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
     """Execute a whitelisted write command on the local node.
