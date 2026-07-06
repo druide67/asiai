@@ -142,6 +142,8 @@
 
     // A nickname removed from the fleet must not haunt localStorage: an
     // unchecked-then-removed node would silently keep filtering forever.
+    // Same hygiene for the in-memory registries (sparkline history and
+    // rolling counters — their keys are prefixed by the nickname).
     function pruneHidden(nodes) {
         var known = {};
         nodes.forEach(function (n) { known[n.nickname] = 1; });
@@ -150,6 +152,8 @@
             state.hidden = pruned;
             saveHidden();
         }
+        Object.keys(state.history).forEach(function (k) { if (!known[k]) delete state.history[k]; });
+        Object.keys(counters).forEach(function (k) { if (!known[k.split('/')[0]]) delete counters[k]; });
     }
 
     function pollLocal() {
