@@ -75,7 +75,7 @@
 
 @media (prefers-reduced-motion: reduce) {
     .fl-dot, .fl-sq, .fl-badge, .fl-toast, .fl-drawer, .fl-stripe, .fl-spinner,
-    .fl-nav-alert, .fl-caret {
+    .fl-caret {
         animation: none !important;
     }
 }
@@ -1176,18 +1176,8 @@
 .fl-toast-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
 .fl-toast-sub { font-size: 11px; color: var(--fl-text-dim); font-family: var(--font-mono); margin-top: 2px; }
 
-/* ── Sidebar fleet alert dot ───────────────────────────────── */
-
-.fl-nav-alert {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--red);
-    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
-    animation: pulseDot 1.6s infinite;
-    margin-left: auto;
-    flex: none;
-}
+/* The sidebar Fleet alert dot moved to the global shell (shell.css
+ * .sh-attn-dot) — one dot, one data source (health-summary). */
 
 /* ── Empty / no-node states ────────────────────────────────── */
 

@@ -1558,23 +1558,10 @@
         }
     }
 
-    // ── nav alert dot (sidebar Fleet item) ──────────────────────
-
-    function renderNavAlert() {
-        var link = document.querySelector('.sidebar-nav a[href="/fleet"]');
-        if (!link) return;
-        var existing = link.querySelector('.fl-nav-alert');
-        var alert = false;
-        (state.snapshot && state.snapshot.nodes || []).forEach(function (node) {
-            if (!node.ok) alert = true;
-            enginesOf(node).forEach(function (e) {
-                var st = engineStateOf(node.nickname, e, node.ok);
-                if (st === 'unhealthy' || st === 'degraded') alert = true;
-            });
-        });
-        if (alert && !existing) link.appendChild(el('span', { cls: 'fl-nav-alert' }));
-        if (!alert && existing) existing.remove();
-    }
+    // The sidebar Fleet-item alert dot is owned by the global shell
+    // (shell.js #sh-fleet-attn, fed by /api/v1/fleet/health-summary) —
+    // fleet.js used to render its own from the cockpit snapshot, which
+    // doubled the dot on /fleet with a diverging data source.
 
     // ── top-level render ────────────────────────────────────────
 
@@ -1593,7 +1580,6 @@
         renderSessionFooter();
         renderBanner();
         renderDetail();
-        renderNavAlert();
         if (masterList) masterList.scrollTop = masterScroll;
         if (detailBody) detailBody.scrollTop = detailScroll;
     }

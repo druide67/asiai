@@ -222,6 +222,28 @@ class TestForward:
         )
         assert resp.status_code == 200
 
+    @pytest.mark.parametrize("command", ["enable", "disable"])
+    def test_cold_standby_pair_reversible_no_confirm(self, client, monkeypatch, command):
+        """enable/disable (1.18) are REVERSIBLE: accepted without a typed
+        confirmation and forwarded with the engine untouched."""
+        csrf = _login(client)
+        _add_node()
+        captured: dict = {}
+
+        def fake_forward(node, cmd, args, timeout):
+            captured.update(command=cmd, args=args)
+            return (200, {"ok": True, "exit_code": 0})
+
+        monkeypatch.setattr(fleet_routes, "_forward_to_node", fake_forward)
+        resp = _post_action(
+            client,
+            csrf,
+            body={"command": command, "args": {"engine": "llamacpp-aux-4"}},
+        )
+        assert resp.status_code == 200
+        assert captured["command"] == command
+        assert captured["args"] == {"engine": "llamacpp-aux-4"}
+
     def test_node_error_mapped_through(self, client, monkeypatch):
         csrf = _login(client)
         _add_node()
