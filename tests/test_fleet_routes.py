@@ -211,6 +211,9 @@ class TestGlobalShell:
         assert "sh-session" in resp.text
         assert "apexcharts" in resp.text
         assert "shell.js" in resp.text
+        # Honest affordance: until the multi-node pages land, the switcher
+        # visibly states its scope instead of implying it drives this page.
+        assert "applies to Fleet" in resp.text
 
 
 class TestFleetCommandSurface:
