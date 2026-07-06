@@ -273,6 +273,77 @@
 
 .mn-spark i.hot { background: rgba(6, 182, 212, 0.55); }
 
+/* ── Monitor live activity (the rolling counters) ──────────── */
+
+.mn-inferring {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    animation: pulseDot 1.2s infinite;
+    flex: none;
+}
+
+.mn-activity {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.mn-alabel {
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    color: var(--text-muted);
+}
+
+.mn-alabel.on { color: var(--text-secondary); font-weight: 600; }
+
+.mn-kv {
+    display: inline-block;
+    width: 42px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--fl-track);
+    overflow: hidden;
+    flex: none;
+}
+
+.mn-kv i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.mn-kv i.warn { background: var(--yellow); }
+.mn-kv i.crit { background: var(--red); }
+
+.mn-tokens {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.mn-row.model .nm.dim {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    padding-left: 1.1rem;
+}
+
+.mn-line.sys {
+    margin: 0.15rem 0 0.4rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--fl-hairline);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mn-inferring { animation: none !important; }
+}
+
 /* ── Empty / fallback states ───────────────────────────────── */
 
 .mn-empty {

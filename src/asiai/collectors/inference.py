@@ -110,12 +110,18 @@ def parse_prometheus_text(text: str) -> dict:
         if not line or line.startswith("#"):
             continue
 
-        # Match: metric_name{labels} value  or  metric_name value
-        m = re.match(r"^(\w+)(?:\{[^}]*\})?\s+([\d.eE+-]+)", line)
+        # Match: metric_name{labels} value  or  metric_name value.
+        # Prometheus metric names may carry a namespace COLON —
+        # llama.cpp exposes ``llamacpp:tokens_predicted_total`` — which
+        # ``\w`` does not match: the old pattern silently truncated the
+        # name to "llamacpp" and every activity metric read as zero.
+        m = re.match(r"^([\w:]+)(?:\{[^}]*\})?\s+([\d.eE+-]+)", line)
         if not m:
             continue
 
-        metric_name = m.group(1)
+        # Normalize the namespace separator so both exposition styles
+        # (``llamacpp:foo`` current, ``llamacpp_foo`` legacy) hit the map.
+        metric_name = m.group(1).replace(":", "_")
         if metric_name in mappings:
             key, typ = mappings[metric_name]
             try:

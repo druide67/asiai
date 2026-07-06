@@ -103,6 +103,22 @@ vllm_generation_tokens_total 9876
         result = parse_prometheus_text(text)
         assert result["requests_processing"] == 5
 
+    def test_llamacpp_colon_namespace(self):
+        """Current llama-server exposes ``llamacpp:metric`` (Prometheus
+        namespace colon). The old ``\\w+`` pattern truncated the name at
+        the colon and every activity metric silently read as zero —
+        reproduced live on the fleet (deploy 1.19.1 finding)."""
+        text = """\
+# TYPE llamacpp:tokens_predicted_total counter
+llamacpp:tokens_predicted_total 7892
+llamacpp:requests_processing 2
+llamacpp:kv_cache_usage_ratio 0.17
+"""
+        result = parse_prometheus_text(text)
+        assert result["tokens_predicted_total"] == 7892
+        assert result["requests_processing"] == 2
+        assert result["kv_cache_usage_ratio"] == pytest.approx(0.17)
+
     def test_unknown_metrics_ignored(self):
         text = "some_random_metric 42\n"
         result = parse_prometheus_text(text)

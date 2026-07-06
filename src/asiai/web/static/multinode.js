@@ -20,10 +20,14 @@
     if (!root) return;
     var PAGE = root.getAttribute('data-mn-page'); // 'dashboard' | 'monitor'
 
-    var POLL_MS = 12000;
+    // Monitor is the LIVE page: poll faster (the hub cache still bounds
+    // freshness at ~10 s; the counter tween below absorbs identical polls).
+    var POLL_MS = PAGE === 'monitor' ? 6000 : 12000;
     var HIDDEN_KEY = 'asiai-fleet-nodes-hidden'; // JSON array of UNchecked nicknames
     var COCKPIT_NODE_KEY = 'asiai-fleet-node';   // the cockpit's mono selection
-    var SPARK_POINTS = 36;                       // ~7 min of CPU history at 12 s
+    var SPARK_POINTS = 48;                       // ~5 min of history at 6 s
+    var REDUCED_MOTION = !!(window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     // Reachability wins over launchd paperwork — same display rule as the
     // cockpit (a serving engine is RUNNING whatever its rich state says).
@@ -36,8 +40,56 @@
         localSnap: null,    // zero-fleet fallback: local /api/v1/snapshot
         localOnly: false,
         hidden: loadHidden(),
-        history: {},        // nickname -> [cpu% ...] ring buffer (monitor)
+        history: {},        // nickname -> {cpu:[...], gpu:[...]} ring buffers
     };
+
+    // ── live counters (the "you can SEE it inferring" effect) ───
+    //
+    // Full-DOM re-renders every poll would freeze any CSS animation, so
+    // moving numbers are driven by ONE rAF loop over a registry keyed by
+    // metric: each poll re-attaches the freshly created element and sets a
+    // new target; the observed rate (delta ÷ time between two DIFFERENT
+    // values) keeps the number rolling BETWEEN polls — a generating LLM
+    // never stops counting, an idle one sits still. Identical polls (hub
+    // cache) don't stutter: the rate simply carries until the next change.
+    var counters = {};
+
+    function tween(key, target, eln, fmt) {
+        var c = counters[key];
+        var now = Date.now();
+        if (!c) {
+            c = counters[key] = { shown: target, target: target, rate: 0, changedAt: now };
+        } else if (target !== c.target) {
+            var dt = now - c.changedAt;
+            c.rate = dt > 0 ? (target - c.target) / dt : 0;
+            c.changedAt = now;
+            c.target = target;
+        }
+        c.el = eln;
+        c.fmt = fmt;
+        eln.textContent = fmt(REDUCED_MOTION ? target : c.shown);
+    }
+
+    var lastTick = Date.now();
+    function tick() {
+        var now = Date.now();
+        var dt = now - lastTick;
+        lastTick = now;
+        Object.keys(counters).forEach(function (key) {
+            var c = counters[key];
+            if (!c.el || !c.el.isConnected || c.shown === c.target) return;
+            if (c.rate > 0 && c.target > c.shown) {
+                c.shown = Math.min(c.target, c.shown + c.rate * dt);
+            } else {
+                // Resets (engine restart) and downward moves snap — a token
+                // counter must never be seen rolling backwards.
+                c.shown = c.target;
+            }
+            c.el.textContent = c.fmt(c.shown);
+        });
+        window.requestAnimationFrame(tick);
+    }
+    if (!REDUCED_MOTION && PAGE === 'monitor') window.requestAnimationFrame(tick);
 
     function loadHidden() {
         try {
@@ -90,6 +142,8 @@
 
     // A nickname removed from the fleet must not haunt localStorage: an
     // unchecked-then-removed node would silently keep filtering forever.
+    // Same hygiene for the in-memory registries (sparkline history and
+    // rolling counters — their keys are prefixed by the nickname).
     function pruneHidden(nodes) {
         var known = {};
         nodes.forEach(function (n) { known[n.nickname] = 1; });
@@ -98,6 +152,8 @@
             state.hidden = pruned;
             saveHidden();
         }
+        Object.keys(state.history).forEach(function (k) { if (!known[k]) delete state.history[k]; });
+        Object.keys(counters).forEach(function (k) { if (!known[k.split('/')[0]]) delete counters[k]; });
     }
 
     function pollLocal() {
@@ -115,13 +171,16 @@
     function pushHistory(nodes) {
         nodes.forEach(function (n) {
             var s = n.snapshot || {};
+            var h = state.history[n.nickname] || (state.history[n.nickname] = { cpu: [], gpu: [] });
             var cores = s.cpu_cores || 0;
-            var load = s.cpu_load_1;
-            if (!cores || typeof load !== 'number') return;
-            var pct = Math.max(0, Math.min(100, (load / cores) * 100));
-            var h = state.history[n.nickname] || (state.history[n.nickname] = []);
-            h.push(pct);
-            if (h.length > SPARK_POINTS) h.shift();
+            if (cores && typeof s.cpu_load_1 === 'number') {
+                h.cpu.push(Math.max(0, Math.min(100, (s.cpu_load_1 / cores) * 100)));
+                if (h.cpu.length > SPARK_POINTS) h.cpu.shift();
+            }
+            if (typeof s.gpu_utilization_pct === 'number' && s.gpu_utilization_pct >= 0) {
+                h.gpu.push(Math.max(0, Math.min(100, s.gpu_utilization_pct)));
+                if (h.gpu.length > SPARK_POINTS) h.gpu.shift();
+            }
         });
     }
 
@@ -356,19 +415,128 @@
         return block;
     }
 
-    function sparkCell(nick) {
+    function sparkCell(nick, kind, label) {
         var wrap = el('div');
-        wrap.appendChild(el('div', 'mn-klabel', 'CPU (last ~7 min)'));
+        wrap.appendChild(el('div', 'mn-klabel', label));
         var spark = el('div', 'mn-spark');
-        var h = state.history[nick] || [];
+        var hist = state.history[nick] || {};
+        var h = hist[kind] || [];
+        var last = null;
         for (var i = 0; i < SPARK_POINTS; i++) {
             var v = h[h.length - SPARK_POINTS + i];
             var bar = el('i', typeof v === 'number' && v > 55 ? 'hot' : '');
             bar.style.height = typeof v === 'number' ? Math.max(4, Math.min(100, v)).toFixed(0) + '%' : '2px';
             spark.appendChild(bar);
+            if (typeof v === 'number') last = v;
         }
         wrap.appendChild(spark);
+        wrap.appendChild(el('div', 'mn-line', last === null ? '—' : last.toFixed(0) + ' %'));
         return wrap;
+    }
+
+    // Rich engine ACTIVITY — the live heart of the Monitor. Only engines
+    // with a pulse show up here (the Dashboard owns the state inventory):
+    // rolling token counter, in-flight requests, KV pressure, connections.
+    function activityRows(node) {
+        var host = el('div', 'mn-engines');
+        var shown = 0;
+        enginesOf(node).forEach(function (e) {
+            var st = engineStateOf(e, node.ok);
+            if (!LIVE_STATES[st]) return;
+            shown += 1;
+            var row = el('div', 'mn-row');
+            row.appendChild(el('span', 'fl-dot sm st-' + st));
+            row.appendChild(el('span', 'nm', engineLabel(e)));
+            var busy = (e.requests_processing || 0) > 0;
+            if (busy) row.appendChild(el('span', 'mn-inferring', 'INFERRING'));
+
+            var right = el('span', 'mn-activity');
+            // KV cache pressure (llama.cpp /metrics; -1 = not exposed)
+            var kv = e.kv_cache_usage_ratio;
+            if (typeof kv === 'number' && kv >= 0) {
+                var kvPct = Math.round(kv * 100);
+                var kvBar = el('span', 'mn-kv');
+                var kvFill = el('i', kvPct > 95 ? 'crit' : kvPct > 80 ? 'warn' : '');
+                kvFill.style.width = Math.min(100, kvPct) + '%';
+                kvBar.appendChild(kvFill);
+                right.appendChild(el('span', 'mn-alabel', 'kv ' + kvPct + '%'));
+                right.appendChild(kvBar);
+            }
+            var conns = e.tcp_connections || 0;
+            right.appendChild(el('span', 'mn-alabel' + (conns ? ' on' : ''), conns + ' conn'));
+            if (busy) right.appendChild(el('span', 'mn-alabel on', e.requests_processing + ' req'));
+
+            // The rolling counter: total tokens generated by this engine.
+            var tokens = e.tokens_predicted_total;
+            if (typeof tokens === 'number' && tokens > 0) {
+                var counter = el('span', 'mn-tokens');
+                tween(node.nickname + '/' + engineLabel(e) + '/tokens', tokens, counter, function (v) {
+                    return Math.floor(v).toLocaleString('en-US') + ' tok';
+                });
+                right.appendChild(counter);
+            }
+            row.appendChild(right);
+            host.appendChild(row);
+
+            // Loaded models with their VRAM, under the engine row.
+            (Array.isArray(e.models) ? e.models : []).forEach(function (m) {
+                if (!m || !m.name) return;
+                var mr = el('div', 'mn-row model');
+                mr.appendChild(el('span', 'nm dim', m.name));
+                mr.appendChild(el('span', 'meta',
+                    typeof m.size_vram === 'number' && m.size_vram > 0 ? fmtGB(m.size_vram) + ' GB' : ''));
+                host.appendChild(mr);
+            });
+        });
+        if (!shown) host.appendChild(el('div', 'mn-more', 'no engine serving on this node'));
+        return host;
+    }
+
+    function powerCell(node) {
+        var s = node.snapshot || {};
+        var wrap = el('div');
+        wrap.appendChild(el('div', 'mn-klabel', 'Power'));
+        var total = s.power_total_watts;
+        var kpi = el('div', 'mn-kpi');
+        if (typeof total === 'number' && total >= 0) {
+            var span = el('span');
+            tween(node.nickname + '/power', total, span, function (v) { return v.toFixed(1); });
+            kpi.appendChild(span);
+            var small = el('small');
+            small.textContent = 'W';
+            kpi.appendChild(small);
+        } else {
+            kpi.textContent = '—';
+        }
+        wrap.appendChild(kpi);
+        var parts = [];
+        [['gpu', s.power_gpu_watts], ['cpu', s.power_cpu_watts],
+         ['ane', s.power_ane_watts], ['dram', s.power_dram_watts]].forEach(function (p) {
+            if (typeof p[1] === 'number' && p[1] >= 0) parts.push(p[0] + ' ' + p[1].toFixed(1));
+        });
+        wrap.appendChild(el('div', 'mn-line', parts.length ? parts.join(' · ') + ' W' : ''));
+        return wrap;
+    }
+
+    function systemLine(node) {
+        var s = node.snapshot || {};
+        var line = el('div', 'mn-line sys');
+        var loads = [s.cpu_load_1, s.cpu_load_5, s.cpu_load_15].map(function (v) {
+            return typeof v === 'number' ? v.toFixed(1) : '—';
+        });
+        var bits = ['load ' + loads.join(' / ')];
+        bits.push('pressure ' + (s.mem_pressure || '—'));
+        var thermal = 'thermal ' + (s.thermal_level || '—');
+        if (typeof s.thermal_speed_limit === 'number' && s.thermal_speed_limit >= 0
+            && s.thermal_speed_limit < 100) {
+            thermal += ' (limit ' + s.thermal_speed_limit + '%)';
+        }
+        bits.push(thermal);
+        var gpuMem = typeof s.gpu_mem_in_use === 'number' && s.gpu_mem_in_use > 0
+            ? fmtGB(s.gpu_mem_in_use) + ' GB gpu wired' : null;
+        if (gpuMem) bits.push(gpuMem);
+        line.textContent = bits.join(' · ');
+        return line;
     }
 
     function monitorBlock(node) {
@@ -376,17 +544,15 @@
         block.appendChild(nodeHead(node));
         var s = node.snapshot || {};
         var stats = el('div', 'mn-stats');
-        stats.appendChild(sparkCell(node.nickname));
-        stats.appendChild(memCell(s));
+        stats.appendChild(sparkCell(node.nickname, 'cpu', 'CPU'));
+        stats.appendChild(sparkCell(node.nickname, 'gpu', 'GPU'));
         block.appendChild(stats);
         var stats2 = el('div', 'mn-stats');
-        stats2.appendChild(vitalsCell(s));
-        var gpu = el('div');
-        gpu.appendChild(el('div', 'mn-klabel', 'GPU memory'));
-        gpu.appendChild(el('div', 'mn-kpi plain',
-            typeof s.gpu_mem_in_use === 'number' && s.gpu_mem_in_use > 0 ? fmtGB(s.gpu_mem_in_use) + ' GB wired' : '—'));
-        stats2.appendChild(gpu);
+        stats2.appendChild(memCell(s));
+        stats2.appendChild(powerCell(node));
         block.appendChild(stats2);
+        block.appendChild(systemLine(node));
+        block.appendChild(activityRows(node));
         block.appendChild(manageLink(node));
         return block;
     }
