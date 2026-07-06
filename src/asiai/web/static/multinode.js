@@ -81,10 +81,23 @@
                 if (!nodes.length) { state.localOnly = true; return pollLocal(); }
                 state.localOnly = false;
                 state.fleet = snap;
+                pruneHidden(nodes);
                 pushHistory(nodes);
                 renderAll();
             })
             .catch(function () { renderAll(); /* ages drift -> STALE badges say it */ });
+    }
+
+    // A nickname removed from the fleet must not haunt localStorage: an
+    // unchecked-then-removed node would silently keep filtering forever.
+    function pruneHidden(nodes) {
+        var known = {};
+        nodes.forEach(function (n) { known[n.nickname] = 1; });
+        var pruned = state.hidden.filter(function (nick) { return known[nick]; });
+        if (pruned.length !== state.hidden.length) {
+            state.hidden = pruned;
+            saveHidden();
+        }
     }
 
     function pollLocal() {
@@ -115,6 +128,10 @@
     // ── derived ─────────────────────────────────────────────────
     function visibleNodes() {
         var nodes = state.fleet && state.fleet.nodes ? state.fleet.nodes : [];
+        // The chip bar only exists at >= 2 nodes, so the hidden filter must
+        // not apply below that — or a lone node unchecked BEFORE its sibling
+        // was removed becomes unrecoverable (audit finding: dead-end UI).
+        if (nodes.length < 2) return nodes;
         return nodes.filter(function (n) { return state.hidden.indexOf(n.nickname) === -1; });
     }
 
