@@ -1,0 +1,290 @@
+/* ═══════════════════════════════════════════════════════════════
+   asiai — multi-node Dashboard & Monitor (Lot 2, direction D)
+   Fleet ribbon + one detailed block per node + multi-select chips.
+   Layout only: state colors/dots/badges come from ui.css (st-*),
+   theme tokens from style.css + ui.css. Read-only pages by design —
+   every block links to the Fleet cockpit for actions.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Fleet ribbon ──────────────────────────────────────────── */
+
+.mn-ribbon {
+    display: flex;
+    align-items: center;
+    gap: 1.8rem;
+    background: linear-gradient(90deg, rgba(6, 182, 212, 0.07), transparent 55%), var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.7rem 1.1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.mn-ribbon-item { display: flex; flex-direction: column; }
+
+.mn-ribbon-item b {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.mn-ribbon-item b.ok { color: var(--green); }
+.mn-ribbon-item b.bad { color: var(--red); }
+
+.mn-ribbon-item span {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.mn-ribbon-link {
+    margin-left: auto;
+    color: var(--accent);
+    font-size: 0.8rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.mn-ribbon-link:hover, .mn-ribbon-link:focus-visible { text-decoration: underline; }
+
+/* ── Node chips (multi-select) ─────────────────────────────── */
+
+.mn-chipbar {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.mn-chipbar-label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-right: 0.2rem;
+}
+
+.mn-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--bg-elevated);
+    border: 1px solid rgba(6, 182, 212, 0.45);
+    border-radius: 999px;
+    padding: 0.28rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.mn-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.mn-chip .tick { color: var(--accent); font-weight: 700; }
+
+.mn-chip.off {
+    border-color: var(--border);
+    color: var(--text-muted);
+}
+
+.mn-chip.off .tick { visibility: hidden; }
+
+.mn-chip-count {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: 0.25rem;
+}
+
+/* ── Node blocks grid ──────────────────────────────────────── */
+
+.mn-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(23rem, 1fr));
+    gap: 0.9rem;
+}
+
+.mn-node {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.05rem;
+    min-width: 0;
+}
+
+.mn-node.stale { opacity: 0.55; }
+
+.mn-node-head {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.75rem;
+}
+
+.mn-node-name { font-weight: 650; font-size: 1rem; }
+
+.mn-node-meta {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* freshness badge (age of the node's snapshot) */
+.mn-age {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    border-radius: 5px;
+    padding: 0.14rem 0.45rem;
+    white-space: nowrap;
+}
+
+.mn-age.fresh { color: var(--green); background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); }
+.mn-age.slow { color: var(--yellow); background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); }
+.mn-age.stale { color: var(--red); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+/* ── Block internals ───────────────────────────────────────── */
+
+.mn-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+    margin-bottom: 0.75rem;
+}
+
+.mn-klabel {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.15rem;
+}
+
+.mn-kpi {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: var(--accent);
+    line-height: 1.1;
+}
+
+.mn-kpi small { font-size: 0.72rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.2rem; }
+
+.mn-kpi.plain { color: var(--text-primary); font-size: 1.05rem; }
+
+.mn-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--fl-track);
+    overflow: hidden;
+    margin-top: 0.45rem;
+}
+
+.mn-bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.mn-bar i.warn { background: var(--yellow); }
+.mn-bar i.crit { background: var(--red); }
+
+.mn-line {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+}
+
+.mn-line b { color: var(--text-secondary); font-weight: 600; }
+
+/* engine rows */
+.mn-engines { border-top: 1px solid var(--fl-hairline); margin-top: 0.35rem; }
+
+.mn-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.32rem 0;
+    border-bottom: 1px solid var(--fl-hairline);
+    font-size: 0.8rem;
+    min-width: 0;
+}
+
+.mn-row:last-child { border-bottom: 0; }
+
+.mn-row .nm {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mn-row .meta {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 55%;
+}
+
+.mn-more {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    padding: 0.32rem 0 0.1rem;
+}
+
+.mn-manage {
+    display: block;
+    text-align: right;
+    margin-top: 0.55rem;
+    color: var(--accent);
+    font-size: 0.78rem;
+    text-decoration: none;
+}
+
+.mn-manage:hover, .mn-manage:focus-visible { text-decoration: underline; }
+
+/* ── Monitor sparklines / gauges ───────────────────────────── */
+
+.mn-spark {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 44px;
+}
+
+.mn-spark i {
+    flex: 1;
+    min-height: 2px;
+    background: var(--accent-dim);
+    border-radius: 2px 2px 0 0;
+}
+
+.mn-spark i.hot { background: rgba(6, 182, 212, 0.55); }
+
+/* ── Empty / fallback states ───────────────────────────────── */
+
+.mn-empty {
+    padding: 2.2rem 1.5rem;
+    text-align: center;
+    color: var(--text-muted);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+    .mn-ribbon { gap: 1rem; }
+    .mn-grid { grid-template-columns: 1fr; }
+}

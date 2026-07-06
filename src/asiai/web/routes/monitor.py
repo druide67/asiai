@@ -18,19 +18,17 @@ router = APIRouter()
 
 @router.get("/monitor", response_class=HTMLResponse)
 async def monitor_page(request: Request) -> HTMLResponse:
-    """Render the monitor page."""
-    state = request.app.state.app_state
+    """Render the monitor page.
+
+    Shell-only since the multi-node redesign (Lot 2): blocks are
+    data-driven client-side from the fleet snapshot. The SSE stream
+    below keeps serving (external consumers), the page no longer uses it.
+    """
     templates = request.app.state.templates
-
-    snapshot = await asyncio.to_thread(_get_snapshot, state)
-
     return templates.TemplateResponse(
         request,
         "monitor.html",
-        {
-            "nav_active": "monitor",
-            "snapshot": snapshot,
-        },
+        {"nav_active": "monitor"},
     )
 
 
