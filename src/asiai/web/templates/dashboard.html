@@ -1,24 +1,28 @@
 {% extends "base.html" %}
 {% block title %}asiai — Dashboard{% endblock %}
 
+{# Vanilla-JS multi-node page: htmx/SSE/ApexCharts are dead weight here #}
+{% block vendors %}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/multinode.css?v=1.0.0">
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2>Dashboard</h2>
-    <p>System overview and inference engines status</p>
+    <p>Every node of the fleet, in detail — actions live in the Fleet cockpit</p>
 </div>
 
-<!-- System metrics -->
-<div class="card-grid fade-in">
-    {% include "partials/system_card.html" %}
-    {% include "partials/engines_card.html" %}
+<div id="mn-root" data-mn-page="dashboard">
+    <div class="mn-ribbon" id="mn-ribbon" hidden></div>
+    <div class="mn-chipbar" id="mn-chips" hidden></div>
+    <div class="mn-grid" id="mn-grid">
+        <div class="mn-empty">Polling fleet…</div>
+    </div>
 </div>
 
-<!-- Models table -->
-<div class="mt-6 fade-in-delay-1">
-    {% include "partials/models_table.html" %}
-</div>
-
-<!-- Last benchmark -->
+<!-- Last benchmark (local hub DB — server-rendered) -->
 {% if last_bench and last_bench.engines %}
 <div class="mt-6 fade-in-delay-2">
     <div class="card card-accent">
@@ -82,4 +86,8 @@
     <a href="/doctor" class="btn">Run Doctor</a>
     <a href="/monitor" class="btn">Live Monitor</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/multinode.js?v=1.0.0"></script>
 {% endblock %}

@@ -173,31 +173,19 @@ class TestCSRF:
 
 
 class TestDashboard:
-    @patch("asiai.web.routes.dashboard._get_snapshot")
-    def test_dashboard_returns_200(self, mock_snap, client):
-        mock_snap.return_value = {
-            "cpu_load_1": 2.5,
-            "cpu_load_5": 2.0,
-            "cpu_load_15": 1.5,
-            "cpu_cores": 10,
-            "mem_total": 68_719_476_736,
-            "mem_used": 34_000_000_000,
-            "mem_pressure": "normal",
-            "thermal_level": "nominal",
-            "thermal_speed_limit": -1,
-            "uptime": 86400,
-        }
+    def test_dashboard_returns_200_as_multinode_shell(self, client):
+        """Lot 2 (direction D): the page is a client-driven shell — node
+        blocks come from the fleet snapshot at runtime, nothing is
+        server-rendered but the last-bench card."""
         response = client.get("/")
         assert response.status_code == 200
         assert "Dashboard" in response.text
-        assert "asiai" in response.text
-
-    @patch("asiai.web.routes.dashboard._get_snapshot")
-    def test_dashboard_shows_engines(self, mock_snap, client):
-        mock_snap.return_value = {}
-        response = client.get("/")
-        assert response.status_code == 200
-        assert "ollama" in response.text
+        assert 'data-mn-page="dashboard"' in response.text
+        assert "mn-ribbon" in response.text
+        assert "mn-chips" in response.text
+        assert "multinode.js" in response.text
+        # Vanilla page: vendor payloads dropped with the redesign.
+        assert "apexcharts" not in response.text
 
 
 # ---------------------------------------------------------------------------
@@ -206,20 +194,13 @@ class TestDashboard:
 
 
 class TestMonitor:
-    @patch("asiai.web.routes.monitor._get_snapshot")
-    def test_monitor_page_returns_200(self, mock_snap, client):
-        mock_snap.return_value = {
-            "cpu_load_1": 1.0,
-            "cpu_cores": 10,
-            "mem_total": 68_719_476_736,
-            "mem_used": 30_000_000_000,
-            "mem_pressure": "normal",
-            "thermal_level": "nominal",
-            "thermal_speed_limit": -1,
-        }
+    def test_monitor_page_returns_200_as_multinode_shell(self, client):
         response = client.get("/monitor")
         assert response.status_code == 200
         assert "Monitor" in response.text
+        assert 'data-mn-page="monitor"' in response.text
+        assert "multinode.js" in response.text
+        assert "apexcharts" not in response.text
 
 
 # ---------------------------------------------------------------------------

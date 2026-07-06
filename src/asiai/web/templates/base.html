@@ -29,9 +29,10 @@
     <script src="/static/charts.js"></script>
     {% endblock %}
 
-    <!-- asiai styles -->
+    <!-- asiai styles: base theme, then the shared design-system layer -->
     <link rel="stylesheet" href="/static/style.css?v=2.0.0">
-    <link rel="stylesheet" href="/static/shell.css?v=1.0.0">
+    <link rel="stylesheet" href="/static/ui.css?v=1.0.0">
+    <link rel="stylesheet" href="/static/shell.css?v=1.1.0">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -104,14 +105,12 @@
         <!-- Main content -->
         <main class="main-content">
             {% if nav_active not in ('fleet', 'login') %}
-            <!-- Global shell topbar — filled by shell.js, hidden until it has data.
-                 The fleet cockpit keeps its own master column and session footer. -->
+            <!-- Global shell topbar (operator session) — filled by shell.js.
+                 The fleet cockpit keeps its own session footer. Node scoping
+                 lives IN the pages now: multi-select chips on the multi-node
+                 pages, master column in the cockpit — no global mono select. -->
             <header class="sh-topbar" id="sh-topbar" hidden>
-                <div class="sh-node">
-                    <label class="sh-node-label" for="sh-node-select">Node</label>
-                    <select id="sh-node-select" class="sh-node-select" aria-label="Fleet node"></select>
-                    <a id="sh-node-open" class="sh-node-open" href="/fleet" title="Open the selected node in the Fleet cockpit">Fleet &rarr;</a>
-                </div>
+                <a class="sh-node-open" href="/fleet" title="Open the Fleet cockpit">Fleet &rarr;</a>
                 <div class="sh-session" id="sh-session"></div>
             </header>
             {% endif %}
@@ -173,7 +172,7 @@
     });
     </script>
 
-    <script src="/static/shell.js?v=1.0.0" defer></script>
+    <script src="/static/shell.js?v=1.1.0" defer></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

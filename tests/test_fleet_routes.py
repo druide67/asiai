@@ -200,17 +200,18 @@ class TestGlobalShell:
         assert "sh-topbar" not in resp.text
         assert "apexcharts" not in resp.text
 
-    def test_regular_page_keeps_topbar_and_vendors(self, client):
-        from unittest.mock import patch as mock_patch
-
-        with mock_patch("asiai.web.routes.dashboard._get_snapshot", return_value={}):
-            resp = client.get("/")
+    def test_regular_page_keeps_topbar(self, client):
+        """The shell topbar carries the operator session everywhere; the
+        mono node select is GONE (Lot 2: node scoping lives in the pages —
+        multi-select chips on multi-node pages, master column in the
+        cockpit). /versions is a page that kept its vendors."""
+        resp = client.get("/versions")
         assert resp.status_code == 200
         assert "sh-topbar" in resp.text
-        assert "sh-node-select" in resp.text
         assert "sh-session" in resp.text
-        assert "apexcharts" in resp.text
+        assert "sh-node-select" not in resp.text
         assert "shell.js" in resp.text
+        assert "htmx" in resp.text  # vendors preserved on htmx pages
 
 
 class TestFleetCommandSurface:

@@ -1,11 +1,13 @@
 /* Global shell — runs on every page.
  *
- * Three small responsibilities, all fail-silent (a page must render fine
+ * Two small responsibilities, both fail-silent (a page must render fine
  * with the fleet API absent or this script erroring):
- *   1. node switcher in the topbar (persisted, shared with the fleet
- *      cockpit through localStorage);
- *   2. operator session status + logout, visible outside /fleet;
- *   3. cross-page alert dot on the Fleet nav item.
+ *   1. operator session status + logout, visible outside /fleet;
+ *   2. cross-page alert dot on the Fleet nav item.
+ *
+ * Node scoping deliberately does NOT live here: the multi-node pages
+ * carry their own multi-select chips (multinode.js) and the cockpit its
+ * master column — a global mono select drove nothing and lied about it.
  *
  * Rendering rule (same as fleet.js): createElement/textContent only,
  * never innerHTML with dynamic data.
@@ -13,15 +15,11 @@
 (function () {
     'use strict';
 
-    // Shared with fleet.js: the cockpit reads/writes the same key so the
-    // node picked here is the node the cockpit opens on.
-    var NODE_KEY = 'asiai-fleet-node';
     var ALERT_POLL_MS = 45000;
     var SESSION_POLL_MS = 60000;
 
     var topbar = document.getElementById('sh-topbar');
     var sessionHost = document.getElementById('sh-session');
-    var nodeSelect = document.getElementById('sh-node-select');
     var alertDot = document.getElementById('sh-fleet-attn');
 
     function el(tag, cls, text) {
@@ -31,38 +29,12 @@
         return node;
     }
 
-    // ── node switcher ───────────────────────────────────────────
-    function initNodes() {
-        if (!nodeSelect) return;
-        fetch('/api/v1/fleet/nodes')
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (data) {
-                var nodes = data && Array.isArray(data.nodes) ? data.nodes : [];
-                if (!nodes.length) return; // fleet not configured: keep the bar hidden
-                nodeSelect.textContent = '';
-                nodes.forEach(function (n) {
-                    if (!n || typeof n.nickname !== 'string') return;
-                    var opt = document.createElement('option');
-                    opt.value = n.nickname;
-                    opt.textContent = n.nickname;
-                    nodeSelect.appendChild(opt);
-                });
-                var saved = null;
-                try { saved = localStorage.getItem(NODE_KEY); } catch (e) { /* private mode */ }
-                if (saved && nodeSelect.querySelector('option[value="' + CSS.escape(saved) + '"]')) {
-                    nodeSelect.value = saved;
-                }
-                nodeSelect.addEventListener('change', function () {
-                    try { localStorage.setItem(NODE_KEY, nodeSelect.value); } catch (e) { /* ignored */ }
-                });
-                if (topbar) topbar.hidden = false;
-            })
-            .catch(function () { /* fleet API absent — shell stays dormant */ });
-    }
-
     // ── operator session ────────────────────────────────────────
     function renderSession(info) {
         if (!sessionHost) return;
+        // The topbar reveals as soon as session state is known — for BOTH
+        // outcomes (read-only included), it no longer waits on fleet data.
+        if (topbar) topbar.hidden = false;
         sessionHost.textContent = '';
         var authenticated = !!(info && info.authenticated);
         var dot = el('span', 'sh-session-dot' + (authenticated ? ' on' : ''));
@@ -87,7 +59,6 @@
                 .catch(function () { /* next poll reconciles */ });
         });
         sessionHost.appendChild(out);
-        if (topbar) topbar.hidden = false;
     }
 
     function pollSession() {
@@ -121,7 +92,6 @@
             .catch(function () { /* transient — keep last state */ });
     }
 
-    initNodes();
     pollSession();
     pollAlert();
     setInterval(pollSession, SESSION_POLL_MS);

@@ -15,35 +15,6 @@
     font-size: 0.8rem;
 }
 
-.sh-node {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    min-width: 0;
-}
-
-.sh-node-label {
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-size: 0.68rem;
-}
-
-.sh-node-select {
-    background: var(--bg-elevated);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 0.3rem 0.55rem;
-    font: inherit;
-    max-width: 14rem;
-}
-
-.sh-node-select:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-}
-
 .sh-node-open {
     color: var(--accent);
     text-decoration: none;
