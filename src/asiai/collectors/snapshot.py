@@ -172,8 +172,10 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                 # Modern llama.cpp removed the KV gauges from /metrics;
                 # /slots is the live occupancy source. Fill the same fields
                 # so the whole pipeline (DB, API, UI kv bar) lights up.
+                # llama.cpp-only (fork included): other engines will never
+                # grow the endpoint, so probing them every poll is waste.
                 ratio = entry["kv_cache_usage_ratio"]
-                if isinstance(ratio, (int, float)) and ratio < 0:
+                if engine.name == "llamacpp" and isinstance(ratio, (int, float)) and ratio < 0:
                     slots_kv = scrape_slots_kv(engine.base_url)
                     if slots_kv:
                         entry["kv_cache_usage_ratio"] = slots_kv["kv_cache_usage_ratio"]
