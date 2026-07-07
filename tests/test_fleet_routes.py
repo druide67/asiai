@@ -336,6 +336,7 @@ class TestNodeReadProxy:
             ("engine-history", "/api/engine-history"),
             ("benchmark-process", "/api/benchmark-process"),
             ("doctor", "/api/v1/doctor"),
+            ("presets", "/api/v1/presets"),
         ],
     )
     def test_proxies_whitelisted_endpoints(self, client, tmp_fleet, endpoint, node_path):
@@ -439,3 +440,49 @@ class TestDoctorApi:
         assert cats == {"system"}
         assert "XXXXSECRET" not in str(body)
         assert "pid 4242" not in str(body)
+
+
+class TestNodePresets:
+    """GET /api/v1/presets — this node's bundled presets via aisctl serve."""
+
+    def test_no_loopback_token_returns_empty(self, client, monkeypatch):
+        from asiai.auth import loopback
+
+        monkeypatch.setattr(loopback, "read_token", lambda: None)
+        resp = client.get("/api/v1/presets")
+        assert resp.status_code == 200
+        assert resp.json()["presets"] == []
+
+    def test_forwards_serve_payload(self, client, monkeypatch):
+        from unittest.mock import MagicMock, patch
+
+        from asiai.auth import loopback
+
+        monkeypatch.setattr(loopback, "read_token", lambda: "aint_x")
+        body = (
+            b'{"presets": [{"preset": "hermes-aux-1",'
+            b' "engine": "llamacpp-aux-1", "display": "aux 1"}]}'
+        )
+        resp_mock = MagicMock()
+        resp_mock.read.return_value = body
+        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
+        resp_mock.__exit__ = MagicMock(return_value=False)
+        with patch("urllib.request.urlopen", return_value=resp_mock) as mock_open:
+            resp = client.get("/api/v1/presets")
+        assert resp.status_code == 200
+        assert resp.json()["presets"][0]["preset"] == "hermes-aux-1"
+        req = mock_open.call_args[0][0]
+        assert req.full_url.endswith("/internal/v1/presets")
+        assert req.get_header("Authorization") == "Bearer aint_x"
+
+    def test_serve_down_returns_empty(self, client, monkeypatch):
+        from unittest.mock import patch
+        from urllib.error import URLError
+
+        from asiai.auth import loopback
+
+        monkeypatch.setattr(loopback, "read_token", lambda: "aint_x")
+        with patch("urllib.request.urlopen", side_effect=URLError("refused")):
+            resp = client.get("/api/v1/presets")
+        assert resp.status_code == 200
+        assert resp.json()["presets"] == []

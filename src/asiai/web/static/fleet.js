@@ -517,6 +517,7 @@
             type: 'text',
             attrs: { placeholder: nick, autocomplete: 'off', spellcheck: 'false' },
         });
+        var presetPicker = command === 'install' ? buildPresetPicker(nick, engineName) : null;
         var confirmBtn = el('button', {
             cls: 'fl-btn danger',
             text: titleFor(command, engineName, nick),
@@ -525,7 +526,11 @@
                 click: function () {
                     if (input.value.trim() !== nick) return;
                     closeOverlay();
-                    runAction(nick, engineName, command, null, nick);
+                    var extra = null;
+                    if (presetPicker && presetPicker.select.value) {
+                        extra = { preset: presetPicker.select.value };
+                    }
+                    runAction(nick, engineName, command, extra, nick);
                 },
             },
         });
@@ -559,9 +564,53 @@
                 confirmBtn,
             ]),
         ];
-        if (command === 'install') children.splice(3, 0, buildUmaAdvisory(node, null));
+        if (command === 'install') {
+            children.splice(3, 0, buildUmaAdvisory(node, null));
+            if (presetPicker) children.splice(3, 0, presetPicker.root);
+        }
         openModal(children);
         input.focus();
+    }
+
+    function buildPresetPicker(nick, engineName) {
+        // The install picker exists because a preset-less install ships the
+        // generic base manifest SILENTLY (wrong binary/ctx on tuned nodes).
+        // So when tuned presets exist for this engine, the FIRST one is
+        // preselected — the generic baseline must be an explicit choice,
+        // never the accidental default.
+        var select = el('select', { cls: 'fl-input' });
+        select.appendChild(new Option('Base manifest (generic defaults)', ''));
+        var note = el('div', { cls: 'fl-modal-body', text: 'Loading presets…' });
+        var root = el('div', {}, [
+            el('div', { cls: 'fl-confirm-label', text: 'Configuration' }),
+            select,
+            note,
+        ]);
+        fetch('/api/v1/fleet/' + encodeURIComponent(nick) + '/presets')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                var all = data && Array.isArray(data.presets) ? data.presets : [];
+                var mine = all.filter(function (p) {
+                    return p && p.preset && p.engine === engineName;
+                });
+                if (!mine.length) {
+                    note.textContent = all.length
+                        ? 'No tuned preset ships for this engine — base manifest only.'
+                        : 'No presets available on this node — base manifest only.';
+                    return;
+                }
+                mine.forEach(function (p) {
+                    var label = p.preset + (p.display ? ' — ' + p.display : '');
+                    select.appendChild(new Option(label, p.preset));
+                });
+                select.value = mine[0].preset;
+                note.textContent = 'Installing the base manifest over a tuned service silently '
+                    + 'downgrades it — keep the preset unless you know why.';
+            })
+            .catch(function () {
+                note.textContent = 'Could not load presets — base manifest only.';
+            });
+        return { root: root, select: select };
     }
 
     function buildUmaAdvisory(node, engine) {

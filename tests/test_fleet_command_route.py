@@ -186,6 +186,57 @@ class TestPayloadValidation:
         assert resp.status_code == 200
         assert resp.json()["command"] == "purge"
 
+    def test_install_forwards_valid_preset(self, authed, monkeypatch):
+        client, secret = authed
+        seen = {}
+
+        def proxy(command, args, internal, timeout):
+            seen["args"] = args
+            return (200, {"ok": True, "exit_code": 0})
+
+        monkeypatch.setattr(fleet_routes, "_proxy_to_aisctl", proxy)
+        resp = client.post(
+            "/api/v1/fleet/alpha/command",
+            headers=_common_headers({"Authorization": f"Bearer {secret}"}),
+            json={
+                "command": "install",
+                "args": {"engine": "llamacpp", "preset": "hermes-aux-1"},
+            },
+        )
+        assert resp.status_code == 200
+        assert seen["args"]["preset"] == "hermes-aux-1"
+
+    def test_install_rejects_malformed_preset(self, authed):
+        client, secret = authed
+        resp = client.post(
+            "/api/v1/fleet/alpha/command",
+            headers=_common_headers({"Authorization": f"Bearer {secret}"}),
+            json={
+                "command": "install",
+                "args": {"engine": "llamacpp", "preset": "../evil preset"},
+            },
+        )
+        assert resp.status_code == 400
+        assert "preset" in resp.json().get("detail", "")
+
+    def test_preset_dropped_on_non_install(self, authed, monkeypatch):
+        """A preset smuggled onto another verb never reaches the funnel."""
+        client, secret = authed
+        seen = {}
+
+        def proxy(command, args, internal, timeout):
+            seen["args"] = args
+            return (200, {"ok": True, "exit_code": 0})
+
+        monkeypatch.setattr(fleet_routes, "_proxy_to_aisctl", proxy)
+        resp = client.post(
+            "/api/v1/fleet/alpha/command",
+            headers=_common_headers({"Authorization": f"Bearer {secret}"}),
+            json={"command": "stop", "args": {"engine": "ollama", "preset": "x"}},
+        )
+        assert resp.status_code == 200
+        assert "preset" not in seen["args"]
+
 
 class TestProxy:
     @pytest.fixture

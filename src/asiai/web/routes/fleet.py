@@ -150,6 +150,10 @@ _NICKNAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,63}$")
 # and bare tags (``llama3.2:3b``). Rejects shell metacharacters.
 _MODEL_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_./:\-]{0,127}$")
 
+# Preset name regex — bundled tuned-manifest names (file basenames on the
+# node). Same shape ``aisctl serve`` enforces before building the argv.
+_PRESET_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]{0,63}$")
+
 # Max body size for a command request. The body is a small JSON envelope;
 # anything beyond 64 KB is almost certainly malformed or hostile.
 _MAX_BODY_BYTES = 64 * 1024
@@ -245,6 +249,16 @@ def _validate_command_payload(
             if not isinstance(keep_alive, str) or not re.match(r"^[0-9]+[smh]?$", keep_alive):
                 return (None, {}, "args.keep_alive must match [0-9]+[smh]? (e.g. '5m', '30s')")
             args["keep_alive"] = keep_alive
+
+    if command == "install":
+        # Optional tuned-manifest preset (the picker's answer to the
+        # silent-baseline trap). Shape-checked here; the node's aisctl
+        # validates the name against its bundled registry.
+        preset = raw_args.get("preset")
+        if preset is not None:
+            if not isinstance(preset, str) or not _PRESET_RE.match(preset):
+                return (None, {}, "args.preset must match [a-zA-Z0-9][a-zA-Z0-9._-]{0,63}")
+            args["preset"] = preset
 
     return (command, args, None)
 
@@ -423,6 +437,7 @@ _NODE_READ_ENDPOINTS: dict[str, tuple[str, frozenset[str], float]] = {
     "engine-history": ("/api/engine-history", frozenset({"hours"}), 15.0),
     "benchmark-process": ("/api/benchmark-process", frozenset({"hours"}), 15.0),
     "doctor": ("/api/v1/doctor", frozenset(), 45.0),
+    "presets": ("/api/v1/presets", frozenset(), 10.0),
 }
 
 _NODE_READ_MAX_BODY = 8 * 1024 * 1024
@@ -477,6 +492,37 @@ def _proxy_node_read(nickname: str, endpoint: str, query: dict[str, str]) -> tup
     except (urllib.error.URLError, OSError, ValueError) as e:
         logger.debug("node read proxy %s/%s failed: %s", nickname, endpoint, e)
         return (502, {"error": "node_unreachable"})
+
+
+@router.get("/api/v1/presets")
+async def api_node_presets() -> JSONResponse:
+    """Bundled tuned-manifest presets of THIS node (via ``aisctl serve``).
+
+    The cockpit's install picker reads it (directly or through the hub
+    proxy) so an install can name a preset instead of silently shipping
+    the generic baseline. Nodes without the ``aisctl serve`` companion
+    (or without ``asiai-inference-server`` at all) answer an empty list
+    — the picker then only offers the base manifest.
+    """
+    token = loopback.read_token()
+    if not token:
+        return JSONResponse({"presets": [], "note": "aisctl serve not available"})
+
+    def _fetch() -> dict:
+        req = urllib.request.Request(
+            f"{AISCTL_SERVE_URL}/internal/v1/presets",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        try:
+            # nosec B310 — fixed loopback URL from a trusted env knob.
+            with urllib.request.urlopen(req, timeout=5.0) as resp:  # noqa: S310
+                data = _json.loads(resp.read(1024 * 1024).decode("utf-8"))
+        except (urllib.error.URLError, OSError, ValueError):
+            return {"presets": [], "note": "aisctl serve not available"}
+        presets = data.get("presets") if isinstance(data, dict) else None
+        return {"presets": presets if isinstance(presets, list) else []}
+
+    return JSONResponse(await asyncio.to_thread(_fetch))
 
 
 @router.get("/api/v1/fleet/{nickname}/{endpoint}")
