@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import argparse
 import json as _json
+import re
 import sys
 import time
 from typing import Any
 
+from asiai.auth import audit
 from asiai.display.formatters import bold, dim, green, red, yellow
 from asiai.fleet import config as fleet_config
 from asiai.fleet.poll import poll_all, poll_one
@@ -178,12 +180,104 @@ def _cmd_ping(args: argparse.Namespace) -> int:
     return 1
 
 
+# Hard cap on --limit, and the pool size fetched when a filter narrows
+# the view (filters discard events, so we read a larger window and trim
+# back down to --limit afterwards). read_tail() is O(pool), the journal
+# rotates at 10 MB — 1000 lines is a cheap upper bound.
+_AUDIT_LIMIT_CAP = 1000
+
+_SINCE_RE = re.compile(r"(\d+)([smhd])")
+_SINCE_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def _parse_since(text: str) -> int:
+    """Parse a relative duration like '30m', '2h' or '1d' into seconds."""
+    m = _SINCE_RE.fullmatch(text.strip())
+    if not m:
+        raise ValueError(f"invalid --since value {text!r} (expected e.g. 30m, 2h, 1d)")
+    return int(m.group(1)) * _SINCE_UNITS[m.group(2)]
+
+
+def _format_audit_row(event: dict[str, Any]) -> str:
+    ts = event.get("ts")
+    when = (
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
+        if isinstance(ts, (int, float))
+        else "-"
+    )
+    action = event.get("command") or event.get("event") or "-"
+    status = event.get("status") or "-"
+    if status == "ok":
+        status_str = green(status)
+    elif status == "denied":
+        status_str = red(status)
+    else:
+        status_str = yellow(status)
+    return (
+        f"  {when:<20} "
+        f"{event.get('actor_type') or '-':<9} "
+        f"{action:<22} "
+        f"{event.get('nickname') or '-':<12} "
+        f"{status_str:<7} "
+        f"{event.get('http_status') or '-':<5} "
+        f"{event.get('source_ip') or '-'}"
+    )
+
+
+def _cmd_audit(args: argparse.Namespace) -> int:
+    """Show the LOCAL node's fleet audit journal (the file this host owns).
+
+    This is a direct read of ``~/.local/share/asiai/fleet-audit.jsonl`` —
+    same trust boundary as the file's owner opening it in a pager, so no
+    redaction is applied (unlike the one-shot MCP exchange, whose output
+    feeds an LLM context). Run it on the hub to see fleet-wide writes.
+    """
+    limit = max(1, min(args.limit, _AUDIT_LIMIT_CAP))
+    since_cutoff: int | None = None
+    if args.since:
+        try:
+            since_cutoff = int(time.time()) - _parse_since(args.since)
+        except ValueError as e:
+            print(red(f"✗ {e}"), file=sys.stderr)
+            return 1
+
+    filtered = bool(args.actor or args.status or since_cutoff is not None)
+    events = audit.read_tail(_AUDIT_LIMIT_CAP if filtered else limit)
+    if args.actor:
+        events = [e for e in events if e.get("actor_type") == args.actor]
+    if args.status:
+        events = [e for e in events if e.get("status") == args.status]
+    if since_cutoff is not None:
+        events = [
+            e for e in events if isinstance(e.get("ts"), (int, float)) and e["ts"] >= since_cutoff
+        ]
+    events = events[:limit]
+
+    if args.json:
+        print(_json.dumps({"events": events}, indent=2, default=str))
+        return 0
+    if not events:
+        print(dim("No matching audit events."))
+        return 0
+    # Oldest first, like `tail`: the most recent event lands next to the
+    # prompt (read_tail returns newest first).
+    events.reverse()
+    print(
+        bold(
+            f"  {'TIME':<20} {'ACTOR':<9} {'ACTION':<22} {'NODE':<12} {'STATUS':<7} {'HTTP':<5} IP"
+        )
+    )
+    for e in events:
+        print(_format_audit_row(e))
+    return 0
+
+
 def cmd_fleet(args: argparse.Namespace) -> int:
-    """Top-level dispatcher for ``asiai fleet {add,remove,list,status,ping}``."""
+    """Top-level dispatcher for ``asiai fleet {add,remove,list,status,ping,audit}``."""
     action = getattr(args, "action", None)
     if not action:
         print(
-            dim("Usage: asiai fleet {add|remove|list|status|ping}"),
+            dim("Usage: asiai fleet {add|remove|list|status|ping|audit}"),
             file=sys.stderr,
         )
         return 1
@@ -193,6 +287,7 @@ def cmd_fleet(args: argparse.Namespace) -> int:
         "list": _cmd_list,
         "status": _cmd_status,
         "ping": _cmd_ping,
+        "audit": _cmd_audit,
     }
     handler = dispatch.get(action)
     if handler is None:
@@ -245,3 +340,33 @@ def add_fleet_subparser(subparsers: argparse._SubParsersAction) -> None:
     p_ping = fleet_sub.add_parser("ping", help="Poll a single node")
     p_ping.add_argument("nickname", help="Nickname of the node to ping")
     p_ping.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout in seconds")
+
+    p_audit = fleet_sub.add_parser(
+        "audit",
+        help="Show this host's fleet audit journal (run on the hub for fleet-wide writes)",
+    )
+    p_audit.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help=f"Max events to show (default 50, cap {_AUDIT_LIMIT_CAP})",
+    )
+    p_audit.add_argument(
+        "--actor",
+        choices=[audit.ACTOR_MACHINE, audit.ACTOR_OPERATOR, audit.ACTOR_LOOPBACK],
+        default=None,
+        help="Filter by credential audience (machine=asai_ token, operator=dashboard session, "
+        "loopback=aint_ secret)",
+    )
+    p_audit.add_argument(
+        "--status",
+        choices=["ok", "denied", "error"],
+        default=None,
+        help="Filter by outcome",
+    )
+    p_audit.add_argument(
+        "--since",
+        default=None,
+        help="Only events newer than a relative duration, e.g. 30m, 2h, 1d",
+    )
+    p_audit.add_argument("--json", action="store_true", help="Emit raw events as JSON")

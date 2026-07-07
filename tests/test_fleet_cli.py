@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json as _json
+import time
 from unittest.mock import patch
 
 import pytest
@@ -215,3 +216,177 @@ class TestDispatcher:
         assert rc == 1
         err = capsys.readouterr().err
         assert "Usage" in err
+
+
+@pytest.fixture
+def tmp_audit(tmp_path, monkeypatch):
+    """Point the audit module at a temp journal and return its path."""
+    from asiai.auth import audit as audit_mod
+
+    path = tmp_path / "fleet-audit.jsonl"
+    monkeypatch.setattr(audit_mod, "AUDIT_PATH", str(path))
+    yield path
+
+
+def _write_events(path, events):
+    with open(path, "w") as f:
+        for e in events:
+            f.write(_json.dumps(e) + "\n")
+
+
+def _audit_args(**overrides) -> argparse.Namespace:
+    base = {
+        "action": "audit",
+        "limit": 50,
+        "actor": None,
+        "status": None,
+        "since": None,
+        "json": False,
+    }
+    base.update(overrides)
+    return _args(**base)
+
+
+class TestCmdAudit:
+    def test_empty_journal(self, tmp_audit, capsys):
+        rc = fleet_cli.cmd_fleet(_audit_args())
+        assert rc == 0
+        assert "No matching audit events" in capsys.readouterr().out
+
+    def test_table_shows_events_oldest_first(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {"ts": now - 60, "actor_type": "operator", "command": "restart", "status": "ok"},
+                {"ts": now, "actor_type": "machine", "command": "purge", "status": "denied"},
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args())
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "restart" in out
+        assert "purge" in out
+        # oldest first: restart (older) appears before purge (newer)
+        assert out.index("restart") < out.index("purge")
+
+    def test_limit_keeps_newest(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {"ts": now - i, "actor_type": "machine", "command": f"cmd-{i}", "status": "ok"}
+                for i in range(5, 0, -1)
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args(limit=2))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "cmd-1" in out
+        assert "cmd-2" in out
+        assert "cmd-5" not in out
+
+    def test_filter_actor(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {"ts": now, "actor_type": "machine", "command": "stop", "status": "ok"},
+                {"ts": now, "actor_type": "operator", "command": "enable", "status": "ok"},
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args(actor="operator"))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "enable" in out
+        assert "stop" not in out
+
+    def test_filter_status(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {"ts": now, "actor_type": "machine", "command": "stop", "status": "denied"},
+                {"ts": now, "actor_type": "machine", "command": "start", "status": "ok"},
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args(status="denied"))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "stop" in out
+        assert "start" not in out
+
+    def test_filter_since(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {"ts": now - 7200, "actor_type": "machine", "command": "old-cmd", "status": "ok"},
+                {"ts": now - 60, "actor_type": "machine", "command": "new-cmd", "status": "ok"},
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args(since="30m"))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "new-cmd" in out
+        assert "old-cmd" not in out
+
+    def test_since_invalid_returns_1(self, tmp_audit, capsys):
+        rc = fleet_cli.cmd_fleet(_audit_args(since="soon"))
+        assert rc == 1
+        assert "invalid --since" in capsys.readouterr().err
+
+    def test_json_emits_raw_events(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {
+                    "ts": now,
+                    "actor_type": "operator",
+                    "command": "restart",
+                    "status": "ok",
+                    "args": {"engine": "llamacpp"},
+                    "source_ip": "192.0.2.7",
+                }
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args(json=True))
+        assert rc == 0
+        payload = _json.loads(capsys.readouterr().out)
+        assert payload["events"][0]["command"] == "restart"
+        # local read of the owner's own file: raw fields pass through
+        assert payload["events"][0]["args"] == {"engine": "llamacpp"}
+
+    def test_limit_is_capped(self, tmp_audit, capsys):
+        _write_events(tmp_audit, [])
+        rc = fleet_cli.cmd_fleet(_audit_args(limit=10_000_000))
+        assert rc == 0
+
+    def test_corrupt_lines_skipped(self, tmp_audit, capsys):
+        now = int(time.time())
+        with open(tmp_audit, "w") as f:
+            f.write("{not json\n")
+            f.write(
+                _json.dumps(
+                    {"ts": now, "actor_type": "machine", "command": "ok-cmd", "status": "ok"}
+                )
+                + "\n"
+            )
+        rc = fleet_cli.cmd_fleet(_audit_args())
+        assert rc == 0
+        assert "ok-cmd" in capsys.readouterr().out
+
+
+class TestParseSince:
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [("45s", 45), ("30m", 1800), ("2h", 7200), ("1d", 86400)],
+    )
+    def test_valid(self, text, expected):
+        assert fleet_cli._parse_since(text) == expected
+
+    @pytest.mark.parametrize("text", ["", "h", "2w", "-5m", "2.5h", "2 h"])
+    def test_invalid(self, text):
+        with pytest.raises(ValueError):
+            fleet_cli._parse_since(text)
