@@ -517,14 +517,18 @@
             type: 'text',
             attrs: { placeholder: nick, autocomplete: 'off', spellcheck: 'false' },
         });
-        var presetPicker = command === 'install' ? buildPresetPicker(nick, engineName) : null;
+        // The picker fetches its options async. The confirm gate below waits
+        // on BOTH the typed nickname AND the picker being ready, so a click
+        // (or paste-then-Enter) before the presets load can never fire an
+        // install with no preset — the silent-baseline bug this feature closes.
+        var presetPicker = command === 'install' ? buildPresetPicker(nick, engineName, onReady) : null;
         var confirmBtn = el('button', {
             cls: 'fl-btn danger',
             text: titleFor(command, engineName, nick),
             attrs: { disabled: 'disabled' },
             on: {
                 click: function () {
-                    if (input.value.trim() !== nick) return;
+                    if (!canConfirm()) return;
                     closeOverlay();
                     var extra = null;
                     if (presetPicker && presetPicker.select.value) {
@@ -534,12 +538,20 @@
                 },
             },
         });
-        input.addEventListener('input', function () {
-            if (input.value.trim() === nick) confirmBtn.removeAttribute('disabled');
+
+        function canConfirm() {
+            if (input.value.trim() !== nick) return false;
+            if (presetPicker && !presetPicker.ready()) return false;
+            return true;
+        }
+        function refreshConfirm() {
+            if (canConfirm()) confirmBtn.removeAttribute('disabled');
             else confirmBtn.setAttribute('disabled', 'disabled');
-        });
+        }
+        function onReady() { refreshConfirm(); }
+        input.addEventListener('input', refreshConfirm);
         input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && input.value.trim() === nick) confirmBtn.click();
+            if (e.key === 'Enter' && canConfirm()) confirmBtn.click();
         });
 
         var scope = {
@@ -572,7 +584,7 @@
         input.focus();
     }
 
-    function buildPresetPicker(nick, engineName) {
+    function buildPresetPicker(nick, engineName, onReady) {
         // The install picker exists because a preset-less install ships the
         // generic base manifest SILENTLY (wrong binary/ctx on tuned nodes).
         // So when tuned presets exist for this engine, the FIRST one is
@@ -586,6 +598,14 @@
             select,
             note,
         ]);
+        // Not ready until the fetch settles (success, empty, or error). The
+        // confirm gate blocks on this so a click can never fire an install
+        // before the preselected preset is in the select.
+        var isReady = false;
+        function settle() {
+            isReady = true;
+            if (typeof onReady === 'function') onReady();
+        }
         fetch('/api/v1/fleet/' + encodeURIComponent(nick) + '/presets')
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
@@ -609,8 +629,9 @@
             })
             .catch(function () {
                 note.textContent = 'Could not load presets — base manifest only.';
-            });
-        return { root: root, select: select };
+            })
+            .then(settle, settle);
+        return { root: root, select: select, ready: function () { return isReady; } };
     }
 
     function buildUmaAdvisory(node, engine) {
