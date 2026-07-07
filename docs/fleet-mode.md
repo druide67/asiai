@@ -166,10 +166,13 @@ Every write attempt (denied or executed) appends one JSON object to
 `duration_ms`, `exit_code`, `error`. Useful both for forensics and
 for confirming that a command actually ran on the right host.
 
-Three ways to read it, by audience:
+Four ways to read it, by audience:
 
 - **Humans** — the dashboard's Journal page and the cockpit drawer
   (operator session required).
+- **Operators at a terminal** — `asiai fleet audit` on the host that
+  owns the file (filters: `--limit`, `--actor`, `--status`, `--since`;
+  `--json` for raw events). A direct local read, no session needed.
 - **Machines on the hub** — `GET /api/v1/fleet/audit` (raw events,
   full operator session required).
 - **AI agents** — the redacted one-shot exchange below.
