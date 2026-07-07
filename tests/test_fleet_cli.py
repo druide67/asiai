@@ -248,7 +248,24 @@ def _audit_args(**overrides) -> argparse.Namespace:
 
 
 class TestCmdAudit:
+    def test_missing_journal_says_so(self, tmp_audit, capsys):
+        # No file on disk: distinguish "no journal yet" from "no events".
+        rc = fleet_cli.cmd_fleet(_audit_args())
+        assert rc == 0
+        assert "No audit journal yet" in capsys.readouterr().out
+
+    def test_unreadable_journal_returns_1(self, tmp_audit, capsys):
+        _write_events(tmp_audit, [])
+        tmp_audit.chmod(0o000)
+        try:
+            rc = fleet_cli.cmd_fleet(_audit_args())
+        finally:
+            tmp_audit.chmod(0o600)
+        assert rc == 1
+        assert "cannot read audit journal" in capsys.readouterr().err
+
     def test_empty_journal(self, tmp_audit, capsys):
+        _write_events(tmp_audit, [])
         rc = fleet_cli.cmd_fleet(_audit_args())
         assert rc == 0
         assert "No matching audit events" in capsys.readouterr().out
@@ -360,8 +377,17 @@ class TestCmdAudit:
 
     def test_limit_is_capped(self, tmp_audit, capsys):
         _write_events(tmp_audit, [])
-        rc = fleet_cli.cmd_fleet(_audit_args(limit=10_000_000))
+        requested = []
+        real_read_tail = fleet_cli.audit.read_tail
+
+        def spy(limit):
+            requested.append(limit)
+            return real_read_tail(limit)
+
+        with patch.object(fleet_cli.audit, "read_tail", side_effect=spy):
+            rc = fleet_cli.cmd_fleet(_audit_args(limit=10_000_000))
         assert rc == 0
+        assert requested == [fleet_cli._AUDIT_LIMIT_CAP]
 
     def test_corrupt_lines_skipped(self, tmp_audit, capsys):
         now = int(time.time())
@@ -376,6 +402,70 @@ class TestCmdAudit:
         rc = fleet_cli.cmd_fleet(_audit_args())
         assert rc == 0
         assert "ok-cmd" in capsys.readouterr().out
+
+    def test_malformed_but_valid_json_lines_do_not_crash(self, tmp_audit, capsys):
+        # Lines that parse as JSON but carry hostile/broken values: the
+        # forensics tool must render them, not die on them (F1).
+        _write_events(
+            tmp_audit,
+            [
+                {"ts": 1e300, "actor_type": "machine", "command": "big-ts", "status": "ok"},
+                {"ts": 1, "command": {"a": 1}, "nickname": [1, 2], "status": "ok"},
+                {"ts": 2, "actor_type": "machine", "command": "ok-cmd", "status": "ok"},
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args())
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "big-ts" in out
+        assert "ok-cmd" in out
+
+    def test_control_chars_are_neutralized(self, tmp_audit, capsys):
+        # A damaged/hand-edited journal must not inject ANSI escapes
+        # into the operator's terminal.
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [
+                {
+                    "ts": now,
+                    "actor_type": "machine",
+                    "command": "evil\x1b[31mred",
+                    "nickname": "a\r\nb",
+                    "status": "ok",
+                }
+            ],
+        )
+        rc = fleet_cli.cmd_fleet(_audit_args())
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "evil\x1b[31mred" not in out
+        assert "evil?[31mred" in out
+        assert "a??b" in out
+
+    def test_filtered_view_discloses_search_window(self, tmp_audit, capsys):
+        now = int(time.time())
+        _write_events(
+            tmp_audit,
+            [{"ts": now, "actor_type": "machine", "command": "stop", "status": "denied"}],
+        )
+        # Table: footer note when a filter narrows the view (F2).
+        rc = fleet_cli.cmd_fleet(_audit_args(status="denied"))
+        assert rc == 0
+        assert "searched the newest" in capsys.readouterr().out
+        # Empty filtered result: the note still shows.
+        rc = fleet_cli.cmd_fleet(_audit_args(status="error"))
+        assert rc == 0
+        assert "searched the newest" in capsys.readouterr().out
+        # JSON: window disclosed as a field.
+        rc = fleet_cli.cmd_fleet(_audit_args(status="denied", json=True))
+        assert rc == 0
+        payload = _json.loads(capsys.readouterr().out)
+        assert payload["search_window"] == fleet_cli._AUDIT_LIMIT_CAP
+        # Unfiltered: no note, no field.
+        rc = fleet_cli.cmd_fleet(_audit_args(json=True))
+        assert rc == 0
+        assert "search_window" not in _json.loads(capsys.readouterr().out)
 
 
 class TestParseSince:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json as _json
+import os
 import re
 import sys
 import time
@@ -198,15 +199,31 @@ def _parse_since(text: str) -> int:
     return int(m.group(1)) * _SINCE_UNITS[m.group(2)]
 
 
+# Control chars (ANSI escapes, CR/LF, NUL...) never reach the terminal:
+# the journal's writers already validate what lands in the fields we
+# print, but a forensics tool must survive — not amplify — a damaged or
+# hand-edited journal. Coercion also freezes the anti-injection
+# guarantee if a free-text field (e.g. `error`) joins the table later.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _cell(value: Any) -> str:
+    """Coerce any journal value into a printable single-line cell."""
+    if value is None or value == "":
+        return "-"
+    return _CONTROL_CHARS_RE.sub("?", str(value))
+
+
 def _format_audit_row(event: dict[str, Any]) -> str:
     ts = event.get("ts")
-    when = (
-        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
-        if isinstance(ts, (int, float))
-        else "-"
-    )
-    action = event.get("command") or event.get("event") or "-"
-    status = event.get("status") or "-"
+    when = "-"
+    if isinstance(ts, (int, float)):
+        try:
+            when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
+        except (OverflowError, OSError, ValueError):
+            when = "-"  # out-of-range ts in a malformed line — keep the row
+    action = _cell(event.get("command") or event.get("event"))
+    status = _cell(event.get("status"))
     if status == "ok":
         status_str = green(status)
     elif status == "denied":
@@ -215,12 +232,12 @@ def _format_audit_row(event: dict[str, Any]) -> str:
         status_str = yellow(status)
     return (
         f"  {when:<20} "
-        f"{event.get('actor_type') or '-':<9} "
+        f"{_cell(event.get('actor_type')):<9} "
         f"{action:<22} "
-        f"{event.get('nickname') or '-':<12} "
+        f"{_cell(event.get('nickname')):<12} "
         f"{status_str:<7} "
-        f"{event.get('http_status') or '-':<5} "
-        f"{event.get('source_ip') or '-'}"
+        f"{_cell(event.get('http_status')):<5} "
+        f"{_cell(event.get('source_ip'))}"
     )
 
 
@@ -241,6 +258,16 @@ def _cmd_audit(args: argparse.Namespace) -> int:
             print(red(f"✗ {e}"), file=sys.stderr)
             return 1
 
+    # "Can't read the journal" must never look like "nothing happened":
+    # read_tail() swallows OSErrors into [], which is right for the web
+    # routes but would be a silent false negative in a forensics CLI.
+    if not os.path.exists(audit.AUDIT_PATH):
+        print(dim(f"No audit journal yet at {audit.AUDIT_PATH}."))
+        return 0
+    if not os.access(audit.AUDIT_PATH, os.R_OK):
+        print(red(f"✗ cannot read audit journal: {audit.AUDIT_PATH}"), file=sys.stderr)
+        return 1
+
     filtered = bool(args.actor or args.status or since_cutoff is not None)
     events = audit.read_tail(_AUDIT_LIMIT_CAP if filtered else limit)
     if args.actor:
@@ -253,11 +280,20 @@ def _cmd_audit(args: argparse.Namespace) -> int:
         ]
     events = events[:limit]
 
+    # A filtered view only searches the newest _AUDIT_LIMIT_CAP events —
+    # say so, because for an audit tool a silent false negative ("no
+    # denials!" when the denial simply aged out of the window) is the
+    # worst failure mode.
+    window_note = f"(searched the newest {_AUDIT_LIMIT_CAP} journal events)" if filtered else None
+
     if args.json:
-        print(_json.dumps({"events": events}, indent=2, default=str))
+        payload: dict[str, Any] = {"events": events}
+        if window_note:
+            payload["search_window"] = _AUDIT_LIMIT_CAP
+        print(_json.dumps(payload, indent=2, default=str))
         return 0
     if not events:
-        print(dim("No matching audit events."))
+        print(dim("No matching audit events." + (f" {window_note}" if window_note else "")))
         return 0
     # Oldest first, like `tail`: the most recent event lands next to the
     # prompt (read_tail returns newest first).
@@ -269,6 +305,8 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     )
     for e in events:
         print(_format_audit_row(e))
+    if window_note:
+        print(dim(f"  {window_note}"))
     return 0
 
 
@@ -356,17 +394,20 @@ def add_fleet_subparser(subparsers: argparse._SubParsersAction) -> None:
         choices=[audit.ACTOR_MACHINE, audit.ACTOR_OPERATOR, audit.ACTOR_LOOPBACK],
         default=None,
         help="Filter by credential audience (machine=asai_ token, operator=dashboard session, "
-        "loopback=aint_ secret)",
+        f"loopback=aint_ secret); searches the newest {_AUDIT_LIMIT_CAP} events",
     )
     p_audit.add_argument(
         "--status",
         choices=["ok", "denied", "error"],
         default=None,
-        help="Filter by outcome",
+        help=f"Filter by outcome; searches the newest {_AUDIT_LIMIT_CAP} events",
     )
     p_audit.add_argument(
         "--since",
         default=None,
-        help="Only events newer than a relative duration, e.g. 30m, 2h, 1d",
+        help="Only events newer than a relative duration, e.g. 30m, 2h, 1d; "
+        f"searches the newest {_AUDIT_LIMIT_CAP} events",
     )
-    p_audit.add_argument("--json", action="store_true", help="Emit raw events as JSON")
+    p_audit.add_argument(
+        "--json", action="store_true", help="Emit raw events as JSON (newest first)"
+    )
