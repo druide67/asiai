@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}asiai — Leaderboard{% endblock %}
+{% block vendors %}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Community Leaderboard</h2>
+    <p>Median throughput per engine × model, from community submissions on api.asiai.dev</p>
+</div>
+
+<div class="filter-bar fade-in">
+    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Chip:</span>
+    <button class="filter-chip active" id="lb-chip-all" onclick="setChipFilter('', this)">All chips</button>
+    {% if local_chip %}
+    <button class="filter-chip" id="lb-chip-local" onclick="setChipFilter({{ local_chip | tojson }}, this)">This machine ({{ local_chip }})</button>
+    {% endif %}
+    <span class="text-xs text-neutral-500 filter-label" style="margin-left: 1rem; margin-right: 0.5rem;">Model:</span>
+    <input type="text" id="lb-model" class="range-input" placeholder="filter by model…" style="min-width: 200px;">
+</div>
+
+<div class="mt-6 fade-in-delay-1">
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="results-table" id="lb-table">
+                <thead>
+                    <tr>
+                        <th class="text-left">Engine</th>
+                        <th class="text-left">Model</th>
+                        <th class="text-left">Chip</th>
+                        <th class="text-right">tok/s (median)</th>
+                        <th class="text-right">TTFT (median)</th>
+                        <th class="text-right">Samples</th>
+                    </tr>
+                </thead>
+                <tbody id="lb-tbody"></tbody>
+            </table>
+        </div>
+        <div id="lb-empty" class="text-neutral-400 text-sm" style="display: none; padding: 1.5rem 0;">
+            No community data — the leaderboard API may be unreachable, or no submissions match this filter.
+            Submit yours with <code>asiai bench --submit</code>.
+        </div>
+        <div id="lb-loading" class="text-neutral-400 text-sm" style="padding: 1.5rem 0;">Loading…</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var chipFilter = '';
+    var modelTimer = null;
+
+    function setChipFilter(chip, btn) {
+        chipFilter = chip || '';
+        document.querySelectorAll('.filter-bar .filter-chip').forEach(function (c) {
+            c.classList.remove('active');
+        });
+        btn.classList.add('active');
+        loadLeaderboard();
+    }
+
+    document.getElementById('lb-model').addEventListener('input', function () {
+        clearTimeout(modelTimer);
+        modelTimer = setTimeout(loadLeaderboard, 350);
+    });
+
+    function loadLeaderboard() {
+        var params = [];
+        if (chipFilter) params.push('chip=' + encodeURIComponent(chipFilter));
+        var model = document.getElementById('lb-model').value.trim();
+        if (model) params.push('model=' + encodeURIComponent(model.slice(0, 128)));
+        var url = '/api/v1/leaderboard' + (params.length ? '?' + params.join('&') : '');
+
+        document.getElementById('lb-loading').style.display = '';
+        document.getElementById('lb-empty').style.display = 'none';
+        fetch(url)
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                var entries = data && Array.isArray(data.entries) ? data.entries : [];
+                renderRows(entries);
+            })
+            .catch(function () { renderRows([]); });
+    }
+
+    function renderRows(entries) {
+        var tbody = document.getElementById('lb-tbody');
+        tbody.textContent = '';
+        document.getElementById('lb-loading').style.display = 'none';
+        document.getElementById('lb-empty').style.display = entries.length ? 'none' : '';
+        // All community-sourced strings land via textContent — remote data
+        // is data, never markup.
+        entries.forEach(function (e) {
+            var tr = document.createElement('tr');
+            function td(text, right) {
+                var cell = document.createElement('td');
+                cell.textContent = text;
+                if (right) cell.className = 'text-right';
+                tr.appendChild(cell);
+            }
+            td(e.engine || '?');
+            td(e.model || '?');
+            // The community API names the field hw_chip (hw_ram_gb beside it).
+            var chip = e.hw_chip || e.chip || '—';
+            td(e.hw_ram_gb ? chip + ' · ' + e.hw_ram_gb + ' GB' : chip);
+            var tok = typeof e.median_tok_s === 'number' ? e.median_tok_s : 0;
+            var ttft = typeof e.median_ttft_ms === 'number' ? e.median_ttft_ms : 0;
+            td(tok ? tok.toFixed(1) : '—', true);
+            td(ttft ? Math.round(ttft) + ' ms' : '—', true);
+            td(String(e.samples || e.submissions || 0), true);
+            tbody.appendChild(tr);
+        });
+    }
+
+    loadLeaderboard();
+</script>
+{% endblock %}
