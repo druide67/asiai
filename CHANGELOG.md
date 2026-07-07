@@ -5,6 +5,153 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.22.0](https://github.com/druide67/asiai/compare/v1.21.0...v1.22.0) — 2026-07-07
+
+Install preset picker — ending the silent-baseline trap.
+
+### Added
+
+- The cockpit's Install modal now offers a preset `<select>`: when the
+  node ships tuned presets for the engine, the first is preselected, so
+  the generic base manifest (wrong binary/context on tuned nodes) becomes
+  an explicit choice rather than the accidental default. The confirm
+  button waits for the preset list to load, so a fast confirmation can
+  never fire an install with no preset. New `GET /api/v1/presets`
+  (proxies the node's `aisctl serve`); the fleet command funnel accepts
+  `args.preset` for `install` only. Companion:
+  asiai-inference-server 0.10.0.
+
+## [1.21.0](https://github.com/druide67/asiai/compare/v1.20.0...v1.21.0) — 2026-07-07
+
+Per-node History and Doctor across the fleet.
+
+### Added
+
+- `GET /api/v1/doctor` (JSON twin of the `/doctor` page, web-safe
+  category subset) and hub read proxies `GET /api/v1/fleet/{nickname}/{endpoint}`
+  for history/benchmarks/engine-history/benchmark-process/doctor — each a
+  single hardcoded node path with a digit-only query allowlist (no
+  SSRF/write reach), rate-limited and concurrency-bounded. The History
+  and Doctor pages gain a node picker that re-sources every chart/card
+  through the proxy when a fleet is configured.
+
+## [1.20.0](https://github.com/druide67/asiai/compare/v1.19.2...v1.20.0) — 2026-07-07
+
+Fleet visibility for MCP agents, with a scoped audit-read path.
+
+### Added
+
+- Three read-only MCP tools — `get_fleet_snapshot`, `get_fleet_health`,
+  `fleet_audit_tail` — so an agent can see the fleet, not just the local
+  node.
+- Scoped operator login codes: `asiai auth login --scope full|audit:read`.
+  The scope is bound to the code at mint and cannot be widened at
+  exchange; an `audit:read` code buys exactly one redacted, bounded,
+  rate-limited audit-journal read (via `POST /api/v1/fleet/audit-tail` /
+  the `fleet_audit_tail` tool) and can never open a write session. See
+  `docs/adr/0001-audit-journal-read-for-local-agents.md`.
+
+## [1.19.2](https://github.com/druide67/asiai/compare/v1.19.1...v1.19.2) — 2026-07-07
+
+Live KV occupancy and observed throughput on the Monitor.
+
+### Added
+
+- Per-engine KV-cache occupancy read from llama.cpp `/slots` (the modern
+  builds dropped the KV gauges from `/metrics`), filling the existing KV
+  fields with a numbers-only privacy guard, and an observed decode-rate
+  readout (`~N t/s`) next to the rolling token counter, averaged over a
+  sliding window so a per-request counter bump doesn't misreport.
+
+## [1.19.1](https://github.com/druide67/asiai/compare/v1.19.0...v1.19.1) — 2026-07-07
+
+Monitor goes live — the page now visibly distinguishes itself from the
+Dashboard's inventory view.
+
+### Added
+
+- Rolling per-engine token counters (rAF tween at the observed decode
+  rate), an `INFERRING` pulse, TCP connection and request counts, a KV
+  mini-bar, CPU+GPU sparklines, and a power total with GPU/CPU/ANE/DRAM
+  breakdown — so an inferring engine is visible at a glance and an idle
+  one sits still. Poll cadence 6 s on Monitor, 12 s on Dashboard.
+
+### Fixed
+
+- Prometheus parser truncated metric names at the namespace colon
+  (`llamacpp:tokens_predicted_total`), so every llama.cpp activity metric
+  read as zero fleet-wide. Names are now captured with the colon and
+  normalized, covering both exposition styles.
+
+## [1.19.0](https://github.com/druide67/asiai/compare/v1.18.0...v1.19.0) — 2026-07-07
+
+Multi-node Dashboard and Monitor ("direction D"): both pages show the
+whole fleet, not just the local node.
+
+### Added
+
+- A fleet ribbon (parc-wide aggregates) above every node rendered as its
+  own read-only detail block, with multi-select chips to hide/show nodes
+  and a per-block freshness badge (fresh/slow/stale on the poll time).
+- `ui.css` — shared design-system primitives (tokens, status dots,
+  badges, keyframes) extracted from the cockpit stylesheet so the pages
+  and the cockpit stay visually consistent.
+
+### Changed
+
+- Dashboard and Monitor are read-only across the fleet; write actions
+  stay in the Fleet cockpit ("manage in Fleet →"). The mono node-select
+  in the topbar is gone (the chips replace it).
+
+## [1.18.0](https://github.com/druide67/asiai/compare/v1.17.4...v1.18.0) — 2026-07-06
+
+Global shell across the dashboard pages.
+
+### Added
+
+- A shared topbar (operator session + logout + Fleet link), a
+  cross-page alert dot fed by a reduced `GET /api/v1/fleet/health-summary`,
+  and cold-standby verbs (`enable`/`disable`) wired into the write funnel
+  with a Standby/Enable menu.
+
+### Changed
+
+- Vendor scripts (htmx/SSE/ApexCharts) load per page instead of on every
+  page — the cockpit, journal and login no longer carry unused payloads.
+
+## [1.17.0](https://github.com/druide67/asiai/compare/v1.16.0...v1.17.4) — 2026-07-06
+
+Rich engine lifecycle states in the fleet snapshot (companion to
+asiai-inference-server 0.8), plus a cockpit dogfooding round.
+
+### Added
+
+- The snapshot joins the node's `aisctl serve` state so cards show the
+  real lifecycle (running/stopped/disabled/available/not_installed) and
+  the model a provisioned-but-idle engine would serve, not just an
+  HTTP reachable/unreachable split. `AVAILABLE` badge + preset line for
+  provisioned engines.
+
+### Fixed
+
+- Observed reality wins over launchd's paper state; cards sort by
+  urgency and fold `not_installed`; honest Install verb; the model name
+  behind a preset symlink is resolved for display.
+
+## [1.16.0](https://github.com/druide67/asiai/compare/v1.15.0...v1.16.0) — 2026-07-05
+
+The fleet cockpit — the human write surface for fleet mode.
+
+### Added
+
+- `GET /fleet`: a master-detail cockpit with live write actions
+  (start/stop/restart/purge/load/unload/install/uninstall), a
+  type-to-confirm gate on destructive verbs, and an audit-journal
+  drawer. Writes go through the operator same-origin proxy
+  (`POST /fleet/{nickname}/action`), which authenticates the operator
+  session + CSRF and forwards to the target node holding its Bearer
+  server-side — it never executes locally.
+
 ## [1.15.0](https://github.com/druide67/asiai/compare/v1.14.1...v1.15.0) — 2026-07-02
 
 Fleet groundwork: one shared write-command spec, and a human operator

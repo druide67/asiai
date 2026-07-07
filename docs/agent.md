@@ -222,6 +222,8 @@ All endpoints return JSON with HTTP 200. If an engine is unreachable, the respon
 | `GET /api/metrics` | < 500ms | 2s |
 | `GET /api/history` | < 500ms | 5s |
 | `GET /api/engine-history` | < 500ms | 5s |
+| `GET /api/benchmarks` | < 500ms | 5s |
+| `GET /api/benchmark-process` | < 500ms | 5s |
 
 ### `GET /api/status`
 
@@ -386,6 +388,14 @@ Engine-specific activity history. Useful for detecting inference patterns.
   "hours": 24
 }
 ```
+
+### `GET /api/benchmarks?hours=N` · `GET /api/benchmark-process?hours=N`
+
+Benchmark history behind the `/history` charts. `/api/benchmarks` returns
+the recorded runs (tok/s, TTFT, power, model, engine, timestamp);
+`/api/benchmark-process` returns the engine process metrics sampled during
+those runs (CPU %, RSS). Both accept `hours` (and `/api/benchmarks` also
+`since`/`until` unix seconds) and return a JSON array, newest first.
 
 ## Interpreting Metrics
 
