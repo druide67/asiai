@@ -70,7 +70,7 @@ from asiai.fleet.poll import (
     poll_all,
 )
 from asiai.web import fleet_metrics
-from asiai.web.routes.operator import require_operator, require_operator_csrf
+from asiai.web.routes.operator import require_operator_csrf, require_operator_read
 
 logger = logging.getLogger("asiai.web.routes.fleet")
 
@@ -997,65 +997,22 @@ async def fleet_operator_action(
 
 _AUDIT_TAIL_DEFAULT = 100
 _AUDIT_TAIL_MAX = 500
-_AUDIT_READ_BLOCK = 64 * 1024
-
-
-def _tail_lines(path: str, limit: int) -> list[str]:
-    """Last ``limit`` complete lines of ``path``, reading blocks from the end.
-
-    The audit log rotates at 10 MB, so backwards block reads keep this
-    O(limit) instead of O(file size). A truncated first line (partial
-    block boundary) is dropped rather than parsed.
-    """
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            pos = f.tell()
-            data = b""
-            while pos > 0 and data.count(b"\n") <= limit:
-                step = min(_AUDIT_READ_BLOCK, pos)
-                pos -= step
-                f.seek(pos)
-                data = f.read(step) + data
-    except OSError:
-        return []
-    lines = data.splitlines()
-    if pos > 0 and lines:
-        lines = lines[1:]
-    return [ln.decode("utf-8", "replace") for ln in lines[-limit:]]
-
-
-def _read_audit_tail(limit: int) -> list[dict[str, Any]]:
-    """Last ``limit`` audit events, newest first, straddling one rotation."""
-    lines = _tail_lines(audit.AUDIT_PATH, limit)
-    if len(lines) < limit:
-        older = _tail_lines(f"{audit.AUDIT_PATH}.1", limit - len(lines))
-        lines = older + lines
-    events: list[dict[str, Any]] = []
-    for ln in lines:
-        try:
-            obj = _json.loads(ln)
-        except ValueError:
-            continue  # corrupt line (e.g. crash mid-write) — skip, don't fail
-        if isinstance(obj, dict):
-            events.append(obj)
-    events.reverse()
-    return events[:limit]
 
 
 @router.get("/api/v1/fleet/audit")
 async def api_fleet_audit(
     request: Request,
     limit: int = _AUDIT_TAIL_DEFAULT,
-    session: OperatorSession = Depends(require_operator),  # noqa: B008
+    session: OperatorSession = Depends(require_operator_read),  # noqa: B008
 ) -> JSONResponse:
     """Read the local fleet audit journal (newest first). Operator-only.
 
-    Query params: ``limit`` (1..500, default 100). Errors: 401 (no
-    operator session).
+    Any operator scope may read (``audit:read`` sessions included) —
+    writes stay gated on full scope. Query params: ``limit`` (1..500,
+    default 100). Errors: 401 (no operator session).
     """
     limit = max(1, min(limit, _AUDIT_TAIL_MAX))
-    events = await asyncio.to_thread(_read_audit_tail, limit)
+    events = await asyncio.to_thread(audit.read_tail, limit)
     # no-store: source IPs, token ids and the command history must not
     # outlive the operator session in a shared browser's disk cache.
     return JSONResponse(

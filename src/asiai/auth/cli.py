@@ -141,25 +141,38 @@ def _cmd_login(args: argparse.Namespace) -> int:
     # really dies at the clamped value, so an over-range --ttl must not
     # promise a longer window than the operator actually gets.
     effective_ttl = int(operator_auth.clamp_login_ttl(args.ttl))
+    scope = getattr(args, "scope", operator_auth.SCOPE_FULL)
     try:
-        code = operator_auth.create_login_code(ttl=args.ttl)
+        code = operator_auth.create_login_code(ttl=args.ttl, scope=scope)
     except OSError as e:
         print(red(f"✗ failed to write login code: {e}"), file=sys.stderr)
         return 1
     if args.json:
-        print(_json.dumps({"code": code, "expires_in": effective_ttl}))
+        print(_json.dumps({"code": code, "expires_in": effective_ttl, "scope": scope}))
         return 0
-    print(green(f"✓ one-time operator login code (valid {effective_ttl}s, single use):"))
+    scope_note = "" if scope == operator_auth.SCOPE_FULL else f", scope {scope}"
+    print(
+        green(f"✓ one-time operator login code (valid {effective_ttl}s, single use{scope_note}):")
+    )
     print()
     print(f"    {bold(code)}")
     print()
-    print(
-        dim(
-            "  Paste it into the dashboard login form:\n"
-            "    http://127.0.0.1:8899/login  (or your asiai web URL)\n"
-            "  Running 'asiai auth login' again replaces any pending code."
+    if scope == operator_auth.SCOPE_AUDIT_READ:
+        print(
+            dim(
+                "  audit:read code — exchange it for ONE redacted journal read:\n"
+                '    POST /api/v1/fleet/audit-tail  {"code": "..."}\n'
+                "  (or the fleet_audit_tail MCP tool). It cannot open a write session."
+            )
         )
-    )
+    else:
+        print(
+            dim(
+                "  Paste it into the dashboard login form:\n"
+                "    http://127.0.0.1:8899/login  (or your asiai web URL)\n"
+                "  Running 'asiai auth login' again replaces any pending code."
+            )
+        )
     return 0
 
 
@@ -226,5 +239,15 @@ def add_auth_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=float,
         default=60.0,
         help="Code validity in seconds (default: 60, max: 300).",
+    )
+    p_login.add_argument(
+        "--scope",
+        choices=["full", "audit:read"],
+        default="full",
+        help=(
+            "What the code can be exchanged for — bound at mint. "
+            "'full' opens a dashboard write session; 'audit:read' only "
+            "buys one redacted audit-journal read (default: full)."
+        ),
     )
     p_login.add_argument("--json", action="store_true")

@@ -86,6 +86,52 @@ def _rotate_if_needed() -> None:
         logger.warning("Audit log rotation failed: %s", e)
 
 
+_TAIL_READ_BLOCK = 64 * 1024
+
+
+def tail_lines(path: str, limit: int) -> list[str]:
+    """Last ``limit`` complete lines of ``path``, reading blocks from the end.
+
+    The audit log rotates at 10 MB, so backwards block reads keep this
+    O(limit) instead of O(file size). A truncated first line (partial
+    block boundary) is dropped rather than parsed.
+    """
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            data = b""
+            while pos > 0 and data.count(b"\n") <= limit:
+                step = min(_TAIL_READ_BLOCK, pos)
+                pos -= step
+                f.seek(pos)
+                data = f.read(step) + data
+    except OSError:
+        return []
+    lines = data.splitlines()
+    if pos > 0 and lines:
+        lines = lines[1:]
+    return [ln.decode("utf-8", "replace") for ln in lines[-limit:]]
+
+
+def read_tail(limit: int) -> list[dict[str, Any]]:
+    """Last ``limit`` audit events, newest first, straddling one rotation."""
+    lines = tail_lines(AUDIT_PATH, limit)
+    if len(lines) < limit:
+        older = tail_lines(f"{AUDIT_PATH}.1", limit - len(lines))
+        lines = older + lines
+    events: list[dict[str, Any]] = []
+    for ln in lines:
+        try:
+            obj = json.loads(ln)
+        except ValueError:
+            continue  # corrupt line (e.g. crash mid-write) — skip, don't fail
+        if isinstance(obj, dict):
+            events.append(obj)
+    events.reverse()
+    return events[:limit]
+
+
 def log_event(**fields: Any) -> None:
     """Append one audit event. Never raises.
 

@@ -794,3 +794,155 @@ async def compare_engines(
         "comparison": comparison,
         "verdict": verdict,
     }
+
+
+# ---------------------------------------------------------------------------
+# Tool 12: get_fleet_snapshot (read-only, ~1-10s)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": False,
+        "title": "Fleet Snapshot",
+    }
+)
+async def get_fleet_snapshot(ctx: Context) -> dict:
+    """Poll every configured fleet node and return their live snapshots.
+
+    Each node entry carries reachability, latency, and the node's full
+    system + engines snapshot (memory, GPU, power, engine states, loaded
+    models, activity counters). Uses the same node registry and machine
+    Bearer tokens as `asiai fleet status` — no web dashboard required.
+
+    Returns {"polled_at": ts, "nodes": [...]}; an empty node list means
+    no fleet is configured on this host.
+    """
+    from asiai.fleet.config import get_nodes
+    from asiai.fleet.poll import poll_all
+
+    nodes = await asyncio.to_thread(get_nodes)
+    if not nodes:
+        return {"polled_at": int(time.time()), "nodes": [], "note": "no fleet configured"}
+    polls = await asyncio.to_thread(poll_all, nodes)
+    return {"polled_at": int(time.time()), "nodes": [p.to_dict() for p in polls]}
+
+
+# ---------------------------------------------------------------------------
+# Tool 13: get_fleet_health (read-only, ~1-10s)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": False,
+        "title": "Fleet Health Summary",
+    }
+)
+async def get_fleet_health(ctx: Context) -> dict:
+    """Reduced fleet alert feed: only franc alarms count.
+
+    Counts engines whose rich state says unhealthy/degraded and nodes
+    that no longer answer — the same reduction the dashboard's alert dot
+    uses. Cheap to poll; use get_fleet_snapshot for the full picture.
+    """
+    from asiai.fleet.config import get_nodes
+    from asiai.fleet.poll import poll_all
+
+    nodes = await asyncio.to_thread(get_nodes)
+    if not nodes:
+        return {
+            "unhealthy_engines": 0,
+            "unreachable_nodes": 0,
+            "total_nodes": 0,
+            "note": "no fleet configured",
+        }
+    polls = await asyncio.to_thread(poll_all, nodes)
+    unhealthy = 0
+    unreachable = 0
+    for p in polls:
+        if not p.ok:
+            unreachable += 1
+            continue
+        engines = (p.snapshot or {}).get("engines_status") or []
+        for engine in engines:
+            if isinstance(engine, dict) and engine.get("state") in ("unhealthy", "degraded"):
+                unhealthy += 1
+    return {
+        "unhealthy_engines": unhealthy,
+        "unreachable_nodes": unreachable,
+        "total_nodes": len(polls),
+        "polled_at": int(time.time()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 14: fleet_audit_tail (operator-code gated, redacted)
+# ---------------------------------------------------------------------------
+
+# The hub web URL the one-shot audit exchange is POSTed to. The journal
+# lives on the hub node; the REST funnel is the ONLY read path (gate:
+# never read the journal file/DB directly from the MCP process).
+_AUDIT_TAIL_TIMEOUT = 10.0
+
+
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": False,
+        "title": "Fleet Audit Tail (operator code required)",
+    }
+)
+async def fleet_audit_tail(
+    ctx: Context,
+    code: str,
+    lines: int = 50,
+    since_hours: float = 6.0,
+) -> dict:
+    """Read the fleet audit journal (redacted) with a single-use operator code.
+
+    Requires a code minted in a trusted shell with:
+
+        asiai auth login --scope audit:read
+
+    The code buys exactly ONE redacted read (metadata only: ts, actor,
+    verb, target, status — never command payloads or secrets) and is
+    consumed by the exchange. `lines` caps at 200, `since_hours` at 24.
+
+    Set ASIAI_WEB_URL if the hub dashboard is not on
+    http://127.0.0.1:8899 (e.g. a mesh-bound hub).
+    """
+    import json as _json
+    import os as _os
+    import urllib.request as _request
+    from urllib.error import HTTPError, URLError
+
+    base = _os.environ.get("ASIAI_WEB_URL", "http://127.0.0.1:8899").rstrip("/")
+    payload = _json.dumps(
+        {"code": code, "lines": int(lines), "since_hours": float(since_hours)}
+    ).encode()
+    req = _request.Request(
+        base + "/api/v1/fleet/audit-tail",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    def _post() -> dict:
+        try:
+            # nosec B310 — scheme-pinned local hub URL from a trusted env knob.
+            with _request.urlopen(req, timeout=_AUDIT_TAIL_TIMEOUT) as resp:  # noqa: S310
+                return _json.loads(resp.read(4 * 1024 * 1024).decode())
+        except HTTPError as e:
+            detail = ""
+            try:
+                detail = _json.loads(e.read(64 * 1024).decode()).get("error", "")
+            except Exception:  # noqa: BLE001 — body may be empty/non-JSON
+                pass
+            return {"error": detail or f"http_{e.code}", "http_status": e.code}
+        except (URLError, OSError, ValueError) as e:
+            return {"error": f"hub unreachable at {base}: {e.__class__.__name__}"}
+
+    return await asyncio.to_thread(_post)
