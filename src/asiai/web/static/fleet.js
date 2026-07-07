@@ -928,6 +928,81 @@
         });
     }
 
+    // ── per-node doctor drawer ──────────────────────────────────
+    //
+    // Diagnostics for ANY fleet node without leaving the cockpit, via the
+    // read proxy GET /api/v1/fleet/<nick>/doctor (web-safe categories only:
+    // the node's JSON twin already drops the webhook/daemon secrets). No
+    // auth — same LAN read posture as the snapshot.
+
+    var DOCTOR_STATUS_COLOR = {
+        ok: 'var(--green)', warn: 'var(--yellow)', fail: 'var(--red)', error: 'var(--red)',
+    };
+
+    function doctorCheckRow(check) {
+        var dot = el('span', { cls: 'fl-dot sm' });
+        dot.style.background = DOCTOR_STATUS_COLOR[check.status] || 'var(--text-secondary)';
+        var body = el('div', { cls: 'fl-doc-body' }, [
+            el('div', { cls: 'fl-doc-name', text: check.name || '' }),
+            el('div', { cls: 'fl-doc-msg', text: check.message || '' }),
+        ]);
+        if (check.fix) {
+            var fix = el('code', { cls: 'fl-doc-fix', text: check.fix, attrs: { title: 'Click to copy' } });
+            fix.addEventListener('click', function () { navigator.clipboard.writeText(fix.textContent); });
+            body.appendChild(fix);
+        }
+        return el('div', { cls: 'fl-doc-row' }, [dot, body]);
+    }
+
+    function openDoctorDrawer(nick) {
+        var host = overlayHost();
+        if (!host) return;
+        host.textContent = '';
+        var body = el('div', { cls: 'fl-drawer-body' }, [
+            el('div', { cls: 'fl-audit-empty', text: 'Running checks on ' + nick + '…' }),
+        ]);
+        var backdrop = el('div', { cls: 'fl-drawer-backdrop', on: { click: closeOverlay } });
+        var drawer = el('div', { cls: 'fl-drawer' }, [
+            el('div', { cls: 'fl-drawer-header' }, [
+                el('span', { cls: 'fl-drawer-title', text: 'Doctor' }),
+                el('span', { cls: 'fl-drawer-sub', text: nick + ' · diagnostics' }),
+                el('button', { cls: 'fl-drawer-close', text: '✕', on: { click: closeOverlay }, attrs: { 'aria-label': 'Close' } }),
+            ]),
+            body,
+        ]);
+        host.appendChild(backdrop);
+        host.appendChild(drawer);
+        _restoreFocus = document.activeElement;
+        document.addEventListener('keydown', escListener);
+        document.addEventListener('keydown', trapListener);
+
+        fetch('/api/v1/fleet/' + encodeURIComponent(nick) + '/doctor')
+            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+            .then(function (res) {
+                body.textContent = '';
+                var checks = res.ok && res.body && Array.isArray(res.body.checks) ? res.body.checks : null;
+                if (!checks) {
+                    var why = (res.body && res.body.error) || 'node unreachable';
+                    body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'Could not read diagnostics: ' + why }));
+                    return;
+                }
+                if (!checks.length) {
+                    body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'No checks reported.' }));
+                    return;
+                }
+                ['system', 'engine', 'database'].forEach(function (cat) {
+                    var rows = checks.filter(function (c) { return c && c.category === cat; });
+                    if (!rows.length) return;
+                    body.appendChild(el('div', { cls: 'fl-doc-cat', text: cat }));
+                    rows.forEach(function (c) { body.appendChild(doctorCheckRow(c)); });
+                });
+            })
+            .catch(function () {
+                body.textContent = '';
+                body.appendChild(el('div', { cls: 'fl-audit-empty', text: 'Could not read diagnostics: hub unreachable.' }));
+            });
+    }
+
     // ── journal full page ───────────────────────────────────────
 
     function loadJournalPage() {
@@ -1544,10 +1619,17 @@
             el('div', { cls: 'fl-stat-value', text: running + '/' + engines.length }),
         ]));
 
+        var doctorBtn = el('button', {
+            cls: 'fl-doc-open',
+            text: 'Doctor →',
+            attrs: { title: 'Run diagnostics on ' + node.nickname },
+            on: { click: function () { openDoctorDrawer(node.nickname); } },
+        });
         host.appendChild(el('div', { cls: 'fl-detail-head' }, [
             el('div', {}, [
                 el('div', { cls: 'fl-node-row1' }, [dot, el('span', { cls: 'fl-detail-name', text: node.nickname })]),
                 el('div', { cls: 'fl-detail-meta', text: metaBits.join(' · ') }),
+                doctorBtn,
             ]),
             stats,
         ]));
