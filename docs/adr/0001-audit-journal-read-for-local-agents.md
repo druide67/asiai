@@ -38,24 +38,35 @@ So this gate is **not an access-control barrier against local agents**
 Reuse the ephemeral shell-bound operator-login flow, hardened by five
 invariants:
 
-1. **Scope is bound to the code at mint, never chosen at exchange.**
-   `asiai auth login --scope audit:read` writes the scope into the code
-   file; every consumer inherits it verbatim. A code minted `audit:read`
-   can never open a write-capable session, whatever endpoint receives it
-   (`consume_login_code` returns the mint-time scope; unknown scopes fail
-   closed). Conversely the one-shot exchange refuses `full`-scope codes:
-   one scope, one exchange surface — mint decides use.
+1. **Scope is bound to the code at mint, never chosen at exchange —
+   and each scope has exactly ONE exchange surface.** `asiai auth login
+   --scope audit:read` writes the scope into the code file; every
+   consumer inherits it verbatim (`consume_login_code` returns the
+   mint-time scope; unknown scopes fail closed). An `audit:read` code
+   buys the one-shot redacted exchange and NOTHING else: `/login`
+   refuses it (and burns it), so it can never become a session of any
+   kind — a 12-hour session on the raw journal route would bypass the
+   redaction and bounds this scope exists for. Conversely the one-shot
+   exchange refuses (and burns) `full`-scope codes. The raw journal
+   endpoint (`GET /api/v1/fleet/audit`, unredacted, for the human
+   drawer) requires a full session. Mint decides use.
 2. **Redacted output, metadata only.** The exchange response feeds an
    LLM context, so it carries a field whitelist (`ts`, `actor_type`,
    `event`, `source_ip`, `token_id`, `nickname`, `command`, `status`,
    `http_status`, `duration_ms`, `scope`, exchange bookkeeping). Raw
    command arguments (`args`) and free-form `error` text are dropped by
    construction, as is any unknown/future field. No login code, token
-   value or secret name ever passes.
+   value or secret name ever passes. The whitelisted fields must stay
+   closed-set to keep that promise: validation-failure audit lines log
+   the submitted `command` only when it is a known command, else a
+   fixed `<invalid>` placeholder — free text in a "safe" field would
+   smuggle content past the whitelist into the LLM context.
 3. **Bounded window + rate limit.** `lines` ≤ 200 (default 50),
-   `since_hours` ≤ 24 (default 6), and the route charges an
-   all-requests rate limit (6/min per peer) — a leaked context cannot
-   exfiltrate the whole history in one sweep, nor scrape it in a loop.
+   `since_hours` ≤ 24 (default 6), the request body is size-capped
+   before parsing (the route is reachable pre-auth), and the route
+   charges an all-requests rate limit (6/min per peer) — a leaked
+   context cannot exfiltrate the whole history in one sweep, nor
+   scrape it in a loop.
 4. **REST funnel only.** The MCP tool POSTs to the hub's
    `/api/v1/fleet/audit-tail`; it never opens the journal file or the
    database directly. One read path, one place where redaction and

@@ -70,7 +70,7 @@ from asiai.fleet.poll import (
     poll_all,
 )
 from asiai.web import fleet_metrics
-from asiai.web.routes.operator import require_operator_csrf, require_operator_read
+from asiai.web.routes.operator import require_operator, require_operator_csrf
 
 logger = logging.getLogger("asiai.web.routes.fleet")
 
@@ -167,6 +167,25 @@ def _audit_machine(**fields: Any) -> None:
     from operator-session (human) events in the shared audit log.
     """
     audit.log_event(actor_type=audit.ACTOR_MACHINE, **fields)
+
+
+def _loggable_command(payload: Any) -> str | None:
+    """A ``command`` value safe to journal from an UNVALIDATED payload.
+
+    Validation-failure branches must not copy the raw field into the
+    audit log: the journal's ``command`` column is treated as closed-set
+    metadata by the redacted read surface (LLM-facing), so free attacker
+    text here would smuggle content past the whitelist. Only a known
+    command passes verbatim; anything else logs a fixed placeholder.
+    """
+    if not isinstance(payload, dict):
+        return None
+    command = payload.get("command")
+    if command is None:
+        return None
+    if isinstance(command, str) and command in ALLOWED_COMMANDS:
+        return command
+    return "<invalid>"
 
 
 def _redact_args(args: dict[str, Any]) -> dict[str, Any]:
@@ -541,14 +560,14 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             source_ip=ip,
             token_id=token_id,
             nickname=nickname,
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             args=_redact_args(payload.get("args") or {}) if isinstance(payload, dict) else {},
             status="error",
             http_status=400,
             error=err or "bad_payload",
         )
         fleet_metrics.record(
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             status="error",
             error="bad_payload",
             token_id=token_id,
@@ -839,14 +858,14 @@ async def fleet_operator_action(
         _audit_operator(
             source_ip=ip,
             nickname=nickname,
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             args=_redact_args(payload.get("args") or {}) if isinstance(payload, dict) else {},
             status="error",
             http_status=400,
             error=err or "bad_payload",
         )
         fleet_metrics.record(
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             status="error",
             error="bad_payload",
             token_id="operator",
@@ -1003,12 +1022,14 @@ _AUDIT_TAIL_MAX = 500
 async def api_fleet_audit(
     request: Request,
     limit: int = _AUDIT_TAIL_DEFAULT,
-    session: OperatorSession = Depends(require_operator_read),  # noqa: B008
+    session: OperatorSession = Depends(require_operator),  # noqa: B008
 ) -> JSONResponse:
     """Read the local fleet audit journal (newest first). Operator-only.
 
-    Any operator scope may read (``audit:read`` sessions included) —
-    writes stay gated on full scope. Query params: ``limit`` (1..500,
+    Full-scope sessions only — this endpoint serves RAW events (args,
+    errors) for the human drawer. Agents get the redacted one-shot
+    exchange (``POST /api/v1/fleet/audit-tail``) instead; ``audit:read``
+    codes cannot open sessions at all. Query params: ``limit`` (1..500,
     default 100). Errors: 401 (no operator session).
     """
     limit = max(1, min(limit, _AUDIT_TAIL_MAX))

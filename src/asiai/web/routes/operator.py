@@ -55,31 +55,20 @@ def _current_session(request: Request) -> operator_auth.OperatorSession | None:
     return _session_store(request).get(session_id)
 
 
-def require_operator_read(request: Request) -> operator_auth.OperatorSession:
-    """FastAPI dependency: any live operator session, whatever its scope.
+def require_operator(request: Request) -> operator_auth.OperatorSession:
+    """FastAPI dependency: a live FULL-scope operator session.
 
-    For operator-gated READ routes (the audit journal). Write routes
-    must use :func:`require_operator` so a reduced-scope session can
-    never mutate anything.
+    ``/login`` only ever exchanges FULL-scope codes (reduced-scope codes
+    are refused there and can never become a session), so every live
+    session is full-scope today — the check is defense in depth should a
+    new loginable scope ever appear. Machine (Bearer) endpoints keep
+    their own auth — the audiences are deliberately separate.
     """
     session = _current_session(request)
     if session is None:
         raise HTTPException(status_code=401, detail="operator session required")
-    return session
-
-
-def require_operator(request: Request) -> operator_auth.OperatorSession:
-    """FastAPI dependency: a live FULL-scope operator session.
-
-    For browser-facing write routes. A session inherited from a reduced-
-    scope login code (e.g. ``audit:read``) is rejected here — the scope
-    was bound to the code at mint and the write gate honors it. Machine
-    (Bearer) endpoints keep their own auth — the audiences are
-    deliberately separate.
-    """
-    session = require_operator_read(request)
     if session.scope != operator_auth.SCOPE_FULL:
-        raise HTTPException(status_code=403, detail="session scope does not allow writes")
+        raise HTTPException(status_code=403, detail="session scope does not allow this")
     return session
 
 
@@ -128,6 +117,28 @@ async def login_submit(request: Request, code: str = Form(default="")):
     ip = _client_ip(request)
 
     scope = operator_auth.consume_login_code(code.strip())
+    if scope is not None and scope != operator_auth.SCOPE_FULL:
+        # One scope, one exchange surface: a reduced-scope code buys its
+        # dedicated one-shot exchange, NEVER a session — a 12h session
+        # reading the raw journal would bypass the redaction/bounds that
+        # scope exists for. The code is already consumed (burned), same
+        # as a full code misdirected at the one-shot route.
+        audit.log_event(
+            actor_type=audit.ACTOR_OPERATOR,
+            event="login",
+            source_ip=ip,
+            scope=scope,
+            status="denied",
+            http_status=401,
+            error="scope_not_loginable",
+        )
+        templates = request.app.state.templates
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"nav_active": "login", "error": "This code's scope cannot open a session."},
+            status_code=401,
+        )
     if scope is not None:
         session_id, session = _session_store(request).create(scope=scope)
         audit.log_event(
@@ -304,9 +315,17 @@ async def api_audit_tail_oneshot(request: Request) -> JSONResponse:
             headers={"Retry-After": str(int(retry_after) + 1)},
         )
 
+    # This route is reachable pre-auth (the code IS the auth), so bound
+    # the body before parsing — Starlette imposes no default size cap.
+    # The real payload is a <1 KB JSON envelope.
+    raw_body = await request.body()
+    if len(raw_body) > 8 * 1024:
+        return JSONResponse({"error": "body_too_large"}, status_code=413)
+    import json as _json
+
     try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001 — malformed/absent JSON body
+        body = _json.loads(raw_body)
+    except ValueError:
         body = None
     if not isinstance(body, dict) or not isinstance(body.get("code"), str):
         return JSONResponse({"error": "invalid_body"}, status_code=400)
