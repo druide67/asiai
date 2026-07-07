@@ -169,6 +169,25 @@ def _audit_machine(**fields: Any) -> None:
     audit.log_event(actor_type=audit.ACTOR_MACHINE, **fields)
 
 
+def _loggable_command(payload: Any) -> str | None:
+    """A ``command`` value safe to journal from an UNVALIDATED payload.
+
+    Validation-failure branches must not copy the raw field into the
+    audit log: the journal's ``command`` column is treated as closed-set
+    metadata by the redacted read surface (LLM-facing), so free attacker
+    text here would smuggle content past the whitelist. Only a known
+    command passes verbatim; anything else logs a fixed placeholder.
+    """
+    if not isinstance(payload, dict):
+        return None
+    command = payload.get("command")
+    if command is None:
+        return None
+    if isinstance(command, str) and command in ALLOWED_COMMANDS:
+        return command
+    return "<invalid>"
+
+
 def _redact_args(args: dict[str, Any]) -> dict[str, Any]:
     """Strip plausible secret-bearing keys from audit log args."""
     if not isinstance(args, dict):
@@ -541,14 +560,14 @@ async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
             source_ip=ip,
             token_id=token_id,
             nickname=nickname,
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             args=_redact_args(payload.get("args") or {}) if isinstance(payload, dict) else {},
             status="error",
             http_status=400,
             error=err or "bad_payload",
         )
         fleet_metrics.record(
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             status="error",
             error="bad_payload",
             token_id=token_id,
@@ -839,14 +858,14 @@ async def fleet_operator_action(
         _audit_operator(
             source_ip=ip,
             nickname=nickname,
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             args=_redact_args(payload.get("args") or {}) if isinstance(payload, dict) else {},
             status="error",
             http_status=400,
             error=err or "bad_payload",
         )
         fleet_metrics.record(
-            command=payload.get("command") if isinstance(payload, dict) else None,
+            command=_loggable_command(payload),
             status="error",
             error="bad_payload",
             token_id="operator",
@@ -997,50 +1016,6 @@ async def fleet_operator_action(
 
 _AUDIT_TAIL_DEFAULT = 100
 _AUDIT_TAIL_MAX = 500
-_AUDIT_READ_BLOCK = 64 * 1024
-
-
-def _tail_lines(path: str, limit: int) -> list[str]:
-    """Last ``limit`` complete lines of ``path``, reading blocks from the end.
-
-    The audit log rotates at 10 MB, so backwards block reads keep this
-    O(limit) instead of O(file size). A truncated first line (partial
-    block boundary) is dropped rather than parsed.
-    """
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            pos = f.tell()
-            data = b""
-            while pos > 0 and data.count(b"\n") <= limit:
-                step = min(_AUDIT_READ_BLOCK, pos)
-                pos -= step
-                f.seek(pos)
-                data = f.read(step) + data
-    except OSError:
-        return []
-    lines = data.splitlines()
-    if pos > 0 and lines:
-        lines = lines[1:]
-    return [ln.decode("utf-8", "replace") for ln in lines[-limit:]]
-
-
-def _read_audit_tail(limit: int) -> list[dict[str, Any]]:
-    """Last ``limit`` audit events, newest first, straddling one rotation."""
-    lines = _tail_lines(audit.AUDIT_PATH, limit)
-    if len(lines) < limit:
-        older = _tail_lines(f"{audit.AUDIT_PATH}.1", limit - len(lines))
-        lines = older + lines
-    events: list[dict[str, Any]] = []
-    for ln in lines:
-        try:
-            obj = _json.loads(ln)
-        except ValueError:
-            continue  # corrupt line (e.g. crash mid-write) — skip, don't fail
-        if isinstance(obj, dict):
-            events.append(obj)
-    events.reverse()
-    return events[:limit]
 
 
 @router.get("/api/v1/fleet/audit")
@@ -1051,11 +1026,14 @@ async def api_fleet_audit(
 ) -> JSONResponse:
     """Read the local fleet audit journal (newest first). Operator-only.
 
-    Query params: ``limit`` (1..500, default 100). Errors: 401 (no
-    operator session).
+    Full-scope sessions only — this endpoint serves RAW events (args,
+    errors) for the human drawer. Agents get the redacted one-shot
+    exchange (``POST /api/v1/fleet/audit-tail``) instead; ``audit:read``
+    codes cannot open sessions at all. Query params: ``limit`` (1..500,
+    default 100). Errors: 401 (no operator session).
     """
     limit = max(1, min(limit, _AUDIT_TAIL_MAX))
-    events = await asyncio.to_thread(_read_audit_tail, limit)
+    events = await asyncio.to_thread(audit.read_tail, limit)
     # no-store: source IPs, token ids and the command history must not
     # outlive the operator session in a shared browser's disk cache.
     return JSONResponse(

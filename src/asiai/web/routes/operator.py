@@ -56,14 +56,19 @@ def _current_session(request: Request) -> operator_auth.OperatorSession | None:
 
 
 def require_operator(request: Request) -> operator_auth.OperatorSession:
-    """FastAPI dependency: the request must carry a live operator session.
+    """FastAPI dependency: a live FULL-scope operator session.
 
-    For browser-facing write routes. Machine (Bearer) endpoints keep
+    ``/login`` only ever exchanges FULL-scope codes (reduced-scope codes
+    are refused there and can never become a session), so every live
+    session is full-scope today — the check is defense in depth should a
+    new loginable scope ever appear. Machine (Bearer) endpoints keep
     their own auth — the audiences are deliberately separate.
     """
     session = _current_session(request)
     if session is None:
         raise HTTPException(status_code=401, detail="operator session required")
+    if session.scope != operator_auth.SCOPE_FULL:
+        raise HTTPException(status_code=403, detail="session scope does not allow this")
     return session
 
 
@@ -111,12 +116,36 @@ async def login_submit(request: Request, code: str = Form(default="")):
     """
     ip = _client_ip(request)
 
-    if operator_auth.consume_login_code(code.strip()):
-        session_id, session = _session_store(request).create()
+    scope = operator_auth.consume_login_code(code.strip())
+    if scope is not None and scope != operator_auth.SCOPE_FULL:
+        # One scope, one exchange surface: a reduced-scope code buys its
+        # dedicated one-shot exchange, NEVER a session — a 12h session
+        # reading the raw journal would bypass the redaction/bounds that
+        # scope exists for. The code is already consumed (burned), same
+        # as a full code misdirected at the one-shot route.
         audit.log_event(
             actor_type=audit.ACTOR_OPERATOR,
             event="login",
             source_ip=ip,
+            scope=scope,
+            status="denied",
+            http_status=401,
+            error="scope_not_loginable",
+        )
+        templates = request.app.state.templates
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"nav_active": "login", "error": "This code's scope cannot open a session."},
+            status_code=401,
+        )
+    if scope is not None:
+        session_id, session = _session_store(request).create(scope=scope)
+        audit.log_event(
+            actor_type=audit.ACTOR_OPERATOR,
+            event="login",
+            source_ip=ip,
+            scope=scope,
             status="ok",
             http_status=303,
         )
@@ -202,6 +231,155 @@ async def operator_session_info(request: Request) -> JSONResponse:
             "authenticated": True,
             "expires_at": int(session.expires_at),
             "csrf_token": session.csrf_secret,
+            "scope": session.scope,
         },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+# ── one-shot audit read (agents / MCP) ──────────────────────────────
+#
+# Gate (claude-config 2026-07-07): the audit journal may be read by a
+# local agent ONLY through the operator-code funnel, with the scope
+# bound at mint, a redacted output, a bounded window and a rate limit.
+# This route is deliberately session-LESS: the code is exchanged for
+# exactly one redacted read (a hardening beyond the approved
+# session-based design — no cookie/CSRF lifecycle to manage in a
+# non-browser consumer, nothing persists to revoke).
+
+# Metadata-only whitelist (gate condition 2): the response feeds an LLM
+# context, so no aop_ code, no token value, no secret name/value, no raw
+# command payload may pass. `args` (raw command arguments) and `error`
+# (free-form text) are deliberately absent. Unknown/future fields are
+# dropped by construction.
+_AUDIT_REDACT_WHITELIST = frozenset(
+    {
+        "ts",
+        "actor_type",
+        "event",
+        "source_ip",
+        "token_id",
+        "nickname",
+        "command",
+        "status",
+        "http_status",
+        "duration_ms",
+        "scope",
+        "exchange_id",
+        "lines_returned",
+    }
+)
+
+_AUDIT_TAIL_ONESHOT_DEFAULT_LINES = 50
+_AUDIT_TAIL_ONESHOT_MAX_LINES = 200
+_AUDIT_TAIL_ONESHOT_DEFAULT_HOURS = 6.0
+_AUDIT_TAIL_ONESHOT_MAX_HOURS = 24.0
+
+# Every request charges the budget (unlike the failure-only login
+# limiter): each successful call burns a single-use code anyway, so a
+# tight all-requests limit simply bounds journal-scraping throughput
+# (gate condition 3).
+_audit_tail_rate_limiter = TokenRateLimiter(limit=6, window_seconds=60.0)
+
+
+def _redact_audit_event(event: dict) -> dict:
+    return {k: v for k, v in event.items() if k in _AUDIT_REDACT_WHITELIST}
+
+
+@router.post("/api/v1/fleet/audit-tail")
+async def api_audit_tail_oneshot(request: Request) -> JSONResponse:
+    """Exchange an ``audit:read`` login code for ONE redacted journal read.
+
+    Body (JSON): ``{"code": "aop_...", "lines": 50, "since_hours": 6}``.
+    The code must have been minted with ``asiai auth login --scope
+    audit:read`` — a full-scope code is refused (one scope, one exchange
+    surface; mint decides use). The code is consumed either way once it
+    verifies. Errors: 400 (bad body), 401 (bad/expired/wrong-scope
+    code), 429 (rate limit).
+    """
+    ip = _client_ip(request)
+
+    allowed, _remaining, retry_after = _audit_tail_rate_limiter.check(ip)
+    if not allowed:
+        audit.log_event(
+            actor_type=audit.ACTOR_OPERATOR,
+            event="audit_read",
+            source_ip=ip,
+            status="denied",
+            http_status=429,
+            error="rate_limited",
+        )
+        return JSONResponse(
+            {"error": "rate_limited", "retry_after": round(retry_after, 1)},
+            status_code=429,
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+
+    # This route is reachable pre-auth (the code IS the auth), so bound
+    # the body before parsing — Starlette imposes no default size cap.
+    # The real payload is a <1 KB JSON envelope.
+    raw_body = await request.body()
+    if len(raw_body) > 8 * 1024:
+        return JSONResponse({"error": "body_too_large"}, status_code=413)
+    import json as _json
+
+    try:
+        body = _json.loads(raw_body)
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or not isinstance(body.get("code"), str):
+        return JSONResponse({"error": "invalid_body"}, status_code=400)
+
+    scope = operator_auth.consume_login_code(body["code"].strip())
+    if scope is None or scope != operator_auth.SCOPE_AUDIT_READ:
+        # A valid full-scope code IS consumed by the check above — by
+        # design: pasting a full code here was a mint-time mistake and a
+        # burned code is cheaper than an over-scoped exchange.
+        audit.log_event(
+            actor_type=audit.ACTOR_OPERATOR,
+            event="audit_read",
+            source_ip=ip,
+            status="denied",
+            http_status=401,
+            error="invalid_code_or_scope",
+        )
+        return JSONResponse({"error": "invalid_code_or_scope"}, status_code=401)
+
+    raw_lines = body.get("lines", _AUDIT_TAIL_ONESHOT_DEFAULT_LINES)
+    raw_hours = body.get("since_hours", _AUDIT_TAIL_ONESHOT_DEFAULT_HOURS)
+    if not isinstance(raw_lines, int) or isinstance(raw_lines, bool):
+        raw_lines = _AUDIT_TAIL_ONESHOT_DEFAULT_LINES
+    if not isinstance(raw_hours, (int, float)) or isinstance(raw_hours, bool):
+        raw_hours = _AUDIT_TAIL_ONESHOT_DEFAULT_HOURS
+    lines = max(1, min(raw_lines, _AUDIT_TAIL_ONESHOT_MAX_LINES))
+    since_hours = max(0.1, min(float(raw_hours), _AUDIT_TAIL_ONESHOT_MAX_HOURS))
+
+    import asyncio
+    import secrets as _secrets
+    import time as _time
+
+    events = await asyncio.to_thread(audit.read_tail, lines)
+    cutoff = _time.time() - since_hours * 3600.0
+    redacted = [
+        _redact_audit_event(e)
+        for e in events
+        if isinstance(e.get("ts"), (int, float)) and e["ts"] >= cutoff
+    ]
+
+    # The read is itself journaled (gate condition 5); the exchange id
+    # ties this response to its audit line without minting any session.
+    exchange_id = "aex_" + _secrets.token_urlsafe(8)
+    audit.log_event(
+        actor_type=audit.ACTOR_OPERATOR,
+        event="audit_read",
+        source_ip=ip,
+        scope=scope,
+        exchange_id=exchange_id,
+        lines_returned=len(redacted),
+        status="ok",
+        http_status=200,
+    )
+    return JSONResponse(
+        {"events": redacted, "count": len(redacted), "exchange_id": exchange_id},
         headers={"Cache-Control": "no-store"},
     )

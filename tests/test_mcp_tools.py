@@ -519,3 +519,158 @@ class TestMCPCli:
             port=8900,
             register=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# fleet tools (get_fleet_snapshot / get_fleet_health / fleet_audit_tail)
+# ---------------------------------------------------------------------------
+
+
+def _fake_poll(nickname, ok=True, engine_state=None, snapshot=None):
+    from asiai.fleet.poll import NodePoll
+
+    snap = snapshot
+    if snap is None:
+        engines = []
+        if engine_state:
+            engines = [{"name": "llamacpp", "state": engine_state}]
+        snap = {"engines_status": engines} if ok else None
+    return NodePoll(
+        nickname=nickname,
+        url=f"http://{nickname}.local:8899",
+        ok=ok,
+        latency_ms=12.0,
+        snapshot=snap if ok else None,
+        error=None if ok else "ConnectionRefusedError",
+        reached_at=int(time.time()),
+    )
+
+
+class TestGetFleetSnapshot:
+    @pytest.mark.asyncio
+    @patch("asiai.fleet.poll.poll_all")
+    @patch("asiai.fleet.config.get_nodes")
+    async def test_polls_configured_nodes(self, mock_nodes, mock_poll, mock_ctx):
+        mock_nodes.return_value = [{"nickname": "m4"}, {"nickname": "m5"}]
+        mock_poll.return_value = [_fake_poll("m4"), _fake_poll("m5")]
+        from asiai.mcp.tools import get_fleet_snapshot
+
+        result = await get_fleet_snapshot(mock_ctx)
+        assert len(result["nodes"]) == 2
+        assert result["nodes"][0]["nickname"] == "m4"
+        assert result["nodes"][0]["ok"] is True
+
+    @pytest.mark.asyncio
+    @patch("asiai.fleet.config.get_nodes")
+    async def test_no_fleet_configured(self, mock_nodes, mock_ctx):
+        mock_nodes.return_value = []
+        from asiai.mcp.tools import get_fleet_snapshot
+
+        result = await get_fleet_snapshot(mock_ctx)
+        assert result["nodes"] == []
+        assert result["note"] == "no fleet configured"
+
+
+class TestGetFleetHealth:
+    @pytest.mark.asyncio
+    @patch("asiai.fleet.poll.poll_all")
+    @patch("asiai.fleet.config.get_nodes")
+    async def test_counts_franc_alarms_only(self, mock_nodes, mock_poll, mock_ctx):
+        mock_nodes.return_value = [{"nickname": n} for n in ("a", "b", "c", "d")]
+        mock_poll.return_value = [
+            _fake_poll("a", engine_state="unhealthy"),
+            _fake_poll("b", engine_state="degraded"),
+            _fake_poll("c", engine_state="serving"),
+            _fake_poll("d", ok=False),
+        ]
+        from asiai.mcp.tools import get_fleet_health
+
+        result = await get_fleet_health(mock_ctx)
+        assert result["unhealthy_engines"] == 2
+        assert result["unreachable_nodes"] == 1
+        assert result["total_nodes"] == 4
+
+    @pytest.mark.asyncio
+    @patch("asiai.fleet.config.get_nodes")
+    async def test_no_fleet_configured(self, mock_nodes, mock_ctx):
+        mock_nodes.return_value = []
+        from asiai.mcp.tools import get_fleet_health
+
+        result = await get_fleet_health(mock_ctx)
+        assert result["total_nodes"] == 0
+        assert result["note"] == "no fleet configured"
+
+
+class TestFleetAuditTail:
+    @pytest.mark.asyncio
+    @patch("urllib.request.urlopen")
+    async def test_posts_code_to_hub(self, mock_urlopen, mock_ctx):
+        import json as _json
+
+        body = _json.dumps(
+            {
+                "events": [{"ts": 1, "command": "purge", "status": "ok"}],
+                "count": 1,
+                "exchange_id": "aex_x",
+            }
+        ).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = MagicMock(return_value=resp)
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+        from asiai.mcp.tools import fleet_audit_tail
+
+        result = await fleet_audit_tail(mock_ctx, code="aop_test", lines=10, since_hours=2)
+        assert result["count"] == 1
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url.endswith("/api/v1/fleet/audit-tail")
+        sent = _json.loads(req.data.decode())
+        assert sent == {"code": "aop_test", "lines": 10, "since_hours": 2.0}
+
+    @pytest.mark.asyncio
+    @patch("urllib.request.urlopen")
+    async def test_http_error_surfaces_reason(self, mock_urlopen, mock_ctx):
+        import io
+        import json as _json
+        from urllib.error import HTTPError
+
+        err = HTTPError(
+            url="http://127.0.0.1:8899/api/v1/fleet/audit-tail",
+            code=401,
+            msg="unauthorized",
+            hdrs=None,
+            fp=io.BytesIO(_json.dumps({"error": "invalid_code_or_scope"}).encode()),
+        )
+        mock_urlopen.side_effect = err
+        from asiai.mcp.tools import fleet_audit_tail
+
+        result = await fleet_audit_tail(mock_ctx, code="aop_bad")
+        assert result["error"] == "invalid_code_or_scope"
+        assert result["http_status"] == 401
+
+    @pytest.mark.asyncio
+    @patch("urllib.request.urlopen")
+    async def test_hub_unreachable(self, mock_urlopen, mock_ctx):
+        from urllib.error import URLError
+
+        mock_urlopen.side_effect = URLError("refused")
+        from asiai.mcp.tools import fleet_audit_tail
+
+        result = await fleet_audit_tail(mock_ctx, code="aop_x")
+        assert "hub unreachable" in result["error"]
+
+    @pytest.mark.asyncio
+    @patch.dict("os.environ", {"ASIAI_WEB_URL": "http://100.64.0.4:8642"})
+    @patch("urllib.request.urlopen")
+    async def test_respects_web_url_env(self, mock_urlopen, mock_ctx):
+        resp = MagicMock()
+        resp.read.return_value = b'{"events": [], "count": 0, "exchange_id": "aex_y"}'
+        resp.__enter__ = MagicMock(return_value=resp)
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+        from asiai.mcp.tools import fleet_audit_tail
+
+        await fleet_audit_tail(mock_ctx, code="aop_x")
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url.startswith("http://100.64.0.4:8642/")

@@ -57,6 +57,15 @@ SESSION_TTL = 12 * 3600.0
 
 SESSION_COOKIE = "asiai_operator"
 
+# Login-code / session scopes. A code's scope is FIXED AT MINT and every
+# consumer inherits it verbatim — the exchange point can never widen it
+# (an "audit:read" code must never produce a write-capable session, or
+# the attribution the scope exists for would lie). Unknown scopes fail
+# closed at consume time.
+SCOPE_FULL = "full"  # every operator action (the pre-scope behavior)
+SCOPE_AUDIT_READ = "audit:read"  # read the audit journal, nothing else
+VALID_SCOPES = frozenset({SCOPE_FULL, SCOPE_AUDIT_READ})
+
 
 def _new_login_code() -> str:
     # 24 bytes -> ~192 bits; paste-friendly, brute-force-proof even
@@ -75,13 +84,16 @@ def clamp_login_ttl(ttl: float) -> float:
     return min(max(float(ttl), 1.0), MAX_LOGIN_CODE_TTL)
 
 
-def create_login_code(ttl: float = DEFAULT_LOGIN_CODE_TTL) -> str:
+def create_login_code(ttl: float = DEFAULT_LOGIN_CODE_TTL, scope: str = SCOPE_FULL) -> str:
     """Generate a single-use login code and persist its salted hash.
 
     Returns the plaintext code (shown once by the CLI, never stored).
     Writing the 0o600 file is the shell-boundary proof: only this user
-    can mint a code the web edge will accept.
+    can mint a code the web edge will accept. ``scope`` is bound to the
+    code here, at mint — consumers inherit it and cannot widen it.
     """
+    if scope not in VALID_SCOPES:
+        raise ValueError(f"unknown scope {scope!r}; valid: {sorted(VALID_SCOPES)}")
     ttl = clamp_login_ttl(ttl)
     code = _new_login_code()
     now = time.time()
@@ -90,6 +102,7 @@ def create_login_code(ttl: float = DEFAULT_LOGIN_CODE_TTL) -> str:
         "code_hash": _hash_secret(code),
         "created_at": now,
         "expires_at": now + ttl,
+        "scope": scope,
     }
     os.makedirs(STATE_DIR, exist_ok=True)
     if os.path.islink(STATE_DIR):
@@ -109,8 +122,14 @@ def create_login_code(ttl: float = DEFAULT_LOGIN_CODE_TTL) -> str:
     return code
 
 
-def consume_login_code(code: str) -> bool:
+def consume_login_code(code: str) -> str | None:
     """Verify ``code`` against the pending login-code file.
+
+    Returns the scope BOUND TO THE CODE AT MINT on success (the caller
+    must build whatever it grants from that value alone), or ``None`` on
+    any failure. A file without a scope field was minted by a pre-scope
+    CLI whose only behavior was full access, so it reads as ``full``; an
+    unknown scope value fails closed.
 
     On success the file is deleted (single-use). On a wrong code the
     file is kept — the rate limit on the login route is the brute-force
@@ -118,30 +137,34 @@ def consume_login_code(code: str) -> bool:
     the operator's login window. An expired file is cleaned up.
     """
     if not isinstance(code, str) or not code.startswith(LOGIN_CODE_PREFIX):
-        return False
+        return None
     try:
         with open(LOGIN_CODE_PATH) as f:
             payload = json.load(f)
     except FileNotFoundError:
-        return False
+        return None
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to read login-code file %s: %s", LOGIN_CODE_PATH, e)
-        return False
+        return None
     if not isinstance(payload, dict):
-        return False
+        return None
     expires_at = payload.get("expires_at")
     stored = payload.get("code_hash")
     if not isinstance(expires_at, (int, float)) or not isinstance(stored, str):
-        return False
+        return None
+    scope = payload.get("scope", SCOPE_FULL)
+    if scope not in VALID_SCOPES:
+        logger.warning("Login-code file carries unknown scope %r — refusing", scope)
+        return None
     if time.time() > expires_at:
         with contextlib.suppress(OSError):
             os.unlink(LOGIN_CODE_PATH)
-        return False
+        return None
     if not _verify_hash(code, stored):
-        return False
+        return None
     with contextlib.suppress(OSError):
         os.unlink(LOGIN_CODE_PATH)
-    return True
+    return scope
 
 
 @dataclass
@@ -152,6 +175,8 @@ class OperatorSession:
     expires_at: float
     csrf_secret: str
     last_seen: float = field(default=0.0)
+    # Inherited verbatim from the consumed login code — see VALID_SCOPES.
+    scope: str = SCOPE_FULL
 
 
 class OperatorSessionStore:
@@ -169,14 +194,21 @@ class OperatorSessionStore:
         self._sessions: dict[str, OperatorSession] = {}
         self._lock = threading.Lock()
 
-    def create(self) -> tuple[str, OperatorSession]:
-        """Mint a new session. Returns ``(session_id, session)``."""
+    def create(self, scope: str = SCOPE_FULL) -> tuple[str, OperatorSession]:
+        """Mint a new session. Returns ``(session_id, session)``.
+
+        ``scope`` must come from :func:`consume_login_code` — the session
+        carries the code's mint-time scope, never a caller's choice.
+        """
+        if scope not in VALID_SCOPES:
+            raise ValueError(f"unknown scope {scope!r}; valid: {sorted(VALID_SCOPES)}")
         now = time.time()
         session = OperatorSession(
             created_at=now,
             expires_at=now + self._ttl,
             csrf_secret=secrets.token_urlsafe(32),
             last_seen=now,
+            scope=scope,
         )
         session_id = secrets.token_urlsafe(32)
         with self._lock:
