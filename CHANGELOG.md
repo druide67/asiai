@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.23.0](https://github.com/druide67/asiai/compare/v1.22.0...v1.23.0) — 2026-07-08
+
+Fleet polish: per-node Doctor in the cockpit, a local Community
+Leaderboard page, a terminal view of the audit journal, and
+design-system convergence.
+
+### Added
+
+- **Per-node Doctor drawer in the cockpit** (#51): every node's detail
+  panel gains a "Doctor →" button that runs the node's health checks
+  through the hub read proxy and renders them grouped by category
+  (system / engine / database) with pass/warn/fail dots and
+  click-to-copy fix commands. Web-safe category subset only.
+- **Community Leaderboard page** (#52): `/leaderboard` renders the
+  public community leaderboard in the local dashboard with "All" /
+  "This machine" chip filters (matched on the local chip) and a
+  debounced model filter. Backed by `GET /api/v1/leaderboard`
+  (server-side 5-minute cache per chip/model, bounded key space,
+  bounded query params).
+- **`asiai fleet audit`** (#54): read the local fleet audit journal
+  from the terminal — `--limit` (cap 1000), `--actor
+  {machine,operator,loopback}`, `--status {ok,denied,error}`,
+  `--since 30m/2h/1d`, `--json` (newest first; table is oldest first,
+  `tail`-style). Malformed journal lines render instead of crashing,
+  control characters are neutralized, and filtered views disclose
+  their 1000-event search window. No redaction: this is the file's
+  owner reading their own `0600` journal — the metadata whitelist
+  remains exclusive to the MCP one-shot exchange (ADR 0001).
+
+### Changed
+
+- **Design-system convergence** (#50): the shared `--fl-*` tokens
+  (track, subtle/elevated/hover borders) are now derived from the base
+  palette instead of hardcoded twins — pixel-identical in dark and
+  light, one source of truth for future theme work.
+
+### Documentation
+
+- Fleet guide: operator login scopes, agent audit access (MCP), and
+  the four journal read paths by audience; MCP tool count caught up
+  to 14 across README/FAQ/agent docs (#53).
+
 ## [1.22.0](https://github.com/druide67/asiai/compare/v1.21.0...v1.22.0) — 2026-07-07
 
 Install preset picker — ending the silent-baseline trap.
