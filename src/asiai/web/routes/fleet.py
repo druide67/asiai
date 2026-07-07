@@ -427,6 +427,19 @@ _NODE_READ_ENDPOINTS: dict[str, tuple[str, frozenset[str], float]] = {
 
 _NODE_READ_MAX_BODY = 8 * 1024 * 1024
 
+# Bound concurrent node-read proxies. Each holds a thread of the
+# process-wide ``asyncio.to_thread`` pool — SHARED with the aggregate
+# snapshot and the operator write-forward — for up to its timeout (45s
+# for doctor). Without a cap, a burst of proxy reads (real or to slow /
+# unreachable nicknames) starves the whole dashboard. Same reasoning as
+# ``_forward_semaphore`` on the write path; a separate semaphore so reads
+# and writes can't exhaust each other's budget.
+_MAX_CONCURRENT_NODE_READS = 6
+_node_read_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_NODE_READS)
+
+# Per-IP rate limit on the read proxy (unauthenticated LAN/mesh surface).
+_node_read_rate_limiter = TokenRateLimiter(limit=60, window_seconds=60.0)
+
 
 def _proxy_node_read(nickname: str, endpoint: str, query: dict[str, str]) -> tuple[int, Any]:
     """Fetch one whitelisted read endpoint from a fleet node.
@@ -471,10 +484,29 @@ async def api_fleet_node_read(nickname: str, endpoint: str, request: Request) ->
     """Read-only per-node proxy for the endpoints in ``_NODE_READ_ENDPOINTS``.
 
     404 for anything not whitelisted — this route deliberately shadows
-    no write path (commands are POST on a different route).
+    no write path (commands are POST on a different route). Rate-limited
+    per IP and concurrency-bounded so a burst of slow proxied reads can't
+    starve the shared thread pool (503 busy instead).
     """
+    allowed, _remaining, retry_after = _node_read_rate_limiter.check(_client_ip(request))
+    if not allowed:
+        return JSONResponse(
+            {"error": "rate_limited"},
+            status_code=429,
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+    if _node_read_semaphore.locked():
+        return JSONResponse(
+            {
+                "error": "busy",
+                "detail": f"{_MAX_CONCURRENT_NODE_READS} node reads already in flight",
+            },
+            status_code=503,
+            headers={"Retry-After": "2"},
+        )
     query = dict(request.query_params.items())
-    status, payload = await asyncio.to_thread(_proxy_node_read, nickname, endpoint, query)
+    async with _node_read_semaphore:
+        status, payload = await asyncio.to_thread(_proxy_node_read, nickname, endpoint, query)
     return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
 
 

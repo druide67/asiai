@@ -416,3 +416,26 @@ class TestDoctorApi:
         body = resp.json()
         assert body["checks"] == checks
         assert isinstance(body["ts"], int)
+
+    def test_doctor_json_drops_secret_categories(self, client):
+        """The JSON twin must never expose checks the HTML hides — the
+        webhook URL (alerting) and daemon PIDs are secret-bearing."""
+        from unittest.mock import patch
+
+        checks = [
+            {"category": "system", "name": "RAM", "status": "ok", "message": "128 GB"},
+            {
+                "category": "alerting",
+                "name": "Webhook URL",
+                "status": "ok",
+                "message": "https://hooks.slack.com/services/T00/B00/XXXXSECRET",
+            },
+            {"category": "daemon", "name": "monitor", "status": "ok", "message": "pid 4242"},
+        ]
+        with patch("asiai.web.routes.doctor._run_checks", return_value=checks):
+            resp = client.get("/api/v1/doctor")
+        body = resp.json()
+        cats = {c["category"] for c in body["checks"]}
+        assert cats == {"system"}
+        assert "XXXXSECRET" not in str(body)
+        assert "pid 4242" not in str(body)
