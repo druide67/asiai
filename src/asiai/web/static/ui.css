@@ -10,19 +10,23 @@
 
 :root,
 [data-theme="dark"] {
+    /* Tokens that share style.css's value in BOTH themes derive from the
+       base palette — one source of truth, no theme drift on retouch.
+       (track/border-subtle/border-elevated/border-hover only; the others
+       below stay fl-owned because they diverge in light — see comments.) */
     --fl-master-bg: #0d0d0f;
     --fl-input-bg: #0c0c0e;
-    --fl-elevated: #18181b;
-    --fl-track: #1f1f23;
+    --fl-elevated: #18181b; /* fl-owned: pure white in light, ≠ --bg-elevated */
+    --fl-track: var(--bg-hover);
     --fl-hairline: #17171a;
-    --fl-border-subtle: #1c1c1f;
+    --fl-border-subtle: var(--border);
     --fl-border: #26262b;
-    --fl-border-elevated: #2a2a2e;
-    --fl-border-hover: #3a3a3f;
+    --fl-border-elevated: var(--border-hover);
+    --fl-border-hover: var(--border-active);
     --fl-text-strong: #e4e4e7;
     --fl-text-body: #d4d4d8;
     --fl-text-dim: #71717a;
-    --fl-text-faint: #52525b;
+    --fl-text-faint: #52525b; /* fl-owned: #71717a in light, ≠ --text-muted */
     --fl-text-disabled: #3f3f46;
     --fl-violet: #8b5cf6;
     --fl-violet-text: #a78bfa;
@@ -39,19 +43,21 @@
 }
 
 [data-theme="light"] {
+    /* The four derived tokens are NOT re-listed here: they inherit the
+       base light values via the var() aliases in the dark/root block
+       (--fl-track=--bg-hover=#e4e4e7, --fl-border-subtle=--border=#e4e4e7,
+       --fl-border-elevated=--border-hover=#d4d4d8,
+       --fl-border-hover=--border-active=#a1a1aa) — identical to the old
+       hardcoded light values, one source of truth. */
     --fl-master-bg: #f4f4f5;
     --fl-input-bg: #ffffff;
-    --fl-elevated: #ffffff;
-    --fl-track: #e4e4e7;
+    --fl-elevated: #ffffff; /* fl-owned: intentionally ≠ --bg-elevated (#f4f4f5) */
     --fl-hairline: #ececee;
-    --fl-border-subtle: #e4e4e7;
     --fl-border: #d4d4d8;
-    --fl-border-elevated: #d4d4d8;
-    --fl-border-hover: #a1a1aa;
     --fl-text-strong: #18181b;
     --fl-text-body: #27272a;
     --fl-text-dim: #52525b;
-    --fl-text-faint: #71717a;
+    --fl-text-faint: #71717a; /* fl-owned: intentionally ≠ --text-muted (#a1a1aa) */
     --fl-text-disabled: #a1a1aa;
     --fl-violet: #7c3aed;
     --fl-violet-text: #7c3aed;
