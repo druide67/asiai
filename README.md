@@ -115,6 +115,8 @@ Options:
     --agentic-output FILE  Save agentic-mode results as JSON
     --agentic-skip-long    Skip phases 7-8 (50K context) to save ~10 min
     --agentic-only LIST    Run only specified phases (cold,prefix-test-1,...)
+    --burst-mode           Concurrency stress: N simultaneous calls (tool-call fan-out)
+    --burst-runs N         Repeat the burst protocol N times (median + CV)
     --code                 Dev-quality eval: tool-call, recovery, thinking, coding
     --code-suite LIST      tool-call[-stress],recovery,thinking[,coding[-hard]]
     --instruct             Instruction-following: IFEval-style verifiable + agentic deliverable
@@ -345,9 +347,39 @@ aisctl fleet push studio restart --engine ollama
 aisctl fleet push studio unload --engine ollama --model llama3.2
 ```
 
-The `/fleet` page in `asiai web` shows a card per node with HTMX
-auto-refresh every 10 seconds. Phase 3 will add mDNS Bonjour
-auto-discovery and TLS. Full guide:
+The `/fleet` page in `asiai web` is a master-detail **cockpit**: a card
+per node with its engines' live lifecycle state, and — once you log in
+as operator — the write buttons (start/stop/restart, standby/enable,
+purge, load/unload, install/uninstall) with a type-to-confirm gate on
+destructive verbs and an audit-journal drawer. The `/dashboard` and
+`/monitor` pages show the whole fleet read-only (a ribbon of aggregates
+plus a block per node); `/monitor` adds live token counters and power.
+
+#### Operator login (browser write actions)
+
+The node-to-node Bearer authenticates *machines*. A *human* clicking a
+write button in the cockpit authenticates separately, with an ephemeral
+shell-bound code — no password is ever stored:
+
+```bash
+# In a trusted shell ON the machine running `asiai web`:
+asiai auth login                 # prints a single-use code (aop_…, ~60s TTL)
+asiai auth login --scope audit:read   # a code that ONLY reads the audit journal
+```
+
+Paste the code into the dashboard's login form (`/login`). You get a
+server-side session behind an `HttpOnly; SameSite=Lax` cookie with
+per-form CSRF; a process restart or `logout` ends it. The write funnel
+is unchanged — the browser session only lets the same-origin proxy
+forward on your behalf. The `audit:read` scope is bound to the code at
+mint: it can be exchanged for one redacted journal read (used by the MCP
+`fleet_audit_tail` tool) but can never open a write session.
+
+> The dashboard write bind stays on loopback + SSH-forward + the trusted
+> mesh interface; it is never exposed publicly. See
+> [docs/fleet-mode.md](docs/fleet-mode.md) for the full model.
+
+Phase 3 will add mDNS Bonjour auto-discovery and TLS. Full guide:
 [docs/fleet-mode.md](docs/fleet-mode.md).
 
 > ⚠️ Phase 1 is unauthenticated read-only; Phase 2 requires Bearer
