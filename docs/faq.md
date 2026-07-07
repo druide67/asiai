@@ -18,7 +18,7 @@ faq:
   - q: "How do I install asiai?"
     a: "Install via pip (pip install asiai) or Homebrew (brew tap druide67/tap && brew install asiai). Python 3.11+ required."
   - q: "Can AI agents use asiai?"
-    a: "Yes. asiai includes an MCP server with 11 tools and 3 resources. Install with pip install asiai[mcp] and configure as asiai mcp in your MCP client (Claude Code, Cursor, etc.)."
+    a: "Yes. asiai includes an MCP server with 14 tools and 3 resources. Install with pip install asiai[mcp] and configure as asiai mcp in your MCP client (Claude Code, Cursor, etc.)."
   - q: "How accurate are the power measurements?"
     a: "IOReport power readings have less than 1.5% delta compared to sudo powermetrics, validated across 20 samples on both LM Studio (MLX) and Ollama (llama.cpp)."
   - q: "Can I benchmark multiple models at once?"
@@ -95,10 +95,10 @@ Yes. Run `asiai bench --share` to anonymously submit results to the [community l
 
 **Can AI agents use asiai?**
 
-Yes. asiai includes an MCP server with 11 tools and 3 resources. Install with `pip install "asiai[mcp]"` and configure as `asiai mcp` in your MCP client (Claude Code, Cursor, Windsurf). See the [Agent Integration Guide](agent.md).
+Yes. asiai includes an MCP server with 14 tools and 3 resources. Install with `pip install "asiai[mcp]"` and configure as `asiai mcp` in your MCP client (Claude Code, Cursor, Windsurf). See the [Agent Integration Guide](agent.md).
 
 **What MCP tools are available?**
 
-11 tools: `check_inference_health`, `get_inference_snapshot`, `list_models`, `detect_engines`, `run_benchmark`, `get_recommendations`, `diagnose`, `get_metrics_history`, `get_benchmark_history`, `refresh_engines`, `compare_engines`.
+14 tools: `check_inference_health`, `get_inference_snapshot`, `list_models`, `detect_engines`, `run_benchmark`, `get_recommendations`, `diagnose`, `get_metrics_history`, `get_benchmark_history`, `refresh_engines`, `compare_engines`, `get_fleet_snapshot`, `get_fleet_health`, `fleet_audit_tail`.
 
 3 resources: `asiai://status`, `asiai://models`, `asiai://system`.

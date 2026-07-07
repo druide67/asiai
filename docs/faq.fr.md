@@ -18,7 +18,7 @@ faq:
   - q: "Comment installer asiai ?"
     a: "Installez via pip (pip install asiai) ou Homebrew (brew tap druide67/tap && brew install asiai). Python 3.11+ requis."
   - q: "Les agents IA peuvent-ils utiliser asiai ?"
-    a: "Oui. asiai inclut un serveur MCP avec 11 outils et 3 ressources. Installez avec pip install asiai[mcp] et configurez comme asiai mcp dans votre client MCP (Claude Code, Cursor, etc.)."
+    a: "Oui. asiai inclut un serveur MCP avec 14 outils et 3 ressources. Installez avec pip install asiai[mcp] et configurez comme asiai mcp dans votre client MCP (Claude Code, Cursor, etc.)."
   - q: "Quelle est la précision des mesures de puissance ?"
     a: "Les mesures de puissance IOReport ont moins de 1,5% d'écart par rapport à sudo powermetrics, validé sur 20 échantillons sur LM Studio (MLX) et Ollama (llama.cpp)."
   - q: "Puis-je benchmarker plusieurs modèles à la fois ?"
@@ -95,10 +95,10 @@ Oui. Exécutez `asiai bench --share` pour soumettre anonymement vos résultats a
 
 **Les agents IA peuvent-ils utiliser asiai ?**
 
-Oui. asiai inclut un serveur MCP avec 11 outils et 3 ressources. Installez avec `pip install "asiai[mcp]"` et configurez comme `asiai mcp` dans votre client MCP (Claude Code, Cursor, Windsurf). Voir le [Guide d'intégration agent](agent.md).
+Oui. asiai inclut un serveur MCP avec 14 outils et 3 ressources. Installez avec `pip install "asiai[mcp]"` et configurez comme `asiai mcp` dans votre client MCP (Claude Code, Cursor, Windsurf). Voir le [Guide d'intégration agent](agent.md).
 
 **Quels outils MCP sont disponibles ?**
 
-11 outils : `check_inference_health`, `get_inference_snapshot`, `list_models`, `detect_engines`, `run_benchmark`, `get_recommendations`, `diagnose`, `get_metrics_history`, `get_benchmark_history`, `refresh_engines`, `compare_engines`.
+14 outils : `check_inference_health`, `get_inference_snapshot`, `list_models`, `detect_engines`, `run_benchmark`, `get_recommendations`, `diagnose`, `get_metrics_history`, `get_benchmark_history`, `refresh_engines`, `compare_engines`, `get_fleet_snapshot`, `get_fleet_health`, `fleet_audit_tail`.
 
 3 ressources : `asiai://status`, `asiai://models`, `asiai://system`.
