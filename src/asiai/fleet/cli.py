@@ -247,7 +247,9 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     This is a direct read of ``~/.local/share/asiai/fleet-audit.jsonl`` —
     same trust boundary as the file's owner opening it in a pager, so no
     redaction is applied (unlike the one-shot MCP exchange, whose output
-    feeds an LLM context). Run it on the hub to see fleet-wide writes.
+    feeds an LLM context). Run it on the hub to see cockpit-proxied
+    writes; direct node-to-node pushes are journaled on the receiving
+    node only.
     """
     limit = max(1, min(args.limit, _AUDIT_LIMIT_CAP))
     since_cutoff: int | None = None
@@ -381,7 +383,7 @@ def add_fleet_subparser(subparsers: argparse._SubParsersAction) -> None:
 
     p_audit = fleet_sub.add_parser(
         "audit",
-        help="Show this host's fleet audit journal (run on the hub for fleet-wide writes)",
+        help="Show this host's fleet audit journal (the hub journals cockpit-proxied writes)",
     )
     p_audit.add_argument(
         "--limit",

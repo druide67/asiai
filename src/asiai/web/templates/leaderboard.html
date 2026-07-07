@@ -10,9 +10,11 @@
 
 <div class="filter-bar fade-in">
     <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Chip:</span>
-    <button class="filter-chip active" id="lb-chip-all" onclick="setChipFilter('', this)">All chips</button>
+    <button class="filter-chip active" id="lb-chip-all" data-chip="">All chips</button>
     {% if local_chip %}
-    <button class="filter-chip" id="lb-chip-local" onclick="setChipFilter({{ local_chip | tojson }}, this)">This machine ({{ local_chip }})</button>
+    {# data-chip + listener: chip names contain spaces/quotes, so they must
+       stay out of inline JS — autoescape handles the attribute safely. #}
+    <button class="filter-chip" id="lb-chip-local" data-chip="{{ local_chip }}">This machine ({{ local_chip }})</button>
     {% endif %}
     <span class="text-xs text-neutral-500 filter-label" style="margin-left: 1rem; margin-right: 0.5rem;">Model:</span>
     <input type="text" id="lb-model" class="range-input" placeholder="filter by model…" style="min-width: 200px;">
@@ -49,14 +51,16 @@
     var chipFilter = '';
     var modelTimer = null;
 
-    function setChipFilter(chip, btn) {
-        chipFilter = chip || '';
-        document.querySelectorAll('.filter-bar .filter-chip').forEach(function (c) {
-            c.classList.remove('active');
+    document.querySelectorAll('.filter-bar .filter-chip').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            chipFilter = btn.getAttribute('data-chip') || '';
+            document.querySelectorAll('.filter-bar .filter-chip').forEach(function (c) {
+                c.classList.remove('active');
+            });
+            btn.classList.add('active');
+            loadLeaderboard();
         });
-        btn.classList.add('active');
-        loadLeaderboard();
-    }
+    });
 
     document.getElementById('lb-model').addEventListener('input', function () {
         clearTimeout(modelTimer);

@@ -31,8 +31,9 @@ _ENTRIES = [
 def client(tmp_path):
     state = AppState(engines=[], db_path=str(tmp_path / "bench.db"))
     app = create_app(state)
-    # Module-level cache must not leak between tests.
+    # Module-level cache and rate-limit state must not leak between tests.
     lb_routes._cache.clear()
+    lb_routes._rate_limiter = lb_routes.TokenRateLimiter(limit=60, window_seconds=60.0)
     return TestClient(app)
 
 
@@ -75,6 +76,15 @@ class TestLeaderboardApi:
         assert resp.status_code == 200
         assert resp.json() == {"entries": [], "count": 0}
 
+    def test_rate_limited_returns_429(self, client):
+        lb_routes._rate_limiter = lb_routes.TokenRateLimiter(limit=2, window_seconds=60.0)
+        with patch.object(lb_routes, "fetch_leaderboard", return_value=_ENTRIES):
+            assert client.get("/api/v1/leaderboard").status_code == 200
+            assert client.get("/api/v1/leaderboard").status_code == 200
+            resp = client.get("/api/v1/leaderboard")
+        assert resp.status_code == 429
+        assert "Retry-After" in resp.headers
+
 
 class TestLeaderboardPage:
     def test_page_renders_with_nav(self, client):
@@ -84,6 +94,25 @@ class TestLeaderboardPage:
         assert resp.status_code == 200
         assert "Community Leaderboard" in resp.text
         assert "/api/v1/leaderboard" in resp.text
+
+    def test_local_chip_button_renders_valid_attribute(self, client):
+        # Regression: chip names contain spaces (and could contain quotes);
+        # an inline onclick with tojson produced a broken attribute that
+        # killed the "This machine" filter on every real machine.
+        with patch(
+            "asiai.collectors.system.collect_hw_chip",
+            return_value='Apple "M4" Pro',
+        ):
+            resp = client.get("/leaderboard")
+        assert resp.status_code == 200
+        import re
+
+        m = re.search(r"<button[^>]*id=\"lb-chip-local\"[^>]*>", resp.text)
+        assert m, "local chip button missing"
+        button = m.group(0)
+        # The chip lands in data-chip, HTML-escaped — never in inline JS.
+        assert "onclick" not in button
+        assert 'data-chip="Apple &#34;M4&#34; Pro"' in button
 
     def test_nav_link_present_on_other_pages(self, client):
         resp = client.get("/versions")

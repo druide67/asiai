@@ -23,6 +23,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from asiai.auth.ratelimit import TokenRateLimiter
 from asiai.community import fetch_leaderboard
 
 router = APIRouter(tags=["leaderboard"])
@@ -35,6 +36,15 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 _CACHE_TTL = 300.0
 _cache: dict[tuple[str, str], tuple[float, list]] = {}
 _cache_lock = threading.Lock()
+
+# Same posture as the fleet read proxy: every cache miss is an outbound
+# call on the process-wide thread pool, and empty results are (rightly)
+# not cached — so an unauthenticated client cycling distinct filters
+# while the public API is down would otherwise turn every request into
+# a 10s outbound fetch and starve snapshot/doctor/history reads.
+_MAX_CONCURRENT_FETCHES = 4
+_fetch_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
+_rate_limiter = TokenRateLimiter(limit=60, window_seconds=60.0)
 
 
 def _cached_leaderboard(chip: str, model: str) -> list[dict]:
@@ -57,13 +67,36 @@ def _cached_leaderboard(chip: str, model: str) -> list[dict]:
     return entries
 
 
+def _client_ip(request: Request) -> str:
+    """Peer IP for rate limiting (socket peer, no forwarded headers)."""
+    return request.client.host if request.client else "unknown"
+
+
 @router.get("/api/v1/leaderboard")
 async def api_leaderboard(
+    request: Request,
     chip: str = Query(default="", max_length=64),
     model: str = Query(default="", max_length=128),
 ) -> JSONResponse:
     """Community leaderboard entries, optionally filtered by chip/model."""
-    entries = await asyncio.to_thread(_cached_leaderboard, chip.strip(), model.strip())
+    allowed, _remaining, retry_after = _rate_limiter.check(_client_ip(request))
+    if not allowed:
+        return JSONResponse(
+            {"error": "rate_limited"},
+            status_code=429,
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+    if _fetch_semaphore.locked():
+        return JSONResponse(
+            {
+                "error": "busy",
+                "detail": f"{_MAX_CONCURRENT_FETCHES} leaderboard fetches already in flight",
+            },
+            status_code=503,
+            headers={"Retry-After": "2"},
+        )
+    async with _fetch_semaphore:
+        entries = await asyncio.to_thread(_cached_leaderboard, chip.strip(), model.strip())
     return JSONResponse({"entries": entries, "count": len(entries)})
 
 
