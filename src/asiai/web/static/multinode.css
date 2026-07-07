@@ -293,7 +293,9 @@
     margin-left: auto;
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.55rem;
     white-space: nowrap;
     min-width: 0;
 }
@@ -325,6 +327,13 @@
     font-size: 0.7rem;
     font-weight: 700;
     color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.mn-rate {
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    color: var(--accent-dim);
     font-variant-numeric: tabular-nums;
 }
 

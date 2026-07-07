@@ -9,6 +9,7 @@ from asiai.collectors.inference import (
     count_tcp_connections,
     parse_prometheus_text,
     scrape_prometheus_metrics,
+    scrape_slots_kv,
 )
 
 
@@ -130,6 +131,85 @@ llamacpp:kv_cache_usage_ratio 0.17
         result = parse_prometheus_text(text)
         # llamacpp_requests_processing maps to requests_processing first
         assert result["requests_processing"] == 3
+
+
+def _slots_response(payload):
+    """Build a mocked urlopen context manager returning ``payload`` as JSON."""
+    import json as _json
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = _json.dumps(payload).encode()
+    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    return mock_resp
+
+
+class TestScrapeSlotsKv:
+    """Tests for scrape_slots_kv() — the /slots KV occupancy source."""
+
+    @patch("urllib.request.urlopen")
+    def test_occupancy_summed_over_all_slots(self, mock_urlopen):
+        """Real-world shape (llama-server b9580): idle slots keep their hot
+        cache, so occupancy sums over ALL slots, not just processing ones."""
+        mock_urlopen.return_value = _slots_response(
+            [
+                {"id": 0, "n_ctx": 40960, "is_processing": True, "n_prompt_tokens": 1219},
+                {"id": 1, "n_ctx": 40960, "is_processing": False, "n_prompt_tokens": 2048},
+            ]
+        )
+        result = scrape_slots_kv("http://localhost:8092")
+        assert result["kv_cache_tokens"] == 3267
+        assert result["kv_cache_usage_ratio"] == pytest.approx(3267 / 81920)
+
+    @patch("urllib.request.urlopen")
+    def test_numbers_only_no_prompt_text_leaks(self, mock_urlopen):
+        """/slots carries prompt fragments — nothing textual may leave."""
+        mock_urlopen.return_value = _slots_response(
+            [
+                {
+                    "id": 0,
+                    "n_ctx": 4096,
+                    "is_processing": True,
+                    "n_prompt_tokens": 100,
+                    "prompt": "TOP-SECRET user prompt content",
+                    "params": {"grammar": "sensitive grammar text"},
+                }
+            ]
+        )
+        result = scrape_slots_kv("http://localhost:8092")
+        assert "TOP-SECRET" not in repr(result)
+        assert all(isinstance(v, (int, float)) for v in result.values())
+
+    @patch("urllib.request.urlopen")
+    def test_ratio_capped_at_one(self, mock_urlopen):
+        """Context-shift can hold more than n_ctx transiently — cap the bar."""
+        mock_urlopen.return_value = _slots_response(
+            [{"id": 0, "n_ctx": 1000, "n_prompt_tokens": 1500}]
+        )
+        result = scrape_slots_kv("http://localhost:8092")
+        assert result["kv_cache_usage_ratio"] == 1.0
+
+    @patch("urllib.request.urlopen")
+    def test_unreachable_returns_empty(self, mock_urlopen):
+        from urllib.error import URLError
+
+        mock_urlopen.side_effect = URLError("Connection refused")
+        assert scrape_slots_kv("http://localhost:8092") == {}
+
+    @patch("urllib.request.urlopen")
+    def test_non_list_body_returns_empty(self, mock_urlopen):
+        """Engines without the endpoint often answer a JSON error object."""
+        mock_urlopen.return_value = _slots_response({"error": "not supported"})
+        assert scrape_slots_kv("http://localhost:8092") == {}
+
+    @patch("urllib.request.urlopen")
+    def test_zero_capacity_returns_empty(self, mock_urlopen):
+        mock_urlopen.return_value = _slots_response([])
+        assert scrape_slots_kv("http://localhost:8092") == {}
+
+    def test_bad_base_url_returns_empty(self):
+        assert scrape_slots_kv("") == {}
+        assert scrape_slots_kv("not-a-url") == {}
 
 
 class TestScrapePrometheusMetrics:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -191,3 +191,47 @@ class TestCollectEnginesStatus:
         statuses = collect_engines_status([engine])
         assert len(statuses) == 1
         assert statuses[0]["reachable"] is False
+
+    @staticmethod
+    def _reachable_engine(scraped: dict) -> MagicMock:
+        engine = MagicMock()
+        engine.name = "llamacpp"
+        engine.base_url = "http://localhost:8092"
+        engine.is_reachable.return_value = True
+        engine.version.return_value = "b9580"
+        engine.list_running.return_value = []
+        engine.scrape_metrics.return_value = scraped
+        return engine
+
+    def test_kv_falls_back_to_slots_when_metrics_lack_it(self):
+        """Modern llama.cpp has no KV gauge in /metrics — /slots fills in."""
+        from asiai.collectors.snapshot import collect_engines_status
+
+        engine = self._reachable_engine({"tokens_predicted_total": 100})
+        with patch("asiai.collectors.snapshot.scrape_slots_kv") as mock_slots:
+            mock_slots.return_value = {
+                "kv_cache_usage_ratio": 0.25,
+                "kv_cache_tokens": 10240,
+            }
+            statuses = collect_engines_status([engine])
+        assert statuses[0]["kv_cache_usage_ratio"] == 0.25
+        assert statuses[0]["kv_cache_tokens"] == 10240
+
+    def test_kv_from_metrics_wins_over_slots(self):
+        """Legacy builds still exposing the gauge skip the /slots round-trip."""
+        from asiai.collectors.snapshot import collect_engines_status
+
+        engine = self._reachable_engine({"kv_cache_usage_ratio": 0.5})
+        with patch("asiai.collectors.snapshot.scrape_slots_kv") as mock_slots:
+            statuses = collect_engines_status([engine])
+        mock_slots.assert_not_called()
+        assert statuses[0]["kv_cache_usage_ratio"] == 0.5
+
+    def test_kv_stays_sentinel_when_slots_absent(self):
+        from asiai.collectors.snapshot import collect_engines_status
+
+        engine = self._reachable_engine({})
+        with patch("asiai.collectors.snapshot.scrape_slots_kv") as mock_slots:
+            mock_slots.return_value = {}
+            statuses = collect_engines_status([engine])
+        assert statuses[0]["kv_cache_usage_ratio"] == -1.0
