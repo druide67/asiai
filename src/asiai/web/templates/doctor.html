@@ -7,18 +7,129 @@
     <p>Installation and environment diagnostics</p>
 </div>
 
-<div style="margin-bottom: 1.5rem;">
-    <button class="btn btn-primary"
-            hx-post="/doctor/refresh"
-            hx-target="#doctor-checks"
-            hx-swap="outerHTML"
-            hx-indicator="#refresh-spinner">
-        Refresh
-    </button>
-    <span id="refresh-spinner" class="spinner htmx-indicator" style="margin-left: 0.5rem;"></span>
+<div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+    <span class="text-xs text-neutral-500" id="doc-node-label" hidden>Node:</span>
+    <select id="doc-node" class="range-input" hidden onchange="setDoctorNode(this.value)" title="Diagnostics source node"></select>
+    <span id="doctor-local-controls">
+        <button class="btn btn-primary"
+                hx-post="/doctor/refresh"
+                hx-target="#doctor-checks"
+                hx-swap="outerHTML"
+                hx-indicator="#refresh-spinner">
+            Refresh
+        </button>
+        <span id="refresh-spinner" class="spinner htmx-indicator" style="margin-left: 0.5rem;"></span>
+    </span>
+    <button class="btn btn-primary" id="doctor-remote-refresh" hidden onclick="loadRemoteDoctor()">Refresh</button>
 </div>
 
-<div class="fade-in">
+<div class="fade-in" id="doctor-local">
     {% include "partials/doctor_checks.html" %}
 </div>
+<div id="doctor-remote" hidden></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Per-node diagnostics via the fleet read proxy. '' = this node
+    // (server-rendered htmx flow above); a nickname swaps in a client-
+    // rendered view of GET /api/v1/fleet/<nick>/doctor. All remote text
+    // lands via textContent — a node's check messages are data, not HTML.
+    var doctorNode = '';
+
+    function el(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+    }
+
+    function setDoctorNode(nick) {
+        doctorNode = nick || '';
+        var remote = !!doctorNode;
+        document.getElementById('doctor-local').hidden = remote;
+        document.getElementById('doctor-local-controls').hidden = remote;
+        document.getElementById('doctor-remote').hidden = !remote;
+        document.getElementById('doctor-remote-refresh').hidden = !remote;
+        if (remote) loadRemoteDoctor();
+    }
+
+    function renderRemoteDoctor(checks) {
+        var host = document.getElementById('doctor-remote');
+        host.textContent = '';
+        var wrap = el('div', 'space-y-6');
+        ['system', 'engine', 'database'].forEach(function (category) {
+            var cat = checks.filter(function (c) { return c && c.category === category; });
+            if (!cat.length) return;
+            var section = el('div');
+            var title = el('h3', 'card-title', category.charAt(0).toUpperCase() + category.slice(1));
+            title.style.marginBottom = '0.75rem';
+            section.appendChild(title);
+            cat.forEach(function (check) {
+                var card = el('div', 'check-card');
+                var icon = el('div', 'check-icon ' + (check.status || 'warn'));
+                icon.textContent = check.status === 'ok' ? '✓' : check.status === 'warn' ? '!' : '✗';
+                card.appendChild(icon);
+                var body = el('div', 'check-body');
+                body.appendChild(el('h4', '', check.name || ''));
+                body.appendChild(el('p', '', check.message || ''));
+                if (check.fix) {
+                    var fix = el('code', 'check-fix', check.fix);
+                    fix.title = 'Click to copy';
+                    fix.onclick = function () { navigator.clipboard.writeText(fix.textContent); };
+                    body.appendChild(fix);
+                }
+                card.appendChild(body);
+                section.appendChild(card);
+            });
+            wrap.appendChild(section);
+        });
+        host.appendChild(wrap);
+    }
+
+    function loadRemoteDoctor() {
+        var host = document.getElementById('doctor-remote');
+        host.textContent = '';
+        host.appendChild(el('p', 'text-xs text-neutral-500', 'Running checks on ' + doctorNode + '…'));
+        fetch('/api/v1/fleet/' + encodeURIComponent(doctorNode) + '/doctor')
+            .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, body: b }; }); })
+            .then(function (r) {
+                if (!r.ok || !r.body || !Array.isArray(r.body.checks)) {
+                    host.textContent = '';
+                    var err = (r.body && r.body.error) || 'node unreachable';
+                    host.appendChild(el('p', 'text-xs', 'Could not read diagnostics: ' + err));
+                    return;
+                }
+                renderRemoteDoctor(r.body.checks);
+            })
+            .catch(function () {
+                host.textContent = '';
+                host.appendChild(el('p', 'text-xs', 'Could not read diagnostics: hub unreachable'));
+            });
+    }
+
+    (function initDoctorNodePicker() {
+        fetch('/api/v1/fleet/nodes')
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (data) {
+                var nodes = data && Array.isArray(data.nodes) ? data.nodes : [];
+                if (!nodes.length) return;
+                var sel = document.getElementById('doc-node');
+                var optLocal = document.createElement('option');
+                optLocal.value = '';
+                optLocal.textContent = 'this node';
+                sel.appendChild(optLocal);
+                nodes.forEach(function (n) {
+                    if (!n || !n.nickname) return;
+                    var opt = document.createElement('option');
+                    opt.value = n.nickname;
+                    opt.textContent = n.nickname;
+                    sel.appendChild(opt);
+                });
+                sel.hidden = false;
+                document.getElementById('doc-node-label').hidden = false;
+            })
+            .catch(function () { /* no fleet — picker stays hidden */ });
+    })();
+</script>
 {% endblock %}

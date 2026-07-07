@@ -404,6 +404,112 @@ async def api_fleet_health_summary(request: Request) -> JSONResponse:
     )
 
 
+# ---------------------------------------------------------------------------
+# Per-node READ proxies (History / Doctor across the fleet)
+# ---------------------------------------------------------------------------
+#
+# Each proxy targets ONE hardcoded read endpoint on the node and forwards
+# only a whitelisted, digit-validated query subset — deliberately not a
+# generic path-through proxy, so the hub can never be steered into
+# arbitrary-URL fetches (SSRF) or into a node's write surface. Same
+# LAN read-only posture as the aggregate snapshot: the proxied data is
+# what the node already serves unauthenticated on its own dashboard.
+
+# endpoint key -> (node path, allowed query params, timeout seconds).
+# Doctor gets a longer budget: it runs live probes, not a DB read.
+_NODE_READ_ENDPOINTS: dict[str, tuple[str, frozenset[str], float]] = {
+    "history": ("/api/history", frozenset({"hours", "since", "until"}), 15.0),
+    "benchmarks": ("/api/benchmarks", frozenset({"hours", "since", "until"}), 15.0),
+    "engine-history": ("/api/engine-history", frozenset({"hours"}), 15.0),
+    "benchmark-process": ("/api/benchmark-process", frozenset({"hours"}), 15.0),
+    "doctor": ("/api/v1/doctor", frozenset(), 45.0),
+}
+
+_NODE_READ_MAX_BODY = 8 * 1024 * 1024
+
+# Bound concurrent node-read proxies. Each holds a thread of the
+# process-wide ``asyncio.to_thread`` pool — SHARED with the aggregate
+# snapshot and the operator write-forward — for up to its timeout (45s
+# for doctor). Without a cap, a burst of proxy reads (real or to slow /
+# unreachable nicknames) starves the whole dashboard. Same reasoning as
+# ``_forward_semaphore`` on the write path; a separate semaphore so reads
+# and writes can't exhaust each other's budget.
+_MAX_CONCURRENT_NODE_READS = 6
+_node_read_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_NODE_READS)
+
+# Per-IP rate limit on the read proxy (unauthenticated LAN/mesh surface).
+_node_read_rate_limiter = TokenRateLimiter(limit=60, window_seconds=60.0)
+
+
+def _proxy_node_read(nickname: str, endpoint: str, query: dict[str, str]) -> tuple[int, Any]:
+    """Fetch one whitelisted read endpoint from a fleet node.
+
+    Returns ``(http_status, payload)``. Never raises. Query values must
+    be plain digits (every whitelisted param is a unix ts or an hour
+    count) — anything else is dropped, fail-closed.
+    """
+    spec = _NODE_READ_ENDPOINTS.get(endpoint)
+    if spec is None:
+        return (404, {"error": "unknown_endpoint"})
+    path, allowed, timeout = spec
+    if not _NICKNAME_RE.match(nickname or ""):
+        return (400, {"error": "invalid_nickname"})
+    node = fleet_config.find_node(nickname)
+    if node is None:
+        return (404, {"error": "unknown_node"})
+    base = str(node.get("asiai_url") or "").rstrip("/")
+    parsed = urllib.parse.urlparse(base)
+    if parsed.scheme not in ("http", "https"):
+        return (502, {"error": "unsupported_node_url"})
+    params = {k: v for k, v in query.items() if k in allowed and str(v).isdigit()}
+    url = base + path
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        # nosec B310 — scheme checked above, URL comes from the operator's
+        # own fleet config, path is hardcoded per endpoint.
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            raw = resp.read(_NODE_READ_MAX_BODY)
+        return (200, _json.loads(raw.decode("utf-8")))
+    except urllib.error.HTTPError as e:
+        return (502, {"error": "node_http_error", "node_status": e.code})
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        logger.debug("node read proxy %s/%s failed: %s", nickname, endpoint, e)
+        return (502, {"error": "node_unreachable"})
+
+
+@router.get("/api/v1/fleet/{nickname}/{endpoint}")
+async def api_fleet_node_read(nickname: str, endpoint: str, request: Request) -> JSONResponse:
+    """Read-only per-node proxy for the endpoints in ``_NODE_READ_ENDPOINTS``.
+
+    404 for anything not whitelisted — this route deliberately shadows
+    no write path (commands are POST on a different route). Rate-limited
+    per IP and concurrency-bounded so a burst of slow proxied reads can't
+    starve the shared thread pool (503 busy instead).
+    """
+    allowed, _remaining, retry_after = _node_read_rate_limiter.check(_client_ip(request))
+    if not allowed:
+        return JSONResponse(
+            {"error": "rate_limited"},
+            status_code=429,
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+    if _node_read_semaphore.locked():
+        return JSONResponse(
+            {
+                "error": "busy",
+                "detail": f"{_MAX_CONCURRENT_NODE_READS} node reads already in flight",
+            },
+            status_code=503,
+            headers={"Retry-After": "2"},
+        )
+    query = dict(request.query_params.items())
+    async with _node_read_semaphore:
+        status, payload = await asyncio.to_thread(_proxy_node_read, nickname, endpoint, query)
+    return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
+
+
 @router.post("/api/v1/fleet/{nickname}/command")
 async def api_fleet_command(nickname: str, request: Request) -> JSONResponse:
     """Execute a whitelisted write command on the local node.
