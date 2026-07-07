@@ -47,6 +47,62 @@ def count_tcp_connections(port: int) -> int:
         return 0
 
 
+def scrape_slots_kv(base_url: str) -> dict:
+    """KV-cache occupancy via ``GET /slots`` (llama.cpp).
+
+    Modern llama.cpp removed the KV gauges from ``/metrics`` (KV-cache
+    refactor); ``/slots`` is the only live source. Each slot reports
+    ``n_ctx`` (its capacity) and ``n_prompt_tokens`` — the tokens held in
+    the slot's KV (prompt + decoded, validated on b9430 by the bench
+    KVCacheSampler). Idle slots keep their hot cache for prefix reuse, so
+    summing over ALL slots reads the real occupancy, not just in-flight work.
+
+    Privacy guard: the ``/slots`` body can carry prompt fragments. Only
+    numbers leave this function — the response text is never stored,
+    logged, or returned.
+
+    Best-effort: any failure (endpoint absent — MLX/ollama —, disabled
+    build, network, malformed JSON) returns ``{}``.
+
+    Returns:
+        ``{kv_cache_usage_ratio: float 0..1, kv_cache_tokens: int}`` or ``{}``.
+    """
+    import json
+    from urllib.error import URLError
+    from urllib.request import urlopen
+
+    if not base_url or not base_url.startswith(("http://", "https://")):
+        return {}
+    url = base_url.rstrip("/") + "/slots"
+    try:
+        with urlopen(url, timeout=2) as resp:
+            # Large cap: a 256K-context slot's JSON (prompt text included)
+            # runs to megabytes; truncated JSON would parse-fail to {}.
+            slots = json.loads(resp.read(8 * 1024 * 1024).decode("utf-8", errors="replace"))
+    except (URLError, OSError, ValueError) as e:
+        logger.debug("Failed to scrape %s: %s", url, e)
+        return {}
+    if not isinstance(slots, list):
+        return {}
+    used = 0
+    capacity = 0
+    for s in slots:
+        if not isinstance(s, dict):
+            continue
+        n_ctx = s.get("n_ctx")
+        if isinstance(n_ctx, int) and n_ctx > 0:
+            capacity += n_ctx
+        n = s.get("n_prompt_tokens")
+        if isinstance(n, int) and n > 0:
+            used += n
+    if capacity <= 0:
+        return {}
+    return {
+        "kv_cache_usage_ratio": min(1.0, used / capacity),
+        "kv_cache_tokens": used,
+    }
+
+
 def scrape_prometheus_metrics(url: str) -> dict:
     """Scrape a Prometheus /metrics endpoint and extract key gauges.
 

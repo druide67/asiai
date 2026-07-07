@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 
 from asiai.collectors.gpu import collect_gpu
-from asiai.collectors.inference import count_tcp_connections
+from asiai.collectors.inference import count_tcp_connections, scrape_slots_kv
 from asiai.collectors.system import (
     collect_cpu_cores,
     collect_cpu_load,
@@ -169,6 +169,16 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                 entry["kv_cache_compressed_bytes"] = scraped.get("kv_cache_compressed_bytes", 0)
                 entry["kv_cache_original_bytes"] = scraped.get("kv_cache_original_bytes", 0)
                 entry["kv_cache_tokens"] = scraped.get("kv_cache_tokens", 0)
+                # Modern llama.cpp removed the KV gauges from /metrics;
+                # /slots is the live occupancy source. Fill the same fields
+                # so the whole pipeline (DB, API, UI kv bar) lights up.
+                ratio = entry["kv_cache_usage_ratio"]
+                if isinstance(ratio, (int, float)) and ratio < 0:
+                    slots_kv = scrape_slots_kv(engine.base_url)
+                    if slots_kv:
+                        entry["kv_cache_usage_ratio"] = slots_kv["kv_cache_usage_ratio"]
+                        if not entry["kv_cache_tokens"]:
+                            entry["kv_cache_tokens"] = slots_kv["kv_cache_tokens"]
         except Exception as e:
             logger.warning("Engine %s status error: %s", engine.name, e)
         statuses.append(entry)
