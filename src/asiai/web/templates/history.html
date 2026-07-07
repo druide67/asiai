@@ -9,6 +9,8 @@
 
 <!-- Filters -->
 <div class="filter-bar fade-in">
+    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;" id="hist-node-label" hidden>Node:</span>
+    <select id="hist-node" class="range-input" hidden onchange="setHistoryNode(this.value)" title="Data source node"></select>
     <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Time range:</span>
     <button class="filter-chip" data-hours="1" onclick="setTimeRange(1, this)">1h</button>
     <button class="filter-chip" data-hours="24" onclick="setTimeRange(24, this)">24h</button>
@@ -180,11 +182,54 @@
         return 'hours=' + currentHours;
     }
 
+    // ── per-node data source (fleet read proxy) ──────────────────
+    // '' = this node (direct local API); a nickname routes every fetch
+    // through the hub's read proxy. The picker only appears when a
+    // fleet is configured (2+ known nodes or 1 remote node).
+    var historyNode = '';
+
+    function apiUrl(endpoint, qs) {
+        var base = historyNode
+            ? '/api/v1/fleet/' + encodeURIComponent(historyNode) + '/'
+            : '/api/';
+        return base + endpoint + (qs ? '?' + qs : '');
+    }
+
+    function setHistoryNode(nick) {
+        historyNode = nick || '';
+        loadData();
+    }
+
+    function initNodePicker() {
+        fetch('/api/v1/fleet/nodes')
+            .then(function(res) { return res.ok ? res.json() : null; })
+            .then(function(data) {
+                var nodes = data && Array.isArray(data.nodes) ? data.nodes : [];
+                if (!nodes.length) return;
+                var sel = document.getElementById('hist-node');
+                var optLocal = document.createElement('option');
+                optLocal.value = '';
+                optLocal.textContent = 'this node';
+                sel.appendChild(optLocal);
+                nodes.forEach(function(n) {
+                    if (!n || !n.nickname) return;
+                    var opt = document.createElement('option');
+                    opt.value = n.nickname;
+                    opt.textContent = n.nickname;
+                    sel.appendChild(opt);
+                });
+                sel.hidden = false;
+                document.getElementById('hist-node-label').hidden = false;
+            })
+            .catch(function() { /* no fleet — picker stays hidden */ });
+    }
+
     function loadData() {
         var qs = buildQuery();
-        fetch('/api/benchmarks?' + qs)
+        fetch(apiUrl('benchmarks', qs))
             .then(function(res) { return res.json(); })
             .then(function(rows) {
+                if (!Array.isArray(rows)) rows = [];
                 renderCharts(rows);
                 renderTable(rows);
             })
@@ -192,27 +237,30 @@
                 console.error('Failed to load benchmarks:', err);
             });
 
-        fetch('/api/history?' + qs)
+        fetch(apiUrl('history', qs))
             .then(function(res) { return res.json(); })
             .then(function(rows) {
+                if (!Array.isArray(rows)) rows = [];
                 renderSystemCharts(rows);
             })
             .catch(function(err) {
                 console.error('Failed to load system history:', err);
             });
 
-        fetch('/api/engine-history?' + qs)
+        fetch(apiUrl('engine-history', qs))
             .then(function(res) { return res.json(); })
             .then(function(rows) {
+                if (!Array.isArray(rows)) rows = [];
                 renderEngineActivity(rows);
             })
             .catch(function(err) {
                 console.error('Failed to load engine history:', err);
             });
 
-        fetch('/api/benchmark-process?' + qs)
+        fetch(apiUrl('benchmark-process', qs))
             .then(function(res) { return res.json(); })
             .then(function(rows) {
+                if (!Array.isArray(rows)) rows = [];
                 renderProcessMetrics(rows);
             })
             .catch(function(err) {
@@ -582,6 +630,7 @@
     window.addEventListener('beforeunload', cleanupHistory);
 
     // Initial load
+    initNodePicker();
     loadData();
 </script>
 {% endblock %}

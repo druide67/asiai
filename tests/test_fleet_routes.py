@@ -305,3 +305,114 @@ class TestJournalPage:
         assert resp.status_code == 200
         assert 'data-fl-page="journal"' in resp.text
         assert "fleet.js" in resp.text
+
+
+class TestNodeReadProxy:
+    """GET /api/v1/fleet/{nickname}/{endpoint} — whitelisted read proxy."""
+
+    def _add_node(self, nickname="m4", url="http://192.0.2.10:8899"):
+        fleet_config.upsert_node(nickname, url)
+
+    def test_unknown_endpoint_404(self, client, tmp_fleet):
+        self._add_node()
+        resp = client.get("/api/v1/fleet/m4/command")
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "unknown_endpoint"
+
+    def test_unknown_node_404(self, client, tmp_fleet):
+        resp = client.get("/api/v1/fleet/ghost/history")
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "unknown_node"
+
+    def test_invalid_nickname_400(self, client, tmp_fleet):
+        resp = client.get("/api/v1/fleet/%0abad/history")
+        assert resp.status_code == 400
+
+    @pytest.mark.parametrize(
+        "endpoint,node_path",
+        [
+            ("history", "/api/history"),
+            ("benchmarks", "/api/benchmarks"),
+            ("engine-history", "/api/engine-history"),
+            ("benchmark-process", "/api/benchmark-process"),
+            ("doctor", "/api/v1/doctor"),
+        ],
+    )
+    def test_proxies_whitelisted_endpoints(self, client, tmp_fleet, endpoint, node_path):
+        from unittest.mock import MagicMock, patch
+
+        self._add_node()
+        body = b'{"ok": true}'
+        resp_mock = MagicMock()
+        resp_mock.read.return_value = body
+        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
+        resp_mock.__exit__ = MagicMock(return_value=False)
+        with patch("urllib.request.urlopen", return_value=resp_mock) as mock_open:
+            resp = client.get(f"/api/v1/fleet/m4/{endpoint}?hours=24")
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        req = mock_open.call_args[0][0]
+        assert req.full_url.startswith("http://192.0.2.10:8899" + node_path)
+
+    def test_query_whitelist_drops_junk(self, client, tmp_fleet):
+        from unittest.mock import MagicMock, patch
+
+        self._add_node()
+        resp_mock = MagicMock()
+        resp_mock.read.return_value = b"[]"
+        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
+        resp_mock.__exit__ = MagicMock(return_value=False)
+        with patch("urllib.request.urlopen", return_value=resp_mock) as mock_open:
+            client.get(
+                "/api/v1/fleet/m4/history?hours=24&since=abc&evil=1%3B rm&until=170000&model=x"
+            )
+        url = mock_open.call_args[0][0].full_url
+        assert "hours=24" in url
+        assert "until=170000" in url
+        assert "since" not in url  # non-digit value dropped
+        assert "evil" not in url  # not whitelisted
+        assert "model" not in url  # not whitelisted for history
+
+    def test_node_unreachable_maps_502(self, client, tmp_fleet):
+        from unittest.mock import patch
+        from urllib.error import URLError
+
+        self._add_node()
+        with patch("urllib.request.urlopen", side_effect=URLError("refused")):
+            resp = client.get("/api/v1/fleet/m4/history")
+        assert resp.status_code == 502
+        assert resp.json()["error"] == "node_unreachable"
+
+    def test_node_http_error_maps_502(self, client, tmp_fleet):
+        from unittest.mock import patch
+        from urllib.error import HTTPError
+
+        self._add_node()
+        err = HTTPError(url="x", code=500, msg="boom", hdrs=None, fp=None)
+        with patch("urllib.request.urlopen", side_effect=err):
+            resp = client.get("/api/v1/fleet/m4/doctor")
+        assert resp.status_code == 502
+        body = resp.json()
+        assert body["error"] == "node_http_error"
+        assert body["node_status"] == 500
+
+
+class TestDoctorApi:
+    def test_doctor_json(self, client):
+        from unittest.mock import patch
+
+        checks = [
+            {
+                "category": "system",
+                "name": "Apple Silicon",
+                "status": "ok",
+                "message": "arm64",
+                "fix": None,
+            }
+        ]
+        with patch("asiai.web.routes.doctor._run_checks", return_value=checks):
+            resp = client.get("/api/v1/doctor")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["checks"] == checks
+        assert isinstance(body["ts"], int)

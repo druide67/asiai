@@ -3,11 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
+
+
+@router.get("/api/v1/doctor")
+async def api_doctor(request: Request) -> JSONResponse:
+    """Doctor checks as JSON — the machine-readable twin of ``/doctor``.
+
+    Exists so the fleet hub can proxy another node's diagnostics
+    (per-node Doctor view) without scraping HTML. Same LAN read-only
+    posture as ``/api/v1/snapshot``.
+    """
+    state = request.app.state.app_state
+    checks = await asyncio.to_thread(_run_checks, state)
+    return JSONResponse({"ts": int(time.time()), "checks": checks})
 
 
 @router.get("/doctor", response_class=HTMLResponse)
