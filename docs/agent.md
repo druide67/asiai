@@ -1,5 +1,5 @@
 ---
-description: Give your AI agents real-time visibility into LLM inference. MCP server with 11 tools for autonomous engine monitoring.
+description: Give your AI agents real-time visibility into LLM inference. MCP server with 14 tools for autonomous engine and fleet monitoring.
 type: faq
 faq:
   - q: "Does asiai require root/sudo?"
@@ -184,6 +184,9 @@ All tools return JSON. Read-only tools respond in < 2 seconds. `run_benchmark` i
 | `get_benchmark_history` | Historical benchmark results | `hours` (1–720, default 24), `model` (optional), `engine` (optional) |
 | `compare_engines` | Ranked engine comparison with verdict for a given model; supports multi-model comparison from history | `model` (required) |
 | `refresh_engines` | Re-detect engines without restarting the MCP server | — |
+| `get_fleet_snapshot` | Poll every configured fleet node: reachability, latency, full system + engine snapshots. Uses the same node registry and Bearer tokens as `asiai fleet status` — no web dashboard required | — |
+| `get_fleet_health` | Reduced fleet alert feed: unhealthy/degraded engine count + unreachable node count (the dashboard alert-dot reduction) | — |
+| `fleet_audit_tail` | Read the fleet audit journal (redacted, metadata only) with a single-use operator code minted via `asiai auth login --scope audit:read`. One code buys exactly one read; see [Fleet audit access for agents](fleet-mode.md#audit-access-for-agents-mcp) | `code` (required), `lines` (1–200, default 50), `since_hours` (≤ 24, default 6) |
 
 ### MCP Resources
 
@@ -201,6 +204,7 @@ Static data endpoints, available without calling a tool:
 - **Rate limiting**: Benchmarks are limited to 1 per 60 seconds
 - **Input clamping**: `hours` clamped to 1–168, `runs` clamped to 1–10
 - **Local by default**: stdio transport has no network exposure; SSE binds to `127.0.0.1`
+- **Audit reads are gated**: `fleet_audit_tail` requires a single-use `audit:read` operator code and returns metadata only (no command payloads, no secrets) — the full design is in [ADR 0001](adr/0001-audit-journal-read-for-local-agents.md)
 
 ### MCP Limitations
 

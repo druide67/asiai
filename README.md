@@ -425,7 +425,7 @@ asiai setup
 
 ### `asiai mcp`
 
-Start the MCP server for AI agent integration. 11 tools, 3 resources.
+Start the MCP server for AI agent integration. 14 tools, 3 resources.
 
 ```bash
 asiai mcp                          # stdio (Claude Code, Cursor)

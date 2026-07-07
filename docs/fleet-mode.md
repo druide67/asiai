@@ -166,6 +166,64 @@ Every write attempt (denied or executed) appends one JSON object to
 `duration_ms`, `exit_code`, `error`. Useful both for forensics and
 for confirming that a command actually ran on the right host.
 
+Three ways to read it, by audience:
+
+- **Humans** — the dashboard's Journal page and the cockpit drawer
+  (operator session required).
+- **Machines on the hub** — `GET /api/v1/fleet/audit` (raw events,
+  full operator session required).
+- **AI agents** — the redacted one-shot exchange below.
+
+### Operator login scopes
+
+`asiai auth login` mints a single-use operator code. The scope is
+**bound to the code at mint** and cannot be widened at exchange:
+
+```sh
+asiai auth login                      # scope "full" — opens a dashboard write session
+asiai auth login --scope audit:read   # buys exactly ONE redacted audit read, nothing else
+```
+
+Each scope has exactly one exchange surface. A `full` code is only
+accepted by the `/login` form; an `audit:read` code is only accepted by
+the one-shot exchange route — each is refused (and burned) by the other
+surface, so a code can never do more than what it was minted for.
+
+### Audit access for agents (MCP)
+
+An LLM agent asking "what happened on the fleet tonight?" is a
+legitimate use case — but the agent's context may leave the machine, so
+the journal must never reach it raw. The `fleet_audit_tail` MCP tool
+(and the underlying `POST /api/v1/fleet/audit-tail` route) implements a
+hardened path:
+
+```sh
+# 1. Mint a read-scoped code in a trusted shell:
+asiai auth login --scope audit:read
+
+# 2. The agent exchanges it for ONE redacted read:
+#    MCP: fleet_audit_tail(code="aop_...", lines=50, since_hours=6)
+#    or:  POST /api/v1/fleet/audit-tail  {"code": "aop_...", "lines": 50}
+```
+
+Guarantees, enforced server-side:
+
+- **One code, one read** — the code is consumed by the exchange; no
+  session is created, so there is nothing to revoke.
+- **Metadata only** — a strict field whitelist (`ts`, actor, verb,
+  target, status, durations). Raw command `args` and free-form `error`
+  text never pass; neither do codes, tokens or secrets.
+- **Bounded** — `lines` ≤ 200, `since_hours` ≤ 24, all-requests rate
+  limit on the route.
+- **Self-journaled** — every read lands in the journal as an
+  `audit_read` event with an exchange id.
+
+What this is NOT: an access-control barrier against local agents (any
+process with shell access can mint a code itself). It buys attribution,
+short TTLs and a single audited read path — the honest rationale and
+the deployment trade-offs (local vs cloud LLM) are recorded in
+[ADR 0001](adr/0001-audit-journal-read-for-local-agents.md).
+
 ### What is NOT in Phase 2
 
 - **Auto-discovery** (Bonjour/mDNS) — Phase 3.
