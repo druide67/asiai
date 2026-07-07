@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.22.0](https://github.com/druide67/asiai/compare/v1.21.0...v1.22.0) — 2026-07-07
+
+Install preset picker — ending the silent-baseline trap.
+
+### Added
+
+- The cockpit's Install modal now offers a preset `<select>`: when the
+  node ships tuned presets for the engine, the first is preselected, so
+  the generic base manifest (wrong binary/context on tuned nodes) becomes
+  an explicit choice rather than the accidental default. The confirm
+  button waits for the preset list to load, so a fast confirmation can
+  never fire an install with no preset. New `GET /api/v1/presets`
+  (proxies the node's `aisctl serve`); the fleet command funnel accepts
+  `args.preset` for `install` only. Companion:
+  asiai-inference-server 0.10.0.
+
+## [1.21.0](https://github.com/druide67/asiai/compare/v1.20.0...v1.21.0) — 2026-07-07
+
+Per-node History and Doctor across the fleet.
+
+### Added
+
+- `GET /api/v1/doctor` (JSON twin of the `/doctor` page, web-safe
+  category subset) and hub read proxies `GET /api/v1/fleet/{nickname}/{endpoint}`
+  for history/benchmarks/engine-history/benchmark-process/doctor — each a
+  single hardcoded node path with a digit-only query allowlist (no
+  SSRF/write reach), rate-limited and concurrency-bounded. The History
+  and Doctor pages gain a node picker that re-sources every chart/card
+  through the proxy when a fleet is configured.
+
+## [1.20.0](https://github.com/druide67/asiai/compare/v1.19.2...v1.20.0) — 2026-07-07
+
+Fleet visibility for MCP agents, with a scoped audit-read path.
+
+### Added
+
+- Three read-only MCP tools — `get_fleet_snapshot`, `get_fleet_health`,
+  `fleet_audit_tail` — so an agent can see the fleet, not just the local
+  node.
+- Scoped operator login codes: `asiai auth login --scope full|audit:read`.
+  The scope is bound to the code at mint and cannot be widened at
+  exchange; an `audit:read` code buys exactly one redacted, bounded,
+  rate-limited audit-journal read (via `POST /api/v1/fleet/audit-tail` /
+  the `fleet_audit_tail` tool) and can never open a write session. See
+  `docs/adr/0001-audit-journal-read-for-local-agents.md`.
+
+## [1.19.2](https://github.com/druide67/asiai/compare/v1.19.1...v1.19.2) — 2026-07-07
+
+Live KV occupancy and observed throughput on the Monitor.
+
+### Added
+
+- Per-engine KV-cache occupancy read from llama.cpp `/slots` (the modern
+  builds dropped the KV gauges from `/metrics`), filling the existing KV
+  fields with a numbers-only privacy guard, and an observed decode-rate
+  readout (`~N t/s`) next to the rolling token counter, averaged over a
+  sliding window so a per-request counter bump doesn't misreport.
+
 ## [1.19.1](https://github.com/druide67/asiai/compare/v1.19.0...v1.19.1) — 2026-07-07
 
 Monitor goes live — the page now visibly distinguishes itself from the
