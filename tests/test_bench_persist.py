@@ -291,7 +291,8 @@ class TestPersistPerType:
                     "llamacpp": {"median_tok_s": 62.0},
                     "ollama": {"median_tok_s": 55.0},
                 },
-                "winner": "llamacpp",
+                # Real export shape: _determine_winner's dict, not a name.
+                "winner": {"name": "llamacpp", "tok_s_delta": "+12.7%"},
             },
         }
         row = self._persist_and_fetch("standard", payload)

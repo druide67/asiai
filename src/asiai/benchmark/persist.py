@@ -36,10 +36,13 @@ def _num(value: Any) -> float | None:
 
 def _headline_standard(payload: dict) -> tuple[float | None, str, int]:
     bench = payload.get("benchmark") or {}
-    winner = bench.get("winner")
     engines = bench.get("engines") or {}
-    if winner and winner in engines:
-        return _num(engines[winner].get("median_tok_s")), "winner_median_tok_s", 0
+    # The export payload's winner is _determine_winner's dict
+    # ({"name", "tok_s_delta", ...}); tolerate a bare name string too.
+    winner = bench.get("winner")
+    winner_name = winner.get("name") if isinstance(winner, dict) else winner
+    if winner_name and winner_name in engines:
+        return _num(engines[winner_name].get("median_tok_s")), "winner_median_tok_s", 0
     # No winner (single engine, or validity gate refused a ranking):
     # fall back to the best median rather than nothing.
     medians = [m for e in engines.values() if (m := _num(e.get("median_tok_s"))) is not None]
