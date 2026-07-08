@@ -228,6 +228,9 @@ All endpoints return JSON with HTTP 200. If an engine is unreachable, the respon
 | `GET /api/engine-history` | < 500ms | 5s |
 | `GET /api/benchmarks` | < 500ms | 5s |
 | `GET /api/benchmark-process` | < 500ms | 5s |
+| `GET /api/bench-runs` | < 500ms | 5s |
+| `GET /api/bench-runs/{id}` | < 500ms | 5s |
+| `GET /bench/report/{id}.md` | < 500ms | 5s |
 
 ### `GET /api/status`
 
@@ -402,6 +405,27 @@ those runs (CPU %, RSS). Both accept `hours` (and `/api/benchmarks` also
 `since`/`until` unix seconds) and return a JSON array, newest first.
 
 ## Interpreting Metrics
+
+### `GET /api/bench-runs?type=code&model=&engine=&hours=0&limit=500`
+
+One row per complete bench run of ANY type (`standard`, `agentic`,
+`burst`, `code`, `language`, `instruct`, `thinking-ablation`), newest
+first, WITHOUT payloads. `score_primary` is only comparable within one
+`score_label` — treat the label as part of the value. `gates_failed > 0`
+means the run tripped quality gates; do not quote its score without
+that caveat.
+
+### `GET /api/bench-runs/{id}`
+
+The same row WITH its full self-describing payload (parsed JSON) — the
+exact dict the bench mode produced.
+
+### `GET /bench/report/{id}.md`
+
+The complete markdown report for any persisted run (any type):
+labeled headline, metrics with CI95/sample counts, run conditions,
+quality gates, provenance. Prefer this over hand-summarizing a payload —
+it is the honest, complete rendering.
 
 ### System Health Thresholds
 
