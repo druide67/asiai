@@ -690,7 +690,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
     _persist_mode_run(args, "agentic", result)
-    return 0
+    return _export_mode_result(args, "agentic", result)
 
 
 def _persist_mode_run(args: argparse.Namespace, bench_type: str, payload: dict) -> None:
@@ -700,6 +700,38 @@ def _persist_mode_run(args: argparse.Namespace, bench_type: str, payload: dict) 
 
     db_path = getattr(args, "db", None) or DEFAULT_DB_PATH
     persist_bench_run(db_path, bench_type, payload)
+
+
+def _export_mode_result(args: argparse.Namespace, bench_type: str, payload: dict) -> int:
+    """Write --export for a mode payload — format by extension (.json / .md).
+
+    ``--export foo.json`` writes the payload verbatim (same content as the
+    mode's legacy ``--*-output`` flag); ``--export foo.md`` renders the
+    unified markdown report. Returns non-zero on a write error.
+    """
+    import json as _json
+
+    from asiai.display.formatters import green, red
+
+    path = getattr(args, "export", None)
+    if not path:
+        return 0
+    try:
+        if path.endswith(".md"):
+            from asiai.benchmark.report_md import render_markdown
+            from asiai.benchmark.result_model import build_result
+
+            content = render_markdown(build_result(bench_type, payload))
+            with open(path, "w") as f:
+                f.write(content)
+        else:
+            with open(path, "w") as f:
+                _json.dump(payload, f, indent=2)
+    except OSError as e:
+        print(red(f"✗ export failed: {e}"), file=sys.stderr)
+        return 1
+    print(f"  {green('✓')} Exported to {path}")
+    return 0
 
 
 def _parse_extra_body(arg: str | None) -> dict | None:
@@ -846,7 +878,7 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
             _json.dump(result, f, indent=2)
         print(f"\nSaved {args.burst_output}")
     _persist_mode_run(args, "burst", result)
-    return 0
+    return _export_mode_result(args, "burst", result)
 
 
 def _run_code_bench(args: argparse.Namespace) -> int:
@@ -1000,7 +1032,7 @@ def _run_code_bench(args: argparse.Namespace) -> int:
     if args.code_output:
         print(f"\nSaved {args.code_output}")
     _persist_mode_run(args, "code", result)
-    return 0
+    return _export_mode_result(args, "code", result)
 
 
 def _run_language_bench(args: argparse.Namespace) -> int:
@@ -1128,7 +1160,7 @@ def _run_language_bench(args: argparse.Namespace) -> int:
     if args.language_output:
         print(f"\nSaved {args.language_output}")
     _persist_mode_run(args, "language", result)
-    return 0
+    return _export_mode_result(args, "language", result)
 
 
 def _run_instruct_bench(args: argparse.Namespace) -> int:
@@ -1247,7 +1279,7 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
     if args.instruct_output:
         print(f"\nSaved {args.instruct_output}")
     _persist_mode_run(args, "instruct", result)
-    return 0
+    return _export_mode_result(args, "instruct", result)
 
 
 def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
@@ -1320,7 +1352,7 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
     if args.thinking_ablation_output:
         print(f"\nSaved {args.thinking_ablation_output}")
     _persist_mode_run(args, "thinking-ablation", result)
-    return 0
+    return _export_mode_result(args, "thinking-ablation", result)
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -1524,13 +1556,18 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
         persist_standard_session(db_path, build_export_payload(bench_run.results, report))
 
-    # Export to JSON if requested
+    # Export if requested — format by extension (.json unchanged, .md report)
     export_path = getattr(args, "export", None)
     if export_path and bench_run.results:
-        path = export_benchmark(bench_run.results, report, export_path)
-        from asiai.display.formatters import green
+        if export_path.endswith(".md"):
+            from asiai.benchmark.reporter import build_export_payload
 
-        print(f"  {green('✓')} Exported to {path}")
+            _export_mode_result(args, "standard", build_export_payload(bench_run.results, report))
+        else:
+            path = export_benchmark(bench_run.results, report, export_path)
+            from asiai.display.formatters import green
+
+            print(f"  {green('✓')} Exported to {path}")
 
     # Check for regressions against historical data
     if bench_run.results:
@@ -2190,7 +2227,8 @@ def main(argv: list[str] | None = None) -> int:
         "--export",
         "-E",
         metavar="FILE",
-        help="Export results to JSON file (e.g. bench.json)",
+        help="Export results — format by extension: .json (payload) or .md "
+        "(full report with conditions/CI/gates). Works with every bench mode.",
     )
     bench_parser.add_argument(
         "--history",
@@ -2245,7 +2283,7 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument(
         "--agentic-output",
         metavar="FILE",
-        help="Write agentic-mode results to JSON file (default: stdout summary only)",
+        help="Write agentic-mode results to JSON file (legacy alias of --export FILE.json)",
     )
     bench_parser.add_argument(
         "--agentic-pause",
@@ -2334,7 +2372,7 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument(
         "--burst-output",
         metavar="FILE",
-        help="Write burst-mode results to JSON file (default: stdout summary only)",
+        help="Write burst-mode results to JSON file (legacy alias of --export FILE.json)",
     )
     bench_parser.add_argument(
         "--burst-no-stream",
@@ -2384,7 +2422,7 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument(
         "--code-output",
         metavar="FILE",
-        help="Write --code results to JSON file (default: stdout summary only).",
+        help="Write --code results to JSON file (legacy alias of --export FILE.json).",
     )
     bench_parser.add_argument(
         "--code-suite",
@@ -2426,7 +2464,7 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument(
         "--language-output",
         metavar="FILE",
-        help="Write --language results to JSON file (default: stdout summary only).",
+        help="Write --language results to JSON file (legacy alias of --export FILE.json).",
     )
     bench_parser.add_argument(
         "--language-suite",
@@ -2453,7 +2491,7 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument(
         "--instruct-output",
         metavar="FILE",
-        help="Write --instruct results to JSON file (default: stdout summary only).",
+        help="Write --instruct results to JSON file (legacy alias of --export FILE.json).",
     )
     bench_parser.add_argument(
         "--instruct-scenario",
@@ -2484,7 +2522,7 @@ def main(argv: list[str] | None = None) -> int:
     bench_parser.add_argument(
         "--thinking-ablation-output",
         metavar="FILE",
-        help="Write --thinking-ablation results to JSON file (default: stdout summary).",
+        help="Write --thinking-ablation results to JSON file (legacy alias of --export FILE.json).",
     )
 
     # leaderboard
