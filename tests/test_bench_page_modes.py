@@ -98,6 +98,80 @@ class TestModeDispatchValidation:
         assert resp.status_code == 409
 
 
+class TestAuditRegressions:
+    def test_instruct_default_omits_scenarios_kwarg(self, client, app_state):
+        """F1: an empty selection must use the runner's OWN default set —
+        passing None overrode the parameter default and crashed."""
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "instruct_results": {}}
+        with patch("asiai.benchmark.instruct_eval.run_instruct_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run", data={"bench_type": "instruct", "mode_engine": "llamacpp"}
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert "scenarios" not in m.call_args.kwargs
+        assert app_state.get_bench_snapshot()["error"] == ""
+
+    def test_language_all_suites_unchecked_omits_kwarg(self, client, app_state):
+        """F3: same contract for language suites."""
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "language_results": {}}
+        with patch("asiai.benchmark.language_eval.run_language_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={"bench_type": "language", "mode_engine": "llamacpp", "language": "fr"},
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert "suites" not in m.call_args.kwargs
+
+    def test_judge_url_loopback_only_from_web(self, client):
+        """F2: a remote judge_url would make the server POST its env API
+        key to an arbitrary host (SSRF) — loopback only from the form."""
+        resp = client.post(
+            "/bench/run",
+            data={
+                "bench_type": "code",
+                "mode_engine": "llamacpp",
+                "code_suites": "tool-call",
+                "judge_url": "http://192.0.2.7/v1",
+            },
+        )
+        assert resp.status_code == 422
+        assert "loopback" in resp.json()["error"]
+
+    def test_judge_url_loopback_accepted(self, client, app_state):
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "code_results": {}}
+        with patch("asiai.benchmark.code_eval.run_code_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={
+                    "bench_type": "code",
+                    "mode_engine": "llamacpp",
+                    "code_suites": "tool-call",
+                    "judge_url": "http://127.0.0.1:8080/v1",
+                },
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert m.call_args.kwargs["judge_url"] == "http://127.0.0.1:8080/v1"
+
+    def test_try_start_bench_is_atomic(self, app_state):
+        """F4: the 409 guard is a check-and-set under the bench lock."""
+        assert app_state.try_start_bench(progress="a") is True
+        assert app_state.try_start_bench(progress="b") is False
+        app_state.update_bench(running=False)
+        assert app_state.try_start_bench(progress="c") is True
+
+
 class TestModeThread:
     def test_code_mode_runs_persists_and_flags_done(self, client, app_state):
         payload = {

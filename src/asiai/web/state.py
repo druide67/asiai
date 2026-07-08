@@ -96,6 +96,19 @@ class AppState:
             for key, value in kwargs.items():
                 setattr(self.bench_status, key, value)
 
+    def try_start_bench(self, **kwargs) -> bool:
+        """Atomically claim the bench slot: False if one is already running.
+
+        The separate snapshot-check + reset pattern left a TOCTOU window
+        where two concurrent POSTs both passed the 409 guard and started
+        two benchmark threads (double engine load, result overwritten).
+        """
+        with self._bench_lock:
+            if self.bench_status.running:
+                return False
+            self.bench_status = BenchStatus(running=True, **kwargs)
+            return True
+
     def reset_bench(self, **kwargs) -> None:
         """Thread-safe reset of bench status to a new BenchStatus."""
         with self._bench_lock:
