@@ -90,7 +90,7 @@ def render(result: BenchResult) -> str:
             except ValueError:
                 pass
         if decode and isinstance(decode.value, (int, float)):
-            value += f" · {fmt_num(decode.value)} tok/s"
+            value += f" · {fmt_num(decode.value)} t/s"
         p.append(
             bar_row(
                 y0 + i * pitch,

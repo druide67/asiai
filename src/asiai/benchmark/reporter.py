@@ -378,6 +378,10 @@ def build_export_payload(raw_results: list[dict], report: dict) -> dict:
             },
             "vram_bytes": data.get("vram_bytes", 0),
         }
+        # Validity gate result — the no-winner card/report must be able to
+        # say WHICH engines were refused, not fabricate a gate.
+        if data.get("output_valid_pct") is not None:
+            engine_data["output_valid_pct"] = data["output_valid_pct"]
 
         # Engine version and model metadata from raw results
         engine_results = [r for r in raw_results if r.get("engine") == engine_name]

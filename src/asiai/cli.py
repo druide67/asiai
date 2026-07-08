@@ -1614,12 +1614,19 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.benchmark.result_model import build_result
         from asiai.display.formatters import dim, green
 
-        session_payload = build_export_payload(bench_run.results, report)
-        if kv_cache_type:
-            session_payload.setdefault("benchmark", {})["kv_cache_type"] = kv_cache_type
-        card_svg = generate_card(build_result("standard", session_payload))
-        svg_path = save_card(card_svg, fmt="svg")
-        print(f"  {green('✓')} Card saved: {svg_path}")
+        try:
+            session_payload = build_export_payload(bench_run.results, report)
+            if kv_cache_type:
+                session_payload.setdefault("benchmark", {})["kv_cache_type"] = kv_cache_type
+            card_svg = generate_card(build_result("standard", session_payload))
+            svg_path = save_card(card_svg, fmt="svg")
+            print(f"  {green('✓')} Card saved: {svg_path}")
+        except Exception as e:  # a card failure must never lose a finished bench
+            from asiai.display.formatters import yellow
+
+            card_svg = ""
+            svg_path = ""  # downstream share/open guards read this
+            print(yellow(f"  ⚠ card generation failed: {e}"), file=sys.stderr)
 
     # Community share (opt-in)
     submission_id = ""
@@ -1679,6 +1686,8 @@ def cmd_bench(args: argparse.Namespace) -> int:
         try:
             has_png = submission_id and "png_path" in dir() and png_path
             card_to_open = png_path if has_png else svg_path
+            if not card_to_open:
+                raise OSError("no card to open")
             subprocess.Popen(
                 ["open", card_to_open],
                 stdout=subprocess.DEVNULL,

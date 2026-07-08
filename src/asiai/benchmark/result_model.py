@@ -139,7 +139,13 @@ def from_standard(payload: dict) -> BenchResult:
         e = engines[name]
         runs_n = int(e.get("runs_count") or 0)
         ci = e.get("ci95") or []
-        ci95 = (float(ci[0]), float(ci[1])) if len(ci) == 2 and any(_num(c) for c in ci) else None
+        # sorted() guards a malformed [hi, lo] pair — an inverted CI would
+        # both miss real ties and print a negative ± on the hero.
+        ci95 = (
+            tuple(sorted((float(ci[0]), float(ci[1]))))
+            if len(ci) == 2 and any(_num(c) for c in ci)
+            else None
+        )
         hero = MetricValue(
             key="median_tok_s",
             label="median tok/s",
@@ -175,6 +181,14 @@ def from_standard(payload: dict) -> BenchResult:
                 direction="lower",
             ),
             MetricValue("stability", "stability", e.get("stability") or None, n=runs_n),
+            MetricValue(
+                "output_valid_pct",
+                "output valid",
+                _num(e.get("output_valid_pct")),
+                "%",
+                n=runs_n,
+                direction="higher",
+            ),
             MetricValue("quantization", "quantization", e.get("model_quantization") or None),
             MetricValue("engine_version", "engine version", e.get("engine_version") or None),
         ]
@@ -622,7 +636,11 @@ def from_code(payload: dict) -> BenchResult:
         title=f"Dev quality — {payload.get('model', '?')} on {payload.get('engine', '?')}",
         subjects=subjects,
         winner=None,
-        conditions={**_base_conditions(payload), "suites": ", ".join(payload.get("suites") or [])},
+        conditions={
+            **_base_conditions(payload),
+            "suites": ", ".join(payload.get("suites") or []),
+            **({"runs_per_prompt": str(payload["repeats"])} if payload.get("repeats") else {}),
+        },
         gates=gates,
         provenance=_provenance(payload),
         headline=_headline_metric("code", payload),
@@ -755,6 +773,7 @@ def from_instruct(payload: dict) -> BenchResult:
         conditions={
             **_base_conditions(payload),
             "scenarios": ", ".join(payload.get("scenarios") or []),
+            **({"runs_per_prompt": str(payload["repeats"])} if payload.get("repeats") else {}),
         },
         gates=[],
         provenance=_provenance(payload),

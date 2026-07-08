@@ -261,7 +261,17 @@ def conditions_string(result: BenchResult) -> str:
     if not versions and result.provenance.get("engine_version"):
         eng = result.subjects[0].engine if result.subjects else ""
         parts.append(f"{eng} {result.provenance['engine_version']}".strip())
-    for key in ("suites", "scenarios", "burst_sizes", "load"):
+    for key in (
+        "suites",
+        "scenarios",
+        "burst_sizes",
+        "load",
+        "streaming",
+        "max_tokens_per_call",
+        "runs",
+        "runs_per_prompt",
+        "cold_warm_repeats",
+    ):
         if c.get(key):
             parts.append(f"{key}: {c[key]}")
     if c.get("extra_body"):

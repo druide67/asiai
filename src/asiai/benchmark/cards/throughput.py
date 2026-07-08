@@ -95,25 +95,45 @@ def render(result: BenchResult) -> str:
                 300,
             )
         )
+        # §5.1: the headline never goes naked — carry the sample count.
+        ns = sorted(
+            {
+                x.hero.n
+                for x in result.subjects
+                if x.label in result.co_leaders and x.hero and x.hero.n
+            }
+        )
+        if ns:
+            n_label = (
+                f"n={ns[0]} runs each" if len(ns) == 1 else "n=" + "/".join(map(str, ns)) + " runs"
+            )
+            p.append(text(54, y + 66, f"{n_label} · same prompt set", size=12, fill=TEXT2))
         if len(result.co_leaders) >= 2:
             a, b = (next(x for x in result.subjects if x.label == n) for n in result.co_leaders[:2])
             svg, _w = chip(
                 54,
-                y + 78,
+                y + 84,
                 f"tie: Δ {fmt_num(abs(_hero_value(a) - _hero_value(b)))} < CI95 overlap",
                 style="accent",
             )
             p.append(svg)
     elif no_winner:
-        svg, _ = chip(54, 176, "✗ output_validity", style="red", size=12, height=24)
-        p.append(svg)
-        p.append(text(54, 240, "no winner declared", size=34, family=SANS, weight=700, fill=TEXT))
-        p.append(
-            wrap_text(
-                54, 268, result.winner_note or "the output validity gate refused the ranking", 300
-            )
-        )
         invalid = [s.label for s in subjects if _subject_invalid(s)]
+        if invalid:
+            # Only claim the validity gate when it actually fired — a
+            # fabricated gate on an old/zero-tok payload would be the
+            # exact dishonesty this card exists to prevent.
+            svg, _ = chip(54, 176, "✗ output_validity", style="red", size=12, height=24)
+            p.append(svg)
+        p.append(text(54, 240, "no winner declared", size=34, family=SANS, weight=700, fill=TEXT))
+        note = result.winner_note or (
+            "the output validity gate refused the ranking"
+            if invalid
+            else "no comparable measurements — ranking unavailable"
+        )
+        if not invalid and "validity" in note:
+            note = "no comparable measurements — ranking unavailable"
+        p.append(wrap_text(54, 268, note, 300))
         if invalid:
             p.append(
                 text(

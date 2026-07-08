@@ -88,8 +88,11 @@ def render(result: BenchResult) -> str:
             p.append(svg)
 
     # ── groups: slim p50/p95/p99 bars per size ───────────────────────
-    group_h = 3 * 17 + 22  # 3 slim bars + header
-    y0 = body_y0(len(subjects) * group_h - 6)
+    n_groups = max(1, len(subjects[:4]))
+    # 4 groups must still clear the GATES divider at 424 — compress.
+    group_h = min(3 * 17 + 22, (414 - 166) // n_groups)
+    row_pitch = max(13, (group_h - 22) // 3)
+    y0 = body_y0(len(subjects[:4]) * group_h - 6)
     for s in subjects[:4]:
         size_label = s.label.removeprefix("burst-")
         p.append(text(BAR_X - 100, y0 + 10, f"{size_label} calls", size=12, fill=TEXT))
@@ -109,7 +112,7 @@ def render(result: BenchResult) -> str:
                 if vm is not None:
                     value += f" · max {fmt_num(vm, 0)}"
             p.append(text(BAR_X + BAR_MAX_W + 12, row_y + 10, value, size=11, fill=TEXT2))
-            row_y += 17
+            row_y += row_pitch
         y0 += group_h
 
     p.append(gates_row(result, 424))

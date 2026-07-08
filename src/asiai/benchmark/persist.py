@@ -41,12 +41,40 @@ def _headline_standard(payload: dict) -> tuple[float | None, str, int]:
     # ({"name", "tok_s_delta", ...}); tolerate a bare name string too.
     winner = bench.get("winner")
     winner_name = winner.get("name") if isinstance(winner, dict) else winner
+    if winner_name and _is_ci95_tie(engines):
+        # Mirror of from_standard's tie detection: a headline labeled
+        # "winner_..." next to a "no winner declared" report would be
+        # self-contradicting — a tie falls back to the best median.
+        winner_name = None
     if winner_name and winner_name in engines:
         return _num(engines[winner_name].get("median_tok_s")), "winner_median_tok_s", 0
     # No winner (single engine, or validity gate refused a ranking):
     # fall back to the best median rather than nothing.
     medians = [m for e in engines.values() if (m := _num(e.get("median_tok_s"))) is not None]
     return (max(medians) if medians else None), "best_median_tok_s", 0
+
+
+def _is_ci95_tie(engines: dict) -> bool:
+    """True when the top-2 medians sit inside each other's CI95."""
+    ranked = sorted(
+        (
+            (m, e.get("ci95"))
+            for e in engines.values()
+            if (m := _num(e.get("median_tok_s"))) is not None
+        ),
+        key=lambda t: t[0],
+        reverse=True,
+    )
+    if len(ranked) < 2:
+        return False
+    (_v1, ci1), (_v2, ci2) = ranked[0], ranked[1]
+    if not (isinstance(ci1, (list, tuple)) and len(ci1) == 2 and any(_num(c) for c in ci1)):
+        return False
+    if not (isinstance(ci2, (list, tuple)) and len(ci2) == 2 and any(_num(c) for c in ci2)):
+        return False
+    lo1 = min(float(ci1[0]), float(ci1[1]))
+    hi2 = max(float(ci2[0]), float(ci2[1]))
+    return lo1 <= hi2
 
 
 def _headline_agentic(payload: dict) -> tuple[float | None, str, int]:

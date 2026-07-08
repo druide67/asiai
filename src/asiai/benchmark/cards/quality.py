@@ -100,7 +100,8 @@ def render(result: BenchResult) -> str:
         )
     ]
 
-    y = body_y0(len(subjects[:6]) * pitch - 13)
+    shown = subjects[:6]
+    y = body_y0(len(shown) * pitch - 13)
     if judge_offline:
         # Notice strip above the bars (spec §4).
         p.append(rrect(54, 166, 1092, 30, 8, fill=AMBER_FILL, stroke=AMBER_STROKE))
@@ -116,9 +117,14 @@ def render(result: BenchResult) -> str:
             )
         )
         y = max(y, 206.0)
+    # The stack must never cross the GATES divider at 424: compress the
+    # pitch when the notice strip + a dense suite set squeeze the band.
+    if shown:
+        pitch = min(pitch, (414 - y) / len(shown))
 
     label_x = BAR_X - 12
-    for s in subjects[:6]:
+    draw_subline = pitch >= 40  # below that the subline would overlap the next bar
+    for s in shown:
         score = _score(s)
         graded = score is not None
         p.append(
@@ -146,17 +152,21 @@ def render(result: BenchResult) -> str:
                     dash="4 3",
                 )
             )
-            p.append(text(BAR_X + 10, y + 13, "not graded — judge offline", size=11, fill=AMBER))
+            placeholder = "not graded — judge offline" if judge_offline else "not graded"
+            p.append(text(BAR_X + 10, y + 13, placeholder, size=11, fill=AMBER))
             p.append(text(BAR_X + BAR_MAX_W + 112, y + 14, "—", size=14, fill=TEXT2))
         subline = _subline(s, judge_offline)
-        if subline:
+        if subline and draw_subline:
             p.append(text(BAR_X + 12, y + (30 if dense else 32), subline[:95], size=11, fill=TEXT3))
         y += pitch
 
     extra = []
     n_runs = result.conditions.get("runs_per_prompt") or ""
     if n_runs:
-        extra.append((f"n={n_runs} runs · deterministic seeds", "neutral"))
+        extra.append((f"n={n_runs} runs", "neutral"))
+    if len(subjects) > 6:
+        # Truncation is never silent (spec §5 spirit).
+        extra.append((f"+{len(subjects) - 6} more suites — see report", "amber"))
     p.append(gates_row(result, 424, extra_chips=extra))
     p.append(chrome_close(result))
     return "".join(p)

@@ -113,6 +113,131 @@ class TestAgentic:
         assert "REUSED" in svg
 
 
+class TestAuditRegressions:
+    def test_no_winner_without_validity_data_has_no_fabricated_gate(self):
+        """HIGH: winner=None on an old/zero-tok payload must NOT claim the
+        validity gate fired — no gate chip, honest generic note."""
+        payload = _standard_payload()
+        payload["benchmark"]["winner"] = None
+        payload["benchmark"]["engines"]["llamacpp"]["ci95"] = [60.0, 64.0]
+        svg = _svg("standard", payload)
+        assert "output_validity" not in svg
+        assert "no winner declared" in svg
+        # wrap_text may split the phrase across lines — assert the word
+        assert "unavailable" in svg or "refused" in svg
+
+    def test_no_winner_with_validity_data_names_the_gate(self):
+        payload = _standard_payload()
+        payload["benchmark"]["winner"] = None
+        payload["benchmark"]["engines"]["llamacpp"]["ci95"] = [60.0, 64.0]
+        payload["benchmark"]["engines"]["ollama"]["output_valid_pct"] = 40.0
+        svg = _svg("standard", payload)
+        assert "✗ output_validity" in svg
+        assert "invalid ✗" in svg
+        assert "1 of 2 engines produced invalid output" in svg
+
+    def test_tie_hero_carries_n(self):
+        payload = _standard_payload()
+        payload["benchmark"]["engines"]["ollama"]["ci95"] = [51.0, 60.0]
+        svg = _svg("standard", payload)
+        assert "n=6 runs each" in svg
+
+    def test_dense_quality_with_notice_strip_clears_gates_divider(self):
+        """IMPORTANT: 6 suites + judge-offline strip must not cross y=424."""
+        import re
+
+        payload = _code_payload()
+        payload["code_results"].update(
+            {
+                "tool_call_stress": {"pct_clean": 80.0},
+                "recovery": {"pct_recovered": 70.0},
+                "thinking": {"pct_no_think_leak": 95.0},
+                "coding": {"tasks": [{"task": "a", "judge": {}, "transcript": []}]},
+                "coding_hard": {"tasks": [{"task": "b", "judge": {}, "transcript": []}]},
+            }
+        )
+        svg = _svg("code", payload)
+        bar_ys = [
+            float(m.group(1))
+            for m in re.finditer(r'<rect x="482" y="([0-9.]+)" width="[0-9.]+" height="18"', svg)
+        ]
+        assert bar_ys, "no suite bars rendered"
+        assert max(bar_ys) + 18 <= 424, f"suite bar crosses the GATES divider: {max(bar_ys)}"
+
+    def test_burst_four_sizes_clear_gates_divider(self):
+        import re
+
+        payload = {
+            "engine": "llamacpp",
+            "model": "m",
+            "started_at": 1783900000,
+            "burst_sizes": [10, 20, 40, 60],
+            "results": {
+                str(n): {
+                    "latency_ms": {
+                        "p50": 100.0 * n,
+                        "p95": 200.0 * n,
+                        "p99": 300.0 * n,
+                        "max": 400.0 * n,
+                    },
+                    "errors_count": 0,
+                }
+                for n in (10, 20, 40, 60)
+            },
+        }
+        svg = _svg("burst", payload)
+        bar_ys = [
+            float(m.group(1))
+            for m in re.finditer(r'<rect x="482" y="([0-9.]+)" width="[0-9.]+" height="12"', svg)
+        ]
+        assert bar_ys and max(bar_ys) + 12 <= 424, f"burst bar crosses the divider: {max(bar_ys)}"
+
+    def test_more_than_six_suites_disclose_truncation(self):
+        blocks = (
+            "verifiable",
+            "research_brief",
+            "research_brief_deep",
+            "order_control",
+            "loop_search_short",
+            "loop_search_unconfirmable",
+            "honesty_audit",
+            "multi_file_scope",
+            "constraint_preservation",
+        )
+        payload = {
+            "engine": "e",
+            "model": "m",
+            "started_at": 1783900000,
+            "instruct_results": {
+                name: {"pct_primary_delivered": 50.0 + i, "prompts_scored": 5}
+                for i, name in enumerate(blocks)
+            },
+        }
+        svg = _svg("instruct", payload)
+        assert "+3 more suites — see report" in svg
+
+
+class TestTieConsistency:
+    def test_persist_headline_mirrors_tie(self):
+        """IMPORTANT: a tie must not persist a winner_-labeled headline
+        next to a no-winner report."""
+        from asiai.benchmark.persist import extract_headline
+
+        payload = _standard_payload()
+        payload["benchmark"]["engines"]["ollama"]["ci95"] = [51.0, 60.0]
+        score, label, _ = extract_headline("standard", payload)
+        assert label == "best_median_tok_s"
+        assert score == 62.4
+
+    def test_inverted_ci95_still_detects_tie(self):
+        from asiai.benchmark.result_model import build_result
+
+        payload = _standard_payload()
+        payload["benchmark"]["engines"]["ollama"]["ci95"] = [60.0, 51.0]  # malformed order
+        r = build_result("standard", payload)
+        assert r.co_leaders == ["llamacpp", "ollama"]
+
+
 class TestEscaping:
     def test_hostile_model_name_is_escaped(self):
         payload = _standard_payload()
