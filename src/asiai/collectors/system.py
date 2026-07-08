@@ -382,11 +382,14 @@ def collect_run_metadata(
     full reproducibility without leaking identity. Pass ``include_host=True``
     only for private runs.
     """
+    from asiai import __version__
+
     info = collect_machine_info()
     machine_model = info.split(" — ", 1)[0] if info and info != "unknown" else ""
     mem = collect_memory()
     cores = collect_cpu_cores()
     md: dict[str, Any] = {
+        "asiai_version": __version__,
         "machine_model": machine_model or None,
         "hw_chip": collect_hw_chip() or None,
         "os_version": collect_os_version() or None,

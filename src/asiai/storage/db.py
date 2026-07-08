@@ -110,20 +110,17 @@ def store_snapshot(db_path: str, snap: dict) -> None:
 def purge_old(db_path: str, days: int = RETENTION_DAYS) -> int:
     """Delete old high-volume time-series rows. Returns number of deleted rows.
 
-    Purges ONLY the monitoring series that grow without bound:
-    ``metrics`` (one row per monitor tick) and ``benchmark_process`` (per-run
-    process samples, 7-day window). ``benchmarks`` and ``models`` are
-    deliberately KEPT forever — they are the benchmark history the advisor
-    and leaderboard read, and a years-long campaign record the user expects
-    to persist. (Before, this also wiped benchmarks/models, which would have
-    silently discarded the whole campaign history on the first purge.)
+    Purges ONLY the monitoring series that grows without bound: ``metrics``
+    (one row per monitor tick). ``benchmarks``, ``benchmark_process``,
+    ``bench_runs`` and ``models`` are deliberately KEPT forever — they are
+    the benchmark history the advisor and leaderboard read, and a years-long
+    campaign record the user expects to persist. ``benchmark_process`` volume
+    is identical to ``benchmarks`` (one row per result, not a high-frequency
+    series), so its old 7-day window was an inconsistency, not a saving.
     """
     cutoff = int(time.time()) - (days * 86400)
-    # Process metrics have shorter retention (7 days)
-    proc_cutoff = int(time.time()) - (7 * 86400)
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute("DELETE FROM benchmark_process WHERE ts < ?", (proc_cutoff,))
         cursor = conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
         conn.commit()
         return cursor.rowcount
@@ -200,9 +197,12 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     power_watts_ioreport, power_watts_powermetrics,
                     power_source, kv_cache_type,
                     soc_watts, tok_s_per_soc_watt, energy_per_token_j,
-                    tokens_source, prompt_tokens, prefill_tok_s)
+                    tokens_source, prompt_tokens, prefill_tok_s,
+                    output_degenerate, ttft_source, vram_estimated,
+                    engine_runner, extra_body, asiai_version)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
                     r["engine"],
@@ -241,6 +241,13 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("tokens_source", ""),
                     r.get("prompt_tokens", 0),
                     r.get("prefill_tok_s", 0.0),
+                    # Booleans stored as 0/1; -1 = unknown (key absent).
+                    int(r["output_degenerate"]) if "output_degenerate" in r else -1,
+                    r.get("ttft_source", ""),
+                    int(r["vram_estimated"]) if "vram_estimated" in r else -1,
+                    r.get("engine_runner", ""),
+                    r.get("extra_body", ""),
+                    r.get("asiai_version", ""),
                 ),
             )
         conn.commit()
@@ -272,6 +279,111 @@ def store_benchmark_process(db_path: str, results: list[dict]) -> None:
                 ),
             )
         conn.commit()
+    finally:
+        conn.close()
+
+
+# Columns of bench_runs minus the payload — the list views (History page,
+# CLI history) never need the full JSON, so it stays opt-in per row.
+_BENCH_RUN_META_COLS = (
+    "id, ts, finished_ts, bench_type, engine, engine_version, model, "
+    "asiai_version, schema_version, dataset_version, hw_chip, machine_model, "
+    "os_version, ram_gb, powermode, extra_body, score_primary, score_label, "
+    "gates_failed"
+)
+
+
+def store_bench_run(db_path: str, row: dict) -> int:
+    """Persist one complete bench run (any bench type) and return its id.
+
+    ``row`` carries the promoted columns plus the full ``payload`` JSON
+    string — see ``asiai.benchmark.persist`` for the extraction logic.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            """INSERT INTO bench_runs
+               (ts, finished_ts, bench_type, engine, engine_version, model,
+                asiai_version, schema_version, dataset_version,
+                hw_chip, machine_model, os_version, ram_gb, powermode,
+                extra_body, score_primary, score_label, gates_failed, payload)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                row["ts"],
+                row.get("finished_ts", 0),
+                row["bench_type"],
+                row.get("engine", ""),
+                row.get("engine_version", ""),
+                row.get("model", ""),
+                row.get("asiai_version", ""),
+                row.get("schema_version", ""),
+                row.get("dataset_version", ""),
+                row.get("hw_chip", ""),
+                row.get("machine_model", ""),
+                row.get("os_version", ""),
+                row.get("ram_gb", 0),
+                row.get("powermode"),
+                row.get("extra_body", ""),
+                row.get("score_primary"),
+                row.get("score_label", ""),
+                row.get("gates_failed", 0),
+                row["payload"],
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid or 0)
+    finally:
+        conn.close()
+
+
+def query_bench_runs(
+    db_path: str,
+    bench_type: str = "",
+    model: str = "",
+    engine: str = "",
+    hours: int = 0,
+    since: int = 0,
+    until: int = 0,
+    limit: int = 500,
+) -> list[dict]:
+    """Query bench runs (newest first), WITHOUT the payload JSON.
+
+    Use :func:`get_bench_run` to fetch one run's full payload.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        query = f"SELECT {_BENCH_RUN_META_COLS} FROM bench_runs WHERE 1=1"
+        params: list = []
+        if bench_type:
+            query += " AND bench_type = ?"
+            params.append(bench_type)
+        if model:
+            query += " AND model = ?"
+            params.append(model)
+        if engine:
+            query += " AND engine = ?"
+            params.append(engine)
+        if since > 0:
+            query += " AND ts >= ? AND ts <= ?"
+            params.extend([since, until if until > 0 else int(time.time())])
+        elif hours > 0:
+            query += " AND ts >= ?"
+            params.append(int(time.time()) - hours * 3600)
+        query += " ORDER BY ts DESC LIMIT ?"
+        params.append(max(1, min(limit, 5000)))
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
+    finally:
+        conn.close()
+
+
+def get_bench_run(db_path: str, run_id: int) -> dict | None:
+    """Return one bench run WITH its full payload JSON, or None."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM bench_runs WHERE id = ?", (run_id,)).fetchone()
+        return dict(row) if row else None
     finally:
         conn.close()
 

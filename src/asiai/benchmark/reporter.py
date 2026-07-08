@@ -324,6 +324,19 @@ def export_benchmark(
     Returns:
         The path written to.
     """
+    export = build_export_payload(raw_results, report)
+    with open(output_path, "w") as f:
+        json.dump(export, f, indent=2)
+
+    return output_path
+
+
+def build_export_payload(raw_results: list[dict], report: dict) -> dict:
+    """Build the standardized session payload (export schema v2) as a dict.
+
+    Shared by ``export_benchmark`` (writes it to a file) and the
+    ``bench_runs`` session persistence, so both surfaces stay one format.
+    """
     from asiai import __version__
 
     # Extract machine info from first result
@@ -448,11 +461,7 @@ def export_benchmark(
             "winner": report.get("winner"),
         },
     }
-
-    with open(output_path, "w") as f:
-        json.dump(export, f, indent=2)
-
-    return output_path
+    return export
 
 
 # ---------------------------------------------------------------------------

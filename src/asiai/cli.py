@@ -689,7 +689,17 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         )
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
+    _persist_mode_run(args, "agentic", result)
     return 0
+
+
+def _persist_mode_run(args: argparse.Namespace, bench_type: str, payload: dict) -> None:
+    """Persist a mode payload into bench_runs (best-effort, never fails a run)."""
+    from asiai.benchmark.persist import persist_bench_run
+    from asiai.storage.db import DEFAULT_DB_PATH
+
+    db_path = getattr(args, "db", None) or DEFAULT_DB_PATH
+    persist_bench_run(db_path, bench_type, payload)
 
 
 def _parse_extra_body(arg: str | None) -> dict | None:
@@ -835,6 +845,7 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
         with open(args.burst_output, "w") as f:
             _json.dump(result, f, indent=2)
         print(f"\nSaved {args.burst_output}")
+    _persist_mode_run(args, "burst", result)
     return 0
 
 
@@ -988,6 +999,7 @@ def _run_code_bench(args: argparse.Namespace) -> int:
 
     if args.code_output:
         print(f"\nSaved {args.code_output}")
+    _persist_mode_run(args, "code", result)
     return 0
 
 
@@ -1115,6 +1127,7 @@ def _run_language_bench(args: argparse.Namespace) -> int:
 
     if args.language_output:
         print(f"\nSaved {args.language_output}")
+    _persist_mode_run(args, "language", result)
     return 0
 
 
@@ -1233,6 +1246,7 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
 
     if args.instruct_output:
         print(f"\nSaved {args.instruct_output}")
+    _persist_mode_run(args, "instruct", result)
     return 0
 
 
@@ -1305,6 +1319,7 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
 
     if args.thinking_ablation_output:
         print(f"\nSaved {args.thinking_ablation_output}")
+    _persist_mode_run(args, "thinking-ablation", result)
     return 0
 
 
@@ -1499,6 +1514,15 @@ def cmd_bench(args: argparse.Namespace) -> int:
         report["model"] = model  # Use user-requested name, not engine-resolved
     bench_ctx_size = bench_run.results[0].get("context_size", 0) if bench_run.results else 0
     render_bench(report, context_size=bench_ctx_size)
+
+    # Session-level row in bench_runs (payload = export schema v2): gives
+    # the standard mode the same one-row-per-run history the other modes
+    # get, instead of being reconstructed by grouping fine-grained rows.
+    if bench_run.results:
+        from asiai.benchmark.persist import persist_bench_run
+        from asiai.benchmark.reporter import build_export_payload
+
+        persist_bench_run(db_path, "standard", build_export_payload(bench_run.results, report))
 
     # Export to JSON if requested
     export_path = getattr(args, "export", None)
