@@ -131,6 +131,9 @@ class TestAuditRegressions:
         payload["benchmark"]["winner"] = None
         payload["benchmark"]["engines"]["llamacpp"]["ci95"] = [60.0, 64.0]
         payload["benchmark"]["engines"]["ollama"]["output_valid_pct"] = 40.0
+        # 95% is ABOVE the ranking gate's threshold (80) — rankable, and
+        # must not be branded invalid alongside the real offender.
+        payload["benchmark"]["engines"]["llamacpp"]["output_valid_pct"] = 95.0
         svg = _svg("standard", payload)
         assert "✗ output_validity" in svg
         assert "invalid ✗" in svg

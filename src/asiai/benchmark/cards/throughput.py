@@ -222,8 +222,16 @@ def render(result: BenchResult) -> str:
 
 
 def _subject_invalid(s: Subject) -> bool:
+    """Invalid = below the SAME threshold the ranking gate uses — an
+    engine at 95% is rankable and must not be branded invalid."""
+    from asiai.benchmark.output_gates import DEFAULT_MIN_VALID_PCT
+
     validity = metric_map(s).get("output_valid_pct")
-    return bool(validity and isinstance(validity.value, (int, float)) and validity.value < 100)
+    return bool(
+        validity
+        and isinstance(validity.value, (int, float))
+        and validity.value < DEFAULT_MIN_VALID_PCT
+    )
 
 
 def _engine_chip_rows(result: BenchResult, subjects: list[Subject], winner: Subject | None) -> str:
