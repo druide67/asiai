@@ -62,6 +62,7 @@ class BenchResult:
     subjects: list[Subject]
     winner: str | None  # Subject.label, None if not comparative / gate-refused
     winner_note: str = ""  # e.g. "ranking refused: output validity gate"
+    co_leaders: list[str] = field(default_factory=list)  # tie within CI95
     conditions: dict[str, str] = field(default_factory=dict)
     gates: list[Gate] = field(default_factory=list)
     provenance: dict[str, str] = field(default_factory=dict)
@@ -200,7 +201,30 @@ def from_standard(payload: dict) -> BenchResult:
     winner = bench.get("winner")
     winner_name = winner.get("name") if isinstance(winner, dict) else winner
     winner_note = ""
-    if not winner_name and len(subjects) >= 2:
+    co_leaders: list[str] = []
+    if winner_name and len(subjects) >= 2:
+        # Statistical-honesty check: if the top two medians sit inside each
+        # other's CI95, the ranking is noise — withhold the crown and report
+        # a tie instead. Only applies when BOTH carry a CI (multi-run).
+        ranked = sorted(
+            (s for s in subjects if s.hero and isinstance(s.hero.value, (int, float))),
+            key=lambda s: float(s.hero.value),  # type: ignore[arg-type]
+            reverse=True,
+        )
+        if len(ranked) >= 2:
+            top, second = ranked[0], ranked[1]
+            if top.hero.ci95 and second.hero.ci95:
+                lo1, _hi1 = top.hero.ci95
+                _lo2, hi2 = second.hero.ci95
+                if lo1 <= hi2:  # intervals overlap → tie
+                    delta = float(top.hero.value) - float(second.hero.value)
+                    co_leaders = sorted([top.label, second.label])
+                    winner_name = None
+                    winner_note = (
+                        f"Δ {delta:.1f} tok/s is inside the combined CI95 — the "
+                        "ranking is withheld. Co-leaders listed alphabetically."
+                    )
+    if not winner_name and not co_leaders and len(subjects) >= 2:
         winner_note = "ranking refused or unavailable (validity gate / insufficient data)"
 
     conditions = _base_conditions(payload)
@@ -223,6 +247,7 @@ def from_standard(payload: dict) -> BenchResult:
         subjects=subjects,
         winner=winner_name,
         winner_note=winner_note,
+        co_leaders=co_leaders,
         conditions=conditions,
         gates=[],
         provenance=_provenance(payload),
@@ -445,10 +470,12 @@ def from_burst(payload: dict) -> BenchResult:
         if isinstance(errors, dict):
             errors = errors.get("max")
         if _num(errors):
-            gates.append(Gate(f"errors_burst_{size_str}", False, f"{int(errors)} errors"))
+            gates.append(Gate(f"{int(errors)} errors @{size_str}", False, "errors during burst"))
+        else:
+            gates.append(Gate(f"no errors @{size_str}", True, ""))
         swap = _scalar(data.get("memory_pressure_swap_delta_mb"))
         if swap and swap > 0:
-            gates.append(Gate(f"swap_burst_{size_str}", False, f"+{swap:.0f} MB swap"))
+            gates.append(Gate(f"swap +{swap:.0f} MB @{size_str}", False, "swap pressure"))
 
     conditions = _base_conditions(payload)
     for key, label in (
@@ -535,7 +562,10 @@ def from_code(payload: dict) -> BenchResult:
                 metrics=[m for m in metrics if m.value is not None],
             )
         )
-    # Judge suites: report status honestly, never blended into scores.
+    # Judge suites: a first-class subject either way — graded runs carry a
+    # labeled judge score, ungraded runs a hero-less subject that renderers
+    # MUST show as "not graded" (missing ≠ zero), never blended into the
+    # deterministic headline.
     gates: list[Gate] = []
     for suite in ("coding", "coding_hard"):
         block = cr.get(suite)
@@ -544,6 +574,40 @@ def from_code(payload: dict) -> BenchResult:
         tasks = block.get("tasks") or []
         judged = sum(1 for t in tasks if (t.get("judge") or {}).get("scores"))
         errored = sum(1 for t in tasks if (t.get("judge") or {}).get("error"))
+        all_scores = [
+            _num(v)
+            for t in tasks
+            for v in ((t.get("judge") or {}).get("scores") or {}).values()
+            if _num(v) is not None
+        ]
+        hero = None
+        if all_scores:
+            hero = MetricValue(
+                "judge_score",
+                "judge score",
+                round(sum(all_scores) / len(all_scores) * 10, 1),
+                "%",
+                n=judged,
+                direction="higher",
+                caveat="LLM-judged (0-10 criteria scaled to %)",
+            )
+        subjects.append(
+            Subject(
+                label=suite.replace("_", "-"),
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=[
+                    MetricValue(
+                        "transcripts",
+                        "transcripts captured",
+                        float(len(tasks)),
+                        n=len(tasks),
+                        direction="neutral",
+                    )
+                ],
+            )
+        )
         if judged == 0 and tasks:
             gates.append(
                 Gate(f"{suite}_judge", True, "judge offline — transcripts captured, not graded")

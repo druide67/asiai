@@ -690,6 +690,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
     _persist_mode_run(args, "agentic", result)
+    _card_mode_result(args, "agentic", result)
     return _export_mode_result(args, "agentic", result)
 
 
@@ -700,6 +701,24 @@ def _persist_mode_run(args: argparse.Namespace, bench_type: str, payload: dict) 
 
     db_path = getattr(args, "db", None) or DEFAULT_DB_PATH
     persist_bench_run(db_path, bench_type, payload)
+
+
+def _card_mode_result(args: argparse.Namespace, bench_type: str, payload: dict) -> None:
+    """Render the adaptive card for a mode payload when --card is set."""
+    if not getattr(args, "card", False):
+        return
+    try:
+        from asiai.benchmark.card import save_card
+        from asiai.benchmark.cards import generate_card
+        from asiai.benchmark.result_model import build_result
+        from asiai.display.formatters import green
+
+        svg_path = save_card(generate_card(build_result(bench_type, payload)), fmt="svg")
+        print(f"  {green('✓')} Card saved: {svg_path}")
+    except Exception as e:  # a card failure must never lose a finished bench
+        from asiai.display.formatters import yellow
+
+        print(yellow(f"  ⚠ card generation failed: {e}"), file=sys.stderr)
 
 
 def _export_mode_result(args: argparse.Namespace, bench_type: str, payload: dict) -> int:
@@ -878,6 +897,7 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
             _json.dump(result, f, indent=2)
         print(f"\nSaved {args.burst_output}")
     _persist_mode_run(args, "burst", result)
+    _card_mode_result(args, "burst", result)
     return _export_mode_result(args, "burst", result)
 
 
@@ -1032,6 +1052,7 @@ def _run_code_bench(args: argparse.Namespace) -> int:
     if args.code_output:
         print(f"\nSaved {args.code_output}")
     _persist_mode_run(args, "code", result)
+    _card_mode_result(args, "code", result)
     return _export_mode_result(args, "code", result)
 
 
@@ -1160,6 +1181,7 @@ def _run_language_bench(args: argparse.Namespace) -> int:
     if args.language_output:
         print(f"\nSaved {args.language_output}")
     _persist_mode_run(args, "language", result)
+    _card_mode_result(args, "language", result)
     return _export_mode_result(args, "language", result)
 
 
@@ -1279,6 +1301,7 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
     if args.instruct_output:
         print(f"\nSaved {args.instruct_output}")
     _persist_mode_run(args, "instruct", result)
+    _card_mode_result(args, "instruct", result)
     return _export_mode_result(args, "instruct", result)
 
 
@@ -1352,6 +1375,7 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
     if args.thinking_ablation_output:
         print(f"\nSaved {args.thinking_ablation_output}")
     _persist_mode_run(args, "thinking-ablation", result)
+    _card_mode_result(args, "thinking-ablation", result)
     return _export_mode_result(args, "thinking-ablation", result)
 
 
@@ -1584,28 +1608,16 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Benchmark card generation (before share so SVG can be included in payload)
     card_svg = ""
     if getattr(args, "card", False) and bench_run.results:
-        from asiai.benchmark.card import (
-            extract_card_metadata,
-            generate_card_svg,
-            get_share_url,
-            save_card,
-        )
+        from asiai.benchmark.card import get_share_url, save_card
+        from asiai.benchmark.cards import generate_card
+        from asiai.benchmark.reporter import build_export_payload
+        from asiai.benchmark.result_model import build_result
         from asiai.display.formatters import dim, green
 
-        first_result = bench_run.results[0]
-        eng_vers, pw_data, eng_quants = extract_card_metadata(bench_run.results)
-        card_svg = generate_card_svg(
-            report,
-            hw_chip=first_result.get("hw_chip", ""),
-            model_quantization=first_result.get("model_quantization", ""),
-            ram_gb=first_result.get("ram_gb", 0),
-            gpu_cores=first_result.get("gpu_cores", 0),
-            context_size=first_result.get("context_size", 0),
-            engine_versions=eng_vers,
-            power_data=pw_data,
-            engine_quants=eng_quants,
-            kv_cache_type=kv_cache_type,
-        )
+        session_payload = build_export_payload(bench_run.results, report)
+        if kv_cache_type:
+            session_payload.setdefault("benchmark", {})["kv_cache_type"] = kv_cache_type
+        card_svg = generate_card(build_result("standard", session_payload))
         svg_path = save_card(card_svg, fmt="svg")
         print(f"  {green('✓')} Card saved: {svg_path}")
 
