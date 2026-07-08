@@ -27,9 +27,121 @@
     </p>
 </div>
 
+<!-- Bench type selector -->
+<div class="filter-bar fade-in" style="margin-bottom: 1rem;">
+    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Bench type:</span>
+    <button class="filter-chip active" data-btype="" onclick="setWebBenchType('', this)">throughput</button>
+    <button class="filter-chip" data-btype="agentic" onclick="setWebBenchType('agentic', this)">agentic</button>
+    <button class="filter-chip" data-btype="burst" onclick="setWebBenchType('burst', this)">burst</button>
+    <button class="filter-chip" data-btype="code" onclick="setWebBenchType('code', this)">code</button>
+    <button class="filter-chip" data-btype="language" onclick="setWebBenchType('language', this)">language</button>
+    <button class="filter-chip" data-btype="instruct" onclick="setWebBenchType('instruct', this)">instruct</button>
+    <button class="filter-chip" data-btype="thinking-ablation" onclick="setWebBenchType('thinking-ablation', this)">thinking</button>
+</div>
+
 <div class="fade-in" style="max-width: 720px;">
+    <!-- Mode form (non-throughput bench types) -->
+    <div class="card" id="mode-form-card" style="display: none;">
+        <h3 class="card-title" id="mode-form-title">Bench options</h3>
+        <p class="text-neutral-500 text-xs" id="mode-form-hint" style="margin-bottom: 0.75rem;"></p>
+        <form id="mode-form">
+            <div class="form-group">
+                <label class="form-label">Engine (one target)</label>
+                <select name="mode_engine" class="form-select" id="mode-engine">
+                    {% for engine in engines %}
+                    <option value="{{ engine.name }}">{{ engine.name }}{% if not engine.reachable %} (unreachable){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Model <span class="text-neutral-500 text-xs">(blank = first loaded model)</span></label>
+                <input type="text" name="mode_model" class="form-input" placeholder="auto">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Runs / repeats: <span id="mode-runs-value">1</span></label>
+                <input type="range" name="mode_runs" class="form-range" min="1" max="10" value="1"
+                       oninput="document.getElementById('mode-runs-value').textContent = this.value">
+            </div>
+
+            <!-- agentic -->
+            <div class="form-group mode-group" data-modes="agentic" style="display: none;">
+                <label class="form-checkbox">
+                    <input type="checkbox" name="agentic_skip_long">
+                    Skip long phases
+                </label>
+            </div>
+
+            <!-- burst -->
+            <div class="form-group mode-group" data-modes="burst" style="display: none;">
+                <label class="form-label">Burst sizes <span class="text-neutral-500 text-xs">(comma-separated)</span></label>
+                <input type="text" name="burst_sizes" class="form-input" placeholder="10,30,60">
+                <label class="form-label" style="margin-top: 0.5rem;">Max tokens per call</label>
+                <input type="number" name="burst_max_tokens" class="form-input" value="64" min="1" max="4096">
+            </div>
+
+            <!-- code -->
+            <div class="form-group mode-group" data-modes="code" style="display: none;">
+                <label class="form-label">Suites</label>
+                {% for suite in code_suites %}
+                <label class="form-checkbox">
+                    <input type="checkbox" name="code_suites" value="{{ suite }}"
+                           {% if suite in ('tool-call', 'recovery', 'thinking') %}checked{% endif %}>
+                    {{ suite }}
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- language -->
+            <div class="form-group mode-group" data-modes="language" style="display: none;">
+                <label class="form-label">Language</label>
+                <select name="language" class="form-select">
+                    {% for lang in languages %}
+                    <option value="{{ lang }}">{{ lang }}</option>
+                    {% endfor %}
+                </select>
+                <label class="form-label" style="margin-top: 0.5rem;">Suites</label>
+                {% for suite in language_suites %}
+                <label class="form-checkbox">
+                    <input type="checkbox" name="language_suites" value="{{ suite }}"
+                           {% if suite != 'fluency' %}checked{% endif %}>
+                    {{ suite }}
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- instruct -->
+            <div class="form-group mode-group" data-modes="instruct" style="display: none;">
+                <label class="form-label">Scenarios <span class="text-neutral-500 text-xs">(none = default set)</span></label>
+                {% for scenario in instruct_scenarios %}
+                <label class="form-checkbox">
+                    <input type="checkbox" name="instruct_scenarios" value="{{ scenario }}">
+                    {{ scenario }}
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- judge (code + language) -->
+            <div class="form-group mode-group" data-modes="code language" style="display: none;">
+                <label class="form-label">LLM judge <span class="text-neutral-500 text-xs">(optional — API key comes from the SERVER env, never this form)</span></label>
+                <input type="text" name="judge_url" class="form-input" placeholder="judge URL (blank = deterministic checks only)">
+                <input type="text" name="judge_model" class="form-input" placeholder="judge model" style="margin-top: 0.5rem;">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">extra_body <span class="text-neutral-500 text-xs">(optional JSON — sampling params)</span></label>
+                <input type="text" name="mode_extra_body" class="form-input"
+                       placeholder='{"chat_template_kwargs": {"enable_thinking": false}}'>
+            </div>
+
+            <button type="submit" id="mode-submit" class="btn btn-primary"
+                    {% if bench_running %}disabled{% endif %}>
+                Run bench
+            </button>
+        </form>
+    </div>
+
     <!-- Benchmark form -->
-    <div class="card">
+    <div class="card" id="standard-form-card">
         <details id="advanced-options">
             <summary class="card-title advanced-toggle">
                 <span class="chevron">&#9654;</span> Advanced options
@@ -346,6 +458,121 @@
         quickBtn.disabled = false;
     }
 
+    // ── Bench type switcher (mode forms) ─────────────────────────
+    var webBenchType = '';
+    var MODE_HINTS = {
+        'agentic': '8-run prefix-cache reuse protocol — several minutes per repeat.',
+        'burst': 'N-parallel concurrent calls — heavy load on the engine while it runs.',
+        'code': 'Deterministic dev-quality suites; the optional LLM judge grades coding tasks.',
+        'language': 'Multilingual retention suites; fluency needs the optional judge.',
+        'instruct': 'Instruction-following: IFEval-style verifiable + agentic deliverables.',
+        'thinking-ablation': 'Thinking on/off ablation on a tool-call-stress load.'
+    };
+
+    function setWebBenchType(type, btn) {
+        webBenchType = type || '';
+        document.querySelectorAll('.filter-chip[data-btype]').forEach(function(c) {
+            c.classList.remove('active');
+        });
+        btn.classList.add('active');
+        var modeCard = document.getElementById('mode-form-card');
+        var stdCard = document.getElementById('standard-form-card');
+        if (!webBenchType) {
+            modeCard.style.display = 'none';
+            stdCard.style.display = '';
+            quickBtn.disabled = false;
+            return;
+        }
+        stdCard.style.display = 'none';
+        modeCard.style.display = '';
+        quickBtn.disabled = true;
+        document.getElementById('mode-form-title').textContent = webBenchType + ' bench';
+        document.getElementById('mode-form-hint').textContent = MODE_HINTS[webBenchType] || '';
+        document.querySelectorAll('#mode-form .mode-group').forEach(function(g) {
+            var modes = (g.dataset.modes || '').split(' ');
+            g.style.display = modes.indexOf(webBenchType) >= 0 ? '' : 'none';
+        });
+    }
+    window.setWebBenchType = setWebBenchType;
+
+    var modeForm = document.getElementById('mode-form');
+    var modeSubmit = document.getElementById('mode-submit');
+    modeForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!webBenchType) return;
+        modeSubmit.disabled = true;
+        disableAllBenchButtons();
+        showBenchProgress();
+
+        var formData = new FormData(modeForm);
+        formData.append('bench_type', webBenchType);
+
+        fetch('/bench/run', { method: 'POST', body: formData })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    modeSubmit.disabled = false;
+                    showError(data.error);
+                    return;
+                }
+                startBenchSSE();
+            })
+            .catch(function(err) {
+                modeSubmit.disabled = false;
+                showError(err.message);
+            });
+    });
+
+    function renderModeResult(data) {
+        var container = document.getElementById('bench-results');
+        container.textContent = '';
+        var card = document.createElement('div');
+        card.className = 'card';
+        var title = document.createElement('h3');
+        title.className = 'card-title';
+        title.textContent = data.bench_type + ' bench — report';
+        card.appendChild(title);
+
+        var actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;';
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'btn';
+        copyBtn.textContent = 'Copy markdown';
+        var dlLink = document.createElement('a');
+        dlLink.className = 'btn';
+        dlLink.textContent = 'Open .md';
+        dlLink.href = '/bench/report/' + data.result_run_id + '.md';
+        dlLink.target = '_blank';
+        var histLink = document.createElement('a');
+        histLink.className = 'btn';
+        histLink.textContent = 'View in History';
+        histLink.href = '/history';
+        actions.appendChild(copyBtn);
+        actions.appendChild(dlLink);
+        actions.appendChild(histLink);
+        card.appendChild(actions);
+
+        var pre = document.createElement('pre');
+        pre.style.cssText = 'max-height:420px;overflow:auto;font-size:0.72rem;' +
+            'background:var(--bg-elevated);padding:0.9rem;border-radius:0.4rem;white-space:pre-wrap;';
+        pre.textContent = 'Loading report…';
+        card.appendChild(pre);
+        container.appendChild(card);
+
+        fetch('/bench/report/' + data.result_run_id + '.md')
+            .then(function(res) { return res.ok ? res.text() : null; })
+            .then(function(md) {
+                pre.textContent = md || 'Report unavailable.';
+                copyBtn.addEventListener('click', function() {
+                    navigator.clipboard.writeText(md || '').then(function() {
+                        copyBtn.textContent = 'Copied ✓';
+                        setTimeout(function() { copyBtn.textContent = 'Copy markdown'; }, 1500);
+                    });
+                });
+            })
+            .catch(function() { pre.textContent = 'Report unavailable.'; });
+    }
+
     // Quick Bench button
     quickBtn.addEventListener('click', function() {
         disableAllBenchButtons();
@@ -417,6 +644,13 @@
                 statusDiv.appendChild(doneP);
 
                 enableAllBenchButtons();
+                if (modeSubmit) modeSubmit.disabled = false;
+
+                if (data.bench_type && data.result_run_id) {
+                    // Mode bench: render the markdown report panel.
+                    renderModeResult(data);
+                    return;
+                }
 
                 // Render share section from SSE data
                 renderShareSection(data);
