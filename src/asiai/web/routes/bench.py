@@ -288,9 +288,7 @@ def _run_benchmark_thread(
             from asiai.benchmark.persist import persist_standard_session
             from asiai.benchmark.reporter import build_export_payload
 
-            persist_standard_session(
-                state.db_path, build_export_payload(bench_run.results, report)
-            )
+            persist_standard_session(state.db_path, build_export_payload(bench_run.results, report))
 
         # --- Card generation (never blocks benchmark completion) ---
         if not generate_card:
