@@ -1519,10 +1519,10 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # the standard mode the same one-row-per-run history the other modes
     # get, instead of being reconstructed by grouping fine-grained rows.
     if bench_run.results:
-        from asiai.benchmark.persist import persist_bench_run
+        from asiai.benchmark.persist import persist_standard_session
         from asiai.benchmark.reporter import build_export_payload
 
-        persist_bench_run(db_path, "standard", build_export_payload(bench_run.results, report))
+        persist_standard_session(db_path, build_export_payload(bench_run.results, report))
 
     # Export to JSON if requested
     export_path = getattr(args, "export", None)

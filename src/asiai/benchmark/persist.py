@@ -59,9 +59,12 @@ def _headline_agentic(payload: dict) -> tuple[float | None, str, int]:
         failed += 1
     if gates.get("duplicate_processes"):
         failed += 1
+    # _summarize_output emits output_valid_pct + min_valid_pct — the gate
+    # fails on the SAME threshold the bench itself uses for its verdict.
     validity = gates.get("output_validity") or {}
-    pct_valid = _num(validity.get("pct_valid"))
-    if pct_valid is not None and pct_valid < 100:
+    pct_valid = _num(validity.get("output_valid_pct"))
+    min_valid = _num(validity.get("min_valid_pct"))
+    if pct_valid is not None and pct_valid < (min_valid if min_valid is not None else 100):
         failed += 1
     return _num(reuse.get("reuse_fraction")), "reuse_fraction", failed
 
@@ -75,7 +78,12 @@ def _headline_burst(payload: dict) -> tuple[float | None, str, int]:
             size = int(size_str)
         except (TypeError, ValueError):
             continue
-        if data.get("errors_count"):
+        # runs>1 folds errors_count into {"median","min","max"} — always
+        # truthy as a dict, so unwrap to max ("at least one pass errored").
+        errors = data.get("errors_count")
+        if isinstance(errors, dict):
+            errors = errors.get("max", 0)
+        if _num(errors):
             failed += 1
         if max_size is None or size > max_size:
             max_size = size
@@ -158,10 +166,26 @@ def extract_headline(bench_type: str, payload: dict) -> tuple[float | None, str,
         return None, "", 0
 
 
+def persist_standard_session(db_path: str, payload: dict) -> int | None:
+    """Persist a standard-mode session row, skipping empty shells.
+
+    A model-compare session built through ``build_report`` has no
+    ``benchmark.engines`` — persisting it would write a ghost row
+    (engine="", model="", score NULL). Compare-session history is a
+    follow-up; until then, skip rather than pollute.
+    """
+    if not (payload.get("benchmark") or {}).get("engines"):
+        logger.debug("Skipping bench_runs session row: no engines in payload")
+        return None
+    return persist_bench_run(db_path, "standard", payload)
+
+
 def persist_bench_run(db_path: str, bench_type: str, payload: dict) -> int | None:
     """Store one complete bench run; returns the row id, or None on failure."""
     try:
         score, label, gates_failed = extract_headline(bench_type, payload)
+        if score is None:
+            label = ""  # a label without a score would mislabel the NULL
         extra_body = payload.get("extra_body") or {}
         # The standard session payload (export schema v2) nests hardware
         # under "machine"; the six mode payloads carry it at top level.

@@ -356,9 +356,11 @@ MIGRATIONS = [
         ],
     },
     # v1.24: provenance/repro fields that _run_single always computed but
-    # store_benchmark silently dropped. -1 on the two flags = "unknown"
-    # (rows written before this migration), so old rows are never mistaken
-    # for a validated 0/false.
+    # store_benchmark silently dropped. The two flags default to NULL
+    # ("unknown") on pre-migration rows — NOT a sentinel like -1, which
+    # is truthy and would poison every boolean reader (aggregate_results
+    # counts `not output_degenerate` as clean: NULL keeps the exact
+    # pre-migration semantics of an absent key).
     {
         "table": "benchmarks",
         "columns": [
@@ -370,9 +372,9 @@ MIGRATIONS = [
             "asiai_version",
         ],
         "sql": [
-            "ALTER TABLE benchmarks ADD COLUMN output_degenerate INTEGER DEFAULT -1",
+            "ALTER TABLE benchmarks ADD COLUMN output_degenerate INTEGER",
             "ALTER TABLE benchmarks ADD COLUMN ttft_source TEXT DEFAULT ''",
-            "ALTER TABLE benchmarks ADD COLUMN vram_estimated INTEGER DEFAULT -1",
+            "ALTER TABLE benchmarks ADD COLUMN vram_estimated INTEGER",
             "ALTER TABLE benchmarks ADD COLUMN engine_runner TEXT DEFAULT ''",
             "ALTER TABLE benchmarks ADD COLUMN extra_body TEXT DEFAULT ''",
             "ALTER TABLE benchmarks ADD COLUMN asiai_version TEXT DEFAULT ''",

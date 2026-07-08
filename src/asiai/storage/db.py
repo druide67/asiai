@@ -241,10 +241,12 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("tokens_source", ""),
                     r.get("prompt_tokens", 0),
                     r.get("prefill_tok_s", 0.0),
-                    # Booleans stored as 0/1; -1 = unknown (key absent).
-                    int(r["output_degenerate"]) if "output_degenerate" in r else -1,
+                    # Booleans stored as 0/1; NULL = unknown (key absent) —
+                    # NULL reads back falsy, preserving the pre-migration
+                    # semantics for every boolean consumer.
+                    int(r["output_degenerate"]) if "output_degenerate" in r else None,
                     r.get("ttft_source", ""),
-                    int(r["vram_estimated"]) if "vram_estimated" in r else -1,
+                    int(r["vram_estimated"]) if "vram_estimated" in r else None,
                     r.get("engine_runner", ""),
                     r.get("extra_body", ""),
                     r.get("asiai_version", ""),

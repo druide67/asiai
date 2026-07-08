@@ -164,6 +164,8 @@ class TestPersistPerType:
                 "early_stop": {"detected": True, "truncated_runs": [{"phase": "warm-1"}]},
                 "memory_pressure": {"alerted": False},
                 "duplicate_processes": [],
+                # Real _summarize_output shape: output_valid_pct + min_valid_pct.
+                "output_validity": {"output_valid_pct": 100.0, "min_valid_pct": 80},
             },
             **_meta("agentic"),
         }
@@ -174,6 +176,19 @@ class TestPersistPerType:
         assert row["hw_chip"] == "Apple M5 Max"
         assert row["asiai_version"] == "1.24.0"
         assert row["powermode"] == 2
+
+    def test_agentic_output_validity_gate_fires(self):
+        # Below the bench's own min_valid_pct threshold → counts as failed.
+        _score, _label, failed = extract_headline(
+            "agentic",
+            {
+                "prefix_cache_reuse": {"reuse_fraction": 0.9},
+                "quality_gates": {
+                    "output_validity": {"output_valid_pct": 50.0, "min_valid_pct": 80}
+                },
+            },
+        )
+        assert failed == 1
 
     def test_burst(self):
         payload = {
@@ -210,6 +225,26 @@ class TestPersistPerType:
         assert score == 2000.0
         assert label == "p95_ms_at_burst_30"
         assert failed == 0
+
+    def test_burst_multi_runs_errors_dict_zero_not_counted(self):
+        # runs>1: _aggregate_passes folds errors_count into a dict — a
+        # zero-error dict is truthy and must NOT count as a failed gate.
+        payload = {
+            "engine": "llamacpp",
+            "model": "m",
+            "results": {
+                "30": {
+                    "latency_ms": {"p95": {"median": 1000.0, "min": 900.0, "max": 1100.0}},
+                    "errors_count": {"median": 0, "min": 0, "max": 0},
+                },
+                "60": {
+                    "latency_ms": {"p95": {"median": 3000.0, "min": 2800.0, "max": 3200.0}},
+                    "errors_count": {"median": 0, "min": 0, "max": 2},
+                },
+            },
+        }
+        _score, _label, failed = extract_headline("burst", payload)
+        assert failed == 1  # only the size where at least one pass errored
 
     def test_code(self):
         payload = {
@@ -397,8 +432,10 @@ class TestMigrationAndRetention:
         finally:
             os.unlink(path)
 
-    def test_new_columns_default_to_unknown_not_false(self):
-        """Rows written without the flags read as -1 (unknown), never 0."""
+    def test_new_columns_default_to_null_unknown(self):
+        """Rows written without the flags read as NULL (unknown) — NEVER a
+        truthy sentinel like -1, which would make every pre-migration row
+        read as degenerate and poison aggregate_results/compare/winner."""
         path = _make_db()
         try:
             store_benchmark(
@@ -410,7 +447,52 @@ class TestMigrationAndRetention:
                 "SELECT output_degenerate, vram_estimated FROM benchmarks"
             ).fetchone()
             conn.close()
-            assert row == (-1, -1)
+            assert row == (None, None)
+        finally:
+            os.unlink(path)
+
+    def test_pre_migration_rows_stay_clean_for_aggregation(self):
+        """Regression (audit PR#55 critique): historic rows must aggregate
+        exactly as before the migration — never counted degenerate."""
+        from asiai.benchmark.reporter import aggregate_results
+        from asiai.storage.db import query_benchmarks
+
+        path = _make_db()
+        try:
+            store_benchmark(
+                path,
+                [
+                    {
+                        "ts": NOW,
+                        "engine": "ollama",
+                        "model": "m",
+                        "prompt_type": "code",
+                        "tok_per_sec": 42.0,
+                        "ttft_ms": 100.0,
+                        # no output_degenerate key — pre-migration shape
+                    }
+                ],
+            )
+            rows = query_benchmarks(path)
+            report = aggregate_results(rows)
+            assert report["engines"]["ollama"]["output_valid_pct"] == 100.0
+        finally:
+            os.unlink(path)
+
+    def test_compare_session_ghost_rows_skipped(self):
+        from asiai.benchmark.persist import persist_standard_session
+
+        path = _make_db()
+        try:
+            # build_report output has no benchmark.engines → skip, no ghost.
+            assert persist_standard_session(path, {"benchmark": {"slots": []}}) is None
+            assert query_bench_runs(path) == []
+            # A real session payload still persists.
+            ok = persist_standard_session(
+                path,
+                {"timestamp": NOW, "benchmark": {"model": "m", "engines": {"e": {}}}},
+            )
+            assert ok is not None
         finally:
             os.unlink(path)
 
