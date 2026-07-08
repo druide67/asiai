@@ -283,13 +283,14 @@ def store_benchmark_process(db_path: str, results: list[dict]) -> None:
         conn.close()
 
 
-# Columns of bench_runs minus the payload — the list views (History page,
+# SELECT of bench_runs minus the payload — the list views (History page,
 # CLI history) never need the full JSON, so it stays opt-in per row.
-_BENCH_RUN_META_COLS = (
-    "id, ts, finished_ts, bench_type, engine, engine_version, model, "
+# A plain literal (not an f-string) so bandit B608 sees no string-built SQL.
+_BENCH_RUNS_SELECT = (
+    "SELECT id, ts, finished_ts, bench_type, engine, engine_version, model, "
     "asiai_version, schema_version, dataset_version, hw_chip, machine_model, "
     "os_version, ram_gb, powermode, extra_body, score_primary, score_label, "
-    "gates_failed"
+    "gates_failed FROM bench_runs WHERE 1=1"
 )
 
 
@@ -353,7 +354,7 @@ def query_bench_runs(
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        query = f"SELECT {_BENCH_RUN_META_COLS} FROM bench_runs WHERE 1=1"
+        query = _BENCH_RUNS_SELECT
         params: list = []
         if bench_type:
             query += " AND bench_type = ?"
