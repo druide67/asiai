@@ -298,9 +298,11 @@
     function loadData() {
         var qs = buildQuery();
         if (currentType) {
-            fetch('/api/bench-runs?type=' + encodeURIComponent(currentType) + '&' + qs)
+            var requestedType = currentType;
+            fetch('/api/bench-runs?type=' + encodeURIComponent(requestedType) + '&' + qs)
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
+                    if (requestedType !== currentType) return; // stale response
                     var runs = data && Array.isArray(data.runs) ? data.runs : [];
                     renderRunsChart(runs);
                     renderRunsTable(runs);
@@ -653,7 +655,9 @@
         if (procRssChart) { procRssChart.destroy(); procRssChart = null; }
 
         var section = document.getElementById('process-metrics-section');
-        if (!rows || rows.length === 0) {
+        // The fetch resolves async: never resurface the section while a
+        // non-throughput type view is active (applyTypeVisibility hid it).
+        if (!rows || rows.length === 0 || currentType) {
             section.style.display = 'none';
             return;
         }
@@ -786,9 +790,12 @@
             btn.classList.remove('active');
             return;
         }
+        if (btn.disabled) return; // fetch already in flight
+        btn.disabled = true;
         fetch('/api/bench-runs/' + encodeURIComponent(runId))
             .then(function(res) { return res.ok ? res.json() : null; })
             .then(function(run) {
+                btn.disabled = false;
                 if (!run) return;
                 var row = document.createElement('tr');
                 row.dataset.payloadRow = String(runId);
@@ -804,7 +811,10 @@
                 tr.insertAdjacentElement('afterend', row);
                 btn.classList.add('active');
             })
-            .catch(function(err) { console.error('Failed to load payload:', err); });
+            .catch(function(err) {
+                btn.disabled = false;
+                console.error('Failed to load payload:', err);
+            });
     }
 
     // Cleanup: destroy all charts when leaving page
