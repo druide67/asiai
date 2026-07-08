@@ -153,6 +153,9 @@ function createTimeChart(elementId, seriesData, opts = {}) {
             horizontalAlign: 'left',
             labels: { colors: isLightTheme() ? '#525252' : '#a3a3a3' },
         },
+        // Optional marker config (e.g. discrete red points for runs whose
+        // quality gates failed) — passed through verbatim when provided.
+        ...(opts.markers ? { markers: opts.markers } : {}),
     });
 
     const chart = new ApexCharts(document.querySelector(`#${elementId}`), options);

@@ -104,6 +104,68 @@ async def api_benchmarks(
     )
 
 
+_BENCH_TYPES = frozenset(
+    {"standard", "agentic", "burst", "code", "language", "instruct", "thinking-ablation"}
+)
+
+
+@router.get("/api/bench-runs")
+async def api_bench_runs(
+    request: Request,
+    type: str = Query(default="", max_length=32),
+    model: str = Query(default="", max_length=128),
+    engine: str = Query(default="", max_length=64),
+    hours: int = Query(default=0, ge=0, le=87600),
+    since: int = Query(default=0, ge=0),
+    until: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> JSONResponse:
+    """JSON API: bench_runs rows (any bench type), WITHOUT payloads.
+
+    One row per complete run; ``score_primary`` is only comparable within
+    one ``score_label`` — the label is part of the row for that reason.
+    Fetch a run's full payload via ``/api/bench-runs/{run_id}``.
+    """
+    state = request.app.state.app_state
+
+    if type and type not in _BENCH_TYPES:
+        return JSONResponse({"error": "unknown bench type"}, status_code=422)
+
+    from asiai.storage.db import query_bench_runs
+
+    rows = await asyncio.to_thread(
+        query_bench_runs,
+        state.db_path,
+        type,
+        model,
+        engine,
+        hours,
+        since,
+        until,
+        limit,
+    )
+    return JSONResponse({"runs": rows, "count": len(rows)})
+
+
+@router.get("/api/bench-runs/{run_id}")
+async def api_bench_run_detail(request: Request, run_id: int) -> JSONResponse:
+    """JSON API: one bench run WITH its full payload (drill-down)."""
+    import json as _json
+
+    state = request.app.state.app_state
+
+    from asiai.storage.db import get_bench_run
+
+    row = await asyncio.to_thread(get_bench_run, state.db_path, run_id)
+    if row is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    try:
+        row["payload"] = _json.loads(row["payload"])
+    except (ValueError, TypeError):
+        pass  # serve the raw string rather than 500 on a corrupt payload
+    return JSONResponse(row)
+
+
 @router.get("/api/benchmark-process")
 async def api_benchmark_process(
     request: Request,
