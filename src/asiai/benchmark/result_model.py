@@ -300,6 +300,15 @@ def from_agentic(payload: dict) -> BenchResult:
     if pct_valid is not None:
         min_pct = _num(validity.get("min_valid_pct")) or 0
         gates.append(Gate("output_validity", pct_valid >= min_pct, f"{pct_valid}% valid"))
+    thermal = gates_block.get("thermal") or {}
+    if thermal.get("observed"):
+        gates.append(
+            Gate(
+                "thermal",
+                not thermal.get("throttled"),
+                f"min speed limit {thermal.get('min_speed_limit')}%",
+            )
+        )
 
     rf = _num(reuse.get("reuse_fraction"))
     hero = MetricValue(
@@ -391,6 +400,30 @@ def from_burst(payload: dict) -> BenchResult:
                 direction="higher",
             ),
             MetricValue(
+                "calls_per_s",
+                "calls/s",
+                _scalar(data.get("throughput_calls_per_s")),
+                "",
+                n=n_passes,
+                direction="higher",
+            ),
+            MetricValue(
+                "ttft_p50_ms",
+                "p50 TTFT",
+                _scalar((data.get("ttft_ms") or {}).get("p50")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
+                "ttft_p95_ms",
+                "p95 TTFT",
+                _scalar((data.get("ttft_ms") or {}).get("p95")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
                 "wall_s",
                 "wall time",
                 _scalar(data.get("wall_time_s")),
@@ -446,6 +479,8 @@ _CODE_SUITE_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
         ("pct_json_valid", "JSON valid"),
         ("pct_non_truncated", "non-truncated"),
         ("pct_schema_conform", "schema conform"),
+        ("pct_correct_tool", "correct tool"),
+        ("pct_emitted", "emitted"),
         ("edit_turns_pct_clean", "edit turns clean"),
     ),
     "tool_call_stress": (
@@ -453,6 +488,8 @@ _CODE_SUITE_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
         ("pct_json_valid", "JSON valid"),
         ("pct_non_truncated", "non-truncated"),
         ("pct_schema_conform", "schema conform"),
+        ("pct_correct_tool", "correct tool"),
+        ("pct_emitted", "emitted"),
     ),
     "recovery": (
         ("pct_recovered", "recovered"),
@@ -475,7 +512,8 @@ def from_code(payload: dict) -> BenchResult:
         block = cr.get(suite)
         if not isinstance(block, dict):
             continue
-        metrics = [_pct(k, lbl, block.get(k), n=repeats) for k, lbl in fields]
+        n_turns = int(block.get("turns_scored") or 0) or repeats
+        metrics = [_pct(k, lbl, block.get(k), n=n_turns) for k, lbl in fields]
         bug = block.get("count_empty_object_bug")
         if bug is not None:
             metrics.append(
@@ -512,6 +550,8 @@ def from_code(payload: dict) -> BenchResult:
             )
         elif errored:
             gates.append(Gate(f"{suite}_judge", False, f"{errored} judge errors"))
+        elif judged:
+            gates.append(Gate(f"{suite}_judge", True, f"judged {judged}/{len(tasks)} tasks"))
 
     return BenchResult(
         bench_type="code",
@@ -572,9 +612,13 @@ def from_language(payload: dict) -> BenchResult:
         gates.append(Gate("fluency_judge", False, _fmt(flu.get("error"))))
     elif flu.get("skipped"):
         gates.append(Gate("fluency_judge", True, "judge offline — fluency not scored"))
+    elif flu.get("scores"):
+        gates.append(Gate("fluency_judge", True, f"scored by {_fmt(flu.get('judge_model'))}"))
 
     lang = _fmt(payload.get("language_name") or payload.get("language"))
-    hero = _pct("pct_in_language", "in language", adh.get("pct_in_language"))
+    # Reuse the instance already in metrics so the renderer never
+    # prints the same metric twice (dedup is by identity).
+    hero = metrics[0] if metrics else None
     return BenchResult(
         bench_type="language",
         title=f"Language retention ({lang}) — {payload.get('model', '?')}",
@@ -601,6 +645,8 @@ _INSTRUCT_BLOCKS: tuple[tuple[str, str], ...] = (
     ("research_brief", "research brief"),
     ("research_brief_deep", "research brief (deep)"),
     ("order_control", "order control"),
+    ("loop_search_short", "loop search (short)"),
+    ("loop_search_unconfirmable", "loop search (unconfirmable)"),
     ("honesty_audit", "honesty audit"),
     ("multi_file_scope", "multi-file scope"),
     ("constraint_preservation", "constraint preservation"),
@@ -658,7 +704,8 @@ def from_thinking_ablation(payload: dict) -> BenchResult:
     for cell in payload.get("cells") or []:
         if not isinstance(cell, dict):
             continue
-        hero = _pct("pct_clean", "clean", cell.get("pct_clean"))
+        n_turns = int(cell.get("turns") or 0)
+        hero = _pct("pct_clean", "clean", cell.get("pct_clean"), n=n_turns)
         metrics = [
             MetricValue(
                 "latency_ms_mean",

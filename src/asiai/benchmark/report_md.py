@@ -21,6 +21,13 @@ from asiai.benchmark.result_model import BenchResult, MetricValue
 _DIRECTION_HINT = {"higher": "↑ better", "lower": "↓ better"}
 
 
+def _cell(text: str) -> str:
+    """Sanitize a value for a markdown table cell (pipes and newlines
+    break the table; payload strings are auto-generated, not hostile —
+    this is layout robustness, not a security boundary)."""
+    return text.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+
+
 def _fmt_value(m: MetricValue) -> str:
     if m.value is None:
         return "—"
@@ -43,7 +50,7 @@ def render_markdown(result: BenchResult) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add(f"# {result.title}")
+    add(f"# {_cell(result.title)}")
     add("")
     ts = result.provenance.get("started_at", "")
     date = ""
@@ -74,17 +81,18 @@ def render_markdown(result: BenchResult) -> str:
     add("## Results")
     add("")
     for subject in result.subjects:
-        add(f"### {subject.label}")
+        add(f"### {_cell(subject.label)}")
         add("")
         add("| Metric | Value |")
         add("|---|---|")
+        hero_key = subject.hero.key if subject.hero else None
         rows = ([subject.hero] if subject.hero else []) + [
-            m for m in subject.metrics if m is not subject.hero
+            m for m in subject.metrics if m is not subject.hero and m.key != hero_key
         ]
         for m in rows:
             hint = _DIRECTION_HINT.get(m.direction, "")
-            label = f"{m.label}" + (f" ({hint})" if hint else "")
-            add(f"| {label} | {_with_footnote(m, _fmt_value(m))} |")
+            label = _cell(m.label) + (f" ({hint})" if hint else "")
+            add(f"| {label} | {_with_footnote(m, _cell(_fmt_value(m)))} |")
         add("")
 
     # ── Conditions ───────────────────────────────────────────────────
@@ -94,7 +102,7 @@ def render_markdown(result: BenchResult) -> str:
         add("| Condition | Value |")
         add("|---|---|")
         for key in sorted(result.conditions):
-            add(f"| {key} | {result.conditions[key]} |")
+            add(f"| {_cell(key)} | {_cell(result.conditions[key])} |")
     else:
         add("*No condition metadata recorded — treat comparisons with caution.*")
     add("")
@@ -105,7 +113,7 @@ def render_markdown(result: BenchResult) -> str:
         add("")
         for gate in result.gates:
             mark = "✅" if gate.passed else "❌"
-            detail = f" — {gate.detail}" if gate.detail else ""
+            detail = f" — {_cell(gate.detail)}" if gate.detail else ""
             add(f"- {mark} `{gate.name}`{detail}")
         add("")
 
@@ -117,7 +125,7 @@ def render_markdown(result: BenchResult) -> str:
     for key in sorted(result.provenance):
         if key == "started_at":
             continue  # already rendered as the date
-        add(f"| {key} | {result.provenance[key]} |")
+        add(f"| {_cell(key)} | {_cell(result.provenance[key])} |")
     add("")
 
     if footnotes:

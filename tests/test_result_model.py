@@ -312,3 +312,60 @@ class TestRenderMarkdown:
     def test_extra_body_in_conditions(self):
         md = render_markdown(build_result("agentic", _agentic_payload()))
         assert "enable_thinking" in md
+
+    def test_language_metric_never_duplicated(self):
+        # Regression (audit F3): the hero must be the same instance as the
+        # first metric — "in language" appeared twice.
+        md = render_markdown(build_result("language", _language_payload()))
+        assert md.count("| in language") == 1
+
+    def test_instruct_loop_search_blocks_rendered(self):
+        # Regression (audit F1): loop_search_* scenarios were silently
+        # absent from the report.
+        payload = _instruct_payload()
+        payload["instruct_results"]["loop_search_short"] = {
+            "pct_stopped_cleanly": 70.0,
+            "prompts_scored": 10,
+        }
+        md = render_markdown(build_result("instruct", payload))
+        assert "loop search (short)" in md
+        assert "stopped cleanly" in md
+
+    def test_agentic_thermal_gate_rendered(self):
+        # Regression (audit F4): a throttled run must never render clean.
+        payload = _agentic_payload()
+        payload["quality_gates"]["thermal"] = {
+            "observed": True,
+            "min_speed_limit": 60,
+            "throttled": True,
+        }
+        md = render_markdown(build_result("agentic", payload))
+        assert "❌ `thermal` — min speed limit 60%" in md
+
+    def test_markdown_cells_sanitized(self):
+        # Regression (audit F6): pipes/newlines in payload strings must not
+        # break the table layout.
+        payload = _standard_payload()
+        payload["benchmark"]["model"] = "evil|model\nname"
+        payload["benchmark"]["engines"]["llamacpp"]["model_quantization"] = "Q4|K"
+        md = render_markdown(build_result("standard", payload))
+        assert "Q4\\|K" in md  # pipe escaped in the table cell
+        assert "Q4|K |" not in md  # never raw (would add a column)
+        assert "evil\\|model name" in md  # newline flattened, pipe escaped
+        assert md.splitlines()[0].startswith("# ")  # title stays one line
+
+    def test_burst_ttft_and_calls_rendered(self):
+        payload = _burst_payload()
+        payload["results"]["10"]["ttft_ms"] = {"p50": 110.0, "p95": 450.0, "p99": 800.0}
+        payload["results"]["10"]["throughput_calls_per_s"] = 2.4
+        md = render_markdown(build_result("burst", payload))
+        assert "p50 TTFT" in md
+        assert "calls/s" in md
+
+    def test_code_judged_success_visible(self):
+        payload = _code_payload()
+        payload["code_results"]["coding"]["tasks"] = [
+            {"task": "lru", "judge": {"scores": {"correctness": 8}}, "transcript": []}
+        ]
+        md = render_markdown(build_result("code", payload))
+        assert "judged 1/1 tasks" in md

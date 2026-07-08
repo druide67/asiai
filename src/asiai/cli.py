@@ -722,12 +722,12 @@ def _export_mode_result(args: argparse.Namespace, bench_type: str, payload: dict
             from asiai.benchmark.result_model import build_result
 
             content = render_markdown(build_result(bench_type, payload))
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
         else:
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 _json.dump(payload, f, indent=2)
-    except OSError as e:
+    except Exception as e:  # export must fail loud but never traceback
         print(red(f"✗ export failed: {e}"), file=sys.stderr)
         return 1
     print(f"  {green('✓')} Exported to {path}")
@@ -1557,12 +1557,18 @@ def cmd_bench(args: argparse.Namespace) -> int:
         persist_standard_session(db_path, build_export_payload(bench_run.results, report))
 
     # Export if requested — format by extension (.json unchanged, .md report)
+    # A failed export flips the final exit code (the user asked for an
+    # artifact and did not get one) — same contract as the six modes —
+    # but never skips the card/share/regression steps below.
+    export_rc = 0
     export_path = getattr(args, "export", None)
     if export_path and bench_run.results:
         if export_path.endswith(".md"):
             from asiai.benchmark.reporter import build_export_payload
 
-            _export_mode_result(args, "standard", build_export_payload(bench_run.results, report))
+            export_rc = _export_mode_result(
+                args, "standard", build_export_payload(bench_run.results, report)
+            )
         else:
             path = export_benchmark(bench_run.results, report, export_path)
             from asiai.display.formatters import green
@@ -1669,7 +1675,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
         except OSError:
             pass
 
-    return 0
+    return export_rc
 
 
 def cmd_leaderboard(args: argparse.Namespace) -> int:
