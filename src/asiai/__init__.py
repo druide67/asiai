@@ -1,3 +1,3 @@
 """asiai — Multi-engine LLM benchmark & monitoring CLI for Apple Silicon."""
 
-__version__ = "1.24.0"
+__version__ = "1.25.0"

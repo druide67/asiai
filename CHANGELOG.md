@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.25.0](https://github.com/druide67/asiai/compare/v1.24.0...v1.25.0) — 2026-07-09
+
+### Added
+
+- **Advisory UMA pre-flight** (#61): `asiai.fleet.plan.cohabitation_verdict()` judges
+  whether a preset's memory cost fits next to what a node is already running —
+  `fits` / `tight` / `jetsam-risk` / `thermal-risk` / `unknown`, computed on the
+  pessimistic cost bound. Fail-closed: any unknown input degrades the verdict,
+  never inflates it. Advisory only — nothing blocks an install.
+- `GET /api/v1/plan?preset=&engine=` (node-local): fetches the preset cost from the
+  `aisctl serve` planner (asiai-inference-server ≥ 0.11) and returns the verdict with
+  projected free memory, eviction set and reasons. Degrades cleanly (`unknown` + note)
+  when the companion or its planner endpoint is absent.
+- Cockpit install modal: the memory-advisory block is now live — each preset choice
+  fetches the target node's plan through the hub proxy and renders the verdict badge,
+  projected free memory and eviction set. The confirm button is never gated.
+- `iogpu.wired_limit_mb` (unprivileged sysctl) collected into memory info and used as
+  a second ceiling in the verdict (caps `fits` at `tight`).
+
+### Changed
+
+- Per-node read proxy: query params now validate against per-param patterns
+  (digit-only for the six existing endpoints — behavior unchanged; identifier
+  grammars for the new `plan` entry).
+
 ## [1.24.0](https://github.com/druide67/asiai/compare/v1.23.0...v1.24.0) — 2026-07-09
 
 Every bench remembered, every bench reportable, every bench runnable
