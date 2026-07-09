@@ -403,6 +403,13 @@ async def run_benchmark(
         report = aggregate_results(bench_run.results)
         report["model"] = resolved_model  # type: ignore[possibly-undefined]
 
+    # Session-level bench_runs row (same as the CLI/web paths).
+    if bench_run.results:
+        from asiai.benchmark.persist import persist_standard_session
+        from asiai.benchmark.reporter import build_export_payload
+
+        persist_standard_session(app_ctx.db_path, build_export_payload(bench_run.results, report))
+
     report["errors"] = bench_run.errors
     report["total_runs"] = len(bench_run.results)
 

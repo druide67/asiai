@@ -282,6 +282,14 @@ def _run_benchmark_thread(
         report = aggregate_results(bench_run.results)
         report["model"] = actual_model
 
+        # Session-level bench_runs row (same as the CLI path — the web
+        # must not be an amnesiac producer).
+        if bench_run.results:
+            from asiai.benchmark.persist import persist_standard_session
+            from asiai.benchmark.reporter import build_export_payload
+
+            persist_standard_session(state.db_path, build_export_payload(bench_run.results, report))
+
         # --- Card generation (never blocks benchmark completion) ---
         if not generate_card:
             state.update_bench(progress="Benchmark complete", running=False, done=True)

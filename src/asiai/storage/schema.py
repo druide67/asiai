@@ -119,6 +119,32 @@ CREATE TABLE IF NOT EXISTS community_submissions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_community_ts ON community_submissions(ts);
+
+CREATE TABLE IF NOT EXISTS bench_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    finished_ts INTEGER DEFAULT 0,
+    bench_type TEXT NOT NULL,
+    engine TEXT NOT NULL,
+    engine_version TEXT DEFAULT '',
+    model TEXT NOT NULL,
+    asiai_version TEXT DEFAULT '',
+    schema_version TEXT DEFAULT '',
+    dataset_version TEXT DEFAULT '',
+    hw_chip TEXT DEFAULT '',
+    machine_model TEXT DEFAULT '',
+    os_version TEXT DEFAULT '',
+    ram_gb INTEGER DEFAULT 0,
+    powermode INTEGER,
+    extra_body TEXT DEFAULT '',
+    score_primary REAL,
+    score_label TEXT DEFAULT '',
+    gates_failed INTEGER DEFAULT 0,
+    payload TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bench_runs_ts ON bench_runs(ts);
+CREATE INDEX IF NOT EXISTS idx_bench_runs_type_model ON bench_runs(bench_type, model, ts);
 """
 
 # Migrations from earlier schema versions.
@@ -252,7 +278,8 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN ram_gb INTEGER DEFAULT 0",
         ],
     },
-    # v1.2: benchmark process metrics (separate table, 7d retention)
+    # v1.2: benchmark process metrics (separate table; kept forever since
+    # 1.24 — volume matches benchmarks, the old 7d window was inconsistent)
     {
         "table": "benchmark_process",
         "columns": ["ts"],
@@ -327,5 +354,36 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN prompt_tokens INTEGER DEFAULT 0",
             "ALTER TABLE benchmarks ADD COLUMN prefill_tok_s REAL DEFAULT 0",
         ],
+    },
+    # v1.24: provenance/repro fields that _run_single always computed but
+    # store_benchmark silently dropped. The two flags default to NULL
+    # ("unknown") on pre-migration rows — NOT a sentinel like -1, which
+    # is truthy and would poison every boolean reader (aggregate_results
+    # counts `not output_degenerate` as clean: NULL keeps the exact
+    # pre-migration semantics of an absent key).
+    {
+        "table": "benchmarks",
+        "columns": [
+            "output_degenerate",
+            "ttft_source",
+            "vram_estimated",
+            "engine_runner",
+            "extra_body",
+            "asiai_version",
+        ],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN output_degenerate INTEGER",
+            "ALTER TABLE benchmarks ADD COLUMN ttft_source TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN vram_estimated INTEGER",
+            "ALTER TABLE benchmarks ADD COLUMN engine_runner TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN extra_body TEXT DEFAULT ''",
+            "ALTER TABLE benchmarks ADD COLUMN asiai_version TEXT DEFAULT ''",
+        ],
+    },
+    # v1.24: bench_runs table (created in SCHEMA_SQL, migration is a no-op marker)
+    {
+        "table": "bench_runs",
+        "columns": ["ts"],
+        "sql": [],
     },
 ]

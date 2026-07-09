@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass, field
 
+from asiai import __version__
 from asiai.benchmark.output_gates import check_degenerate
 from asiai.benchmark.prompts import BenchPrompt, generate_context_fill_prompt, get_prompts
 from asiai.benchmark.quality_gates import (
@@ -560,6 +562,10 @@ def _run_single(
             "context_size": context_size,
             "gpu_cores": gpu_cores,
             "ram_gb": ram_gb,
+            # Provenance: sampling params + producing version, so a stored
+            # row is reproducible without the invoking shell history.
+            "extra_body": json.dumps(extra_body, sort_keys=True) if extra_body else "",
+            "asiai_version": __version__,
         }
     )
 
