@@ -8,7 +8,7 @@
     <p>Median throughput per engine × model, from community submissions on api.asiai.dev</p>
 </div>
 
-<div class="filter-bar fade-in">
+<div class="filter-bar fade-in" style="margin-bottom: var(--space-3);">
     <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Chip:</span>
     <button class="filter-chip active" id="lb-chip-all" data-chip="">All chips</button>
     {% if local_chip %}
@@ -20,18 +20,25 @@
     <input type="text" id="lb-model" class="range-input" placeholder="filter by model…" style="min-width: 200px;">
 </div>
 
+<div class="filter-bar fade-in">
+    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Engine:</span>
+    {# Chips are injected from the fetched entries (DOM API + textContent only). #}
+    <span id="lb-engine-chips" style="display: inline-flex; gap: var(--space-2); flex-wrap: wrap;"></span>
+    <span id="lb-count" class="text-xs text-neutral-500" style="margin-left: auto;"></span>
+</div>
+
 <div class="mt-6 fade-in-delay-1">
     <div class="card">
         <div class="overflow-x-auto">
             <table class="results-table" id="lb-table">
                 <thead>
                     <tr>
-                        <th class="text-left">Engine</th>
-                        <th class="text-left">Model</th>
-                        <th class="text-left">Chip</th>
-                        <th class="text-right">tok/s (median)</th>
-                        <th class="text-right">TTFT (median)</th>
-                        <th class="text-right">Samples</th>
+                        <th class="text-left sortable" data-key="engine">Engine</th>
+                        <th class="text-left sortable" data-key="model">Model</th>
+                        <th class="text-left sortable" data-key="chip">Chip</th>
+                        <th class="text-right sortable sort-desc" data-key="median_tok_s">tok/s (median)</th>
+                        <th class="text-right sortable" data-key="median_ttft_ms">TTFT (median)</th>
+                        <th class="text-right sortable" data-key="samples">Samples</th>
                     </tr>
                 </thead>
                 <tbody id="lb-tbody"></tbody>
@@ -49,12 +56,19 @@
 {% block scripts %}
 <script>
     var chipFilter = '';
+    var engineFilter = '';
     var modelTimer = null;
+    var allEntries = [];
+    var sortKey = 'median_tok_s';
+    var sortDir = 'desc';
+    var NUMERIC_KEYS = { median_tok_s: true, median_ttft_ms: true, samples: true };
 
-    document.querySelectorAll('.filter-bar .filter-chip').forEach(function (btn) {
+    // Scope to [data-chip] so the dynamically-injected engine chips keep
+    // their own active state, independent of the chip-filter row.
+    document.querySelectorAll('.filter-bar .filter-chip[data-chip]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             chipFilter = btn.getAttribute('data-chip') || '';
-            document.querySelectorAll('.filter-bar .filter-chip').forEach(function (c) {
+            document.querySelectorAll('.filter-bar .filter-chip[data-chip]').forEach(function (c) {
                 c.classList.remove('active');
             });
             btn.classList.add('active');
@@ -65,6 +79,24 @@
     document.getElementById('lb-model').addEventListener('input', function () {
         clearTimeout(modelTimer);
         modelTimer = setTimeout(loadLeaderboard, 350);
+    });
+
+    document.querySelectorAll('#lb-table th.sortable').forEach(function (th) {
+        th.addEventListener('click', function () {
+            var key = th.getAttribute('data-key');
+            if (sortKey === key) {
+                sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortKey = key;
+                // Numeric columns start with the best value on top.
+                sortDir = NUMERIC_KEYS[key] ? 'desc' : 'asc';
+            }
+            document.querySelectorAll('#lb-table th.sortable').forEach(function (t) {
+                t.classList.remove('sort-asc', 'sort-desc');
+            });
+            th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+            applyView();
+        });
     });
 
     function loadLeaderboard() {
@@ -79,10 +111,83 @@
         fetch(url)
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
-                var entries = data && Array.isArray(data.entries) ? data.entries : [];
-                renderRows(entries);
+                allEntries = data && Array.isArray(data.entries) ? data.entries : [];
+                rebuildEngineChips();
+                applyView();
             })
-            .catch(function () { renderRows([]); });
+            .catch(function () {
+                allEntries = [];
+                rebuildEngineChips();
+                applyView();
+            });
+    }
+
+    function rebuildEngineChips() {
+        var wrap = document.getElementById('lb-engine-chips');
+        wrap.textContent = '';
+        var engines = [];
+        allEntries.forEach(function (e) {
+            var name = typeof e.engine === 'string' ? e.engine : '';
+            if (name && engines.indexOf(name) === -1) engines.push(name);
+        });
+        engines.sort();
+        // A previously selected engine may vanish after a server-side
+        // chip/model refetch — fall back to "all" rather than a dead filter.
+        if (engineFilter && engines.indexOf(engineFilter) === -1) engineFilter = '';
+        [''].concat(engines).forEach(function (name) {
+            var btn = document.createElement('button');
+            btn.className = 'filter-chip' + (name === engineFilter ? ' active' : '');
+            // Engine names are community data: textContent only, no markup.
+            btn.textContent = name || 'All engines';
+            btn.addEventListener('click', function () {
+                engineFilter = name;
+                wrap.querySelectorAll('.filter-chip').forEach(function (c) {
+                    c.classList.remove('active');
+                });
+                btn.classList.add('active');
+                applyView();
+            });
+            wrap.appendChild(btn);
+        });
+    }
+
+    function sortValue(e, key) {
+        if (key === 'chip') {
+            var chip = e.hw_chip || e.chip;
+            return chip ? String(chip).toLowerCase() : null;
+        }
+        if (key === 'samples') {
+            var s = typeof e.samples === 'number' ? e.samples : e.submissions;
+            return typeof s === 'number' ? s : null;
+        }
+        var v = e[key];
+        if (NUMERIC_KEYS[key]) return typeof v === 'number' ? v : null;
+        return v ? String(v).toLowerCase() : null;
+    }
+
+    function sortEntries(entries) {
+        var dir = sortDir === 'asc' ? 1 : -1;
+        return entries.slice().sort(function (a, b) {
+            var va = sortValue(a, sortKey);
+            var vb = sortValue(b, sortKey);
+            // Missing values sink to the bottom in both directions.
+            if (va === null && vb === null) return 0;
+            if (va === null) return 1;
+            if (vb === null) return -1;
+            if (va < vb) return -dir;
+            if (va > vb) return dir;
+            return 0;
+        });
+    }
+
+    function applyView() {
+        var entries = allEntries.filter(function (e) {
+            return !engineFilter || e.engine === engineFilter;
+        });
+        entries = sortEntries(entries);
+        document.getElementById('lb-count').textContent =
+            entries.length + (entries.length === 1 ? ' result' : ' results');
+        renderRows(entries);
     }
 
     function renderRows(entries) {
@@ -90,6 +195,12 @@
         tbody.textContent = '';
         document.getElementById('lb-loading').style.display = 'none';
         document.getElementById('lb-empty').style.display = entries.length ? 'none' : '';
+        var maxTok = 0;
+        entries.forEach(function (e) {
+            if (typeof e.median_tok_s === 'number' && e.median_tok_s > maxTok) {
+                maxTok = e.median_tok_s;
+            }
+        });
         // All community-sourced strings land via textContent — remote data
         // is data, never markup.
         entries.forEach(function (e) {
@@ -99,6 +210,7 @@
                 cell.textContent = text;
                 if (right) cell.className = 'text-right';
                 tr.appendChild(cell);
+                return cell;
             }
             td(e.engine || '?');
             td(e.model || '?');
@@ -107,7 +219,15 @@
             td(e.hw_ram_gb ? chip + ' · ' + e.hw_ram_gb + ' GB' : chip);
             var tok = typeof e.median_tok_s === 'number' ? e.median_tok_s : 0;
             var ttft = typeof e.median_ttft_ms === 'number' ? e.median_ttft_ms : 0;
-            td(tok ? tok.toFixed(1) : '—', true);
+            var tokCell = td(tok ? tok.toFixed(1) : '—', true);
+            if (tok && maxTok > 0) {
+                // Bar sits left of the number so right-aligned digits stay
+                // aligned; width scales against the best displayed value.
+                var bar = document.createElement('span');
+                bar.className = 'lb-bar';
+                bar.style.width = Math.max(2, Math.round((tok / maxTok) * 64)) + 'px';
+                tokCell.insertBefore(bar, tokCell.firstChild);
+            }
             td(ttft ? Math.round(ttft) + ' ms' : '—', true);
             td(String(e.samples || e.submissions || 0), true);
             tbody.appendChild(tr);
