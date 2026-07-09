@@ -33,6 +33,7 @@ import asyncio
 import http.client
 import json as _json
 import logging
+import math
 import os
 import re
 import time
@@ -612,14 +613,19 @@ def _build_plan_response(preset: str, engine: str) -> dict:
     )
     verdict = uma_plan.cohabitation_verdict(cost, node, replaces_engine=engine or None)
 
+    def _finite(x: float) -> float | None:
+        # Starlette serializes with allow_nan=False: a NaN/Infinity echoed
+        # from a buggy cost producer must never crash the response.
+        return x if math.isfinite(x) else None
+
     payload = verdict.as_dict()
     payload.update(
         {
             "preset": preset,
             "engine": engine or None,
             "cost": {
-                "total_mb_low": cost.total_mb_low,
-                "total_mb_high": cost.total_mb_high,
+                "total_mb_low": _finite(cost.total_mb_low),
+                "total_mb_high": _finite(cost.total_mb_high),
                 "confidence": cost.confidence,
             },
             "node": {

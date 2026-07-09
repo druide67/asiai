@@ -14,6 +14,7 @@ gates a command. Unknown inputs degrade to the ``unknown`` verdict
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 # Verdict ladder, worst first. ``unknown`` outranks everything because a
@@ -121,6 +122,21 @@ def cohabitation_verdict(
     """
     reasons: list[str] = []
 
+    # NaN/Infinity sail through ordinary comparisons (nan <= 0 is False),
+    # so a buggy cost producer could otherwise turn missing data into a
+    # silent "fits" — or crash JSON serialization (allow_nan=False).
+    # Finiteness is checked FIRST, on every numeric input.
+    numeric_inputs = (
+        cost.total_mb_low,
+        cost.total_mb_high,
+        node.mem_total_mb,
+        node.mem_used_mb,
+        node.gpu_wired_limit_mb,
+        *node.engine_rss_mb.values(),
+    )
+    if not all(math.isfinite(x) for x in numeric_inputs):
+        return _unknown(("non-finite-input",))
+
     if cost.confidence not in _KNOWN_CONFIDENCES:
         return _unknown((f"cost-confidence-{cost.confidence or 'missing'}",))
     if cost.total_mb_high <= 0 or cost.total_mb_low <= 0:
@@ -158,6 +174,14 @@ def cohabitation_verdict(
         verdict = VERDICT_TIGHT
     else:
         verdict = VERDICT_FITS
+
+    # Pressure is a PRIMARY jetsam signal (unlike thermal, which is
+    # advisory) — when the collector could not read it, the verdict must
+    # not claim a clean fit on headroom arithmetic alone.
+    if node.pressure not in ("normal", "warn", "critical"):
+        reasons.append("pressure-unknown")
+        if verdict == VERDICT_FITS:
+            verdict = VERDICT_TIGHT
 
     # Explicit GPU-wired ceiling: a preset whose pessimistic cost exceeds
     # it can stall Metal allocations even with free RAM left, so a "fits"

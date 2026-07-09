@@ -60,7 +60,9 @@ class TestVerdictMatrix:
 
     @pytest.mark.parametrize("level", ["serious", "critical"])
     def test_thermal_downgrades_fits(self, level):
-        node = NodeState(mem_total_mb=65536.0, mem_used_mb=16384.0, thermal_level=level)
+        node = NodeState(
+            mem_total_mb=65536.0, mem_used_mb=16384.0, pressure="normal", thermal_level=level
+        )
         v = cohabitation_verdict(_cost(4000, 5000), node)
         assert v.verdict == "thermal-risk"
         assert f"thermal-{level}" in v.reasons
@@ -121,12 +123,54 @@ class TestVerdictMatrix:
         ]:
             assert cohabitation_verdict(bad, NODE_64GB).verdict == "unknown"
 
+    @pytest.mark.parametrize(
+        "low,high",
+        [
+            (float("nan"), 8192.0),
+            (7000.0, float("nan")),
+            (float("nan"), float("nan")),
+            (7000.0, float("inf")),
+            (float("-inf"), 8192.0),
+        ],
+    )
+    def test_non_finite_cost_is_unknown(self, low, high):
+        # NaN sails through <=/>: without an explicit isfinite guard a
+        # buggy producer would get a silent "fits" (audit H1). json.loads
+        # accepts NaN/Infinity tokens, so this input is reachable from a
+        # real aisrv response.
+        v = cohabitation_verdict(_cost(low, high), NODE_64GB)
+        assert v.verdict == "unknown"
+        assert "non-finite-input" in v.reasons
+        assert v.projected_free_mb is None  # nothing non-finite escapes
+
+    def test_non_finite_node_is_unknown(self):
+        node = NodeState(mem_total_mb=float("nan"), mem_used_mb=1000.0)
+        assert cohabitation_verdict(_cost(1000, 2000), node).verdict == "unknown"
+        node = NodeState(
+            mem_total_mb=65536.0,
+            mem_used_mb=1000.0,
+            engine_rss_mb={"llamacpp": float("inf")},
+        )
+        assert cohabitation_verdict(_cost(1000, 2000), node).verdict == "unknown"
+
+    def test_pressure_unknown_caps_fits_at_tight(self):
+        # Pressure is a primary jetsam signal: when the collector could
+        # not read it, headroom arithmetic alone may not claim "fits"
+        # (audit M1). Worse verdicts are untouched.
+        node = NodeState(mem_total_mb=65536.0, mem_used_mb=32768.0)  # pressure default
+        v = cohabitation_verdict(_cost(7000, 8192), node)
+        assert v.verdict == "tight"
+        assert "pressure-unknown" in v.reasons
+        risky = NodeState(mem_total_mb=65536.0, mem_used_mb=61440.0)
+        assert cohabitation_verdict(_cost(8192, 10240), risky).verdict == "jetsam-risk"
+
     # -- GPU wired ceiling ----------------------------------------------
 
     def test_gpu_wired_ceiling_caps_fits_at_tight(self):
         node = NodeState(
             mem_total_mb=131072.0,
             mem_used_mb=16384.0,
+            pressure="normal",
             gpu_wired_limit_mb=8192.0,
         )
         v = cohabitation_verdict(_cost(9000, 10240), node)
@@ -144,7 +188,9 @@ class TestVerdictMatrix:
         assert v.verdict == "jetsam-risk"
 
     def test_no_ceiling_when_sysctl_zero(self):
-        node = NodeState(mem_total_mb=65536.0, mem_used_mb=16384.0, gpu_wired_limit_mb=0.0)
+        node = NodeState(
+            mem_total_mb=65536.0, mem_used_mb=16384.0, pressure="normal", gpu_wired_limit_mb=0.0
+        )
         v = cohabitation_verdict(_cost(9000, 10240), node)
         assert v.verdict == "fits"
         assert "gpu-wired-ceiling" not in v.reasons
@@ -155,6 +201,7 @@ class TestVerdictMatrix:
         node = NodeState(
             mem_total_mb=65536.0,
             mem_used_mb=61440.0,  # only 4 GB free
+            pressure="normal",
             engine_rss_mb={"llamacpp": 30720.0},
         )
         # Without the credit this would be deeply negative; with 30 GB
@@ -323,6 +370,29 @@ class TestPlanRoute:
         body = resp.json()
         assert body["verdict"] == "fits"
         assert body["eviction_set"] == ["llamacpp"]
+
+    def test_nan_in_planner_body_degrades_to_unknown(self, client):
+        # json.loads accepts the non-standard NaN token, and Starlette
+        # serializes with allow_nan=False — without the isfinite guard
+        # this exact body turned into an unhandled 500 (audit H1).
+        resp_mock = MagicMock()
+        resp_mock.read.return_value = (
+            b'{"preset": "qwen-tuned", "cost": {"total_mb_low": 4096,'
+            b' "total_mb_high": NaN, "confidence": "computed"}}'
+        )
+        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
+        resp_mock.__exit__ = MagicMock(return_value=False)
+        with (
+            patch.object(fleet_routes.loopback, "read_token", return_value="tok"),
+            patch("urllib.request.urlopen", return_value=resp_mock),
+            patch("asiai.collectors.system.collect_memory", return_value=_fake_memory()),
+            patch("asiai.collectors.system.collect_thermal", return_value=_fake_thermal()),
+        ):
+            resp = client.get("/api/v1/plan", params={"preset": "qwen-tuned"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["verdict"] == "unknown"
+        assert "non-finite-input" in body["reasons"]
 
     def test_malformed_planner_body_degrades_to_unknown(self, client):
         resp_mock = MagicMock()
