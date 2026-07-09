@@ -365,8 +365,8 @@ class TestBench:
 
 
 class TestBenchThread:
-    @patch("asiai.web.routes.bench.run_benchmark", create=True)
-    @patch("asiai.web.routes.bench.find_common_model", create=True)
+    @patch("asiai.benchmark.runner.run_benchmark")
+    @patch("asiai.benchmark.runner.find_common_model")
     def test_thread_card_generation_success(self, mock_find, mock_run, app_state):
         """Card gen should populate card_svg_url and card_png_url on success."""
         from asiai.web.routes.bench import _run_benchmark_thread
@@ -376,7 +376,7 @@ class TestBenchThread:
         mock_bench_run.results = [{"hw_chip": "Apple M4 Pro", "tok_per_sec": 50.0}]
         mock_run.return_value = mock_bench_run
 
-        svg_p = patch("asiai.benchmark.card.generate_card_svg", return_value="<svg></svg>")
+        svg_p = patch("asiai.benchmark.cards.generate_card", return_value="<svg></svg>")
         save_p = patch("asiai.benchmark.card.save_card", return_value="/tmp/cards/bench.svg")
         png_p = patch(
             "asiai.benchmark.card.convert_svg_to_png",
@@ -393,8 +393,8 @@ class TestBenchThread:
         assert snap["card_png_url"] == "/cards/bench.png"
         assert snap["error"] == ""
 
-    @patch("asiai.web.routes.bench.run_benchmark", create=True)
-    @patch("asiai.web.routes.bench.find_common_model", create=True)
+    @patch("asiai.benchmark.runner.run_benchmark")
+    @patch("asiai.benchmark.runner.find_common_model")
     def test_thread_card_generation_failure_non_blocking(self, mock_find, mock_run, app_state):
         """Card gen failure should not block benchmark completion."""
         from asiai.web.routes.bench import _run_benchmark_thread
@@ -405,7 +405,7 @@ class TestBenchThread:
         mock_run.return_value = mock_bench_run
 
         svg_p = patch(
-            "asiai.benchmark.card.generate_card_svg",
+            "asiai.benchmark.cards.generate_card",
             side_effect=RuntimeError("svg fail"),
         )
         store_p = patch("asiai.storage.db.store_benchmark")

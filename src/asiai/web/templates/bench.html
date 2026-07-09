@@ -538,6 +538,12 @@
         var copyBtn = document.createElement('button');
         copyBtn.className = 'btn';
         copyBtn.textContent = 'Copy markdown';
+        var cardLink = document.createElement('a');
+        cardLink.className = 'btn';
+        cardLink.textContent = 'Open card .svg';
+        cardLink.href = '/bench/card/' + data.result_run_id + '.svg';
+        cardLink.target = '_blank';
+        actions.appendChild(cardLink);
         var dlLink = document.createElement('a');
         dlLink.className = 'btn';
         dlLink.textContent = 'Open .md';
@@ -551,6 +557,13 @@
         actions.appendChild(dlLink);
         actions.appendChild(histLink);
         card.appendChild(actions);
+
+        var img = document.createElement('img');
+        img.src = '/bench/card/' + data.result_run_id + '.svg';
+        img.alt = 'bench result card';
+        img.style.cssText = 'max-width:100%;border-radius:0.6rem;margin-bottom:0.75rem;';
+        img.addEventListener('error', function() { img.remove(); });
+        card.appendChild(img);
 
         var pre = document.createElement('pre');
         pre.style.cssText = 'max-height:420px;overflow:auto;font-size:0.72rem;' +

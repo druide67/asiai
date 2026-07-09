@@ -227,6 +227,31 @@ async def bench_report_md(request: Request, run_id: int) -> Response:
     )
 
 
+@router.get("/bench/card/{run_id}.svg")
+async def bench_card_svg(request: Request, run_id: int) -> Response:
+    """Adaptive SVG card for any persisted bench run (any type)."""
+    state = request.app.state.app_state
+
+    from asiai.storage.db import get_bench_run
+
+    row = await asyncio.to_thread(get_bench_run, state.db_path, run_id)
+    if row is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    try:
+        payload = json.loads(row["payload"])
+        from asiai.benchmark.cards import generate_card
+        from asiai.benchmark.result_model import build_result
+
+        svg = generate_card(build_result(row["bench_type"], payload))
+    except (ValueError, TypeError) as e:
+        return JSONResponse({"error": f"cannot render card: {e}"}, status_code=422)
+    return Response(
+        svg,
+        media_type="image/svg+xml",
+        headers={"Content-Disposition": f'inline; filename="bench-card-{run_id}.svg"'},
+    )
+
+
 @router.get("/bench/export")
 async def bench_export(request: Request) -> JSONResponse:
     """Export last benchmark results as JSON."""
@@ -590,24 +615,21 @@ def _run_benchmark_thread(
             from asiai.benchmark.card import (
                 convert_svg_to_png,
                 download_card_png,
-                extract_card_metadata,
-                generate_card_svg,
                 get_share_url,
                 save_card,
             )
 
-            first = bench_run.results[0] if bench_run.results else {}
-            eng_vers, pw_data, eng_quants = extract_card_metadata(bench_run.results)
-            svg = generate_card_svg(
-                report,
-                hw_chip=first.get("hw_chip", ""),
-                model_quantization=first.get("model_quantization", ""),
-                ram_gb=first.get("ram_gb", 0),
-                gpu_cores=first.get("gpu_cores", 0),
-                context_size=first.get("context_size", 0),
-                engine_versions=eng_vers,
-                power_data=pw_data,
-                engine_quants=eng_quants,
+            # Aliased: the thread's own `generate_card` parameter is the
+            # form's boolean toggle — importing the renderer under the
+            # same name would silently shadow it.
+            from asiai.benchmark.cards import generate_card as render_card
+            from asiai.benchmark.reporter import build_export_payload
+            from asiai.benchmark.result_model import build_result
+
+            if not bench_run.results:
+                raise ValueError("no results to render")
+            svg = render_card(
+                build_result("standard", build_export_payload(bench_run.results, report))
             )
             svg_path = save_card(svg, fmt="svg")
             svg_filename = os.path.basename(svg_path)

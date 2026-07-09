@@ -274,6 +274,38 @@ class TestReportEndpoint:
         )
         assert client.get(f"/bench/report/{run_id}.md").status_code == 422
 
+    def test_card_endpoint_for_persisted_run(self, client, app_state):
+        run_id = store_bench_run(
+            app_state.db_path,
+            {
+                "ts": NOW,
+                "bench_type": "agentic",
+                "engine": "llamacpp",
+                "model": "m",
+                "payload": json.dumps(
+                    {
+                        "engine": "llamacpp",
+                        "model": "m",
+                        "started_at": NOW,
+                        "prefix_cache_reuse_verdict": "REUSED",
+                        "prefix_cache_reuse": {"reuse_fraction": 0.9},
+                    }
+                ),
+            },
+        )
+        resp = client.get(f"/bench/card/{run_id}.svg")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/svg+xml")
+        assert "REUSED" in resp.text
+        assert client.get("/bench/card/424242.svg").status_code == 404
+
+    def test_card_endpoint_corrupt_payload_422(self, client, app_state):
+        run_id = store_bench_run(
+            app_state.db_path,
+            {"ts": NOW, "bench_type": "code", "engine": "e", "model": "m", "payload": "{nope"},
+        )
+        assert client.get(f"/bench/card/{run_id}.svg").status_code == 422
+
     def test_page_renders_type_chips(self, client):
         resp = client.get("/bench")
         assert resp.status_code == 200

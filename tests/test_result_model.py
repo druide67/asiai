@@ -37,7 +37,7 @@ def _standard_payload() -> dict:
                 "ollama": {
                     "median_tok_s": 55.0,
                     "runs_count": 6,
-                    "ci95": [51.0, 59.0],
+                    "ci95": [51.0, 57.0],
                     "median_ttft_ms": 300.0,
                     "model_quantization": "Q4_K_M",
                 },
@@ -251,8 +251,9 @@ class TestBuildResult:
         r = build_result("burst", _burst_payload())
         assert [s.label for s in r.subjects] == ["burst-10", "burst-60"]
         names = {g.name for g in r.gates}
-        assert "errors_burst_60" in names
-        assert "swap_burst_60" in names
+        assert "2 errors @60" in names
+        assert "no errors @10" in names
+        assert "swap +120 MB @60" in names
 
     def test_code_judge_offline_gate(self):
         r = build_result("code", _code_payload())
