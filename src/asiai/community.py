@@ -583,6 +583,7 @@ def get_agent_info() -> dict:
 def fetch_leaderboard(
     chip: str = "",
     model: str = "",
+    days: int = 0,
     api_url: str = "",
 ) -> list[dict]:
     """Fetch leaderboard data from community API.
@@ -590,6 +591,7 @@ def fetch_leaderboard(
     Args:
         chip: Filter by chip (e.g. ``"Apple M4 Pro"``).
         model: Filter by model name.
+        days: Rolling window in days (1-365); 0 keeps the server default (90).
         api_url: API base URL.
 
     Returns:
@@ -600,6 +602,8 @@ def fetch_leaderboard(
         params["chip"] = chip
     if model:
         params["model"] = model
+    if days:
+        params["days"] = str(int(days))
 
     base = f"{api_url or get_api_url()}/leaderboard"
     url = f"{base}?{urlencode(params)}" if params else base
@@ -610,6 +614,56 @@ def fetch_leaderboard(
     if isinstance(data, dict) and "results" in data:
         return data["results"]  # type: ignore[return-value]
     return []
+
+
+def fetch_benchmarks(
+    chip: str,
+    model: str,
+    engine: str = "",
+    days: int = 0,
+    limit: int = 0,
+    offset: int = 0,
+    api_url: str = "",
+) -> dict | None:
+    """Fetch per-submission drill-down entries from ``GET /api/v1/benchmarks``.
+
+    The endpoint returns the individual submissions behind one leaderboard
+    group (see the community API drill-down contract). It may not be
+    deployed yet — a 404, like any network error, returns ``None`` so
+    callers can degrade gracefully.
+
+    Args:
+        chip: Required chip substring filter (e.g. ``"Apple M4 Pro"``).
+        model: Required model substring filter.
+        engine: Optional display-engine substring filter.
+        days: Rolling window in days (1-365); 0 keeps the server default.
+        limit: Page size (1-100); 0 keeps the server default.
+        offset: Page offset (>= 0).
+        api_url: API base URL.
+
+    Returns:
+        The response envelope (``{"results": [...], "meta": {...}}``) or
+        ``None`` on any failure.
+    """
+    params: dict[str, str] = {"chip": chip, "model": model}
+    if engine:
+        params["engine"] = engine
+    if days:
+        params["days"] = str(int(days))
+    if limit:
+        params["limit"] = str(int(limit))
+    if offset:
+        params["offset"] = str(int(offset))
+
+    # SSRF posture: the URL is only ever the configured community base
+    # plus urlencoded query parameters — caller input never reaches the
+    # scheme/host/path.
+    url = f"{api_url or get_api_url()}/benchmarks?{urlencode(params)}"
+
+    data = _safe_get(url)
+    if isinstance(data, dict) and isinstance(data.get("results"), list):
+        return data
+    return None
 
 
 # ---------------------------------------------------------------------------

@@ -1,15 +1,21 @@
 """Community leaderboard page (read-only).
 
 - ``GET /api/v1/leaderboard`` — community entries from api.asiai.dev,
-  cached 300s per (chip, model) filter so page polling never hammers the
-  public API.
+  cached 300s per (chip, model, days) filter so page polling never
+  hammers the public API.
+- ``GET /api/v1/leaderboard/submissions`` — per-submission drill-down
+  behind one leaderboard group (proxy to the community ``/benchmarks``
+  endpoint). Not cached: it only fires on an explicit row expand, and
+  the upstream endpoint may not be deployed yet — a miss maps to 404 so
+  the client can degrade.
 - ``GET /leaderboard`` — HTML shell; the table is client-rendered from
-  the JSON route.
+  the JSON routes.
 
-``fetch_leaderboard`` is a synchronous urllib call, so the handler wraps
-it in ``asyncio.to_thread`` — same discipline as the fleet routes. The
-community API being unreachable is a NORMAL state (offline lab, no
-submissions yet): it surfaces as an empty list, never an error page.
+``fetch_leaderboard``/``fetch_benchmarks`` are synchronous urllib calls,
+so the handlers wrap them in ``asyncio.to_thread`` — same discipline as
+the fleet routes. The community API being unreachable is a NORMAL state
+(offline lab, no submissions yet): the leaderboard surfaces it as an
+empty list, never an error page.
 """
 
 from __future__ import annotations
@@ -24,7 +30,7 @@ from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from asiai.auth.ratelimit import TokenRateLimiter
-from asiai.community import fetch_leaderboard
+from asiai.community import fetch_benchmarks, fetch_leaderboard
 
 router = APIRouter(tags=["leaderboard"])
 
@@ -34,8 +40,15 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 # One fetch per filter combination per TTL — the community feed moves
 # slowly and the page has no reason to hit the public API on every load.
 _CACHE_TTL = 300.0
-_cache: dict[tuple[str, str], tuple[float, list]] = {}
+_cache: dict[tuple[str, str, int], tuple[float, list]] = {}
 _cache_lock = threading.Lock()
+
+# Query-parameter charsets, mirrored from the community API contract so
+# invalid input is rejected locally (422) instead of burning an outbound
+# call that the upstream would 400 anyway.
+_CHIP_PATTERN = r"^[a-zA-Z0-9_.+ -]+$"
+_MODEL_PATTERN = r"^[a-zA-Z0-9_.+: -]+$"
+_ENGINE_PATTERN = r"^[a-zA-Z0-9_.+ -]*$"
 
 # Same posture as the fleet read proxy: every cache miss is an outbound
 # call on the process-wide thread pool, and empty results are (rightly)
@@ -47,17 +60,17 @@ _fetch_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
 _rate_limiter = TokenRateLimiter(limit=60, window_seconds=60.0)
 
 
-def _cached_leaderboard(chip: str, model: str) -> list[dict]:
-    key = (chip, model)
+def _cached_leaderboard(chip: str, model: str, days: int) -> list[dict]:
+    key = (chip, model, days)
     now = time.monotonic()
     with _cache_lock:
         hit = _cache.get(key)
         if hit and now - hit[0] < _CACHE_TTL:
             return hit[1]
-    entries = fetch_leaderboard(chip=chip, model=model)
+    entries = fetch_leaderboard(chip=chip, model=model, days=days)
     with _cache_lock:
         # Bound the key space: filters are free-text, so an unbounded dict
-        # would grow with every distinct (chip, model) a client tries.
+        # would grow with every distinct (chip, model, days) a client tries.
         if len(_cache) >= 128:
             _cache.clear()
         # Don't cache failures long: an unreachable API answering [] would
@@ -72,13 +85,8 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-@router.get("/api/v1/leaderboard")
-async def api_leaderboard(
-    request: Request,
-    chip: str = Query(default="", max_length=64),
-    model: str = Query(default="", max_length=128),
-) -> JSONResponse:
-    """Community leaderboard entries, optionally filtered by chip/model."""
+def _reject_early(request: Request) -> JSONResponse | None:
+    """Shared rate-limit + concurrency guard for the community proxies."""
     allowed, _remaining, retry_after = _rate_limiter.check(_client_ip(request))
     if not allowed:
         return JSONResponse(
@@ -95,9 +103,57 @@ async def api_leaderboard(
             status_code=503,
             headers={"Retry-After": "2"},
         )
+    return None
+
+
+@router.get("/api/v1/leaderboard")
+async def api_leaderboard(
+    request: Request,
+    chip: str = Query(default="", max_length=64),
+    model: str = Query(default="", max_length=128),
+    days: int = Query(default=90, ge=1, le=365),
+) -> JSONResponse:
+    """Community leaderboard entries, filtered by chip/model over a window."""
+    early = _reject_early(request)
+    if early is not None:
+        return early
     async with _fetch_semaphore:
-        entries = await asyncio.to_thread(_cached_leaderboard, chip.strip(), model.strip())
+        entries = await asyncio.to_thread(_cached_leaderboard, chip.strip(), model.strip(), days)
     return JSONResponse({"entries": entries, "count": len(entries)})
+
+
+@router.get("/api/v1/leaderboard/submissions")
+async def api_leaderboard_submissions(
+    request: Request,
+    chip: str = Query(min_length=1, max_length=64, pattern=_CHIP_PATTERN),
+    model: str = Query(min_length=1, max_length=128, pattern=_MODEL_PATTERN),
+    engine: str = Query(default="", max_length=32, pattern=_ENGINE_PATTERN),
+    days: int = Query(default=90, ge=1, le=365),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> JSONResponse:
+    """Per-submission drill-down behind one leaderboard group.
+
+    Proxies the community ``GET /api/v1/benchmarks`` endpoint. That
+    endpoint may not be deployed yet: any upstream failure (404 included)
+    maps to a local 404 the client renders as "detail unavailable".
+    """
+    early = _reject_early(request)
+    if early is not None:
+        return early
+    async with _fetch_semaphore:
+        data = await asyncio.to_thread(
+            fetch_benchmarks,
+            chip=chip.strip(),
+            model=model.strip(),
+            engine=engine.strip(),
+            days=days,
+            limit=limit,
+            offset=offset,
+        )
+    if data is None:
+        return JSONResponse({"error": "detail_unavailable"}, status_code=404)
+    return JSONResponse({"results": data["results"], "meta": data.get("meta", {})})
 
 
 @router.get("/leaderboard")

@@ -1079,6 +1079,32 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
     vertical-align: middle;
 }
 
+/* Leaderboard v2: expandable rows + freshness dot */
+.lb-row { cursor: pointer; }
+.lb-row-open td { background: var(--bg-hover); }
+
+/* Freshness dot beside "Last seen" — reuses the st-* color variables
+   from ui.css (st-running / st-stopped / st-degraded). */
+.lb-seen-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 0.45rem;
+    vertical-align: middle;
+}
+.lb-seen-dot[class*="st-"] { background: var(--st-color); }
+
+/* Per-submission drill-down row */
+.lb-detail > td { padding: 0.5rem 0.75rem 1rem; }
+.lb-detail-msg {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    padding: 0.35rem 0;
+}
+.lb-detail-table { font-size: 0.8rem; }
+.lb-detail-table th { font-size: 0.65rem; }
+
 /* Backwards compat aliases */
 .accent-blue { color: var(--data-2); }
 .accent-cyan { color: var(--accent); }
