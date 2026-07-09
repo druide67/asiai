@@ -114,6 +114,20 @@ class TestLeaderboardPage:
         assert "onclick" not in button
         assert 'data-chip="Apple &#34;M4&#34; Pro"' in button
 
+    def test_client_quick_wins_present(self, client):
+        """Column sort, engine chips, tok/s bars and result counter ship in the page."""
+        resp = client.get("/leaderboard")
+        assert resp.status_code == 200
+        # Sortable headers with data keys (default sort = tok/s descending).
+        assert 'class="text-right sortable sort-desc" data-key="median_tok_s"' in resp.text
+        assert 'data-key="engine"' in resp.text
+        # Engine chips are injected client-side into a dedicated mount point.
+        assert 'id="lb-engine-chips"' in resp.text
+        # Results counter follows the active filters.
+        assert 'id="lb-count"' in resp.text
+        # Proportional tok/s mini-bar class used by the renderer.
+        assert "lb-bar" in resp.text
+
     def test_nav_link_present_on_other_pages(self, client):
         resp = client.get("/versions")
         assert resp.status_code == 200

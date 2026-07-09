@@ -1040,6 +1040,45 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
 .text-lg { font-size: 1.125rem; }
 .overflow-x-auto { overflow-x: auto; }
 
+/* Sortable table headers (leaderboard) */
+.results-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.results-table th.sortable:hover {
+    color: var(--accent);
+}
+
+.results-table th.sortable::after {
+    content: " \2195";
+    opacity: 0.35;
+}
+
+.results-table th.sortable.sort-asc::after {
+    content: " \2191";
+    opacity: 1;
+    color: var(--accent);
+}
+
+.results-table th.sortable.sort-desc::after {
+    content: " \2193";
+    opacity: 1;
+    color: var(--accent);
+}
+
+/* Proportional tok/s mini-bar (leaderboard) */
+.lb-bar {
+    display: inline-block;
+    height: 5px;
+    border-radius: 2px;
+    background: var(--accent);
+    opacity: 0.75;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
 /* Backwards compat aliases */
 .accent-blue { color: var(--data-2); }
 .accent-cyan { color: var(--accent); }
