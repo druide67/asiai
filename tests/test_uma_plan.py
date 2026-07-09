@@ -51,6 +51,24 @@ class TestVerdictMatrix:
         assert v.verdict == "jetsam-risk"
         assert "headroom-below-5pct" in v.reasons
 
+    # Boundary tests use integer figures whose headroom ratio is exactly
+    # representable (3200/64000 rounds to the same double as the literal
+    # 0.05), so the strict < comparison is exercised on true equality —
+    # a future off-by-one to <= flips these verdicts.
+    _NODE_BOUNDARY = NodeState(mem_total_mb=64000.0, mem_used_mb=32000.0, pressure="normal")
+
+    def test_headroom_exactly_15pct_still_fits(self):
+        # free 32000 - cost 22400 = 9600 = exactly 15 % of 64000.
+        v = cohabitation_verdict(_cost(22400, 22400), self._NODE_BOUNDARY)
+        assert v.verdict == "fits"
+        assert v.headroom_pct == pytest.approx(15.0, abs=0.01)
+
+    def test_headroom_exactly_5pct_is_tight_not_jetsam(self):
+        # free 32000 - cost 28800 = 3200 = exactly 5 % of 64000.
+        v = cohabitation_verdict(_cost(28800, 28800), self._NODE_BOUNDARY)
+        assert v.verdict == "tight"
+        assert v.headroom_pct == pytest.approx(5.0, abs=0.01)
+
     @pytest.mark.parametrize("pressure", ["warn", "critical"])
     def test_pressure_forces_jetsam_risk_despite_headroom(self, pressure):
         node = NodeState(mem_total_mb=65536.0, mem_used_mb=8192.0, pressure=pressure)
@@ -279,6 +297,14 @@ def _fake_thermal(level="nominal"):
     return ThermalInfo(level=level, speed_limit=100)
 
 
+def _mock_urlopen(body: bytes) -> MagicMock:
+    resp = MagicMock()
+    resp.read.return_value = body
+    resp.__enter__ = MagicMock(return_value=resp)
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp
+
+
 def _mock_cost_response(low=7000.0, high=8192.0, confidence="declared"):
     body = json.dumps(
         {
@@ -291,11 +317,7 @@ def _mock_cost_response(low=7000.0, high=8192.0, confidence="declared"):
             },
         }
     ).encode()
-    resp = MagicMock()
-    resp.read.return_value = body
-    resp.__enter__ = MagicMock(return_value=resp)
-    resp.__exit__ = MagicMock(return_value=False)
-    return resp
+    return _mock_urlopen(body)
 
 
 class TestPlanRoute:
@@ -400,13 +422,10 @@ class TestPlanRoute:
         # json.loads accepts the non-standard NaN token, and Starlette
         # serializes with allow_nan=False — without the isfinite guard
         # this exact body turned into an unhandled 500 (audit H1).
-        resp_mock = MagicMock()
-        resp_mock.read.return_value = (
+        resp_mock = _mock_urlopen(
             b'{"preset": "qwen-tuned", "cost": {"total_mb_low": 4096,'
             b' "total_mb_high": NaN, "confidence": "computed"}}'
         )
-        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
-        resp_mock.__exit__ = MagicMock(return_value=False)
         with (
             patch.object(fleet_routes.loopback, "read_token", return_value="tok"),
             patch("urllib.request.urlopen", return_value=resp_mock),
@@ -420,10 +439,7 @@ class TestPlanRoute:
         assert "non-finite-input" in body["reasons"]
 
     def test_malformed_planner_body_degrades_to_unknown(self, client):
-        resp_mock = MagicMock()
-        resp_mock.read.return_value = b'{"cost": "not-a-dict"}'
-        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
-        resp_mock.__exit__ = MagicMock(return_value=False)
+        resp_mock = _mock_urlopen(b'{"cost": "not-a-dict"}')
         with (
             patch.object(fleet_routes.loopback, "read_token", return_value="tok"),
             patch("urllib.request.urlopen", return_value=resp_mock),
@@ -440,10 +456,7 @@ class TestPlanProxyParams:
 
     def test_plan_proxied_with_valid_params(self, client, tmp_fleet):
         self._add_node()
-        resp_mock = MagicMock()
-        resp_mock.read.return_value = b'{"verdict": "fits"}'
-        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
-        resp_mock.__exit__ = MagicMock(return_value=False)
+        resp_mock = _mock_urlopen(b'{"verdict": "fits"}')
         with patch("urllib.request.urlopen", return_value=resp_mock) as mock_open:
             resp = client.get("/api/v1/fleet/m4/plan?preset=qwen-tuned.v2&engine=llamacpp")
         assert resp.status_code == 200
@@ -454,10 +467,7 @@ class TestPlanProxyParams:
 
     def test_plan_proxy_drops_invalid_values(self, client, tmp_fleet):
         self._add_node()
-        resp_mock = MagicMock()
-        resp_mock.read.return_value = b"{}"
-        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
-        resp_mock.__exit__ = MagicMock(return_value=False)
+        resp_mock = _mock_urlopen(b"{}")
         with patch("urllib.request.urlopen", return_value=resp_mock) as mock_open:
             client.get(
                 "/api/v1/fleet/m4/plan?preset=..%2F..%2Fetc&engine=UPPER%20CASE&evil=1&hours=24"
@@ -472,10 +482,7 @@ class TestPlanProxyParams:
         # Regression guard for the frozenset -> pattern-map refactor: the
         # digit-only params keep rejecting non-digits.
         self._add_node()
-        resp_mock = MagicMock()
-        resp_mock.read.return_value = b"[]"
-        resp_mock.__enter__ = MagicMock(return_value=resp_mock)
-        resp_mock.__exit__ = MagicMock(return_value=False)
+        resp_mock = _mock_urlopen(b"[]")
         with patch("urllib.request.urlopen", return_value=resp_mock) as mock_open:
             client.get("/api/v1/fleet/m4/history?hours=24&since=abc123")
         url = mock_open.call_args[0][0].full_url

@@ -48,6 +48,8 @@ class PresetCost:
     total_mb_low: float
     total_mb_high: float
     confidence: str
+    # Verbatim cost breakdown from aisrv — not consumed by the verdict;
+    # kept for a future per-component UI drill-down.
     components: dict = field(default_factory=dict)
 
 
@@ -89,16 +91,16 @@ class PlanVerdict:
             "eviction_set": list(self.eviction_set),
             "headroom_pct": self.headroom_pct,
             "reasons": list(self.reasons),
-            "advisory": True,
+            "advisory": self.advisory,
         }
 
 
-def _unknown(reasons: tuple[str, ...], eviction_set: tuple[str, ...] = ()) -> PlanVerdict:
+def _unknown(reasons: tuple[str, ...]) -> PlanVerdict:
     return PlanVerdict(
         verdict=VERDICT_UNKNOWN,
         projected_free_mb=None,
         projected_free_band=None,
-        eviction_set=eviction_set,
+        eviction_set=(),
         headroom_pct=None,
         reasons=reasons,
     )
@@ -198,10 +200,11 @@ def cohabitation_verdict(
         if verdict in (VERDICT_FITS, VERDICT_TIGHT):
             verdict = VERDICT_THERMAL_RISK
 
+    free_low, free_high = round(projected_low, 1), round(projected_high, 1)
     return PlanVerdict(
         verdict=verdict,
-        projected_free_mb=round(projected_low, 1),
-        projected_free_band=(round(projected_low, 1), round(projected_high, 1)),
+        projected_free_mb=free_low,
+        projected_free_band=(free_low, free_high),
         eviction_set=eviction_set,
         headroom_pct=round(headroom_pct, 1),
         reasons=tuple(reasons),
