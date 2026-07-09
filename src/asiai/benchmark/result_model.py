@@ -1,0 +1,769 @@
+"""Unified, render-agnostic model of a bench result — any bench type.
+
+One dataclass family (``BenchResult``) that every renderer (markdown
+report, SVG card, terminal) consumes, built from the same payloads that
+``bench_runs`` persists. The adapters here are the ONLY place where
+mode-specific payload shapes are interpreted for presentation.
+
+Fairness is structural, not editorial: every ``MetricValue`` carries its
+sample count, optional CI95 and a caveat; ``BenchResult`` always carries
+the run conditions and provenance. A renderer cannot show a naked number
+because the model never hands it one.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from asiai.benchmark.persist import extract_headline
+
+
+@dataclass(frozen=True)
+class MetricValue:
+    """One displayed measurement, with its honesty attached."""
+
+    key: str
+    label: str
+    value: float | str | None
+    unit: str = ""
+    ci95: tuple[float, float] | None = None
+    n: int = 0  # measurements behind the value (0 = unknown)
+    direction: str = "neutral"  # higher | lower | neutral
+    caveat: str = ""  # e.g. "estimated", "client-measured", "judge offline"
+
+
+@dataclass(frozen=True)
+class Gate:
+    """One quality gate outcome."""
+
+    name: str
+    passed: bool
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class Subject:
+    """One compared thing (an engine, a config cell, a burst size...)."""
+
+    label: str
+    engine: str = ""
+    model: str = ""
+    hero: MetricValue | None = None
+    metrics: list[MetricValue] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class BenchResult:
+    """The complete, render-ready view of one bench run."""
+
+    bench_type: str
+    title: str
+    subjects: list[Subject]
+    winner: str | None  # Subject.label, None if not comparative / gate-refused
+    winner_note: str = ""  # e.g. "ranking refused: output validity gate"
+    conditions: dict[str, str] = field(default_factory=dict)
+    gates: list[Gate] = field(default_factory=list)
+    provenance: dict[str, str] = field(default_factory=dict)
+    headline: MetricValue | None = None  # the bench_runs score_primary, labeled
+    raw: dict = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Shared extraction helpers
+# ---------------------------------------------------------------------------
+
+
+def _num(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def _fmt(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def _provenance(payload: dict) -> dict[str, str]:
+    machine = payload.get("machine") or {}
+    out = {
+        "asiai_version": _fmt(payload.get("asiai_version")),
+        "engine_version": _fmt(payload.get("engine_version")),
+        "hw_chip": _fmt(payload.get("hw_chip") or machine.get("chip")),
+        "machine_model": _fmt(payload.get("machine_model")),
+        "os_version": _fmt(payload.get("os_version") or machine.get("os_version")),
+        "ram_gb": _fmt(payload.get("ram_gb") or machine.get("ram_gb")),
+        "schema_version": _fmt(payload.get("schema_version")),
+        "dataset_version": _fmt(payload.get("dataset_version")),
+        "started_at": _fmt(payload.get("started_at") or payload.get("timestamp")),
+    }
+    return {k: v for k, v in out.items() if v}
+
+
+def _base_conditions(payload: dict) -> dict[str, str]:
+    out: dict[str, str] = {}
+    extra = payload.get("extra_body")
+    if extra:
+        out["extra_body"] = _fmt(extra)
+    pm = payload.get("powermode")
+    if pm is not None:
+        out["powermode"] = str(pm)
+    return out
+
+
+def _headline_metric(bench_type: str, payload: dict) -> MetricValue | None:
+    score, label, _gates = extract_headline(bench_type, payload)
+    if score is None:
+        return None
+    return MetricValue(key="headline", label=label, value=score, direction="neutral")
+
+
+def _pct(key: str, label: str, value: Any, *, n: int = 0, caveat: str = "") -> MetricValue:
+    return MetricValue(
+        key=key, label=label, value=_num(value), unit="%", n=n, direction="higher", caveat=caveat
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-type adapters
+# ---------------------------------------------------------------------------
+
+
+def from_standard(payload: dict) -> BenchResult:
+    bench = payload.get("benchmark") or {}
+    engines: dict[str, dict] = bench.get("engines") or {}
+    subjects: list[Subject] = []
+    quants: set[str] = set()
+    for name in sorted(engines):
+        e = engines[name]
+        runs_n = int(e.get("runs_count") or 0)
+        ci = e.get("ci95") or []
+        ci95 = (float(ci[0]), float(ci[1])) if len(ci) == 2 and any(_num(c) for c in ci) else None
+        hero = MetricValue(
+            key="median_tok_s",
+            label="median tok/s",
+            value=_num(e.get("median_tok_s")),
+            unit="tok/s",
+            ci95=ci95,
+            n=runs_n,
+            direction="higher",
+        )
+        pct_tok = e.get("percentiles_tok_s") or {}
+        metrics = [
+            MetricValue(
+                "median_ttft_ms",
+                "median TTFT",
+                _num(e.get("median_ttft_ms")),
+                "ms",
+                n=runs_n,
+                direction="lower",
+            ),
+            MetricValue(
+                "p90_tok_s",
+                "p90 tok/s",
+                _num(pct_tok.get("p90")),
+                "tok/s",
+                n=runs_n,
+                direction="higher",
+            ),
+            MetricValue(
+                "vram_gb",
+                "VRAM",
+                round(e["vram_bytes"] / 1024**3, 1) if _num(e.get("vram_bytes")) else None,
+                "GB",
+                direction="lower",
+            ),
+            MetricValue("stability", "stability", e.get("stability") or None, n=runs_n),
+            MetricValue("quantization", "quantization", e.get("model_quantization") or None),
+            MetricValue("engine_version", "engine version", e.get("engine_version") or None),
+        ]
+        for key, label, unit, direction in (
+            ("avg_soc_watts", "SoC power", "W", "lower"),
+            ("avg_tok_s_per_soc_watt", "tok/s per SoC watt", "", "higher"),
+            ("avg_energy_per_token_j", "energy per token", "J", "lower"),
+            ("avg_power_watts", "GPU power", "W", "lower"),
+        ):
+            if _num(e.get(key)) is not None:
+                metrics.append(MetricValue(key, label, _num(e.get(key)), unit, direction=direction))
+        subjects.append(
+            Subject(
+                label=name,
+                engine=name,
+                model=bench.get("model", ""),
+                hero=hero,
+                metrics=[m for m in metrics if m.value is not None],
+            )
+        )
+        if e.get("model_quantization"):
+            quants.add(str(e["model_quantization"]))
+
+    winner = bench.get("winner")
+    winner_name = winner.get("name") if isinstance(winner, dict) else winner
+    winner_note = ""
+    if not winner_name and len(subjects) >= 2:
+        winner_note = "ranking refused or unavailable (validity gate / insufficient data)"
+
+    conditions = _base_conditions(payload)
+    conditions.update(
+        {
+            k: v
+            for k, v in {
+                "context_size": _fmt(bench.get("context_size") or ""),
+                "prompts": ", ".join(bench.get("prompts") or []),
+                "runs_per_prompt": _fmt(bench.get("runs_per_prompt") or ""),
+                "quantizations": ", ".join(sorted(quants)),
+            }.items()
+            if v
+        }
+    )
+
+    return BenchResult(
+        bench_type="standard",
+        title=f"Throughput — {bench.get('model', '?')}",
+        subjects=subjects,
+        winner=winner_name,
+        winner_note=winner_note,
+        conditions=conditions,
+        gates=[],
+        provenance=_provenance(payload),
+        headline=_headline_metric("standard", payload),
+        raw=payload,
+    )
+
+
+def from_agentic(payload: dict) -> BenchResult:
+    reuse = payload.get("prefix_cache_reuse") or {}
+    gates_block = payload.get("quality_gates") or {}
+    phase_stats = payload.get("phase_stats") or {}
+    footprint = payload.get("footprint") or {}
+
+    metrics: list[MetricValue] = [
+        MetricValue(
+            "verdict",
+            "prefix-cache verdict",
+            payload.get("prefix_cache_reuse_verdict"),
+            caveat="engine-family-specific — compare the raw signal, not the verdict",
+        ),
+        MetricValue("cache_source", "cache signal source", reuse.get("cache_source")),
+    ]
+    for phase in sorted(phase_stats):
+        st = phase_stats[phase] or {}
+        ttft = st.get("ttft_ms") or {}
+        decode = st.get("decode_tok_s") or {}
+        if _num(ttft.get("median")) is not None:
+            metrics.append(
+                MetricValue(
+                    f"ttft_{phase}",
+                    f"TTFT ({phase})",
+                    _num(ttft.get("median")),
+                    "ms",
+                    n=int(ttft.get("n") or 0),
+                    direction="lower",
+                    caveat=f"CV={ttft.get('cv')}" if ttft.get("cv") is not None else "",
+                )
+            )
+        if _num(decode.get("median")) is not None:
+            metrics.append(
+                MetricValue(
+                    f"decode_{phase}",
+                    f"decode tok/s ({phase})",
+                    _num(decode.get("median")),
+                    "tok/s",
+                    n=int(decode.get("n") or 0),
+                    direction="higher",
+                )
+            )
+    for key, label in (
+        ("engine_rss_peak_mb", "engine RSS peak"),
+        ("engine_rss_warm_mb", "engine RSS warm"),
+    ):
+        if _num(footprint.get(key)) is not None:
+            metrics.append(
+                MetricValue(key, label, _num(footprint.get(key)), "MB", direction="lower")
+            )
+
+    gates: list[Gate] = []
+    es = gates_block.get("early_stop") or {}
+    if es:
+        truncated = ", ".join(t.get("phase", "?") for t in es.get("truncated_runs", []))
+        gates.append(Gate("early_stop", not es.get("detected"), truncated))
+    mp = gates_block.get("memory_pressure") or {}
+    if mp:
+        gates.append(Gate("memory_pressure", not mp.get("alerted"), _fmt(mp.get("alert_reason"))))
+    dups = gates_block.get("duplicate_processes")
+    if dups is not None:
+        gates.append(
+            Gate("duplicate_processes", not dups, f"{len(dups)} duplicate(s)" if dups else "")
+        )
+    validity = gates_block.get("output_validity") or {}
+    pct_valid = _num(validity.get("output_valid_pct"))
+    if pct_valid is not None:
+        min_pct = _num(validity.get("min_valid_pct")) or 0
+        gates.append(Gate("output_validity", pct_valid >= min_pct, f"{pct_valid}% valid"))
+    thermal = gates_block.get("thermal") or {}
+    if thermal.get("observed"):
+        gates.append(
+            Gate(
+                "thermal",
+                not thermal.get("throttled"),
+                f"min speed limit {thermal.get('min_speed_limit')}%",
+            )
+        )
+
+    rf = _num(reuse.get("reuse_fraction"))
+    hero = MetricValue(
+        "reuse_fraction",
+        "prefix-cache reuse fraction",
+        rf,
+        n=int(payload.get("repeats") or 1),
+        direction="higher",
+    )
+    conditions = _base_conditions(payload)
+    if payload.get("cold_warm_repeats"):
+        conditions["cold_warm_repeats"] = "true (verdict rests on repeat 0's cold run)"
+
+    return BenchResult(
+        bench_type="agentic",
+        title=f"Agentic prefix-cache — {payload.get('model', '?')} on {payload.get('engine', '?')}",
+        subjects=[
+            Subject(
+                label=_fmt(payload.get("engine")),
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=metrics,
+            )
+        ],
+        winner=None,
+        conditions=conditions,
+        gates=gates,
+        provenance=_provenance(payload),
+        headline=_headline_metric("agentic", payload),
+        raw=payload,
+    )
+
+
+def from_burst(payload: dict) -> BenchResult:
+    results: dict = payload.get("results") or {}
+    subjects: list[Subject] = []
+    gates: list[Gate] = []
+
+    def _scalar(v: Any) -> float | None:
+        # runs>1 folds each stat into {median,min,max}: report the median.
+        if isinstance(v, dict):
+            return _num(v.get("median"))
+        return _num(v)
+
+    for size_str in sorted(results, key=lambda s: int(s) if str(s).isdigit() else 0):
+        data = results[size_str] or {}
+        lat = data.get("latency_ms") or {}
+        n_passes = int(data.get("n_passes") or 1)
+        hero = MetricValue(
+            "p95_ms",
+            "p95 latency",
+            _scalar(lat.get("p95")),
+            "ms",
+            n=n_passes,
+            direction="lower",
+        )
+        metrics = [
+            MetricValue(
+                "p50_ms",
+                "p50 latency",
+                _scalar(lat.get("p50")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
+                "p99_ms",
+                "p99 latency",
+                _scalar(lat.get("p99")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
+                "max_ms",
+                "max latency",
+                _scalar(lat.get("max")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
+                "agg_tok_s",
+                "aggregate tok/s",
+                _scalar(data.get("throughput_tokens_aggregate_per_s")),
+                "tok/s",
+                n=n_passes,
+                direction="higher",
+            ),
+            MetricValue(
+                "calls_per_s",
+                "calls/s",
+                _scalar(data.get("throughput_calls_per_s")),
+                "",
+                n=n_passes,
+                direction="higher",
+            ),
+            MetricValue(
+                "ttft_p50_ms",
+                "p50 TTFT",
+                _scalar((data.get("ttft_ms") or {}).get("p50")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
+                "ttft_p95_ms",
+                "p95 TTFT",
+                _scalar((data.get("ttft_ms") or {}).get("p95")),
+                "ms",
+                n=n_passes,
+                direction="lower",
+            ),
+            MetricValue(
+                "wall_s",
+                "wall time",
+                _scalar(data.get("wall_time_s")),
+                "s",
+                n=n_passes,
+                direction="lower",
+            ),
+        ]
+        subjects.append(
+            Subject(
+                label=f"burst-{size_str}",
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=[m for m in metrics if m.value is not None],
+            )
+        )
+        errors = data.get("errors_count")
+        if isinstance(errors, dict):
+            errors = errors.get("max")
+        if _num(errors):
+            gates.append(Gate(f"errors_burst_{size_str}", False, f"{int(errors)} errors"))
+        swap = _scalar(data.get("memory_pressure_swap_delta_mb"))
+        if swap and swap > 0:
+            gates.append(Gate(f"swap_burst_{size_str}", False, f"+{swap:.0f} MB swap"))
+
+    conditions = _base_conditions(payload)
+    for key, label in (
+        ("burst_sizes", "burst_sizes"),
+        ("max_tokens_per_call", "max_tokens_per_call"),
+        ("streaming", "streaming"),
+        ("runs", "runs"),
+    ):
+        if payload.get(key) is not None:
+            conditions[label] = _fmt(payload.get(key))
+
+    return BenchResult(
+        bench_type="burst",
+        title=f"Burst concurrency — {payload.get('model', '?')} on {payload.get('engine', '?')}",
+        subjects=subjects,
+        winner=None,
+        conditions=conditions,
+        gates=gates,
+        provenance=_provenance(payload),
+        headline=_headline_metric("burst", payload),
+        raw=payload,
+    )
+
+
+_CODE_SUITE_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
+    "tool_call": (
+        ("pct_clean", "clean"),
+        ("pct_json_valid", "JSON valid"),
+        ("pct_non_truncated", "non-truncated"),
+        ("pct_schema_conform", "schema conform"),
+        ("pct_correct_tool", "correct tool"),
+        ("pct_emitted", "emitted"),
+        ("edit_turns_pct_clean", "edit turns clean"),
+    ),
+    "tool_call_stress": (
+        ("pct_clean", "clean"),
+        ("pct_json_valid", "JSON valid"),
+        ("pct_non_truncated", "non-truncated"),
+        ("pct_schema_conform", "schema conform"),
+        ("pct_correct_tool", "correct tool"),
+        ("pct_emitted", "emitted"),
+    ),
+    "recovery": (
+        ("pct_recovered", "recovered"),
+        ("pct_looped", "looped"),
+        ("pct_repeated_failing_call", "repeated failing call"),
+    ),
+    "thinking": (
+        ("pct_no_think_leak", "no think leak"),
+        ("pct_nonempty_short_budget", "non-empty short budget"),
+        ("pct_thinking_off_honoured", "thinking-off honoured"),
+    ),
+}
+
+
+def from_code(payload: dict) -> BenchResult:
+    cr = payload.get("code_results") or {}
+    repeats = int(payload.get("repeats") or 1)
+    subjects: list[Subject] = []
+    for suite, fields in _CODE_SUITE_FIELDS.items():
+        block = cr.get(suite)
+        if not isinstance(block, dict):
+            continue
+        n_turns = int(block.get("turns_scored") or 0) or repeats
+        metrics = [_pct(k, lbl, block.get(k), n=n_turns) for k, lbl in fields]
+        bug = block.get("count_empty_object_bug")
+        if bug is not None:
+            metrics.append(
+                MetricValue(
+                    "count_empty_object_bug",
+                    "empty-object bugs",
+                    _num(bug),
+                    n=repeats,
+                    direction="lower",
+                )
+            )
+        hero = metrics[0] if metrics else None
+        subjects.append(
+            Subject(
+                label=suite,
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=[m for m in metrics if m.value is not None],
+            )
+        )
+    # Judge suites: report status honestly, never blended into scores.
+    gates: list[Gate] = []
+    for suite in ("coding", "coding_hard"):
+        block = cr.get(suite)
+        if not isinstance(block, dict):
+            continue
+        tasks = block.get("tasks") or []
+        judged = sum(1 for t in tasks if (t.get("judge") or {}).get("scores"))
+        errored = sum(1 for t in tasks if (t.get("judge") or {}).get("error"))
+        if judged == 0 and tasks:
+            gates.append(
+                Gate(f"{suite}_judge", True, "judge offline — transcripts captured, not graded")
+            )
+        elif errored:
+            gates.append(Gate(f"{suite}_judge", False, f"{errored} judge errors"))
+        elif judged:
+            gates.append(Gate(f"{suite}_judge", True, f"judged {judged}/{len(tasks)} tasks"))
+
+    return BenchResult(
+        bench_type="code",
+        title=f"Dev quality — {payload.get('model', '?')} on {payload.get('engine', '?')}",
+        subjects=subjects,
+        winner=None,
+        conditions={**_base_conditions(payload), "suites": ", ".join(payload.get("suites") or [])},
+        gates=gates,
+        provenance=_provenance(payload),
+        headline=_headline_metric("code", payload),
+        raw=payload,
+    )
+
+
+def from_language(payload: dict) -> BenchResult:
+    lr = payload.get("language_results") or {}
+    metrics: list[MetricValue] = []
+    adh = lr.get("adherence") or {}
+    if adh:
+        metrics += [
+            _pct("pct_in_language", "in language", adh.get("pct_in_language")),
+            MetricValue(
+                "mean_adherence_ratio",
+                "mean adherence ratio",
+                _num(adh.get("mean_adherence_ratio")),
+                direction="higher",
+            ),
+            _pct("pct_non_degenerate", "non-degenerate", adh.get("pct_non_degenerate")),
+            MetricValue(
+                "mean_accent_density",
+                "accent density",
+                _num(adh.get("mean_accent_density")),
+                direction="neutral",
+            ),
+        ]
+    dia = lr.get("diacritics") or {}
+    if dia and not dia.get("skipped"):
+        metrics += [
+            _pct("pct_traps_passed", "diacritic traps passed", dia.get("pct_traps_passed")),
+            MetricValue(
+                "count_ascii_stripped",
+                "ASCII-stripped answers",
+                _num(dia.get("count_ascii_stripped")),
+                direction="lower",
+            ),
+        ]
+    gates: list[Gate] = []
+    if payload.get("fully_populated") is False:
+        gates.append(
+            Gate(
+                "dataset_coverage",
+                False,
+                "partial coverage: adherence only, diacritic traps not populated",
+            )
+        )
+    flu = lr.get("fluency") or {}
+    if flu.get("error"):
+        gates.append(Gate("fluency_judge", False, _fmt(flu.get("error"))))
+    elif flu.get("skipped"):
+        gates.append(Gate("fluency_judge", True, "judge offline — fluency not scored"))
+    elif flu.get("scores"):
+        gates.append(Gate("fluency_judge", True, f"scored by {_fmt(flu.get('judge_model'))}"))
+
+    lang = _fmt(payload.get("language_name") or payload.get("language"))
+    # Reuse the instance already in metrics so the renderer never
+    # prints the same metric twice (dedup is by identity).
+    hero = metrics[0] if metrics else None
+    return BenchResult(
+        bench_type="language",
+        title=f"Language retention ({lang}) — {payload.get('model', '?')}",
+        subjects=[
+            Subject(
+                label=lang or "language",
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=[m for m in metrics if m.value is not None],
+            )
+        ],
+        winner=None,
+        conditions={**_base_conditions(payload), "suites": ", ".join(payload.get("suites") or [])},
+        gates=gates,
+        provenance=_provenance(payload),
+        headline=_headline_metric("language", payload),
+        raw=payload,
+    )
+
+
+_INSTRUCT_BLOCKS: tuple[tuple[str, str], ...] = (
+    ("verifiable", "verifiable (IFEval-style)"),
+    ("research_brief", "research brief"),
+    ("research_brief_deep", "research brief (deep)"),
+    ("order_control", "order control"),
+    ("loop_search_short", "loop search (short)"),
+    ("loop_search_unconfirmable", "loop search (unconfirmable)"),
+    ("honesty_audit", "honesty audit"),
+    ("multi_file_scope", "multi-file scope"),
+    ("constraint_preservation", "constraint preservation"),
+)
+
+
+def from_instruct(payload: dict) -> BenchResult:
+    ir = payload.get("instruct_results") or {}
+    subjects: list[Subject] = []
+    for key, label in _INSTRUCT_BLOCKS:
+        block = ir.get(key)
+        if not isinstance(block, dict):
+            continue
+        n = int(block.get("prompts_scored") or 0)
+        metrics = [
+            _pct(k, k.replace("pct_", "").replace("_", " "), v, n=n)
+            if k.startswith("pct_")
+            else MetricValue(k, k.replace("_", " "), _num(v), n=n, direction="higher")
+            for k, v in block.items()
+            if k.startswith(("pct_", "mean_", "prompt_level_", "instruction_level_"))
+            and _num(v) is not None
+        ]
+        hero = next(
+            (m for m in metrics if m.key in ("prompt_level_strict", "pct_primary_delivered")),
+            metrics[0] if metrics else None,
+        )
+        subjects.append(
+            Subject(
+                label=label,
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=metrics,
+            )
+        )
+    return BenchResult(
+        bench_type="instruct",
+        title=f"Instruction following — {payload.get('model', '?')} "
+        f"on {payload.get('engine', '?')}",
+        subjects=subjects,
+        winner=None,
+        conditions={
+            **_base_conditions(payload),
+            "scenarios": ", ".join(payload.get("scenarios") or []),
+        },
+        gates=[],
+        provenance=_provenance(payload),
+        headline=_headline_metric("instruct", payload),
+        raw=payload,
+    )
+
+
+def from_thinking_ablation(payload: dict) -> BenchResult:
+    subjects: list[Subject] = []
+    for cell in payload.get("cells") or []:
+        if not isinstance(cell, dict):
+            continue
+        n_turns = int(cell.get("turns") or 0)
+        hero = _pct("pct_clean", "clean", cell.get("pct_clean"), n=n_turns)
+        metrics = [
+            MetricValue(
+                "latency_ms_mean",
+                "latency/turn",
+                _num(cell.get("latency_ms_mean")),
+                "ms",
+                direction="lower",
+            ),
+            MetricValue(
+                "ctx_growth",
+                "context growth",
+                _num(cell.get("ctx_growth")),
+                "tok",
+                direction="lower",
+            ),
+            MetricValue(
+                "reasoning_chars_mean",
+                "think chars/turn",
+                _num(cell.get("reasoning_chars_mean")),
+                direction="neutral",
+            ),
+        ]
+        subjects.append(
+            Subject(
+                label=_fmt(cell.get("config")) or "cell",
+                engine=_fmt(payload.get("engine")),
+                model=_fmt(payload.get("model")),
+                hero=hero,
+                metrics=[m for m in metrics if m.value is not None],
+            )
+        )
+    return BenchResult(
+        bench_type="thinking-ablation",
+        title=f"Thinking ablation — {payload.get('model', '?')} on {payload.get('engine', '?')}",
+        subjects=subjects,
+        winner=None,
+        conditions={**_base_conditions(payload), "load": _fmt(payload.get("load"))},
+        gates=[],
+        provenance=_provenance(payload),
+        headline=_headline_metric("thinking-ablation", payload),
+        raw=payload,
+    )
+
+
+_ADAPTERS = {
+    "standard": from_standard,
+    "agentic": from_agentic,
+    "burst": from_burst,
+    "code": from_code,
+    "language": from_language,
+    "instruct": from_instruct,
+    "thinking-ablation": from_thinking_ablation,
+}
+
+
+def build_result(bench_type: str, payload: dict) -> BenchResult:
+    """Build the unified result view for any bench type's payload."""
+    adapter = _ADAPTERS.get(bench_type)
+    if adapter is None:
+        raise ValueError(f"unknown bench type: {bench_type!r}")
+    return adapter(payload)
