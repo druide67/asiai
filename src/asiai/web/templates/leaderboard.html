@@ -18,6 +18,12 @@
     {% endif %}
     <span class="text-xs text-neutral-500 filter-label" style="margin-left: 1rem; margin-right: 0.5rem;">Model:</span>
     <input type="text" id="lb-model" class="range-input" placeholder="filter by model…" style="min-width: 200px;">
+    <span class="text-xs text-neutral-500 filter-label" style="margin-left: 1rem; margin-right: 0.5rem;">Window:</span>
+    <span id="lb-days-chips" style="display: inline-flex; gap: var(--space-2);">
+        <button class="filter-chip" data-days="30">30d</button>
+        <button class="filter-chip active" data-days="90">90d</button>
+        <button class="filter-chip" data-days="365">365d</button>
+    </span>
 </div>
 
 <div class="filter-bar fade-in">
@@ -36,9 +42,13 @@
                         <th class="text-left sortable" data-key="engine">Engine</th>
                         <th class="text-left sortable" data-key="model">Model</th>
                         <th class="text-left sortable" data-key="chip">Chip</th>
+                        <th class="text-left sortable" data-key="quantizations">Quant</th>
                         <th class="text-right sortable sort-desc" data-key="median_tok_s">tok/s (median)</th>
                         <th class="text-right sortable" data-key="median_ttft_ms">TTFT (median)</th>
+                        <th class="text-right sortable" data-key="median_power_watts">W</th>
+                        <th class="text-right sortable" data-key="median_tok_s_per_watt">tok/s/W</th>
                         <th class="text-right sortable" data-key="samples">Samples</th>
+                        <th class="text-left sortable" data-key="last_submitted_at">Last seen</th>
                     </tr>
                 </thead>
                 <tbody id="lb-tbody"></tbody>
@@ -57,11 +67,24 @@
 <script>
     var chipFilter = '';
     var engineFilter = '';
+    var daysFilter = 90;
     var modelTimer = null;
     var allEntries = [];
     var sortKey = 'median_tok_s';
     var sortDir = 'desc';
-    var NUMERIC_KEYS = { median_tok_s: true, median_ttft_ms: true, samples: true };
+    var NUMERIC_KEYS = {
+        median_tok_s: true,
+        median_ttft_ms: true,
+        median_power_watts: true,
+        median_tok_s_per_watt: true,
+        samples: true,
+        last_submitted_at: true
+    };
+    var COLUMN_COUNT = document.querySelectorAll('#lb-table thead th').length;
+    var DAY_MS = 86400000;
+    // Detail expand state: one open row at a time, stale fetches dropped.
+    var openDetail = null;
+    var detailSeq = 0;
 
     // Scope to [data-chip] so the dynamically-injected engine chips keep
     // their own active state, independent of the chip-filter row.
@@ -79,6 +102,17 @@
     document.getElementById('lb-model').addEventListener('input', function () {
         clearTimeout(modelTimer);
         modelTimer = setTimeout(loadLeaderboard, 350);
+    });
+
+    document.querySelectorAll('#lb-days-chips .filter-chip').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            daysFilter = parseInt(btn.getAttribute('data-days'), 10) || 90;
+            document.querySelectorAll('#lb-days-chips .filter-chip').forEach(function (c) {
+                c.classList.remove('active');
+            });
+            btn.classList.add('active');
+            loadLeaderboard();
+        });
     });
 
     document.querySelectorAll('#lb-table th.sortable').forEach(function (th) {
@@ -104,6 +138,7 @@
         if (chipFilter) params.push('chip=' + encodeURIComponent(chipFilter));
         var model = document.getElementById('lb-model').value.trim();
         if (model) params.push('model=' + encodeURIComponent(model.slice(0, 128)));
+        params.push('days=' + daysFilter);
         var url = '/api/v1/leaderboard' + (params.length ? '?' + params.join('&') : '');
 
         document.getElementById('lb-loading').style.display = '';
@@ -160,9 +195,43 @@
             var s = typeof e.samples === 'number' ? e.samples : e.submissions;
             return typeof s === 'number' ? s : null;
         }
+        if (key === 'quantizations') {
+            var q = quantLabel(e);
+            return q === '—' ? null : q.toLowerCase();
+        }
+        if (key === 'last_submitted_at') {
+            var t = parseIsoMs(e.last_submitted_at);
+            return t === null ? null : t;
+        }
         var v = e[key];
         if (NUMERIC_KEYS[key]) return typeof v === 'number' ? v : null;
         return v ? String(v).toLowerCase() : null;
+    }
+
+    // v2 aggregates are additive and OMITTED when no data contributed —
+    // every formatter below tolerates the absent field and renders "—".
+    function quantLabel(e) {
+        // split=quant responses carry a scalar `quantization`; the default
+        // grouping carries the distinct `quantizations` list.
+        if (typeof e.quantization === 'string' && e.quantization) return e.quantization;
+        if (Array.isArray(e.quantizations)) {
+            var vals = e.quantizations.filter(function (q) {
+                return typeof q === 'string' && q;
+            });
+            if (vals.length) return vals.join(', ');
+        }
+        return '—';
+    }
+
+    function parseIsoMs(iso) {
+        if (typeof iso !== 'string' || !iso) return null;
+        var t = Date.parse(iso);
+        return isNaN(t) ? null : t;
+    }
+
+    function fmtNum(v, digits, suffix) {
+        if (typeof v !== 'number' || !isFinite(v) || v <= 0) return '—';
+        return v.toFixed(digits) + (suffix || '');
     }
 
     function sortEntries(entries) {
@@ -190,9 +259,31 @@
         renderRows(entries);
     }
 
+    function lastSeenCell(e) {
+        var cell = document.createElement('td');
+        var t = parseIsoMs(e.last_submitted_at);
+        if (t === null) {
+            cell.textContent = '—';
+            return cell;
+        }
+        var ageDays = (Date.now() - t) / DAY_MS;
+        var dot = document.createElement('span');
+        // Freshness: green < 30 days, neutral 30-90, degraded beyond.
+        dot.className = 'lb-seen-dot ' +
+            (ageDays < 30 ? 'st-running' : ageDays <= 90 ? 'st-stopped' : 'st-degraded');
+        cell.appendChild(dot);
+        var date = document.createElement('span');
+        date.textContent = new Date(t).toLocaleDateString();
+        cell.appendChild(date);
+        return cell;
+    }
+
     function renderRows(entries) {
         var tbody = document.getElementById('lb-tbody');
         tbody.textContent = '';
+        // Any open drill-down row was just cleared with the tbody.
+        openDetail = null;
+        detailSeq++;
         document.getElementById('lb-loading').style.display = 'none';
         document.getElementById('lb-empty').style.display = entries.length ? 'none' : '';
         var maxTok = 0;
@@ -205,6 +296,7 @@
         // is data, never markup.
         entries.forEach(function (e) {
             var tr = document.createElement('tr');
+            tr.className = 'lb-row';
             function td(text, right) {
                 var cell = document.createElement('td');
                 cell.textContent = text;
@@ -217,6 +309,7 @@
             // The community API names the field hw_chip (hw_ram_gb beside it).
             var chip = e.hw_chip || e.chip || '—';
             td(e.hw_ram_gb ? chip + ' · ' + e.hw_ram_gb + ' GB' : chip);
+            td(quantLabel(e));
             var tok = typeof e.median_tok_s === 'number' ? e.median_tok_s : 0;
             var ttft = typeof e.median_ttft_ms === 'number' ? e.median_ttft_ms : 0;
             var tokCell = td(tok ? tok.toFixed(1) : '—', true);
@@ -229,9 +322,138 @@
                 tokCell.insertBefore(bar, tokCell.firstChild);
             }
             td(ttft ? Math.round(ttft) + ' ms' : '—', true);
+            td(fmtNum(e.median_power_watts, 1), true);
+            td(fmtNum(e.median_tok_s_per_watt, 2), true);
             td(String(e.samples || e.submissions || 0), true);
+            tr.appendChild(lastSeenCell(e));
+            tr.addEventListener('click', function () { toggleDetail(tr, e); });
             tbody.appendChild(tr);
         });
+    }
+
+    // --- Per-row drill-down (community /benchmarks via local proxy) ------
+
+    function detailMessage(cellHost, text) {
+        cellHost.textContent = '';
+        var msg = document.createElement('div');
+        msg.className = 'lb-detail-msg';
+        msg.textContent = text;
+        cellHost.appendChild(msg);
+    }
+
+    function closeDetail() {
+        if (openDetail) {
+            openDetail.detailTr.remove();
+            openDetail.anchorTr.classList.remove('lb-row-open');
+            openDetail = null;
+        }
+        detailSeq++;
+    }
+
+    function toggleDetail(tr, e) {
+        var wasOpenHere = openDetail && openDetail.anchorTr === tr;
+        closeDetail();
+        if (wasOpenHere) return;
+
+        var detailTr = document.createElement('tr');
+        detailTr.className = 'lb-detail';
+        var cell = document.createElement('td');
+        cell.colSpan = COLUMN_COUNT;
+        detailTr.appendChild(cell);
+        detailMessage(cell, 'Loading detail…');
+        tr.insertAdjacentElement('afterend', detailTr);
+        tr.classList.add('lb-row-open');
+        openDetail = { anchorTr: tr, detailTr: detailTr };
+
+        var seq = detailSeq;
+        var params = [
+            'chip=' + encodeURIComponent(e.hw_chip || e.chip || ''),
+            'model=' + encodeURIComponent(e.model || ''),
+            'days=' + daysFilter
+        ];
+        if (e.engine) params.push('engine=' + encodeURIComponent(e.engine));
+        fetch('/api/v1/leaderboard/submissions?' + params.join('&'))
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (seq !== detailSeq) return; // row closed/replaced meanwhile
+                if (!data || !Array.isArray(data.results)) {
+                    // Endpoint not deployed yet, upstream down, or bad params:
+                    // degrade to a quiet note, never an error page.
+                    detailMessage(cell, 'Per-submission detail unavailable.');
+                    return;
+                }
+                if (!data.results.length) {
+                    detailMessage(cell, 'No individual submissions in this window.');
+                    return;
+                }
+                renderDetailTable(cell, data.results);
+            })
+            .catch(function () {
+                if (seq !== detailSeq) return;
+                detailMessage(cell, 'Per-submission detail unavailable.');
+            });
+    }
+
+    function renderDetailTable(cellHost, results) {
+        cellHost.textContent = '';
+        var table = document.createElement('table');
+        table.className = 'results-table lb-detail-table';
+        var thead = document.createElement('thead');
+        var htr = document.createElement('tr');
+        ['Date', 'Engine', 'Quant', 'tok/s', 'TTFT', 'VRAM', 'W', 'Card'].forEach(
+            function (label, i) {
+                var th = document.createElement('th');
+                th.textContent = label;
+                th.className = i >= 3 && i <= 6 ? 'text-right' : 'text-left';
+                htr.appendChild(th);
+            }
+        );
+        thead.appendChild(htr);
+        table.appendChild(thead);
+        var tbody = document.createElement('tbody');
+        results.forEach(function (s) {
+            var tr = document.createElement('tr');
+            function td(text, right) {
+                var cell = document.createElement('td');
+                cell.textContent = text;
+                if (right) cell.className = 'text-right';
+                tr.appendChild(cell);
+                return cell;
+            }
+            var t = parseIsoMs(s.submitted_at);
+            td(t === null ? '—' : new Date(t).toLocaleDateString());
+            var engine = s.engine || '?';
+            if (typeof s.engine_version === 'string' && s.engine_version) {
+                engine += ' ' + s.engine_version;
+            }
+            td(engine);
+            td(typeof s.quantization === 'string' && s.quantization ? s.quantization : '—');
+            td(fmtNum(s.median_tok_s, 1), true);
+            td(typeof s.median_ttft_ms === 'number' && s.median_ttft_ms > 0
+                ? Math.round(s.median_ttft_ms) + ' ms' : '—', true);
+            td(fmtNum(s.vram_gb, 1, ' GB'), true);
+            td(fmtNum(s.avg_power_watts, 1), true);
+            var linkCell = document.createElement('td');
+            // card_url comes from a non-trusted API: only accept plain
+            // https URLs as href, never other schemes.
+            if (typeof s.card_url === 'string' && s.card_url.indexOf('https://') === 0) {
+                var a = document.createElement('a');
+                a.href = s.card_url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.textContent = 'card';
+                linkCell.appendChild(a);
+            } else {
+                linkCell.textContent = '—';
+            }
+            tr.appendChild(linkCell);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        var wrap = document.createElement('div');
+        wrap.className = 'overflow-x-auto';
+        wrap.appendChild(table);
+        cellHost.appendChild(wrap);
     }
 
     loadLeaderboard();

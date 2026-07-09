@@ -12,6 +12,7 @@ from asiai.community import (
     DEFAULT_API_URL,
     SubmitResult,
     build_submission,
+    fetch_benchmarks,
     fetch_comparison,
     fetch_leaderboard,
     get_api_url,
@@ -517,6 +518,81 @@ class TestFetchLeaderboard:
         with patch("asiai.community.urlopen", side_effect=exc):
             result = fetch_leaderboard(api_url="https://test.example.com")
         assert result == []
+
+    def test_fetch_leaderboard_days_in_url(self):
+        mock_resp = _make_mock_response([])
+        with patch("asiai.community.urlopen", return_value=mock_resp) as m:
+            fetch_leaderboard(days=30, api_url="https://test.example.com")
+        url = m.call_args[0][0].full_url
+        assert "days=30" in url
+
+    def test_fetch_leaderboard_no_days_by_default(self):
+        """days=0 keeps the server-side default window (no param sent)."""
+        mock_resp = _make_mock_response([])
+        with patch("asiai.community.urlopen", return_value=mock_resp) as m:
+            fetch_leaderboard(api_url="https://test.example.com")
+        assert "days=" not in m.call_args[0][0].full_url
+
+
+# ---------------------------------------------------------------------------
+# fetch_benchmarks (per-submission drill-down)
+# ---------------------------------------------------------------------------
+
+
+class TestFetchBenchmarks:
+    def test_envelope_returned(self):
+        data = {
+            "results": [{"id": "abc", "engine": "llamacpp", "median_tok_s": 62.4}],
+            "meta": {"total": 1, "limit": 25, "offset": 0},
+        }
+        mock_resp = _make_mock_response(data)
+        with patch("asiai.community.urlopen", return_value=mock_resp):
+            result = fetch_benchmarks("Apple M4 Pro", "qwen3.5", api_url="https://t.example")
+        assert result is not None
+        assert result["results"][0]["engine"] == "llamacpp"
+        assert result["meta"]["total"] == 1
+
+    def test_params_urlencoded(self):
+        mock_resp = _make_mock_response({"results": [], "meta": {}})
+        with patch("asiai.community.urlopen", return_value=mock_resp) as m:
+            fetch_benchmarks(
+                "Apple M4 Pro",
+                "qwen3.5:4b",
+                engine="llamacpp + TurboQuant",
+                days=30,
+                limit=10,
+                offset=20,
+                api_url="https://t.example",
+            )
+        url = m.call_args[0][0].full_url
+        # URL is only ever the configured base + urlencoded query (SSRF posture).
+        assert url.startswith("https://t.example/benchmarks?")
+        assert "chip=Apple+M4+Pro" in url
+        assert "model=qwen3.5%3A4b" in url
+        assert "engine=llamacpp+%2B+TurboQuant" in url
+        assert "days=30" in url and "limit=10" in url and "offset=20" in url
+
+    def test_endpoint_not_deployed_returns_none(self):
+        """Upstream 404 (endpoint not shipped yet) degrades to None."""
+        from io import BytesIO
+
+        exc = HTTPError("https://t.example/benchmarks", 404, "Not Found", {}, BytesIO(b""))
+        with patch("asiai.community.urlopen", side_effect=exc):
+            result = fetch_benchmarks("M4", "qwen", api_url="https://t.example")
+        assert result is None
+
+    def test_unreachable_returns_none(self):
+        exc = URLError("Network is unreachable")
+        with patch("asiai.community.urlopen", side_effect=exc):
+            result = fetch_benchmarks("M4", "qwen", api_url="https://t.example")
+        assert result is None
+
+    def test_malformed_body_returns_none(self):
+        """A body without a results list is not a valid envelope."""
+        mock_resp = _make_mock_response({"unexpected": True})
+        with patch("asiai.community.urlopen", return_value=mock_resp):
+            result = fetch_benchmarks("M4", "qwen", api_url="https://t.example")
+        assert result is None
 
 
 # ---------------------------------------------------------------------------
