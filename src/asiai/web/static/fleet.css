@@ -814,6 +814,36 @@
 
 .fl-plan-used { background: var(--fl-cyan-deep); height: 100%; }
 
+/* ── UMA stacked bars (now / after load) — one scale, two rows ────── */
+.fl-uma-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.fl-uma-rowlabel {
+    flex: none;
+    width: 62px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--fl-text-faint);
+    text-align: right;
+}
+.fl-uma-track { position: relative; flex: 1; display: block; }
+.fl-uma-track .fl-uma-seg { position: absolute; top: 0; height: 100%; }
+/* The base track clips at its rounded corners (overflow hidden); the
+   floor marker must stay inside that clip on the stacked rows. */
+.fl-uma-track .fl-plan-floor { top: 0; bottom: 0; }
+.fl-uma-new.plan-fits { background: rgba(34, 197, 94, 0.75); }
+.fl-uma-new.plan-tight { background: rgba(245, 158, 11, 0.75); }
+.fl-uma-new.plan-jetsam-risk { background: rgba(239, 68, 68, 0.75); }
+.fl-uma-new-band.plan-fits { background: rgba(34, 197, 94, 0.3); }
+.fl-uma-new-band.plan-tight { background: rgba(245, 158, 11, 0.3); }
+.fl-uma-new-band.plan-jetsam-risk { background: rgba(239, 68, 68, 0.3); }
+.fl-uma-freed {
+    background: repeating-linear-gradient(
+        135deg,
+        rgba(148, 163, 184, 0.35) 0 3px,
+        transparent 3px 6px
+    );
+}
+
 .fl-plan-floor {
     position: absolute;
     top: -4px;

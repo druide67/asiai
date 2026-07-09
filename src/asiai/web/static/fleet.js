@@ -484,7 +484,7 @@
             ]));
         }
 
-        if (command === 'start') children.push(buildUmaAdvisory(node, engine));
+        if (command === 'start') children.push(buildUmaAdvisory(node, engine).root);
 
         var confirmVariant = command === 'start' ? 'primary'
             : command === 'restart' ? 'accent'
@@ -584,7 +584,7 @@
             ]),
         ];
         if (command === 'install') {
-            if (advisory) children.splice(3, 0, advisory);
+            if (advisory) children.splice(3, 0, advisory.root);
             if (presetPicker) children.splice(3, 0, presetPicker.root);
         }
         openModal(children);
@@ -643,52 +643,119 @@
 
     function buildUmaAdvisory(node, engine, nick) {
         // Memory-plan advisory: real node memory now + the 8 GB floor
-        // marker. With a nick (install modal) the block goes dynamic: each
-        // preset choice fetches the node's /api/v1/plan verdict. Without
-        // one (start modal) it stays informative. Either way it informs,
-        // never blocks.
+        // marker, on ONE scale (the node's total unified RAM). With a nick
+        // (install modal) the block goes dynamic: each preset choice
+        // fetches the node's /api/v1/plan verdict and a second "after
+        // load" bar materializes the projected occupancy — current use
+        // (minus what eviction frees, hatched on the "now" bar), plus the
+        // preset cost tinted by verdict with its low→high uncertainty band
+        // translucent. Without a nick (start modal) it stays informative.
+        // Either way it informs, never blocks.
         var snap = node.snapshot || {};
-        var total = gb(snap.mem_total || 0);
-        var used = gb(snap.mem_used || 0);
+        var totalGb = gb(snap.mem_total || 0);
+        var usedGb = gb(snap.mem_used || 0);
         var wrap = el('div', {});
-        if (total <= 0) return wrap;
+        if (totalGb <= 0) return { root: wrap, update: function () {} };
 
-        var usedPct = Math.min(100, (used / total) * 100);
-        var floorPct = Math.max(0, ((total - 8) / total) * 100);
+        function pct(gbValue) {
+            return Math.max(0, Math.min(100, (gbValue / totalGb) * 100)) + '%';
+        }
 
         wrap.appendChild(el('div', { cls: 'fl-plan-rows' }, [
             el('div', { cls: 'fl-plan-row' }, [
                 el('span', { cls: 'k', text: 'Unified RAM in use now' }),
-                el('span', { cls: 'v', text: used.toFixed(1) + ' / ' + total.toFixed(0) + ' GB' }),
+                el('span', { cls: 'v', text: usedGb.toFixed(1) + ' / ' + totalGb.toFixed(0) + ' GB' }),
             ]),
             el('div', { cls: 'fl-plan-row' }, [
                 el('span', { cls: 'k' }, [
                     document.createTextNode('System headroom now '),
                     el('span', { cls: 'paren', text: '(floor 8 GB)' }),
                 ]),
-                el('span', { cls: 'v', text: Math.max(0, total - used).toFixed(1) + ' GB' }),
+                el('span', { cls: 'v', text: Math.max(0, totalGb - usedGb).toFixed(1) + ' GB' }),
             ]),
         ]));
 
+        function makeTrack(label) {
+            var row = el('div', { cls: 'fl-uma-row' });
+            row.appendChild(el('span', { cls: 'fl-uma-rowlabel', text: label }));
+            var track = el('div', { cls: 'fl-plan-track fl-uma-track' });
+            row.appendChild(track);
+            var floor = el('div', { cls: 'fl-plan-floor' });
+            floor.style.left = pct(totalGb - 8);
+            track.appendChild(floor);
+            return { row: row, track: track };
+        }
+        function seg(track, cls, leftGb, widthGb, title) {
+            var s = el('span', { cls: cls, attrs: title ? { title: title } : null });
+            s.style.left = pct(leftGb);
+            s.style.width = pct(widthGb);
+            track.appendChild(s);
+            return s;
+        }
+
         var bar = el('div', { cls: 'fl-plan-bar' });
-        var track = el('div', { cls: 'fl-plan-track' });
-        var usedSeg = el('span', { cls: 'fl-plan-used', title: 'in use · ' + used.toFixed(1) + ' GB' });
-        usedSeg.style.width = usedPct + '%';
-        track.appendChild(usedSeg);
-        bar.appendChild(track);
-        var floor = el('div', { cls: 'fl-plan-floor' });
-        floor.style.left = floorPct + '%';
-        bar.appendChild(floor);
-        bar.appendChild(el('div', { cls: 'fl-plan-legend' }, [
+        var nowBar = makeTrack('now');
+        seg(nowBar.track, 'fl-plan-used fl-uma-seg', 0, usedGb, 'in use · ' + usedGb.toFixed(1) + ' GB');
+        var nowFreedSeg = null; // hatched "will be freed" overlay, set on update
+        bar.appendChild(nowBar.row);
+        var afterBar = makeTrack('after load');
+        afterBar.row.classList.add('fl-uma-after');
+        afterBar.row.style.display = 'none';
+        bar.appendChild(afterBar.row);
+        var legend = el('div', { cls: 'fl-plan-legend' }, [
             el('span', { text: '▪ in use' }),
+            el('span', { cls: 'fl-uma-legend-plan', text: '▪ + this preset (band = low→high)' }),
             el('span', { text: '┆ 8 GB floor' }),
-        ]));
+        ]);
+        legend.querySelector('.fl-uma-legend-plan').style.display = 'none';
+        bar.appendChild(legend);
         wrap.appendChild(bar);
+
+        function renderAfterBar(data) {
+            // Rebuild the "after load" track from the plan payload. Hidden
+            // whenever the plan has no usable figures (unknown verdict):
+            // no bar beats a bar drawn from invented numbers.
+            afterBar.row.style.display = 'none';
+            legend.querySelector('.fl-uma-legend-plan').style.display = 'none';
+            if (nowFreedSeg) { nowFreedSeg.remove(); nowFreedSeg = null; }
+            if (!data || !data.cost || !data.node) return;
+            var costLow = Number(data.cost.total_mb_low) / 1024;
+            var costHigh = Number(data.cost.total_mb_high) / 1024;
+            var nTotal = Number(data.node.mem_total_mb) / 1024;
+            var nUsed = Number(data.node.mem_used_mb) / 1024;
+            var band = Array.isArray(data.projected_free_band) ? data.projected_free_band : null;
+            if (!isFinite(costLow) || !isFinite(costHigh) || costHigh <= 0
+                || !isFinite(nTotal) || nTotal <= 0 || !isFinite(nUsed) || !band) return;
+            // freed = projected_high − free_now + cost_low (all figures the
+            // payload already carries; keeps the bar consistent with the badge).
+            var freeNow = Math.max(0, nTotal - nUsed);
+            var freedGb = Math.max(0, Number(band[1]) / 1024 - freeNow + costLow);
+            var baseGb = Math.max(0, nUsed - freedGb);
+
+            while (afterBar.track.querySelector('.fl-uma-seg')) {
+                afterBar.track.querySelector('.fl-uma-seg').remove();
+            }
+            var v = typeof data.verdict === 'string' ? data.verdict : 'unknown';
+            var tint = v === 'fits' ? 'fits' : (v === 'jetsam-risk' ? 'jetsam-risk' : 'tight');
+            seg(afterBar.track, 'fl-plan-used fl-uma-seg', 0, baseGb,
+                'in use after freeing · ' + baseGb.toFixed(1) + ' GB');
+            seg(afterBar.track, 'fl-uma-new plan-' + tint + ' fl-uma-seg', baseGb, costLow,
+                'this preset (low bound) · ' + costLow.toFixed(1) + ' GB');
+            seg(afterBar.track, 'fl-uma-new-band plan-' + tint + ' fl-uma-seg', baseGb + costLow,
+                Math.max(0, costHigh - costLow),
+                'uncertainty band up to ' + costHigh.toFixed(1) + ' GB');
+            if (freedGb > 0.05) {
+                nowFreedSeg = seg(nowBar.track, 'fl-uma-freed fl-uma-seg', baseGb, freedGb,
+                    'will be freed · ' + freedGb.toFixed(1) + ' GB');
+            }
+            afterBar.row.style.display = '';
+            legend.querySelector('.fl-uma-legend-plan').style.display = '';
+        }
 
         var badge = el('span', { cls: 'fl-plan-badge advisory', text: 'ADVISORY' });
         var msg = el('p', { text: 'Current usage is shown for reference — this never blocks.' });
         wrap.appendChild(el('div', { cls: 'fl-plan-verdict advisory' }, [badge, msg]));
-        if (!nick) return wrap;
+        if (!nick) return { root: wrap, update: function () {} };
 
         // Dynamic pre-flight (install modal). A sequence counter drops any
         // response that lands after a newer preset choice — same stale-guard
@@ -716,14 +783,16 @@
             if (data && data.note) parts.push(String(data.note));
             if (!parts.length) parts.push('no plan data');
             msg.textContent = parts.join(' · ') + ' — advisory, install is never blocked.';
+            renderAfterBar(v === 'unknown' ? null : data);
         }
-        wrap.update = function (preset) {
+        function update(preset) {
             seq += 1;
             var my = seq;
             if (!preset) {
                 badge.textContent = 'ADVISORY';
                 badge.className = 'fl-plan-badge advisory';
                 msg.textContent = 'Base manifest: no memory plan — planner data is per-preset. Install is not blocked.';
+                renderAfterBar(null);
                 return;
             }
             badge.textContent = 'PLAN…';
@@ -735,8 +804,8 @@
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) { if (my === seq) renderPlan(data); })
                 .catch(function () { if (my === seq) renderPlan(null); });
-        };
-        return wrap;
+        }
+        return { root: wrap, update: update };
     }
 
     // ── login modal (1h) ────────────────────────────────────────
