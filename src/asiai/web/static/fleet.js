@@ -522,6 +522,7 @@
         // (or paste-then-Enter) before the presets load can never fire an
         // install with no preset — the silent-baseline bug this feature closes.
         var presetPicker = command === 'install' ? buildPresetPicker(nick, engineName, onReady) : null;
+        var advisory = command === 'install' ? buildUmaAdvisory(node, engineName, nick) : null;
         var confirmBtn = el('button', {
             cls: 'fl-btn danger',
             text: titleFor(command, engineName, nick),
@@ -548,7 +549,13 @@
             if (canConfirm()) confirmBtn.removeAttribute('disabled');
             else confirmBtn.setAttribute('disabled', 'disabled');
         }
-        function onReady() { refreshConfirm(); }
+        function refreshAdvisory() {
+            if (advisory && typeof advisory.update === 'function' && presetPicker) {
+                advisory.update(presetPicker.select.value);
+            }
+        }
+        function onReady() { refreshConfirm(); refreshAdvisory(); }
+        if (presetPicker) presetPicker.select.addEventListener('change', refreshAdvisory);
         input.addEventListener('input', refreshConfirm);
         input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && canConfirm()) confirmBtn.click();
@@ -577,7 +584,7 @@
             ]),
         ];
         if (command === 'install') {
-            children.splice(3, 0, buildUmaAdvisory(node, null));
+            if (advisory) children.splice(3, 0, advisory);
             if (presetPicker) children.splice(3, 0, presetPicker.root);
         }
         openModal(children);
@@ -634,11 +641,12 @@
         return { root: root, select: select, ready: function () { return isReady; } };
     }
 
-    function buildUmaAdvisory(node, engine) {
-        // Memory-plan advisory shell: real node memory now + the 8 GB floor
-        // marker. The computed verdict (weights + KV projection) needs a
-        // server-side planner that does not exist yet — until it ships this
-        // block informs, never blocks.
+    function buildUmaAdvisory(node, engine, nick) {
+        // Memory-plan advisory: real node memory now + the 8 GB floor
+        // marker. With a nick (install modal) the block goes dynamic: each
+        // preset choice fetches the node's /api/v1/plan verdict. Without
+        // one (start modal) it stays informative. Either way it informs,
+        // never blocks.
         var snap = node.snapshot || {};
         var total = gb(snap.mem_total || 0);
         var used = gb(snap.mem_used || 0);
@@ -677,10 +685,57 @@
         ]));
         wrap.appendChild(bar);
 
-        wrap.appendChild(el('div', { cls: 'fl-plan-verdict advisory' }, [
-            el('span', { cls: 'fl-plan-badge advisory', text: 'ADVISORY' }),
-            el('p', { text: 'The UMA guard (memory plan with projected footprint) computes server-side in a later release. Current usage is shown for reference — starting is not blocked.' }),
-        ]));
+        var badge = el('span', { cls: 'fl-plan-badge advisory', text: 'ADVISORY' });
+        var msg = el('p', { text: 'Current usage is shown for reference — this never blocks.' });
+        wrap.appendChild(el('div', { cls: 'fl-plan-verdict advisory' }, [badge, msg]));
+        if (!nick) return wrap;
+
+        // Dynamic pre-flight (install modal). A sequence counter drops any
+        // response that lands after a newer preset choice — same stale-guard
+        // pattern as the History type chips.
+        var seq = 0;
+        var labels = {
+            'fits': 'FITS',
+            'tight': 'TIGHT',
+            'jetsam-risk': 'JETSAM RISK',
+            'thermal-risk': 'THERMAL RISK',
+            'unknown': 'UNKNOWN',
+        };
+        function renderPlan(data) {
+            var v = data && typeof data.verdict === 'string' && labels[data.verdict]
+                ? data.verdict : 'unknown';
+            badge.textContent = labels[v];
+            badge.className = 'fl-plan-badge plan-' + v;
+            var parts = [];
+            if (data && typeof data.projected_free_mb === 'number') {
+                parts.push('projected free after load ' + (data.projected_free_mb / 1024).toFixed(1) + ' GB (pessimistic)');
+            }
+            if (data && Array.isArray(data.eviction_set) && data.eviction_set.length) {
+                parts.push('frees ' + data.eviction_set.join(', ') + ' first');
+            }
+            if (data && data.note) parts.push(String(data.note));
+            if (!parts.length) parts.push('no plan data');
+            msg.textContent = parts.join(' · ') + ' — advisory, install is never blocked.';
+        }
+        wrap.update = function (preset) {
+            seq += 1;
+            var my = seq;
+            if (!preset) {
+                badge.textContent = 'ADVISORY';
+                badge.className = 'fl-plan-badge advisory';
+                msg.textContent = 'Base manifest: no memory plan — planner data is per-preset. Install is not blocked.';
+                return;
+            }
+            badge.textContent = 'PLAN…';
+            badge.className = 'fl-plan-badge advisory';
+            msg.textContent = 'Checking projected memory fit…';
+            var q = 'preset=' + encodeURIComponent(preset)
+                + (engine ? '&engine=' + encodeURIComponent(engine) : '');
+            fetch('/api/v1/fleet/' + encodeURIComponent(nick) + '/plan?' + q)
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) { if (my === seq) renderPlan(data); })
+                .catch(function () { if (my === seq) renderPlan(null); });
+        };
         return wrap;
     }
 
