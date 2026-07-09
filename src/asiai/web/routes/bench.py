@@ -687,24 +687,27 @@ def _run_benchmark_thread(
 
 
 def _get_engines_for_form(state) -> list[dict]:
-    """Get engine names, running models, and installed models for the bench form."""
+    """Get engine names, running models, and installed models for the bench form.
+
+    One status() call per engine — it already collects running, available
+    and reachable in a single pass, so listing the installed models adds
+    no network round-trip over what the form did before. A slow or broken
+    adapter must never break GET /bench.
+    """
     results = []
     for engine in state.engines:
         try:
-            reachable = engine.status().reachable
-            models = [m.name for m in engine.list_running()] if reachable else []
+            status = engine.status()
+            reachable = status.reachable
+            models = [m.name for m in status.running] if reachable else []
+            loaded = set(models)
+            available = (
+                [m.name for m in status.available if m.name not in loaded] if reachable else []
+            )
         except Exception:
             reachable = False
             models = []
-        available: list[str] = []
-        if reachable:
-            # Installed-but-not-loaded models (only Ollama implements this
-            # today). A slow or broken adapter must never break GET /bench.
-            try:
-                loaded = set(models)
-                available = [m.name for m in engine.list_available() if m.name not in loaded]
-            except Exception:
-                available = []
+            available = []
         results.append(
             {"name": engine.name, "reachable": reachable, "models": models, "available": available}
         )

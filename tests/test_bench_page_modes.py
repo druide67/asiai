@@ -32,11 +32,22 @@ class _FakeEngine:
     def list_running(self):
         return [_FakeModel()]
 
+    def list_available(self):
+        return []
+
     def version(self):
         return "b9580"
 
     def is_reachable(self):
         return True
+
+    def status(self):
+        # Mirrors BaseEngine.status(): one aggregated pass.
+        return SimpleNamespace(
+            running=self.list_running(),
+            available=self.list_available(),
+            reachable=self.is_reachable(),
+        )
 
 
 @pytest.fixture
@@ -315,18 +326,27 @@ class TestReportEndpoint:
         assert "mode-form-card" in resp.text
 
 
-def _reachable_status():
-    return SimpleNamespace(reachable=True)
+class _StatusAggregatingEngine:
+    """Mimics the REAL producer: BaseEngine.status() aggregates
+    list_running/list_available/is_reachable in one pass — the form
+    reads that single status() result, never the list_* methods."""
+
+    def is_reachable(self):
+        return True
+
+    def status(self):
+        return SimpleNamespace(
+            running=self.list_running(),
+            available=self.list_available(),
+            reachable=self.is_reachable(),
+        )
 
 
-class _OllamaLikeEngine:
+class _OllamaLikeEngine(_StatusAggregatingEngine):
     """Engine with loaded models AND installed-but-not-loaded models."""
 
     name = "ollama"
     base_url = "http://127.0.0.1:11434"
-
-    def status(self):
-        return _reachable_status()
 
     def list_running(self):
         return [SimpleNamespace(name="loaded:8b")]
@@ -336,14 +356,13 @@ class _OllamaLikeEngine:
         return [SimpleNamespace(name="loaded:8b"), SimpleNamespace(name="installed:4b")]
 
 
-class _BrokenAvailableEngine:
-    """list_available raises — must degrade to [] without breaking the page."""
+class _BrokenAvailableEngine(_StatusAggregatingEngine):
+    """status() raises (a hung adapter breaks the whole aggregate call the
+    same way) — the form must degrade to an unreachable-looking entry
+    without breaking the page."""
 
     name = "llamacpp"
     base_url = "http://127.0.0.1:8080"
-
-    def status(self):
-        return _reachable_status()
 
     def list_running(self):
         return [SimpleNamespace(name="m1")]
@@ -352,31 +371,28 @@ class _BrokenAvailableEngine:
         raise RuntimeError("engine hung")
 
 
-class _UnreachableEngine:
+class _UnreachableEngine(_StatusAggregatingEngine):
     name = "vllm"
     base_url = "http://127.0.0.1:8000"
 
-    def status(self):
-        return SimpleNamespace(reachable=False)
+    def is_reachable(self):
+        return False
 
-    def list_running(self):  # pragma: no cover — must not be called
-        raise AssertionError("list_running called on unreachable engine")
+    def list_running(self):
+        return []
 
-    def list_available(self):  # pragma: no cover — must not be called
-        raise AssertionError("list_available called on unreachable engine")
+    def list_available(self):
+        return []
 
 
 HOSTILE_NAME = 'evil"</script><script>alert(1)//'
 
 
-class _HostileNameEngine:
+class _HostileNameEngine(_StatusAggregatingEngine):
     """Engine whose model name tries to break out of the inline JSON block."""
 
     name = "llamacpp"
     base_url = "http://127.0.0.1:8080"
-
-    def status(self):
-        return _reachable_status()
 
     def list_running(self):
         return [SimpleNamespace(name=HOSTILE_NAME)]
@@ -409,13 +425,16 @@ class TestModeModelPicker:
         (entry,) = _get_engines_for_form(state)
         assert "loaded:8b" not in entry["available"]
 
-    def test_list_available_raising_degrades_to_empty(self):
+    def test_raising_adapter_degrades_without_breaking(self):
+        # status() aggregates running/available/reachable in one call, so
+        # a hung adapter fails the whole entry — it degrades to an
+        # unreachable-looking row rather than crashing the page.
         from asiai.web.routes.bench import _get_engines_for_form
 
         state = SimpleNamespace(engines=[_BrokenAvailableEngine()])
         (entry,) = _get_engines_for_form(state)
-        assert entry["reachable"] is True
-        assert entry["models"] == ["m1"]
+        assert entry["reachable"] is False
+        assert entry["models"] == []
         assert entry["available"] == []
 
     def test_unreachable_engine_has_empty_available(self):
