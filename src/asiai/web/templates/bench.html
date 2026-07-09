@@ -54,8 +54,13 @@
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label">Model <span class="text-neutral-500 text-xs">(blank = first loaded model)</span></label>
-                <input type="text" name="mode_model" class="form-input" placeholder="auto">
+                <label class="form-label">Model</label>
+                <select name="mode_model" class="form-select" id="mode-model-select">
+                    <option value="" selected>(auto — first loaded model)</option>
+                    <option value="__custom__">Custom…</option>
+                </select>
+                <input type="text" class="form-input" id="mode-model-custom"
+                       placeholder="model name" style="margin-top: 0.5rem; display: none;">
             </div>
             <div class="form-group">
                 <label class="form-label">Runs / repeats: <span id="mode-runs-value">1</span></label>
@@ -377,6 +382,10 @@
 {% endblock %}
 
 {% block scripts %}
+{# Engine → models data for the mode model picker. |tojson inside a JSON
+   script block only — NEVER inside an HTML attribute (it does not escape
+   double quotes; see the 1.23.0 leaderboard chip regression). #}
+<script type="application/json" id="mode-model-data">{{ engines | tojson }}</script>
 <script>
     const form = document.getElementById('bench-form');
     const submitBtn = document.getElementById('bench-submit');
@@ -495,6 +504,65 @@
     }
     window.setWebBenchType = setWebBenchType;
 
+    /* Mode model picker: options follow the engine selected in mode_engine */
+    var MODE_CUSTOM = '__custom__';
+    var modeEngineSelect = document.getElementById('mode-engine');
+    var modeModelSelect = document.getElementById('mode-model-select');
+    var modeModelCustom = document.getElementById('mode-model-custom');
+    var modeEngineData = [];
+    try {
+        modeEngineData = JSON.parse(
+            document.getElementById('mode-model-data').textContent || '[]');
+    } catch (e) { /* malformed data: picker degrades to auto + custom */ }
+
+    function rebuildModeModelOptions() {
+        var engineName = modeEngineSelect ? modeEngineSelect.value : '';
+        var entry = null;
+        for (var i = 0; i < modeEngineData.length; i++) {
+            if (modeEngineData[i].name === engineName) { entry = modeEngineData[i]; break; }
+        }
+        modeModelSelect.textContent = '';
+        var autoOpt = document.createElement('option');
+        autoOpt.value = '';
+        autoOpt.textContent = '(auto — first loaded model)';
+        modeModelSelect.appendChild(autoOpt);
+        if (entry) {
+            (entry.models || []).forEach(function(name) {
+                var opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                modeModelSelect.appendChild(opt);
+            });
+            (entry.available || []).forEach(function(name) {
+                var opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name + ' — will load';
+                modeModelSelect.appendChild(opt);
+            });
+        }
+        var customOpt = document.createElement('option');
+        customOpt.value = MODE_CUSTOM;
+        customOpt.textContent = 'Custom…';
+        modeModelSelect.appendChild(customOpt);
+        modeModelSelect.value = '';
+        if (modeModelCustom) {
+            modeModelCustom.style.display = 'none';
+            modeModelCustom.value = '';
+        }
+    }
+    if (modeModelSelect) {
+        modeModelSelect.addEventListener('change', function() {
+            if (!modeModelCustom) return;
+            var isCustom = this.value === MODE_CUSTOM;
+            modeModelCustom.style.display = isCustom ? '' : 'none';
+            if (!isCustom) modeModelCustom.value = '';
+        });
+        if (modeEngineSelect) {
+            modeEngineSelect.addEventListener('change', rebuildModeModelOptions);
+        }
+        rebuildModeModelOptions();
+    }
+
     var modeForm = document.getElementById('mode-form');
     var modeSubmit = document.getElementById('mode-submit');
     modeForm.addEventListener('submit', function(e) {
@@ -506,6 +574,11 @@
 
         var formData = new FormData(modeForm);
         formData.append('bench_type', webBenchType);
+        if (modeModelSelect && modeModelSelect.value === MODE_CUSTOM) {
+            // The custom input has no name= — its value replaces the select's.
+            // Empty custom = auto, same server behavior as an empty field.
+            formData.set('mode_model', modeModelCustom ? modeModelCustom.value.trim() : '');
+        }
 
         fetch('/bench/run', { method: 'POST', body: formData })
             .then(function(res) { return res.json(); })

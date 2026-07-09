@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -312,3 +313,137 @@ class TestReportEndpoint:
         assert 'data-btype="agentic"' in resp.text
         assert 'data-btype="thinking-ablation"' in resp.text
         assert "mode-form-card" in resp.text
+
+
+def _reachable_status():
+    return SimpleNamespace(reachable=True)
+
+
+class _OllamaLikeEngine:
+    """Engine with loaded models AND installed-but-not-loaded models."""
+
+    name = "ollama"
+    base_url = "http://127.0.0.1:11434"
+
+    def status(self):
+        return _reachable_status()
+
+    def list_running(self):
+        return [SimpleNamespace(name="loaded:8b")]
+
+    def list_available(self):
+        # Includes the loaded model — the form data must not duplicate it.
+        return [SimpleNamespace(name="loaded:8b"), SimpleNamespace(name="installed:4b")]
+
+
+class _BrokenAvailableEngine:
+    """list_available raises — must degrade to [] without breaking the page."""
+
+    name = "llamacpp"
+    base_url = "http://127.0.0.1:8080"
+
+    def status(self):
+        return _reachable_status()
+
+    def list_running(self):
+        return [SimpleNamespace(name="m1")]
+
+    def list_available(self):
+        raise RuntimeError("engine hung")
+
+
+class _UnreachableEngine:
+    name = "vllm"
+    base_url = "http://127.0.0.1:8000"
+
+    def status(self):
+        return SimpleNamespace(reachable=False)
+
+    def list_running(self):  # pragma: no cover — must not be called
+        raise AssertionError("list_running called on unreachable engine")
+
+    def list_available(self):  # pragma: no cover — must not be called
+        raise AssertionError("list_available called on unreachable engine")
+
+
+HOSTILE_NAME = 'evil"</script><script>alert(1)//'
+
+
+class _HostileNameEngine:
+    """Engine whose model name tries to break out of the inline JSON block."""
+
+    name = "llamacpp"
+    base_url = "http://127.0.0.1:8080"
+
+    def status(self):
+        return _reachable_status()
+
+    def list_running(self):
+        return [SimpleNamespace(name=HOSTILE_NAME)]
+
+    def list_available(self):
+        return []
+
+
+class TestModeModelPicker:
+    def test_page_renders_mode_model_select_with_auto(self, client):
+        resp = client.get("/bench")
+        assert resp.status_code == 200
+        assert 'id="mode-model-select"' in resp.text
+        assert 'name="mode_model"' in resp.text
+        assert "(auto — first loaded model)" in resp.text
+        assert 'id="mode-model-data"' in resp.text
+
+    def test_engines_for_form_has_available_key(self):
+        from asiai.web.routes.bench import _get_engines_for_form
+
+        state = SimpleNamespace(engines=[_OllamaLikeEngine()])
+        (entry,) = _get_engines_for_form(state)
+        assert entry["models"] == ["loaded:8b"]
+        assert entry["available"] == ["installed:4b"]
+
+    def test_available_excludes_loaded_models(self):
+        from asiai.web.routes.bench import _get_engines_for_form
+
+        state = SimpleNamespace(engines=[_OllamaLikeEngine()])
+        (entry,) = _get_engines_for_form(state)
+        assert "loaded:8b" not in entry["available"]
+
+    def test_list_available_raising_degrades_to_empty(self):
+        from asiai.web.routes.bench import _get_engines_for_form
+
+        state = SimpleNamespace(engines=[_BrokenAvailableEngine()])
+        (entry,) = _get_engines_for_form(state)
+        assert entry["reachable"] is True
+        assert entry["models"] == ["m1"]
+        assert entry["available"] == []
+
+    def test_unreachable_engine_has_empty_available(self):
+        from asiai.web.routes.bench import _get_engines_for_form
+
+        state = SimpleNamespace(engines=[_UnreachableEngine()])
+        (entry,) = _get_engines_for_form(state)
+        assert entry["reachable"] is False
+        assert entry["models"] == []
+        assert entry["available"] == []
+
+    def test_page_still_renders_when_list_available_raises(self, tmp_path):
+        db_path = str(tmp_path / "bench.db")
+        init_db(db_path)
+        state = AppState(engines=[_BrokenAvailableEngine()], db_path=db_path)
+        resp = TestClient(create_app(state)).get("/bench")
+        assert resp.status_code == 200
+        assert 'id="mode-model-select"' in resp.text
+
+    def test_hostile_model_name_cannot_break_out_of_json_script(self, tmp_path):
+        """|tojson must escape < > so a model name can never close the
+        <script type="application/json"> block and inject markup."""
+        db_path = str(tmp_path / "bench.db")
+        init_db(db_path)
+        state = AppState(engines=[_HostileNameEngine()], db_path=db_path)
+        resp = TestClient(create_app(state)).get("/bench")
+        assert resp.status_code == 200
+        # The raw closing tag from the payload must not appear anywhere.
+        assert "</script><script>alert(1)" not in resp.text
+        # The name survives, unicode-escaped inside the JSON block.
+        assert "\\u003c/script\\u003e" in resp.text
