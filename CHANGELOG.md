@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.24.0](https://github.com/druide67/asiai/compare/v1.23.0...v1.24.0) — Unreleased
+
+Every bench remembered, every bench reportable, every bench runnable
+from the dashboard.
+
+### Added
+
+- **All 7 bench types are now persisted** (#55): new `bench_runs` table —
+  one row per complete run (agentic, burst, code, language, instruct,
+  thinking-ablation, plus a session row for the standard bench) with a
+  normalized headline (`score_primary` + an explicit `score_label`,
+  because scores of different types must never read as comparable),
+  quality-gate failures, and the full self-describing payload. Kept
+  forever, like the benchmark history. The standard rows also gain the
+  provenance fields they always computed but silently dropped
+  (`output_degenerate`, `ttft_source`, `vram_estimated`,
+  `engine_runner`, `extra_body`, `asiai_version`).
+- **Markdown reports for every bench type** (#56): `--export FILE.md`
+  renders a complete, unbiased report — headline with its label,
+  metrics with ±CI95 and sample counts ("n=1 — no noise estimate" is
+  printed, never hidden), run conditions including `extra_body`,
+  quality gates (including refused rankings and judge-offline status),
+  and provenance. `--export FILE.json` keeps the exact previous
+  behavior; the per-mode `--*-output` flags become soft-deprecated
+  aliases.
+- **History goes multi-type** (#57): type chips on the History page
+  chart any bench type's headline over time (one series per
+  model × score label, red markers on gate-failed runs) with a per-run
+  payload drill-down, backed by `GET /api/bench-runs` +
+  `GET /api/bench-runs/{id}`.
+- **Bench page v2** (#58): the six non-standard bench modes are now
+  runnable from the dashboard with adaptive forms (suites, scenarios,
+  burst sizes, optional loopback LLM judge — the judge API key comes
+  from the server environment, never the form). Results persist
+  automatically and render as a markdown report with copy/download,
+  served by `GET /bench/report/{run_id}.md` for any persisted run.
+
+### Changed
+
+- `benchmark_process` rows (engine CPU/RSS per run) are no longer
+  purged after 7 days — their volume matches the benchmark history
+  they annotate, and the short window destroyed engine-RSS history.
+
 ## [1.23.0](https://github.com/druide67/asiai/compare/v1.22.0...v1.23.0) — 2026-07-08
 
 Fleet polish: per-node Doctor in the cockpit, a local Community

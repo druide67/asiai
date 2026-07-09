@@ -1,5 +1,11 @@
 # Benchmark modes
 
+> **Since 1.24**: every mode's complete result is persisted into the
+> local database (`bench_runs` table — one row per run, with the full
+> payload), charted over time on the web History page, runnable from
+> the web Bench page, and exportable as a markdown report with
+> `--export FILE.md` (`--export FILE.json` writes the raw payload).
+
 `asiai bench` has three **performance** modes, each answering a different
 question, all built on one shared instrumentation brick
 (`asiai.benchmark.quality_gates`). The four **quality** modes — `--code`,
