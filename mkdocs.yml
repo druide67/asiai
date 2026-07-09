@@ -28,6 +28,10 @@ theme:
 
 extra_css:
   - assets/stylesheets/custom.css
+  - assets/stylesheets/leaderboard.css
+
+extra_javascript:
+  - assets/js/leaderboard.js
 
 nav:
   - Home: index.md
