@@ -33,6 +33,9 @@ class MemoryInfo:
     total: int = 0
     used: int = 0
     pressure: str = "unknown"
+    # sysctl iogpu.wired_limit_mb — explicit ceiling on GPU-wired memory,
+    # in MB. 0 means no custom ceiling (macOS default budget applies).
+    gpu_wired_limit_mb: int = 0
 
 
 @dataclass
@@ -157,6 +160,21 @@ def collect_memory() -> MemoryInfo:
                 result.pressure = "critical"
         except Exception:
             pass
+
+    # Explicit GPU-wired ceiling (unprivileged sysctl). Missing OID or 0
+    # both mean "default budget" — the planner treats 0 as no ceiling.
+    try:
+        result.gpu_wired_limit_mb = int(
+            subprocess.run(
+                ["sysctl", "-n", "iogpu.wired_limit_mb"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+            ).stdout.strip()
+        )
+    except Exception:
+        pass
 
     return result
 

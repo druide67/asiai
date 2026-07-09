@@ -856,6 +856,13 @@
 
 .fl-plan-badge.advisory { color: var(--accent); border: 1px solid rgba(6, 182, 212, 0.3); }
 
+/* Pre-flight verdict variants (advisory — informative colors, no blocking). */
+.fl-plan-badge.plan-fits { color: var(--fl-green-text); border: 1px solid rgba(34, 197, 94, 0.35); }
+.fl-plan-badge.plan-tight,
+.fl-plan-badge.plan-thermal-risk { color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); }
+.fl-plan-badge.plan-jetsam-risk { color: var(--fl-danger-text); border: 1px solid rgba(239, 68, 68, 0.4); }
+.fl-plan-badge.plan-unknown { color: var(--fl-text-body); border: 1px solid rgba(148, 163, 184, 0.35); }
+
 .fl-plan-verdict p { font-size: 11.5px; color: var(--fl-text-body); line-height: 1.55; margin: 0; }
 
 /* ── Audit journal — drawer (1i) ───────────────────────────── */

@@ -51,6 +51,7 @@ from asiai.auth import config as auth_config
 from asiai.auth.operator import OperatorSession
 from asiai.auth.ratelimit import TokenRateLimiter
 from asiai.fleet import config as fleet_config
+from asiai.fleet import plan as uma_plan
 from asiai.fleet.command_spec import (
     ALLOWED_COMMANDS,
     DESTRUCTIVE_COMMANDS,
@@ -429,15 +430,30 @@ async def api_fleet_health_summary(request: Request) -> JSONResponse:
 # LAN read-only posture as the aggregate snapshot: the proxied data is
 # what the node already serves unauthenticated on its own dashboard.
 
-# endpoint key -> (node path, allowed query params, timeout seconds).
+# Every whitelisted query param carries its own validation pattern —
+# fail-closed, a value that doesn't fullmatch is silently dropped. The
+# time-window params are plain digits (unix ts / hour counts); the plan
+# params reuse the same identifier grammars as the write funnel.
+_DIGITS_RE = re.compile(r"\d{1,12}")
+
+# endpoint key -> (node path, param -> pattern, timeout seconds).
 # Doctor gets a longer budget: it runs live probes, not a DB read.
-_NODE_READ_ENDPOINTS: dict[str, tuple[str, frozenset[str], float]] = {
-    "history": ("/api/history", frozenset({"hours", "since", "until"}), 15.0),
-    "benchmarks": ("/api/benchmarks", frozenset({"hours", "since", "until"}), 15.0),
-    "engine-history": ("/api/engine-history", frozenset({"hours"}), 15.0),
-    "benchmark-process": ("/api/benchmark-process", frozenset({"hours"}), 15.0),
-    "doctor": ("/api/v1/doctor", frozenset(), 45.0),
-    "presets": ("/api/v1/presets", frozenset(), 10.0),
+_NODE_READ_ENDPOINTS: dict[str, tuple[str, dict[str, re.Pattern[str]], float]] = {
+    "history": (
+        "/api/history",
+        {"hours": _DIGITS_RE, "since": _DIGITS_RE, "until": _DIGITS_RE},
+        15.0,
+    ),
+    "benchmarks": (
+        "/api/benchmarks",
+        {"hours": _DIGITS_RE, "since": _DIGITS_RE, "until": _DIGITS_RE},
+        15.0,
+    ),
+    "engine-history": ("/api/engine-history", {"hours": _DIGITS_RE}, 15.0),
+    "benchmark-process": ("/api/benchmark-process", {"hours": _DIGITS_RE}, 15.0),
+    "doctor": ("/api/v1/doctor", {}, 45.0),
+    "presets": ("/api/v1/presets", {}, 10.0),
+    "plan": ("/api/v1/plan", {"preset": _PRESET_RE, "engine": _ENGINE_RE}, 20.0),
 }
 
 _NODE_READ_MAX_BODY = 8 * 1024 * 1024
@@ -459,9 +475,9 @@ _node_read_rate_limiter = TokenRateLimiter(limit=60, window_seconds=60.0)
 def _proxy_node_read(nickname: str, endpoint: str, query: dict[str, str]) -> tuple[int, Any]:
     """Fetch one whitelisted read endpoint from a fleet node.
 
-    Returns ``(http_status, payload)``. Never raises. Query values must
-    be plain digits (every whitelisted param is a unix ts or an hour
-    count) — anything else is dropped, fail-closed.
+    Returns ``(http_status, payload)``. Never raises. Every query value
+    must fullmatch its param's whitelisted pattern — anything else is
+    dropped, fail-closed.
     """
     spec = _NODE_READ_ENDPOINTS.get(endpoint)
     if spec is None:
@@ -476,7 +492,9 @@ def _proxy_node_read(nickname: str, endpoint: str, query: dict[str, str]) -> tup
     parsed = urllib.parse.urlparse(base)
     if parsed.scheme not in ("http", "https"):
         return (502, {"error": "unsupported_node_url"})
-    params = {k: v for k, v in query.items() if k in allowed and str(v).isdigit()}
+    params = {
+        k: v for k, v in query.items() if k in allowed and allowed[k].fullmatch(str(v)) is not None
+    }
     url = base + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -523,6 +541,119 @@ async def api_node_presets() -> JSONResponse:
         return {"presets": presets if isinstance(presets, list) else []}
 
     return JSONResponse(await asyncio.to_thread(_fetch))
+
+
+def _fetch_preset_cost(preset: str) -> tuple[uma_plan.PresetCost, str | None]:
+    """Ask the local ``aisctl serve`` for the memory cost of ``preset``.
+
+    Returns ``(cost, note)``. Any failure — companion absent, endpoint
+    not shipped yet (pre-0.11 aisrv), malformed payload — degrades to an
+    ``unknown`` confidence cost, which the verdict maps to ``unknown``
+    (fail-closed). The note says why, for the UI.
+    """
+    unknown = uma_plan.PresetCost(0.0, 0.0, "unknown")
+    token = loopback.read_token()
+    if not token:
+        return (unknown, "aisctl serve not available")
+    url = f"{AISCTL_SERVE_URL}/internal/v1/plan?" + urllib.parse.urlencode({"preset": preset})
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        # nosec B310 — fixed loopback URL from a trusted env knob.
+        with urllib.request.urlopen(req, timeout=10.0) as resp:  # noqa: S310
+            data = _json.loads(resp.read(1024 * 1024).decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return (unknown, "aisctl serve has no planner (needs asiai-inference-server >= 0.11)")
+        return (unknown, f"aisctl serve error {e.code}")
+    except (urllib.error.URLError, OSError, ValueError):
+        return (unknown, "aisctl serve not available")
+    cost_raw = data.get("cost") if isinstance(data, dict) else None
+    if not isinstance(cost_raw, dict):
+        return (unknown, "malformed planner response")
+    try:
+        low = float(cost_raw["total_mb_low"])
+        high = float(cost_raw["total_mb_high"])
+        confidence = str(cost_raw.get("confidence", "unknown"))
+    except (KeyError, TypeError, ValueError):
+        return (unknown, "malformed planner response")
+    components = cost_raw.get("components")
+    return (
+        uma_plan.PresetCost(
+            total_mb_low=low,
+            total_mb_high=high,
+            confidence=confidence,
+            components=components if isinstance(components, dict) else {},
+        ),
+        None,
+    )
+
+
+def _build_plan_response(preset: str, engine: str) -> dict:
+    """Assemble cost + node state and judge them. Runs in a thread."""
+    from asiai.collectors.system import collect_memory, collect_thermal, find_engine_process
+
+    cost, note = _fetch_preset_cost(preset)
+
+    mem = collect_memory()
+    thermal = collect_thermal()
+    engine_rss_mb: dict[str, float] = {}
+    if engine:
+        proc = find_engine_process(engine)
+        if proc is not None and proc.resident_bytes > 0:
+            engine_rss_mb[engine] = proc.resident_bytes / (1024 * 1024)
+
+    node = uma_plan.NodeState(
+        mem_total_mb=mem.total / (1024 * 1024),
+        mem_used_mb=mem.used / (1024 * 1024),
+        pressure=mem.pressure,
+        thermal_level=thermal.level,
+        gpu_wired_limit_mb=float(mem.gpu_wired_limit_mb),
+        engine_rss_mb=engine_rss_mb,
+    )
+    verdict = uma_plan.cohabitation_verdict(cost, node, replaces_engine=engine or None)
+
+    payload = verdict.as_dict()
+    payload.update(
+        {
+            "preset": preset,
+            "engine": engine or None,
+            "cost": {
+                "total_mb_low": cost.total_mb_low,
+                "total_mb_high": cost.total_mb_high,
+                "confidence": cost.confidence,
+            },
+            "node": {
+                "mem_total_mb": round(node.mem_total_mb, 1),
+                "mem_used_mb": round(node.mem_used_mb, 1),
+                "pressure": node.pressure,
+                "thermal_level": node.thermal_level,
+                "gpu_wired_limit_mb": node.gpu_wired_limit_mb,
+            },
+            "inputs_ts": int(time.time()),
+        }
+    )
+    if note:
+        payload["note"] = note
+    return payload
+
+
+@router.get("/api/v1/plan")
+async def api_node_plan(request: Request) -> JSONResponse:
+    """Advisory UMA cohabitation plan for installing a preset on THIS node.
+
+    Cost comes from the local ``aisctl serve`` planner (loopback), the
+    verdict from ``asiai.fleet.plan``. Same LAN read-only posture as
+    ``/api/v1/presets``; the hub reaches it through the per-node read
+    proxy. Advisory only — nothing here blocks an install.
+    """
+    preset = request.query_params.get("preset", "")
+    engine = request.query_params.get("engine", "")
+    if not _PRESET_RE.match(preset):
+        return JSONResponse({"error": "invalid_preset"}, status_code=400)
+    if engine and not _ENGINE_RE.match(engine):
+        return JSONResponse({"error": "invalid_engine"}, status_code=400)
+    payload = await asyncio.to_thread(_build_plan_response, preset, engine)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/api/v1/fleet/{nickname}/{endpoint}")
