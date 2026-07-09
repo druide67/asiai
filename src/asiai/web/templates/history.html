@@ -9,6 +9,16 @@
 
 <!-- Filters -->
 <div class="filter-bar fade-in">
+    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Type:</span>
+    <button class="filter-chip active" data-type="" onclick="setBenchType('', this)">throughput</button>
+    <button class="filter-chip" data-type="agentic" onclick="setBenchType('agentic', this)">agentic</button>
+    <button class="filter-chip" data-type="burst" onclick="setBenchType('burst', this)">burst</button>
+    <button class="filter-chip" data-type="code" onclick="setBenchType('code', this)">code</button>
+    <button class="filter-chip" data-type="language" onclick="setBenchType('language', this)">language</button>
+    <button class="filter-chip" data-type="instruct" onclick="setBenchType('instruct', this)">instruct</button>
+    <button class="filter-chip" data-type="thinking-ablation" onclick="setBenchType('thinking-ablation', this)">thinking</button>
+</div>
+<div class="filter-bar fade-in">
     <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;" id="hist-node-label" hidden>Node:</span>
     <select id="hist-node" class="range-input" hidden onchange="setHistoryNode(this.value)" title="Data source node"></select>
     <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Time range:</span>
@@ -72,8 +82,8 @@
     </div>
 </div>
 
-<!-- Charts -->
-<div class="card-grid-2 mt-6 fade-in-delay-2">
+<!-- Charts (throughput view) -->
+<div class="card-grid-2 mt-6 fade-in-delay-2" id="bench-charts-row">
     <div class="card">
         <h3 class="card-title">Throughput (tok/s)</h3>
         <div id="history-tok-chart" style="min-height: 300px;"></div>
@@ -101,9 +111,41 @@
     </div>
 </div>
 
+<!-- Bench runs (non-throughput types) -->
+<div id="bench-runs-section" class="mt-6 fade-in-delay-2" style="display: none;">
+    <div class="card">
+        <h3 class="card-title" id="runs-chart-title">Score over time</h3>
+        <p class="text-neutral-500 text-xs" style="margin-top: -0.25rem;">
+            Scores are only comparable within one label — red points carry failed quality gates.
+        </p>
+        <div id="runs-chart" style="min-height: 300px;"></div>
+        <div id="runs-chart-empty" class="text-neutral-400 text-sm text-center" style="display: none; padding: 4rem 0;">No runs of this type in this time range</div>
+    </div>
+    <div class="card mt-4">
+        <h3 class="card-title">Runs</h3>
+        <div class="overflow-x-auto">
+            <table class="results-table" id="runs-table">
+                <thead>
+                    <tr>
+                        <th class="text-left">Date</th>
+                        <th class="text-left">Engine</th>
+                        <th class="text-left">Model</th>
+                        <th class="text-right">Score</th>
+                        <th class="text-left">Label</th>
+                        <th class="text-right">Gates</th>
+                        <th class="text-left">Versions</th>
+                        <th class="text-left"></th>
+                    </tr>
+                </thead>
+                <tbody id="runs-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <!-- Data table -->
 <div class="mt-6 fade-in-delay-3">
-    <div class="card">
+    <div class="card" id="bench-data-card">
         <h3 class="card-title">Benchmark Data</h3>
         <div class="overflow-x-auto">
             <table class="results-table" id="history-table">
@@ -133,6 +175,8 @@
 {% block scripts %}
 <script>
     var currentHours = 168;
+    var currentType = '';   // '' = throughput (legacy view); else a bench_runs type
+    var runsChart = null;
     var customSince = 0;
     var customUntil = 0;
     var tokChart = null;
@@ -147,15 +191,42 @@
     var procCpuChart = null;
     var procRssChart = null;
 
+    function setBenchType(type, btn) {
+        currentType = type || '';
+        document.querySelectorAll('.filter-chip[data-type]').forEach(function(c) {
+            c.classList.remove('active');
+        });
+        btn.classList.add('active');
+        // bench_runs lives in the LOCAL db only for now — the fleet read
+        // proxy whitelists digit-only params (widened in the É3 lot).
+        var nodeSel = document.getElementById('hist-node');
+        if (currentType && nodeSel && nodeSel.value) {
+            nodeSel.value = '';
+            historyNode = '';
+        }
+        if (nodeSel) nodeSel.disabled = !!currentType;
+        applyTypeVisibility();
+        loadData();
+    }
+
+    function applyTypeVisibility() {
+        var throughput = !currentType;
+        document.getElementById('bench-runs-section').style.display = throughput ? 'none' : '';
+        document.getElementById('bench-charts-row').style.display = throughput ? '' : 'none';
+        document.getElementById('bench-data-card').style.display = throughput ? '' : 'none';
+        document.getElementById('process-metrics-section').style.display =
+            throughput ? '' : 'none';
+    }
+
     function setTimeRange(hours, btn) {
         currentHours = hours;
         customSince = 0;
         customUntil = 0;
         document.getElementById('range-from').value = '';
         document.getElementById('range-to').value = '';
-        document.querySelectorAll('.filter-chip').forEach(function(c) {
-            c.classList.remove('active');
-        });
+        document.querySelectorAll('.filter-chip[data-hours], #range-apply-btn').forEach(
+            function(c) { c.classList.remove('active'); }
+        );
         btn.classList.add('active');
         loadData();
     }
@@ -226,6 +297,18 @@
 
     function loadData() {
         var qs = buildQuery();
+        if (currentType) {
+            var requestedType = currentType;
+            fetch('/api/bench-runs?type=' + encodeURIComponent(requestedType) + '&' + qs)
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (requestedType !== currentType) return; // stale response
+                    var runs = data && Array.isArray(data.runs) ? data.runs : [];
+                    renderRunsChart(runs);
+                    renderRunsTable(runs);
+                })
+                .catch(function(err) { console.error('Failed to load bench runs:', err); });
+        }
         fetch(apiUrl('benchmarks', qs))
             .then(function(res) { return res.json(); })
             .then(function(rows) {
@@ -572,7 +655,9 @@
         if (procRssChart) { procRssChart.destroy(); procRssChart = null; }
 
         var section = document.getElementById('process-metrics-section');
-        if (!rows || rows.length === 0) {
+        // The fetch resolves async: never resurface the section while a
+        // non-throughput type view is active (applyTypeVisibility hid it).
+        if (!rows || rows.length === 0 || currentType) {
             section.style.display = 'none';
             return;
         }
@@ -617,9 +702,124 @@
         }
     }
 
+    function renderRunsChart(runs) {
+        if (runsChart) { runsChart.destroy(); runsChart = null; }
+        var chartEl = document.getElementById('runs-chart');
+        var emptyEl = document.getElementById('runs-chart-empty');
+        var scored = runs.filter(function(r) {
+            return typeof r.score_primary === 'number';
+        });
+        if (!scored.length) {
+            chartEl.style.display = 'none';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        chartEl.style.display = '';
+        emptyEl.style.display = 'none';
+
+        // One series per (model × score_label): scores are only comparable
+        // within one label, so the label is part of the series name.
+        var byKey = {};
+        scored.forEach(function(r) {
+            var key = r.model + ' · ' + (r.score_label || '?');
+            if (!byKey[key]) byKey[key] = [];
+            byKey[key].push(r);
+        });
+        var series = [];
+        var discrete = [];
+        var title = '';
+        Object.keys(byKey).sort().forEach(function(key, si) {
+            var pts = byKey[key].slice().sort(function(a, b) { return a.ts - b.ts; });
+            series.push({ name: key, data: pts.map(function(r) {
+                return [r.ts * 1000, r.score_primary];
+            }) });
+            pts.forEach(function(r, di) {
+                if (r.gates_failed > 0) {
+                    discrete.push({ seriesIndex: si, dataPointIndex: di,
+                                    fillColor: '#ef4444', strokeColor: '#ef4444', size: 5 });
+                }
+            });
+            if (!title) title = byKey[key][0].score_label || '';
+        });
+        document.getElementById('runs-chart-title').textContent =
+            'Score over time' + (title ? ' — ' + title : '');
+        runsChart = createTimeChart('runs-chart', series, {
+            yTitle: 'score',
+            yFormatter: function(v) { return v.toFixed(2); },
+            markers: { size: 3, discrete: discrete },
+        });
+    }
+
+    function renderRunsTable(runs) {
+        var tbody = document.getElementById('runs-tbody');
+        tbody.textContent = '';
+        runs.forEach(function(r) {
+            var tr = document.createElement('tr');
+            function td(text, cls) {
+                var cell = document.createElement('td');
+                cell.textContent = text;
+                if (cls) cell.className = cls;
+                tr.appendChild(cell);
+                return cell;
+            }
+            td(new Date(r.ts * 1000).toLocaleString());
+            td(r.engine || '—');
+            td(r.model || '—');
+            td(typeof r.score_primary === 'number' ? r.score_primary.toFixed(2) : '—',
+               'text-right');
+            td(r.score_label || '—');
+            var gates = td(String(r.gates_failed || 0), 'text-right');
+            if (r.gates_failed > 0) gates.style.color = 'var(--red, #ef4444)';
+            td([r.engine_version, r.asiai_version && ('asiai ' + r.asiai_version)]
+                .filter(Boolean).join(' · ') || '—');
+            var tdBtn = document.createElement('td');
+            var btn = document.createElement('button');
+            btn.className = 'filter-chip';
+            btn.textContent = 'payload';
+            btn.addEventListener('click', function() { toggleRunPayload(r.id, tr, btn); });
+            tdBtn.appendChild(btn);
+            tr.appendChild(tdBtn);
+            tbody.appendChild(tr);
+        });
+    }
+
+    function toggleRunPayload(runId, tr, btn) {
+        var next = tr.nextElementSibling;
+        if (next && next.dataset.payloadRow === String(runId)) {
+            next.remove();
+            btn.classList.remove('active');
+            return;
+        }
+        if (btn.disabled) return; // fetch already in flight
+        btn.disabled = true;
+        fetch('/api/bench-runs/' + encodeURIComponent(runId))
+            .then(function(res) { return res.ok ? res.json() : null; })
+            .then(function(run) {
+                btn.disabled = false;
+                if (!run) return;
+                var row = document.createElement('tr');
+                row.dataset.payloadRow = String(runId);
+                var cell = document.createElement('td');
+                cell.colSpan = 8;
+                var pre = document.createElement('pre');
+                pre.style.cssText =
+                    'max-height:320px;overflow:auto;font-size:0.7rem;' +
+                    'background:var(--bg-elevated);padding:0.75rem;border-radius:0.4rem;';
+                pre.textContent = JSON.stringify(run.payload, null, 2);
+                cell.appendChild(pre);
+                row.appendChild(cell);
+                tr.insertAdjacentElement('afterend', row);
+                btn.classList.add('active');
+            })
+            .catch(function(err) {
+                btn.disabled = false;
+                console.error('Failed to load payload:', err);
+            });
+    }
+
     // Cleanup: destroy all charts when leaving page
     function cleanupHistory() {
-        [tokChart, ttftChart, sysCpuChart, sysMemChart, sysGpuChart,
+        [tokChart, ttftChart, runsChart, sysCpuChart, sysMemChart, sysGpuChart,
          engineConnChart, engineKvChart, procCpuChart, procRssChart].forEach(function(c) {
             if (c) { c.destroy(); }
         });
