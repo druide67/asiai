@@ -35,6 +35,12 @@ async def bench_page(request: Request) -> HTMLResponse:
     except Exception:
         pass
 
+    # Mode form option lists (closed sets, also validated server-side).
+    from asiai.benchmark.code_eval import ALL_SUITES as CODE_SUITES
+    from asiai.benchmark.instruct_eval import ALL_SCENARIOS as INSTRUCT_SCENARIOS
+    from asiai.benchmark.language_eval import ALL_SUITES as LANGUAGE_SUITES
+    from asiai.benchmark.language_profiles import PROFILES as LANGUAGE_PROFILES
+
     return templates.TemplateResponse(
         request,
         "bench.html",
@@ -45,8 +51,48 @@ async def bench_page(request: Request) -> HTMLResponse:
             "bench_running": state.get_bench_snapshot()["running"],
             "power_available": power_available,
             "ioreport_power": ioreport_power,
+            "code_suites": sorted(CODE_SUITES),
+            "instruct_scenarios": sorted(INSTRUCT_SCENARIOS),
+            "language_suites": sorted(LANGUAGE_SUITES),
+            "languages": sorted(LANGUAGE_PROFILES),
         },
     )
+
+
+def _validate_judge_url(raw: str) -> tuple[str | None, str]:
+    """Accept a judge URL from the web form ONLY when it targets loopback.
+
+    The server calls the judge with its env API key in the Authorization
+    header. From the CLI that is an operator's own shell; from a
+    LAN-facing web bind it would let any LAN peer point the server (and
+    its key) at an arbitrary host — an SSRF that exfiltrates the key.
+    Loopback judges (the local-LLM case) stay usable; remote judges are
+    a CLI-only feature by design.
+    """
+    from urllib.parse import urlsplit
+
+    if not raw:
+        return None, ""
+    try:
+        parts = urlsplit(raw)
+    except ValueError:
+        return None, "invalid judge URL"
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None, "invalid judge URL"
+    if parts.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return (
+            None,
+            "judge_url must target loopback from the web form — use the CLI for remote judges",
+        )
+    return raw, ""
+
+
+# Bench modes runnable from the web beyond the standard throughput bench.
+# Keys match bench_runs.bench_type; values declare the form fields each
+# mode accepts (everything else in the form is ignored server-side).
+_WEB_BENCH_MODES = frozenset(
+    {"agentic", "burst", "code", "language", "instruct", "thinking-ablation"}
+)
 
 
 @router.post("/bench/run")
@@ -57,6 +103,12 @@ async def bench_run(request: Request) -> JSONResponse:
 
     if state.get_bench_snapshot()["running"]:
         return JSONResponse({"error": "Benchmark already running"}, status_code=409)
+
+    bench_type = (form.get("bench_type") or "").strip()
+    if bench_type and bench_type not in _WEB_BENCH_MODES:
+        return JSONResponse({"error": "unknown bench type"}, status_code=422)
+    if bench_type:
+        return _start_mode_bench(state, bench_type, form)
 
     # Parse form data
     compare_mode = form.get("compare_mode") == "on"
@@ -86,8 +138,9 @@ async def bench_run(request: Request) -> JSONResponse:
     context_size_raw = form.get("context_size", "")
     context_size = context_size_map.get(context_size_raw, 0)
 
-    # Reset status
-    state.reset_bench(running=True, progress="Starting benchmark...")
+    # Reset status (atomic check-and-set closes the 409 TOCTOU window)
+    if not state.try_start_bench(progress="Starting benchmark..."):
+        return JSONResponse({"error": "Benchmark already running"}, status_code=409)
 
     # Run in background thread
     thread = threading.Thread(
@@ -149,6 +202,31 @@ async def bench_stream(request: Request) -> Response:
     )
 
 
+@router.get("/bench/report/{run_id}.md")
+async def bench_report_md(request: Request, run_id: int) -> Response:
+    """Markdown report for any persisted bench run (any type)."""
+    state = request.app.state.app_state
+
+    from asiai.storage.db import get_bench_run
+
+    row = await asyncio.to_thread(get_bench_run, state.db_path, run_id)
+    if row is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    try:
+        payload = json.loads(row["payload"])
+        from asiai.benchmark.report_md import render_markdown
+        from asiai.benchmark.result_model import build_result
+
+        md = render_markdown(build_result(row["bench_type"], payload))
+    except (ValueError, TypeError) as e:
+        return JSONResponse({"error": f"cannot render report: {e}"}, status_code=422)
+    return Response(
+        md,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f"inline; filename=bench-run-{run_id}.md"},
+    )
+
+
 @router.get("/bench/export")
 async def bench_export(request: Request) -> JSONResponse:
     """Export last benchmark results as JSON."""
@@ -174,6 +252,220 @@ async def bench_export(request: Request) -> JSONResponse:
         export_data,
         headers={"Content-Disposition": "attachment; filename=asiai-bench.json"},
     )
+
+
+def _start_mode_bench(state, bench_type: str, form) -> JSONResponse:
+    """Validate a mode form and launch its background thread."""
+    engine_name = (form.get("mode_engine") or "").strip().lower()
+    engine = next((e for e in state.engines if e.name == engine_name), None)
+    if engine is None:
+        return JSONResponse({"error": "select one engine"}, status_code=422)
+
+    model = (form.get("mode_model") or "").strip()
+
+    extra_body = None
+    raw_extra = (form.get("mode_extra_body") or "").strip()
+    if raw_extra:
+        try:
+            extra_body = json.loads(raw_extra)
+            if not isinstance(extra_body, dict):
+                raise ValueError("must be a JSON object")
+        except ValueError as e:
+            return JSONResponse({"error": f"extra_body: {e}"}, status_code=422)
+
+    try:
+        runs = max(1, min(int(form.get("mode_runs") or 1), 10))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "invalid runs"}, status_code=422)
+
+    opts: dict = {"runs": runs, "extra_body": extra_body}
+    if bench_type == "burst":
+        from asiai.benchmark.burst import parse_burst_sizes
+
+        try:
+            opts["burst_sizes"] = parse_burst_sizes((form.get("burst_sizes") or "").strip() or None)
+            opts["max_tokens"] = max(1, min(int(form.get("burst_max_tokens") or 64), 4096))
+        except (TypeError, ValueError) as e:
+            return JSONResponse({"error": f"burst options: {e}"}, status_code=422)
+    elif bench_type == "code":
+        from asiai.benchmark.code_eval import ALL_SUITES
+
+        suites = [s for s in form.getlist("code_suites") if s in ALL_SUITES]
+        if not suites:
+            return JSONResponse({"error": "select at least one suite"}, status_code=422)
+        opts["suites"] = suites
+        judge_url, judge_err = _validate_judge_url((form.get("judge_url") or "").strip())
+        if judge_err:
+            return JSONResponse({"error": judge_err}, status_code=422)
+        opts["judge_url"] = judge_url
+        opts["judge_model"] = (form.get("judge_model") or "").strip() or None
+    elif bench_type == "language":
+        from asiai.benchmark.language_eval import ALL_SUITES as LANG_SUITES
+        from asiai.benchmark.language_profiles import PROFILES
+
+        lang = (form.get("language") or "").strip().lower()
+        if lang not in PROFILES:
+            return JSONResponse({"error": "unknown language"}, status_code=422)
+        opts["language"] = lang
+        opts["suites"] = [s for s in form.getlist("language_suites") if s in LANG_SUITES]
+        judge_url, judge_err = _validate_judge_url((form.get("judge_url") or "").strip())
+        if judge_err:
+            return JSONResponse({"error": judge_err}, status_code=422)
+        opts["judge_url"] = judge_url
+        opts["judge_model"] = (form.get("judge_model") or "").strip() or None
+    elif bench_type == "instruct":
+        from asiai.benchmark.instruct_eval import ALL_SCENARIOS
+
+        # Empty selection = the runner's own default set — never pass None
+        # (it would OVERRIDE the parameter default and crash the runner).
+        opts["scenarios"] = [s for s in form.getlist("instruct_scenarios") if s in ALL_SCENARIOS]
+    elif bench_type == "agentic":
+        opts["skip_long"] = form.get("agentic_skip_long") == "on"
+
+    if not state.try_start_bench(progress=f"Starting {bench_type} bench..."):
+        return JSONResponse({"error": "Benchmark already running"}, status_code=409)
+    state.update_bench(bench_type=bench_type)
+
+    thread = threading.Thread(
+        target=_run_mode_thread,
+        args=(state, bench_type, engine, model, opts),
+        daemon=True,
+    )
+    thread.start()
+    return JSONResponse({"status": "started", "bench_type": bench_type})
+
+
+def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> None:
+    """Run a non-standard bench mode in a background thread."""
+    try:
+        import os
+
+        def progress(msg) -> None:
+            state.update_bench(progress=str(msg))
+
+        if not model:
+            running = engine.list_running()
+            if not running:
+                state.update_bench(
+                    error=f"No model loaded on {engine.name} — load one or name a model",
+                    running=False,
+                    done=True,
+                )
+                return
+            model = running[0].name
+
+        try:
+            engine_version = engine.version() or ""
+        except Exception:
+            engine_version = ""
+
+        # Judge API key comes from the server environment ONLY — the form
+        # never carries a secret (secrets discipline).
+        judge_api_key = os.environ.get("ASIAI_JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+
+        extra_body = opts.get("extra_body")
+        runs = opts.get("runs", 1)
+        if bench_type == "agentic":
+            from asiai.benchmark.agentic import run_agentic_bench
+
+            payload = run_agentic_bench(
+                base_url=engine.base_url,
+                engine_name=engine.name,
+                model=model,
+                skip_long=bool(opts.get("skip_long")),
+                extra_body=extra_body,
+                repeats=runs,
+                engine_version=engine_version,
+                on_run=lambda run: progress(f"[{run.phase}] done"),
+            )
+        elif bench_type == "burst":
+            from asiai.benchmark.burst import run_burst
+
+            payload = run_burst(
+                base_url=engine.base_url,
+                engine=engine.name,
+                model=model,
+                burst_sizes=opts["burst_sizes"],
+                max_tokens=opts["max_tokens"],
+                extra_body=extra_body,
+                runs=runs,
+                engine_version=engine_version,
+            )
+        elif bench_type == "code":
+            from asiai.benchmark.code_eval import run_code_eval
+
+            payload = run_code_eval(
+                base_url=engine.base_url,
+                engine_name=engine.name,
+                model=model,
+                suites=opts["suites"],
+                repeats=runs,
+                extra_body=extra_body,
+                judge_url=opts.get("judge_url"),
+                judge_model=opts.get("judge_model"),
+                judge_api_key=judge_api_key,
+                engine_version=engine_version,
+                on_progress=progress,
+            )
+        elif bench_type == "language":
+            from asiai.benchmark.language_eval import run_language_eval
+
+            kwargs = dict(
+                base_url=engine.base_url,
+                engine_name=engine.name,
+                model=model,
+                language=opts["language"],
+                extra_body=extra_body,
+                judge_url=opts.get("judge_url"),
+                judge_model=opts.get("judge_model"),
+                judge_api_key=judge_api_key,
+                engine_version=engine_version,
+                on_progress=progress,
+            )
+            if opts.get("suites"):
+                # Empty = the runner's default set; None would crash it.
+                kwargs["suites"] = opts["suites"]
+            payload = run_language_eval(**kwargs)
+        elif bench_type == "instruct":
+            from asiai.benchmark.instruct_eval import run_instruct_eval
+
+            kwargs = dict(
+                base_url=engine.base_url,
+                engine_name=engine.name,
+                model=model,
+                repeats=runs,
+                extra_body=extra_body,
+                engine_version=engine_version,
+                on_progress=progress,
+            )
+            if opts.get("scenarios"):
+                # Empty = the runner's default set; None would crash it.
+                kwargs["scenarios"] = opts["scenarios"]
+            payload = run_instruct_eval(**kwargs)
+        else:  # thinking-ablation (closed set — validated at the route)
+            from asiai.benchmark.thinking_ablation import run_thinking_ablation
+
+            payload = run_thinking_ablation(
+                base_url=engine.base_url,
+                engine_name=engine.name,
+                model=model,
+                extra_body=extra_body,
+                engine_version=engine_version,
+                on_progress=progress,
+            )
+
+        from asiai.benchmark.persist import persist_bench_run
+
+        run_id = persist_bench_run(state.db_path, bench_type, payload)
+        state.update_bench(
+            progress=f"{bench_type} bench complete",
+            result_run_id=int(run_id or 0),
+            running=False,
+            done=True,
+        )
+    except Exception as e:
+        logger.exception("Mode bench failed")
+        state.update_bench(error=str(e), running=False, done=True)
 
 
 def _run_benchmark_thread(

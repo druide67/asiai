@@ -1,0 +1,282 @@
+"""Tests for the Bench page v2 — mode dispatch, validation, report endpoint."""
+
+from __future__ import annotations
+
+import json
+import time
+from unittest.mock import patch
+
+import pytest
+
+pytest.importorskip("fastapi", reason="web routes require FastAPI optional dep")
+pytest.importorskip("httpx", reason="TestClient requires httpx")
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from asiai.storage.db import init_db, store_bench_run  # noqa: E402
+from asiai.web.app import create_app  # noqa: E402
+from asiai.web.state import AppState  # noqa: E402
+
+NOW = int(time.time())
+
+
+class _FakeModel:
+    name = "qwen3.5:4b"
+
+
+class _FakeEngine:
+    name = "llamacpp"
+    base_url = "http://127.0.0.1:9999"
+
+    def list_running(self):
+        return [_FakeModel()]
+
+    def version(self):
+        return "b9580"
+
+    def is_reachable(self):
+        return True
+
+
+@pytest.fixture
+def app_state(tmp_path):
+    db_path = str(tmp_path / "bench.db")
+    init_db(db_path)
+    return AppState(engines=[_FakeEngine()], db_path=db_path)
+
+
+@pytest.fixture
+def client(app_state):
+    c = TestClient(create_app(app_state))
+    # The CSRF middleware requires a same-origin Origin header on POSTs.
+    c.headers.update({"Origin": "http://testserver"})
+    return c
+
+
+class TestModeDispatchValidation:
+    def test_unknown_bench_type_422(self, client):
+        resp = client.post("/bench/run", data={"bench_type": "evil"})
+        assert resp.status_code == 422
+
+    def test_unknown_engine_422(self, client):
+        resp = client.post("/bench/run", data={"bench_type": "code", "mode_engine": "nope"})
+        assert resp.status_code == 422
+
+    def test_bad_extra_body_422(self, client):
+        resp = client.post(
+            "/bench/run",
+            data={
+                "bench_type": "code",
+                "mode_engine": "llamacpp",
+                "code_suites": "tool-call",
+                "mode_extra_body": "not json",
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_code_requires_a_suite(self, client):
+        resp = client.post("/bench/run", data={"bench_type": "code", "mode_engine": "llamacpp"})
+        assert resp.status_code == 422
+
+    def test_unknown_language_422(self, client):
+        resp = client.post(
+            "/bench/run",
+            data={"bench_type": "language", "mode_engine": "llamacpp", "language": "xx"},
+        )
+        assert resp.status_code == 422
+
+    def test_bad_burst_sizes_422(self, client):
+        resp = client.post(
+            "/bench/run",
+            data={"bench_type": "burst", "mode_engine": "llamacpp", "burst_sizes": "a,b"},
+        )
+        assert resp.status_code == 422
+
+    def test_running_bench_409(self, client, app_state):
+        app_state.reset_bench(running=True)
+        resp = client.post("/bench/run", data={"bench_type": "agentic", "mode_engine": "llamacpp"})
+        assert resp.status_code == 409
+
+
+class TestAuditRegressions:
+    def test_instruct_default_omits_scenarios_kwarg(self, client, app_state):
+        """F1: an empty selection must use the runner's OWN default set —
+        passing None overrode the parameter default and crashed."""
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "instruct_results": {}}
+        with patch("asiai.benchmark.instruct_eval.run_instruct_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run", data={"bench_type": "instruct", "mode_engine": "llamacpp"}
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert "scenarios" not in m.call_args.kwargs
+        assert app_state.get_bench_snapshot()["error"] == ""
+
+    def test_language_all_suites_unchecked_omits_kwarg(self, client, app_state):
+        """F3: same contract for language suites."""
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "language_results": {}}
+        with patch("asiai.benchmark.language_eval.run_language_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={"bench_type": "language", "mode_engine": "llamacpp", "language": "fr"},
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert "suites" not in m.call_args.kwargs
+
+    def test_judge_url_loopback_only_from_web(self, client):
+        """F2: a remote judge_url would make the server POST its env API
+        key to an arbitrary host (SSRF) — loopback only from the form."""
+        resp = client.post(
+            "/bench/run",
+            data={
+                "bench_type": "code",
+                "mode_engine": "llamacpp",
+                "code_suites": "tool-call",
+                "judge_url": "http://192.0.2.7/v1",
+            },
+        )
+        assert resp.status_code == 422
+        assert "loopback" in resp.json()["error"]
+
+    def test_judge_url_loopback_accepted(self, client, app_state):
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "code_results": {}}
+        with patch("asiai.benchmark.code_eval.run_code_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={
+                    "bench_type": "code",
+                    "mode_engine": "llamacpp",
+                    "code_suites": "tool-call",
+                    "judge_url": "http://127.0.0.1:8080/v1",
+                },
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert m.call_args.kwargs["judge_url"] == "http://127.0.0.1:8080/v1"
+
+    def test_try_start_bench_is_atomic(self, app_state):
+        """F4: the 409 guard is a check-and-set under the bench lock."""
+        assert app_state.try_start_bench(progress="a") is True
+        assert app_state.try_start_bench(progress="b") is False
+        app_state.update_bench(running=False)
+        assert app_state.try_start_bench(progress="c") is True
+
+
+class TestModeThread:
+    def test_code_mode_runs_persists_and_flags_done(self, client, app_state):
+        payload = {
+            "schema_version": "code-v3",
+            "engine": "llamacpp",
+            "model": "qwen3.5:4b",
+            "started_at": NOW,
+            "finished_at": NOW + 5,
+            "code_results": {"tool_call": {"pct_clean": 90.0}},
+        }
+        with patch("asiai.benchmark.code_eval.run_code_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={
+                    "bench_type": "code",
+                    "mode_engine": "llamacpp",
+                    "code_suites": "tool-call",
+                    "mode_runs": "2",
+                },
+            )
+            assert resp.status_code == 200
+            assert resp.json()["bench_type"] == "code"
+            # The daemon thread finishes fast with a mocked runner.
+            for _ in range(50):
+                snap = app_state.get_bench_snapshot()
+                if snap["done"]:
+                    break
+                time.sleep(0.05)
+        snap = app_state.get_bench_snapshot()
+        assert snap["done"] and not snap["running"]
+        assert snap["bench_type"] == "code"
+        assert snap["result_run_id"] > 0
+        kwargs = m.call_args.kwargs
+        assert kwargs["suites"] == ["tool-call"]
+        assert kwargs["repeats"] == 2
+        assert kwargs["model"] == "qwen3.5:4b"  # auto-resolved from loaded models
+
+        # The persisted run is fetchable and renders a markdown report.
+        run_id = snap["result_run_id"]
+        detail = client.get(f"/api/bench-runs/{run_id}")
+        assert detail.status_code == 200
+        report = client.get(f"/bench/report/{run_id}.md")
+        assert report.status_code == 200
+        assert "## Conditions" in report.text
+        assert "## Provenance" in report.text
+
+    def test_mode_thread_error_surfaces(self, client, app_state):
+        with patch(
+            "asiai.benchmark.thinking_ablation.run_thinking_ablation",
+            side_effect=RuntimeError("engine exploded"),
+        ):
+            resp = client.post(
+                "/bench/run",
+                data={"bench_type": "thinking-ablation", "mode_engine": "llamacpp"},
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                snap = app_state.get_bench_snapshot()
+                if snap["done"]:
+                    break
+                time.sleep(0.05)
+        snap = app_state.get_bench_snapshot()
+        assert snap["done"]
+        assert "engine exploded" in snap["error"]
+
+
+class TestReportEndpoint:
+    def test_report_for_any_persisted_run(self, client, app_state):
+        run_id = store_bench_run(
+            app_state.db_path,
+            {
+                "ts": NOW,
+                "bench_type": "agentic",
+                "engine": "llamacpp",
+                "model": "m",
+                "score_primary": 0.9,
+                "score_label": "reuse_fraction",
+                "payload": json.dumps(
+                    {
+                        "engine": "llamacpp",
+                        "model": "m",
+                        "started_at": NOW,
+                        "prefix_cache_reuse_verdict": "REUSED",
+                        "prefix_cache_reuse": {"reuse_fraction": 0.9},
+                    }
+                ),
+            },
+        )
+        resp = client.get(f"/bench/report/{run_id}.md")
+        assert resp.status_code == 200
+        assert "reuse_fraction" in resp.text
+
+    def test_report_missing_404(self, client):
+        assert client.get("/bench/report/424242.md").status_code == 404
+
+    def test_report_corrupt_payload_422(self, client, app_state):
+        run_id = store_bench_run(
+            app_state.db_path,
+            {"ts": NOW, "bench_type": "code", "engine": "e", "model": "m", "payload": "{not json"},
+        )
+        assert client.get(f"/bench/report/{run_id}.md").status_code == 422
+
+    def test_page_renders_type_chips(self, client):
+        resp = client.get("/bench")
+        assert resp.status_code == 200
+        assert 'data-btype="agentic"' in resp.text
+        assert 'data-btype="thinking-ablation"' in resp.text
+        assert "mode-form-card" in resp.text

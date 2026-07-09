@@ -19,6 +19,8 @@ class BenchStatus:
     total_runs: int = 0
     error: str = ""
     done: bool = False
+    bench_type: str = ""  # '' = standard throughput; else a mode
+    result_run_id: int = 0  # bench_runs id of the finished mode run
     card_svg_url: str = ""
     card_png_url: str = ""
     share_url: str = ""
@@ -35,6 +37,8 @@ class BenchStatus:
             "total_runs": self.total_runs,
             "done": self.done,
             "error": self.error,
+            "bench_type": self.bench_type,
+            "result_run_id": self.result_run_id,
             "card_svg_url": self.card_svg_url,
             "card_png_url": self.card_png_url,
             "share_url": self.share_url,
@@ -91,6 +95,19 @@ class AppState:
         with self._bench_lock:
             for key, value in kwargs.items():
                 setattr(self.bench_status, key, value)
+
+    def try_start_bench(self, **kwargs) -> bool:
+        """Atomically claim the bench slot: False if one is already running.
+
+        The separate snapshot-check + reset pattern left a TOCTOU window
+        where two concurrent POSTs both passed the 409 guard and started
+        two benchmark threads (double engine load, result overwritten).
+        """
+        with self._bench_lock:
+            if self.bench_status.running:
+                return False
+            self.bench_status = BenchStatus(running=True, **kwargs)
+            return True
 
     def reset_bench(self, **kwargs) -> None:
         """Thread-safe reset of bench status to a new BenchStatus."""
