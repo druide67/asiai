@@ -323,9 +323,12 @@ class TestPlanRoute:
         assert body["note"] == "aisctl serve not available"
 
     def test_planner_404_names_required_aisrv(self, client):
+        import io
         import urllib.error
 
-        err = urllib.error.HTTPError(url="x", code=404, msg="nope", hdrs=None, fp=None)
+        err = urllib.error.HTTPError(
+            url="x", code=404, msg="nope", hdrs=None, fp=io.BytesIO(b"not found")
+        )
         with (
             patch.object(fleet_routes.loopback, "read_token", return_value="tok"),
             patch("urllib.request.urlopen", side_effect=err),
@@ -334,6 +337,28 @@ class TestPlanRoute:
         body = resp.json()
         assert body["verdict"] == "unknown"
         assert "0.11" in body["note"]
+
+    def test_planner_404_unknown_preset_names_the_preset(self, client):
+        # The planner route 404s for a typo'd preset too — the note must
+        # not misdiagnose an up-to-date aisrv as "too old".
+        import io
+        import urllib.error
+
+        err = urllib.error.HTTPError(
+            url="x",
+            code=404,
+            msg="nope",
+            hdrs=None,
+            fp=io.BytesIO(b'{"error": "unknown_preset"}'),
+        )
+        with (
+            patch.object(fleet_routes.loopback, "read_token", return_value="tok"),
+            patch("urllib.request.urlopen", side_effect=err),
+        ):
+            resp = client.get("/api/v1/plan", params={"preset": "qwen-typo"})
+        body = resp.json()
+        assert body["verdict"] == "unknown"
+        assert body["note"] == "preset not found on this node: qwen-typo"
 
     def test_happy_path_fits(self, client):
         with (

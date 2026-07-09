@@ -564,6 +564,15 @@ def _fetch_preset_cost(preset: str) -> tuple[uma_plan.PresetCost, str | None]:
             data = _json.loads(resp.read(1024 * 1024).decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 404:
+            # The planner route answers 404 for an unknown preset too —
+            # read its error body to tell a typo apart from an aisrv too
+            # old to have the route at all.
+            try:
+                err = _json.loads(e.read(64 * 1024).decode("utf-8"))
+            except (OSError, ValueError, AttributeError):
+                err = None
+            if isinstance(err, dict) and err.get("error") == "unknown_preset":
+                return (unknown, f"preset not found on this node: {preset}")
             return (unknown, "aisctl serve has no planner (needs asiai-inference-server >= 0.11)")
         return (unknown, f"aisctl serve error {e.code}")
     except (urllib.error.URLError, OSError, ValueError):
