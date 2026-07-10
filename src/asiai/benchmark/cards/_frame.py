@@ -421,6 +421,8 @@ def chrome_close(result: BenchResult) -> str:
     ts = prov.get("started_at", "")
     if ts.isdigit():
         footer_bits.append(time.strftime("%Y-%m-%d", time.localtime(int(ts))))
+    if prov.get("reconstructed"):
+        footer_bits.append("reconstructed post-hoc")
     p.append(
         text(36, 606, " · ".join(footer_bits) or "provenance not recorded", size=11, fill=TEXT3)
     )

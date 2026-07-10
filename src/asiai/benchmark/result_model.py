@@ -99,6 +99,10 @@ def _provenance(payload: dict) -> dict[str, str]:
         "dataset_version": _fmt(payload.get("dataset_version")),
         "started_at": _fmt(payload.get("started_at") or payload.get("timestamp")),
     }
+    if payload.get("reconstructed"):
+        # Backfilled session: the payload was rebuilt post-hoc from the raw
+        # per-run rows — say so wherever provenance is shown.
+        out["reconstructed"] = "payload rebuilt post-hoc from raw per-run rows"
     return {k: v for k, v in out.items() if v}
 
 

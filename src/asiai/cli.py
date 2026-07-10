@@ -694,6 +694,52 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
     return _export_mode_result(args, "agentic", result)
 
 
+def _run_backfill_runs(db_path: str, apply: bool = False) -> int:
+    """Handle ``asiai bench --backfill-runs [--apply]``."""
+    import time as _time
+
+    from asiai.benchmark.backfill import backfill_bench_runs
+    from asiai.display.formatters import bold, dim, green, yellow
+
+    sessions = backfill_bench_runs(db_path, apply=apply)
+    if not sessions:
+        print(dim("  No raw benchmark sessions found — nothing to backfill."))
+        return 0
+
+    print(bold(f"  {len(sessions)} raw session(s) in the benchmarks table:"))
+    print()
+    missing = 0
+    created = 0
+    for s in sessions:
+        when = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(s.ts))
+        slots = ", ".join(s.slot_names) or "?"
+        if len(slots) > 76:
+            slots = slots[:75] + "…"
+        runs = len(s.rows)
+        if s.exists:
+            status = dim("present")
+        elif s.created_id is not None:
+            status = green("created")
+            created += 1
+        elif apply:
+            status = yellow("write failed")  # persist logs the reason
+        else:
+            status = yellow("would create")
+            missing += 1
+        print(f"  {when}  {s.session_type:<7} {runs:>4} runs  {status:<22} {slots}")
+    print()
+    if apply:
+        print(f"  {green('✓')} {created} session row(s) written to bench_runs.")
+    elif missing:
+        print(
+            f"  {missing} session(s) missing from bench_runs. "
+            f"{dim('Dry-run — pass --apply to write them.')}"
+        )
+    else:
+        print(f"  {green('✓')} bench_runs already covers every session.")
+    return 0
+
+
 def _persist_mode_run(args: argparse.Namespace, bench_type: str, payload: dict) -> None:
     """Persist a mode payload into bench_runs (best-effort, never fails a run)."""
     from asiai.benchmark.persist import persist_bench_run
@@ -1419,6 +1465,10 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Thinking-ablation mode: enable/preserve thinking trade-off on an agentic load
     if getattr(args, "thinking_ablation", False):
         return _run_thinking_ablation_bench(args)
+
+    # Backfill mode: rebuild missing bench_runs session rows from raw rows
+    if getattr(args, "backfill_runs", False):
+        return _run_backfill_runs(db_path, apply=getattr(args, "apply", False))
 
     # History mode
     if args.history:
@@ -2268,6 +2318,23 @@ def main(argv: list[str] | None = None) -> int:
         "-H",
         metavar="PERIOD",
         help="Show past benchmarks (e.g. 7d, 24h)",
+    )
+    bench_parser.add_argument(
+        "--backfill-runs",
+        action="store_true",
+        help=(
+            "Rebuild missing bench_runs session rows from the raw benchmarks "
+            "table (sessions that predate session persistence, or compare "
+            "sessions skipped by older versions). Dry-run by default: prints "
+            "the detected sessions without writing. Pass --apply to write. "
+            'Rebuilt payloads are marked "reconstructed" and never invent '
+            "unmeasured data. Idempotent: existing session rows are skipped."
+        ),
+    )
+    bench_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="With --backfill-runs: actually write the missing session rows.",
     )
     bench_parser.add_argument(
         "--share",
