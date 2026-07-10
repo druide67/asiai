@@ -1460,7 +1460,7 @@
         <a href="leaderboard/" class="ah-lb-link">{{ tr("lb_full") }} &rarr;</a>
       </div>
 
-      <div class="ah-lb-rows">
+      <div class="ah-lb-rows" id="ah-lb-teaser">
         <div class="ah-lb-cols" aria-hidden="true">
           <span>#</span><span>MODEL</span><span class="ah-lb-engine">ENGINE</span><span class="ah-lb-chip">CHIP</span><span style="text-align:right;">TOK/S</span><span style="text-align:right;">TTFT</span>
         </div>
@@ -1619,6 +1619,43 @@
       }
     };
     xhr.send();
+  }
+
+  /* Leaderboard teaser: hydrate the static top-3 rows with live data from
+   * the same API as the full leaderboard page. The static rows are the
+   * SEO / no-JS fallback — on any error or short payload they stay as-is. */
+  var teaser = document.getElementById('ah-lb-teaser');
+  if (teaser) {
+    var lbXhr = new XMLHttpRequest();
+    lbXhr.open('GET', 'https://api.asiai.dev/api/v1/leaderboard', true);
+    lbXhr.timeout = 5000;
+    lbXhr.onload = function() {
+      if (lbXhr.status !== 200) return;
+      try {
+        var payload = JSON.parse(lbXhr.responseText);
+        var rows = Array.isArray(payload) ? payload : (payload.results || []);
+        rows = rows.filter(function(r) {
+          return r && typeof r.median_tok_s === 'number' && r.median_tok_s > 0 &&
+                 r.model && r.engine && r.hw_chip;
+        }).sort(function(a, b) { return b.median_tok_s - a.median_tok_s; });
+        var slots = teaser.querySelectorAll('.ah-lb-row');
+        if (rows.length < slots.length) return;
+        slots.forEach(function(slot, i) {
+          var r = rows[i];
+          function set(sel, text) {
+            var el = slot.querySelector(sel);
+            if (el) el.textContent = text;
+          }
+          set('.ah-lb-model', r.model);
+          set('.ah-lb-engine', r.engine);
+          set('.ah-lb-chip', r.hw_chip + (r.hw_ram_gb ? ' · ' + r.hw_ram_gb + ' GB' : ''));
+          set('.ah-lb-toks', r.median_tok_s.toFixed(1));
+          set('.ah-lb-ttft', (typeof r.median_ttft_ms === 'number' && r.median_ttft_ms > 0)
+            ? Math.round(r.median_ttft_ms) + ' ms' : '—');
+        });
+      } catch (e) {}
+    };
+    lbXhr.send();
   }
 })();
 </script>
