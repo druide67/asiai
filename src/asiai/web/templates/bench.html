@@ -27,8 +27,10 @@
         </div>
         <div class="bn-hero-side">
             {% set reachable_engines = engines | selectattr('reachable') | list %}
-            {% if reachable_engines %}
+            {% if reachable_engines | length == 1 %}
             <div>uses <span class="bn-mono-accent">{{ reachable_engines[0].name }}</span> &middot; first loaded model</div>
+            {% elif reachable_engines %}
+            <div>auto-detected engines &middot; first common loaded model</div>
             {% else %}
             <div>no engine reachable</div>
             {% endif %}
