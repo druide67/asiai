@@ -31,624 +31,620 @@
     overflow-y: visible !important;
   }
 
-  /* ── Base ── */
+  /* ══════════ Design tokens (light default / slate dark) ══════════ */
   .asiai-home {
-    font-family: var(--md-text-font-family);
-    color: var(--md-default-fg-color);
+    --bg: #fafafa;
+    --bg2: #ffffff;
+    --bg3: #f4f4f5;
+    --line: #e4e4e7;
+    --line2: #d4d4d8;
+    --ink: #18181b;
+    --mut: #52525b;
+    --fnt: #8b8b94;
+    --acc-text: #0e7490;
+    --acc-soft: rgba(var(--accent-rgb), .07);
+    --acc-line: rgba(var(--accent-rgb), .4);
+    --shadow: 0 1px 3px rgba(24,24,27,.07), 0 1px 2px rgba(24,24,27,.05);
+    font-family: var(--md-text-font-family, system-ui, sans-serif);
+    background: var(--bg);
+    color: var(--ink);
     line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
   }
-  .asiai-home section {
-    padding: 4rem 1.5rem;
+  [data-md-color-scheme="slate"] .asiai-home {
+    --bg: #0a0a0c;
+    --bg2: #121215;
+    --bg3: #18181b;
+    --line: #232329;
+    --line2: #2f2f37;
+    --ink: #fafafa;
+    --mut: #a1a1aa;
+    --fnt: #6f6f7a;
+    --acc-text: #22d3ee;
+    --acc-soft: rgba(var(--accent-rgb), .08);
+    --acc-line: rgba(var(--accent-rgb), .28);
+    --shadow: none;
   }
-  .asiai-home .asiai-container {
-    max-width: 1100px;
+  /* Agent mode: cyan → blue accent text */
+  body.agent-mode .asiai-home { --acc-text: #1d4ed8; }
+  [data-md-color-scheme="slate"] body.agent-mode .asiai-home,
+  body.agent-mode[data-md-color-scheme="slate"] .asiai-home { --acc-text: #60a5fa; }
+
+  .asiai-home .ah-mono { font-family: var(--md-code-font-family, ui-monospace, monospace); }
+  .asiai-home a { color: inherit; }
+
+  /* ── Section scaffolding ── */
+  .ah-section { border-top: 1px solid var(--line); }
+  .ah-wrap {
+    max-width: 1120px;
     margin: 0 auto;
+    padding: 80px 40px 88px;
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
   }
+  .ah-head { display: flex; flex-direction: column; gap: 10px; }
   .asiai-home h2 {
-    font-size: 1.8rem;
-    font-weight: 700;
-    text-align: center;
-    margin-bottom: 0.5rem;
-  }
-  .asiai-home .section-subtitle {
-    text-align: center;
-    color: var(--md-default-fg-color--light);
-    margin-bottom: 2.5rem;
-    font-size: 1.05rem;
-  }
-
-  /* ── Hero ── */
-  .asiai-hero {
-    text-align: center;
-    padding: 5rem 1.5rem 4rem;
-    background: linear-gradient(180deg, rgba(6, 182, 212, 0.12) 0%, transparent 100%);
-  }
-  .asiai-hero img {
-    width: 120px;
-    height: 120px;
-    margin-bottom: 1.5rem;
-  }
-  .asiai-hero h1 {
-    font-size: 2.4rem;
-    font-weight: 800;
-    margin: 0 0 0.75rem;
+    margin: 0;
+    font-size: 32px;
     line-height: 1.2;
-  }
-  .asiai-hero .tagline {
-    font-size: 1.2rem;
-    color: var(--md-default-fg-color--light);
-    margin-bottom: 2rem;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .asiai-hero .cta-group {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 2rem;
-  }
-  .asiai-hero .cta-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.75rem;
-    border-radius: 0.5rem;
+    letter-spacing: -0.02em;
     font-weight: 600;
-    font-size: 1rem;
-    text-decoration: none;
-    transition: transform 0.15s, box-shadow 0.15s;
+    color: var(--ink);
   }
-  .asiai-hero .cta-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
-  }
-  .asiai-hero .cta-primary {
-    background: var(--accent);
-    color: #0f0f23;
-  }
-  .asiai-hero .cta-secondary {
-    background: var(--md-code-bg-color);
-    color: var(--md-default-fg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-  }
-  .asiai-hero .badges {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  .asiai-hero .badge {
-    display: inline-block;
-    padding: 0.3rem 0.75rem;
-    border-radius: 2rem;
-    font-size: 0.8rem;
-    font-weight: 500;
-    background: var(--md-code-bg-color);
-    color: var(--md-default-fg-color--light);
-    border: 1px solid var(--md-default-fg-color--lightest);
-  }
-  .asiai-hero .badge-accent {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  /* ── Pain Points ── */
-  .asiai-pain {
-    background: var(--md-code-bg-color);
-  }
-  .pain-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
-  }
-  .pain-card {
-    text-align: center;
-    padding: 1.5rem;
-  }
-  .pain-card .pain-icon {
-    font-size: 2rem;
-    margin-bottom: 0.75rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .pain-card h3 {
-    font-size: 1.15rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-  }
-  .pain-card p {
-    font-size: 0.92rem;
-    color: var(--md-default-fg-color--light);
-    margin: 0;
-  }
-
-  /* ── Feature Cards ── */
-  .feature-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-  }
-  .feature-card {
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    background: var(--md-code-bg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-    transition: border-color 0.2s;
-  }
-  .feature-card:hover {
-    border-color: var(--accent);
-  }
-  .feature-card .feature-icon {
-    font-size: 1.5rem;
-    margin-bottom: 0.75rem;
-    display: flex;
-    align-items: center;
-    height: 36px;
-  }
-  .feature-card .feature-icon svg {
-    width: 32px;
-    height: 32px;
-  }
-  .feature-card h3 {
-    font-size: 1.05rem;
-    font-weight: 700;
-    margin: 0 0 0.5rem;
-  }
-  .feature-card p {
-    font-size: 0.9rem;
-    color: var(--md-default-fg-color--light);
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  /* ── Use Cases ── */
-  .asiai-usecases {
-    background: var(--md-code-bg-color);
-  }
-  .usecase-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-  .usecase-item {
-    display: flex;
-    gap: 0.75rem;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    background: var(--md-default-bg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-  }
-  .usecase-item .usecase-icon {
-    font-size: 1.25rem;
-    flex-shrink: 0;
-    margin-top: 0.2rem;
-    display: flex;
-    align-items: flex-start;
-  }
-  .usecase-item .usecase-icon svg {
-    width: 24px;
-    height: 24px;
-  }
-  .usecase-item h3.uc-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin: 0 0 0.25rem;
-  }
-  .usecase-item p {
-    font-size: 0.85rem;
-    color: var(--md-default-fg-color--light);
-    margin: 0;
-  }
-
-  /* ── How It Works ── */
-  .steps-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
-    text-align: center;
-  }
-  .step {
-    padding: 1.5rem;
-  }
-  .step .step-number {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #0f0f23;
-    font-weight: 700;
-    font-size: 1.1rem;
-    margin-bottom: 1rem;
-  }
-  .step h3 {
-    font-size: 1.1rem;
-    font-weight: 700;
-    margin-bottom: 0.75rem;
-  }
-  .step code {
-    display: block;
-    background: var(--md-code-bg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-    border-radius: 0.5rem;
-    padding: 1rem;
-    font-size: 0.85rem;
-    text-align: left;
-    white-space: pre;
-    font-family: var(--md-code-font-family);
-    line-height: 1.6;
-  }
-
-  /* ── Discoveries ── */
-  .asiai-discoveries {
-    background: var(--md-code-bg-color);
-  }
-  .discovery-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-  }
-  .discovery-card {
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    background: var(--md-default-bg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-    text-align: center;
-  }
-  .discovery-card .discovery-stat {
-    font-size: 2rem;
-    font-weight: 800;
-    color: var(--accent);
-    margin-bottom: 0.5rem;
-  }
-  .discovery-card h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-  }
-  .discovery-card p {
-    font-size: 0.85rem;
-    color: var(--md-default-fg-color--light);
-    margin: 0;
-  }
-
-  /* ── Engines ── */
-  .engine-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.95rem;
-  }
-  .engine-table th {
-    text-align: left;
-    padding: 0.75rem 1rem;
-    border-bottom: 2px solid var(--accent);
-    font-weight: 600;
-  }
-  .engine-table td {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--md-default-fg-color--lightest);
-  }
-  .engine-table tr:last-child td {
-    border-bottom: none;
-  }
-  .engine-table code {
-    font-family: var(--md-code-font-family);
-    font-size: 0.85rem;
-    background: var(--md-code-bg-color);
-    padding: 0.15rem 0.4rem;
-    border-radius: 0.25rem;
-  }
-
-  /* ── Metrics ── */
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-  }
-  .metric-card {
-    text-align: center;
-    padding: 1.25rem;
-    border-radius: 0.5rem;
-    background: var(--md-code-bg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-  }
-  .metric-card .metric-icon {
-    font-size: 1.5rem;
-    margin-bottom: 0.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .metric-card h3.uc-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    margin: 0 0 0.25rem;
-  }
-  .metric-card p {
-    font-size: 0.8rem;
-    color: var(--md-default-fg-color--light);
-    margin: 0;
-  }
-
-  /* ── Bottom CTA ── */
-  .asiai-bottom-cta {
-    text-align: center;
-    background: linear-gradient(0deg, rgba(6, 182, 212, 0.12) 0%, transparent 100%);
-  }
-  .install-commands {
-    display: flex;
-    gap: 1.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 2rem;
-  }
-  .install-block {
-    background: var(--md-code-bg-color);
-    border: 1px solid var(--md-default-fg-color--lightest);
-    border-radius: 0.75rem;
-    padding: 1.25rem 1.5rem;
-    text-align: left;
-    min-width: 280px;
-  }
-  .install-block .install-label {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--md-default-fg-color--light);
-    margin-bottom: 0.5rem;
+  .ah-sub { margin: 0; font-size: 15.5px; color: var(--mut); }
+  .ah-eyebrow {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: var(--fnt);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .install-block code {
-    display: block;
-    font-family: var(--md-code-font-family);
-    font-size: 0.9rem;
-    line-height: 1.6;
-  }
-  .bottom-links {
-    display: flex;
-    gap: 2rem;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  .bottom-links a {
-    color: var(--md-default-fg-color--light);
-    text-decoration: none;
-    font-size: 0.9rem;
-    transition: color 0.15s;
-  }
-  .bottom-links a:hover {
-    color: var(--accent);
-  }
-  .star-nudge {
-    text-align: center;
-    margin-top: 1.5rem;
-    font-size: 0.85rem;
-  }
-  .star-nudge a {
-    color: var(--md-default-fg-color--light);
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-  .star-nudge a:hover {
-    color: var(--accent);
   }
 
-  /* ── Mode Toggle ── */
-  .mode-toggle {
-    display: flex;
+  /* ══════════ 1 · Hero ══════════ */
+  .ah-hero {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 84px 40px 92px;
+    display: grid;
+    grid-template-columns: 1.02fr 1fr;
+    gap: 72px;
     align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    margin: 1.5rem 0 1.5rem;
   }
-  .mode-label {
-    font-size: 0.95rem;
+  .ah-hero-left { display: flex; flex-direction: column; gap: 22px; }
+  .ah-hero-brand { display: flex; align-items: center; gap: 12px; }
+  .ah-hero-brand img { width: 40px; height: 40px; display: block; }
+  .asiai-home h1 {
+    margin: 0;
+    font-size: 54px;
+    line-height: 1.06;
+    letter-spacing: -0.03em;
     font-weight: 600;
-    color: var(--md-default-fg-color--light);
-    transition: color 0.2s;
+    color: var(--ink);
+  }
+  .asiai-home h1 .acc { color: var(--acc-text); }
+  .ah-hero-tagline {
+    margin: 0;
+    font-size: 16.5px;
+    line-height: 1.6;
+    color: var(--mut);
+    max-width: 46ch;
+  }
+  .ah-hero-install {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 20px;
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 13.5px;
+    line-height: 2;
+    box-shadow: var(--shadow);
+  }
+  .ah-hero-install .row { display: flex; gap: 10px; }
+  .ah-hero-install .p { color: var(--fnt); user-select: none; }
+  .ah-hero-install .c { color: var(--fnt); }
+  .ah-cta-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .ah-btn {
+    text-decoration: none;
+    font-size: 14.5px;
+    border-radius: 8px;
+    transition: background .15s, border-color .15s, color .15s;
+    white-space: nowrap;
+  }
+  .ah-btn-primary {
+    background: var(--accent);
+    color: #04262c;
+    font-weight: 600;
+    padding: 11px 22px;
+  }
+  .ah-btn-primary:hover { background: #22d3ee; color: #04262c; }
+  body.agent-mode .ah-btn-primary { color: #0c1a33; }
+  body.agent-mode .ah-btn-primary:hover { background: #93c5fd; color: #0c1a33; }
+  .ah-btn-secondary {
+    color: var(--ink);
+    font-weight: 500;
+    padding: 10px 20px;
+    border: 1px solid var(--line2);
+  }
+  .ah-btn-secondary:hover { border-color: var(--acc-line); color: var(--ink); }
+  .ah-hero-foot {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11px;
+    color: var(--fnt);
+  }
+
+  /* ── Mode toggle (Human / AI Agent) ── */
+  .mode-toggle { display: flex; align-items: center; gap: 12px; }
+  .mode-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fnt);
+    transition: color .2s;
     cursor: pointer;
   }
-  .mode-label.mode-active {
-    color: var(--accent);
-  }
+  .mode-label.mode-active { color: var(--acc-text); }
   .toggle-switch {
     position: relative;
-    width: 48px;
-    height: 26px;
-    background: var(--md-default-fg-color--lightest);
+    width: 44px;
+    height: 24px;
+    background: var(--line2);
     border: none;
-    border-radius: 13px;
+    border-radius: 12px;
     cursor: pointer;
     padding: 0;
-    transition: background 0.2s;
+    transition: background .2s;
   }
-  .toggle-switch[aria-checked="true"] {
-    background: var(--accent);
-  }
+  .toggle-switch[aria-checked="true"] { background: var(--accent); }
   .toggle-slider {
     position: absolute;
     top: 3px;
     left: 3px;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     background: #fff;
     border-radius: 50%;
-    transition: transform 0.2s;
+    transition: transform .2s;
   }
-  .toggle-switch[aria-checked="true"] .toggle-slider {
-    transform: translateX(22px);
+  .toggle-switch[aria-checked="true"] .toggle-slider { transform: translateX(20px); }
+  .agent-count-banner {
+    display: none;
+    font-size: 13.5px;
+    color: var(--acc-text);
+    font-weight: 600;
   }
+  .agent-count-banner.has-data { display: block; }
+
+  /* Human / Agent content switching */
   .mode-agent { display: none !important; }
   .mode-human { display: inline; }
   body.agent-mode .mode-agent { display: inline !important; }
-  .mode-human.screenshots-grid { display: grid !important; }
-  body.agent-mode .mode-agent.screenshots-grid { display: grid !important; }
-  /* Mode content switching with transitions */
-  .mode-human, .mode-agent { transition: opacity 0.3s ease; }
   body.agent-mode .mode-human { display: none !important; }
-  .cta-group .mode-agent { display: none; }
-  .cta-group .mode-human { display: inline-flex; }
-  body.agent-mode .cta-group .mode-agent { display: inline-flex; }
-  body.agent-mode .cta-group .mode-human { display: none; }
-  .badges .mode-agent { display: none; }
-  body.agent-mode .badges .mode-agent { display: inline-block; }
+  .ah-cta-group .mode-human { display: inline-block; }
+  .ah-cta-group .mode-agent { display: none; }
+  body.agent-mode .ah-cta-group .mode-agent { display: inline-block !important; }
+  body.agent-mode .ah-cta-group .mode-human { display: none; }
+  .ah-hero-visual.mode-human { display: block; }
+  .ah-hero-visual.mode-agent { display: none; }
+  body.agent-mode .ah-hero-visual.mode-agent { display: flex !important; }
+  body.agent-mode .ah-hero-visual.mode-human { display: none !important; }
 
-  /* Stable CTA sizing — prevent layout shift between modes */
-  .asiai-hero .cta-btn { min-width: 180px; text-align: center; }
-
-  /* Smooth accent color transitions */
-  .asiai-hero .cta-primary,
-  .toggle-switch,
-  .mode-label,
-  .badge-accent,
-  .feature-card-agent,
-  .agent-count-banner,
-  .discovery-card .discovery-stat,
-  .engine-table th { transition: color 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease; }
-
-  /* ── Agent Feature Card ── */
-  .feature-card-agent {
-    border-color: var(--accent);
+  /* ── Hero visual A: animated terminal ── */
+  .ah-term {
+    background: #0c0d10;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 12.5px;
+    color: #d4d4d8;
+  }
+  .ah-term-bar {
     display: flex;
-    gap: 1rem;
-    align-items: flex-start;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
   }
-  .feature-card-agent .feature-icon {
-    flex-shrink: 0;
+  .ah-term-dot { width: 11px; height: 11px; border-radius: 50%; }
+  .ah-term-title { margin-left: 8px; font-size: 11px; color: #6f6f7a; }
+  .ah-term-tag { margin-left: auto; font-size: 10px; letter-spacing: .12em; color: #06b6d4; }
+  .ah-term-body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 7px; }
+  .ah-term .cmd {
+    overflow: hidden;
+    white-space: nowrap;
+    width: 22ch;
+    animation: ah-type 1.1s steps(22, end) .4s both;
   }
-  .feature-card-agent .feature-card-text h3 {
-    margin: 0 0 0.5rem;
+  .ah-term .dim { color: #6f6f7a; }
+  .ah-term .cyan { color: #22d3ee; }
+  .ah-term .grey { color: #a1a1aa; }
+  .ah-term .li { animation: ah-line-in .4s ease both; }
+  .ah-term-row {
+    display: grid;
+    grid-template-columns: 86px 1fr 96px;
+    gap: 12px;
+    align-items: center;
   }
-  body.agent-mode .feature-card-agent {
-    background: rgba(var(--accent-rgb), 0.08);
-    box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.1);
+  .ah-term-track {
+    height: 14px;
+    border-radius: 3px;
+    background: rgba(255,255,255,.06);
+    overflow: hidden;
+    display: block;
+  }
+  .ah-term-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    animation: ah-bar .9s cubic-bezier(.2,.7,.2,1) both;
+  }
+  .ah-term-caret {
+    width: 8px;
+    height: 15px;
+    background: #06b6d4;
+    animation: ah-caret 1.1s step-end 5.2s infinite;
+  }
+  @keyframes ah-type { from { width: 0ch; } }
+  @keyframes ah-caret { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @keyframes ah-line-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes ah-bar { from { width: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .ah-term .cmd, .ah-term .li, .ah-term-fill, .ah-term-caret { animation: none; }
   }
 
-  /* ── API Preview blocks (Agent mode) ── */
-  .api-preview {
-    background: #1a1a2e;
-    border-radius: 0.75rem;
-    border: 1px solid #2a2a4a;
+  /* ── Hero visual B: API previews (agent mode) ── */
+  .ah-api-stack { flex-direction: column; gap: 18px; }
+  .ah-api {
+    background: #0c0d10;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 12px;
     overflow: hidden;
     text-align: left;
   }
-  .api-preview-header {
-    background: #16162a;
-    padding: 0.6rem 1rem;
+  .ah-api-header {
+    padding: 10px 16px;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    border-bottom: 1px solid #2a2a4a;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
   }
-  .api-preview-method {
+  .ah-api-method {
     background: var(--accent);
-    color: #0f0f23;
-    font-size: 0.7rem;
+    color: #04262c;
+    font-size: 10px;
     font-weight: 700;
-    padding: 0.15rem 0.5rem;
+    padding: 2px 8px;
     border-radius: 3px;
-    font-family: var(--md-code-font, 'Geist Mono', monospace);
+    font-family: var(--md-code-font-family, monospace);
   }
-  .api-preview-url {
-    color: #ccc;
-    font-size: 0.85rem;
-    font-family: var(--md-code-font, 'Geist Mono', monospace);
-  }
-  .api-preview-badge {
-    margin-left: auto;
-    font-size: 0.7rem;
-    color: #6a6a8a;
-    font-family: var(--md-code-font, 'Geist Mono', monospace);
-  }
-  .api-preview-body {
-    padding: 1rem;
+  .ah-api-url { color: #d4d4d8; font-size: 12.5px; font-family: var(--md-code-font-family, monospace); }
+  .ah-api-badge { margin-left: auto; font-size: 10.5px; color: #6f6f7a; font-family: var(--md-code-font-family, monospace); }
+  .ah-api-body {
+    padding: 14px 16px;
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 11.5px;
     line-height: 1.6;
     color: #c5c5d5;
-    font-family: var(--md-code-font, 'Geist Mono', monospace);
+    font-family: var(--md-code-font-family, monospace);
     overflow-x: auto;
     background: transparent;
   }
 
-  /* ── Agent Count ── */
-  .agent-count-banner {
-    display: none;
-    text-align: center;
-    margin-bottom: 1rem;
-    font-size: 0.95rem;
-    color: var(--accent);
-    font-weight: 600;
+  /* ══════════ 2 · Problem cards ══════════ */
+  .ah-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; }
+  .ah-card {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 26px 26px 28px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
-  .agent-count-banner.has-data {
+  .ah-card-num {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: var(--fnt);
+  }
+  .asiai-home h3 { margin: 0; font-weight: 600; color: var(--ink); }
+  .ah-card h3 { font-size: 18px; }
+  .ah-card p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--mut); }
+
+  /* ══════════ 3 · Four surfaces ══════════ */
+  .ah-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .ah-tile {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+  .ah-tile-shot {
+    height: 216px;
+    background: #0c0d10;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .ah-tile-shot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
     display: block;
   }
-
-  /* ── Dark mode overrides ── */
-  [data-md-color-scheme="slate"] .asiai-pain,
-  [data-md-color-scheme="slate"] .asiai-usecases,
-  [data-md-color-scheme="slate"] .asiai-discoveries {
-    background: rgba(255, 255, 255, 0.04);
+  .ah-tile-shot.term-mini {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11.5px;
+    line-height: 2.1;
+    color: #a1a1aa;
   }
-  [data-md-color-scheme="slate"] .feature-card,
-  [data-md-color-scheme="slate"] .metric-card,
-  [data-md-color-scheme="slate"] .install-block {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.08);
+  .ah-tile-shot.term-mini .rows { display: flex; flex-direction: column; }
+  .ah-tile-shot.term-mini .lb-mini {
+    display: grid;
+    grid-template-columns: 20px 150px 66px 62px 46px;
+    gap: 8px;
   }
-  [data-md-color-scheme="slate"] .usecase-item,
-  [data-md-color-scheme="slate"] .discovery-card {
-    background: var(--md-default-bg-color);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-  [data-md-color-scheme="slate"] .step code {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-  [data-md-color-scheme="slate"] .badge {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  [data-md-color-scheme="slate"] .engine-table td {
-    border-bottom-color: rgba(255, 255, 255, 0.06);
+  .ah-tile-text { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 8px; }
+  .ah-tile-text h3 { font-size: 16.5px; }
+  .ah-tile-text p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--mut); }
+  .ah-tile-cmd {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11.5px;
+    color: var(--acc-text);
   }
 
-  /* ── Progressive disclosure animation ── */
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
+  /* ══════════ 4 · Discover FAQ ══════════ */
+  .ah-faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .ah-faq {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin: 0;
+  }
+  .ah-faq summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    cursor: pointer;
+    font-size: 14.5px;
+    font-weight: 600;
+    list-style: none;
+  }
+  .ah-faq summary::-webkit-details-marker { display: none; }
+  .ah-faq .faq-marker { font-family: var(--md-code-font-family, monospace); color: var(--acc-text); font-size: 15px; }
+  .ah-faq .faq-marker::before { content: '+'; }
+  .ah-faq[open] .faq-marker::before { content: '\2212'; }
+  .ah-faq p { margin: 0; padding: 0 20px 18px; font-size: 13.5px; line-height: 1.6; color: var(--mut); }
+  .ah-faq code {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 12.5px;
+    background: none;
+    color: inherit;
+    padding: 0;
   }
 
-  /* ── Responsive ── */
-  @media (max-width: 900px) {
-    .pain-grid,
-    .feature-grid,
-    .steps-grid,
-    .discovery-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-    .metrics-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
+  /* ══════════ 5 · Quickstart ══════════ */
+  .ah-steps { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; align-items: start; }
+  .ah-step { display: flex; flex-direction: column; gap: 14px; }
+  .ah-step-head { display: flex; align-items: center; gap: 12px; }
+  .ah-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--acc-line);
+    color: var(--acc-text);
+    background: var(--acc-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 13px;
+    flex-shrink: 0;
   }
-  @media (max-width: 600px) {
-    .asiai-hero h1 { font-size: 1.8rem; }
-    .pain-grid,
-    .feature-grid,
-    .steps-grid,
-    .discovery-grid,
-    .usecase-grid,
-    .metrics-grid {
-      grid-template-columns: 1fr;
-    }
-    .asiai-home section {
-      padding: 2.5rem 1rem;
-    }
+  .ah-step-head h3 { font-size: 17px; }
+  .ah-step-code {
+    background: #0c0d10;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 12.5px;
+    line-height: 2;
+    color: #d4d4d8;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    overflow-x: auto;
+  }
+  .ah-step-code .dim { color: #6f6f7a; }
+  .ah-step-code .ok { color: #34d399; }
+  .ah-step-code .cyan { color: #22d3ee; }
+  .ah-step-code .grey { color: #a1a1aa; }
+  .ah-step-code .tbl { display: grid; grid-template-columns: 1fr 52px 48px; gap: 8px; }
+  .ah-step-code .tbl .r { text-align: right; }
+
+  /* ══════════ 6 · Real discoveries ══════════ */
+  .ah-stat {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 42px;
+    font-weight: 500;
+    color: var(--acc-text);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .ah-disc { padding: 28px 26px 30px; }
+  .ah-disc h3 { font-size: 16.5px; }
+
+  /* ══════════ 7 · Supported engines ══════════ */
+  .ah-eng-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  a.ah-eng {
+    text-decoration: none;
+    color: var(--ink);
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color .15s;
+  }
+  a.ah-eng:hover { border-color: var(--acc-line); color: var(--ink); }
+  .ah-eng-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .ah-eng-name { font-size: 15.5px; font-weight: 600; }
+  .ah-eng-port { font-family: var(--md-code-font-family, monospace); font-size: 11.5px; color: var(--fnt); }
+  .ah-eng-tags { display: flex; gap: 6px; flex-wrap: wrap; font-family: var(--md-code-font-family, monospace); font-size: 10.5px; }
+  .ah-eng-tags span { color: var(--mut); border: 1px solid var(--line2); border-radius: 999px; padding: 3px 9px; }
+  .ah-eng-tags span.vram { color: var(--acc-text); border-color: var(--acc-line); }
+  .ah-eng-note { margin: 0; font-family: var(--md-code-font-family, monospace); font-size: 11.5px; color: var(--fnt); }
+
+  /* ══════════ 8 · What we measure ══════════ */
+  .ah-met-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .ah-met {
+    border: 1px solid var(--line);
+    background: var(--bg2);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ah-met h3 {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--acc-text);
+  }
+  .ah-met p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mut); }
+
+  /* ══════════ 9 · Leaderboard teaser ══════════ */
+  .ah-lb-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+  .ah-lb-link { color: var(--acc-text); text-decoration: none; font-size: 14.5px; font-weight: 500; white-space: nowrap; }
+  .ah-lb-link:hover { text-decoration: underline; color: var(--acc-text); }
+  .ah-lb-rows { display: flex; flex-direction: column; gap: 12px; }
+  .ah-lb-cols {
+    display: grid;
+    grid-template-columns: 56px 1.5fr 1fr 1fr 150px 110px;
+    gap: 16px;
+    padding: 0 24px;
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    color: var(--fnt);
+  }
+  .ah-lb-row {
+    display: grid;
+    grid-template-columns: 56px 1.5fr 1fr 1fr 150px 110px;
+    gap: 16px;
+    align-items: center;
+    padding: 18px 24px;
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .ah-lb-row.top { background: var(--acc-soft); border-color: var(--acc-line); }
+  .ah-lb-rank { font-family: var(--md-code-font-family, monospace); font-size: 15px; color: var(--fnt); }
+  .ah-lb-row.top .ah-lb-rank { color: var(--acc-text); }
+  .ah-lb-model { font-family: var(--md-code-font-family, monospace); font-size: 13.5px; }
+  .ah-lb-dim { font-size: 13.5px; color: var(--mut); }
+  .ah-lb-toks { font-family: var(--md-code-font-family, monospace); font-size: 22px; font-weight: 500; text-align: right; }
+  .ah-lb-row.top .ah-lb-toks { color: var(--acc-text); }
+  .ah-lb-ttft { font-family: var(--md-code-font-family, monospace); font-size: 13px; color: var(--mut); text-align: right; }
+  .ah-lb-share { font-family: var(--md-code-font-family, monospace); font-size: 12px; color: var(--fnt); }
+  .ah-lb-share .cmd { color: var(--acc-text); }
+
+  /* ══════════ 10 · Shareable cards ══════════ */
+  .ah-card-chip {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 13px;
+    color: var(--acc-text);
+    background: var(--acc-soft);
+    border: 1px solid var(--acc-line);
+    border-radius: 8px;
+    padding: 9px 16px;
+    white-space: nowrap;
+  }
+  .ah-cards-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 22px; align-items: start; }
+  .ah-cards-side { display: flex; flex-direction: column; gap: 22px; }
+  .ah-cards-grid img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+
+  /* ══════════ 11 · Footer ══════════ */
+  .ah-footer-wrap { padding: 44px 40px 56px; gap: 28px; }
+  .ah-footer-top { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .ah-footer-brand { display: flex; align-items: center; gap: 14px; }
+  .ah-footer-brand img { width: 36px; height: 36px; display: block; }
+  .ah-footer-brand-text { display: flex; flex-direction: column; gap: 2px; }
+  .ah-footer-brand-text .name { font-size: 15px; font-weight: 600; }
+  .ah-footer-brand-text .tag {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 10px;
+    letter-spacing: .14em;
+    color: var(--fnt);
+  }
+  .ah-footer-links { display: flex; gap: 26px; font-size: 13.5px; flex-wrap: wrap; }
+  .ah-footer-links a { color: var(--mut); text-decoration: none; transition: color .15s; }
+  .ah-footer-links a:hover { color: var(--acc-text); }
+  .ah-footer-star {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11.5px;
+    color: var(--fnt);
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+  }
+  .ah-footer-star a { color: var(--fnt); text-decoration: none; }
+  .ah-footer-star a:hover { color: var(--acc-text); }
+  .ah-footer-star .star { color: var(--acc-text); }
+
+  /* ── MT disclaimer (zh/ja/ko) ── */
+  .ah-mt-note {
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.85rem;
+    color: var(--mut);
+    border-top: 1px solid var(--line);
+  }
+  .ah-mt-note a { color: var(--acc-text); }
+
+  /* ══════════ Responsive ══════════ */
+  @media (max-width: 1040px) {
+    .ah-hero { grid-template-columns: 1fr; gap: 44px; padding: 56px 24px 64px; }
+    .asiai-home h1 { font-size: 42px; }
+    .ah-wrap { padding: 60px 24px 68px; }
+    .ah-met-grid { grid-template-columns: repeat(2, 1fr); }
+    .ah-lb-cols, .ah-lb-row { grid-template-columns: 40px 1.5fr 1fr 130px 90px; }
+    .ah-lb-chip { display: none; }
+  }
+  @media (max-width: 760px) {
+    .asiai-home h1 { font-size: 34px; }
+    .ah-grid-3, .ah-grid-2, .ah-steps, .ah-faq-grid, .ah-eng-grid, .ah-cards-grid { grid-template-columns: 1fr; }
+    .ah-met-grid { grid-template-columns: repeat(2, 1fr); }
+    .ah-lb-cols, .ah-lb-row { grid-template-columns: 32px 1.5fr 100px 70px; gap: 10px; padding-left: 14px; padding-right: 14px; }
+    .ah-lb-engine { display: none; }
+    .ah-lb-toks { font-size: 17px; }
+    .ah-wrap { padding: 48px 18px 56px; }
+    .ah-hero { padding: 40px 18px 48px; }
+    .ah-footer-wrap { padding: 36px 18px 44px; }
   }
 </style>
 
@@ -656,37 +652,39 @@
 
 {% set t = {
   "hero_title": {
-    "en": "Which LLM? Which engine?<br>Which combo wins on your Mac?",
-    "fr": "Quel LLM ? Quel moteur ?<br>Quelle combo gagne sur votre Mac ?",
-    "de": "Welches LLM? Welche Engine?<br>Welche Kombi gewinnt auf Ihrem Mac?",
-    "es": "¿Cuál LLM? ¿Cuál motor?<br>¿Qué combo gana en tu Mac?",
-    "it": "Quale LLM? Quale motore?<br>Quale combo vince sul tuo Mac?",
-    "pt": "Qual LLM? Qual motor?<br>Qual combo vence no seu Mac?",
-    "zh": "哪个LLM？哪个引擎？<br>哪种组合在你的Mac上最强？",
-    "ja": "どのLLM？どのエンジン？<br>あなたのMacで最強の組み合わせは？",
-    "ko": "어떤 LLM? 어떤 엔진?<br>당신의 Mac에서 최강 조합은?"
+    "en": "The <span class=\"acc\">speedtest</span> for local LLMs on Apple Silicon.",
+    "fr": "Le <span class=\"acc\">speedtest</span> des LLM locaux sur Apple Silicon.",
+    "de": "Der <span class=\"acc\">Speedtest</span> für lokale LLMs auf Apple Silicon.",
+    "es": "El <span class=\"acc\">speedtest</span> de los LLM locales en Apple Silicon.",
+    "it": "Lo <span class=\"acc\">speedtest</span> dei LLM locali su Apple Silicon.",
+    "pt": "O <span class=\"acc\">speedtest</span> dos LLMs locais no Apple Silicon.",
+    "zh": "Apple Silicon 本地 LLM 的<span class=\"acc\">速度测试</span>。",
+    "ja": "Apple SiliconローカルLLMの<span class=\"acc\">スピードテスト</span>。",
+    "ko": "Apple Silicon 로컬 LLM의 <span class=\"acc\">스피드테스트</span>."
   },
   "hero_tagline": {
-    "en": "Benchmark to choose. Dashboard to monitor. History to spot problems.",
-    "fr": "Benchmarker pour choisir. Dashboard pour monitorer. Historique pour repérer les problèmes.",
-    "de": "Benchmarken zum Auswählen. Dashboard zum Überwachen. Verlauf zum Erkennen von Problemen.",
-    "es": "Benchmark para elegir. Dashboard para monitorear. Historial para detectar problemas.",
-    "it": "Benchmark per scegliere. Dashboard per monitorare. Storico per individuare i problemi.",
-    "pt": "Benchmark para escolher. Dashboard para monitorar. Histórico para detectar problemas.",
-    "zh": "跑分来选择。仪表盘来监控。历史记录来发现问题。",
-    "ja": "ベンチマークで選ぶ。ダッシュボードで監視。履歴で問題を発見。",
-    "ko": "벤치마크로 선택하고. 대시보드로 모니터링하고. 이력으로 문제를 발견하세요."
+    "en": "Benchmark Ollama, LM Studio, mlx-lm, llama.cpp and five more engines head-to-head &mdash; tok/s, TTFT, power and thermal, from one command.",
+    "fr": "Benchmarkez Ollama, LM Studio, mlx-lm, llama.cpp et cinq autres moteurs face-à-face &mdash; tok/s, TTFT, puissance et thermique, en une commande.",
+    "de": "Benchmarken Sie Ollama, LM Studio, mlx-lm, llama.cpp und fünf weitere Engines im Direktvergleich &mdash; tok/s, TTFT, Leistung und Thermik, mit einem Befehl.",
+    "es": "Compara Ollama, LM Studio, mlx-lm, llama.cpp y cinco motores más cara a cara &mdash; tok/s, TTFT, consumo y térmica, con un comando.",
+    "it": "Confronta Ollama, LM Studio, mlx-lm, llama.cpp e altri cinque motori testa a testa &mdash; tok/s, TTFT, potenza e termica, con un comando.",
+    "pt": "Compare Ollama, LM Studio, mlx-lm, llama.cpp e mais cinco motores frente a frente &mdash; tok/s, TTFT, energia e térmica, com um comando.",
+    "zh": "让 Ollama、LM Studio、mlx-lm、llama.cpp 及另外五个引擎一对一对决 &mdash; tok/s、TTFT、功耗与温度，一条命令搞定。",
+    "ja": "Ollama、LM Studio、mlx-lm、llama.cppほか5つのエンジンを直接対決 &mdash; tok/s、TTFT、電力、温度をコマンド一発で。",
+    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp 및 5개 엔진을 1:1로 비교 &mdash; tok/s, TTFT, 전력, 온도를 명령어 하나로."
   },
   "cta_start": {
-    "en": "Get Started", "fr": "Démarrer", "de": "Loslegen",
+    "en": "Get started", "fr": "Démarrer", "de": "Loslegen",
     "es": "Empezar", "it": "Inizia", "pt": "Começar",
     "zh": "开始", "ja": "始める", "ko": "시작하기"
   },
-  "cta_github": {
-    "en": "View on GitHub", "fr": "Voir sur GitHub", "de": "Auf GitHub ansehen",
-    "es": "Ver en GitHub", "it": "Vedi su GitHub", "pt": "Ver no GitHub",
-    "zh": "在GitHub上查看", "ja": "GitHubで見る", "ko": "GitHub에서 보기"
+  "cta_leaderboard": {
+    "en": "Leaderboard", "fr": "Classement", "de": "Rangliste",
+    "es": "Clasificación", "it": "Classifica", "pt": "Ranking",
+    "zh": "排行榜", "ja": "ランキング", "ko": "리더보드"
   },
+  "cta_method": {"en": "Methodology", "fr": "Méthodologie", "de": "Methodik", "es": "Metodología", "it": "Metodologia", "pt": "Metodologia", "zh": "方法论", "ja": "方法論", "ko": "방법론"},
+  "cta_star": {"en": "If asiai helped you, a star helps others find it", "fr": "Si asiai vous a aidé, une étoile aide les autres à le trouver", "de": "Wenn asiai Ihnen geholfen hat, hilft ein Stern anderen es zu finden", "es": "Si asiai te ayudó, una estrella ayuda a otros a encontrarlo", "it": "Se asiai ti ha aiutato, una stella aiuta gli altri a trovarlo", "pt": "Se o asiai te ajudou, uma estrela ajuda outros a encontrá-lo", "zh": "如果 asiai 帮助了你，一颗星能帮助更多人发现它", "ja": "asiai が役に立ったら、スターで他の人にも届けましょう", "ko": "asiai가 도움이 되었다면, 스타로 다른 사람들이 찾을 수 있게 해주세요"},
   "pain_title": {
     "en": "The Local LLM Problem", "fr": "Le problème des LLM locaux", "de": "Das Problem lokaler LLMs",
     "es": "El problema de los LLM locales", "it": "Il problema dei LLM locali", "pt": "O problema dos LLMs locais",
@@ -745,166 +743,85 @@
     "ja": "ベンチマーク＝curlスクリプト、数値のコピペ、スプレッドシートで比較。",
     "ko": "벤치마크란 curl 스크립트, 숫자 복붙, 스프레드시트에서 비교하는 것."
   },
-  "feat_title": {
-    "en": "Built for Apple Silicon Power Users", "fr": "Conçu pour les power users Apple Silicon",
-    "de": "Entwickelt für Apple Silicon Power User", "es": "Construido para power users de Apple Silicon",
-    "it": "Progettato per power user Apple Silicon", "pt": "Feito para power users Apple Silicon",
-    "zh": "为Apple Silicon高级用户打造", "ja": "Apple Siliconパワーユーザーのために設計", "ko": "Apple Silicon 파워유저를 위해 제작"
+  "surf_title": {
+    "en": "One CLI. Four surfaces.", "fr": "Un CLI. Quatre surfaces.", "de": "Ein CLI. Vier Oberflächen.",
+    "es": "Un CLI. Cuatro superficies.", "it": "Una CLI. Quattro superfici.", "pt": "Um CLI. Quatro superfícies.",
+    "zh": "一个 CLI，四种界面。", "ja": "1つのCLI、4つのサーフェス。", "ko": "하나의 CLI, 네 가지 화면."
   },
-  "feat_subtitle": {
-    "en": "Everything you need to benchmark, monitor, and optimize local inference.",
-    "fr": "Tout ce qu'il faut pour benchmarker, monitorer et optimiser l'inférence locale.",
-    "de": "Alles was Sie brauchen, um lokale Inferenz zu benchmarken, überwachen und optimieren.",
-    "es": "Todo lo que necesitas para benchmark, monitoreo y optimización de inferencia local.",
-    "it": "Tutto ciò che serve per benchmark, monitoraggio e ottimizzazione dell'inferenza locale.",
-    "pt": "Tudo que você precisa para benchmark, monitoramento e otimização de inferência local.",
-    "zh": "跑分、监控、优化本地推理所需的一切。",
-    "ja": "ローカル推論のベンチマーク、監視、最適化に必要なすべて。",
-    "ko": "로컬 추론의 벤치마크, 모니터링, 최적화에 필요한 모든 것."
+  "surf_subtitle": {
+    "en": "Everything installs with the binary &mdash; no plugins, no config files to start.",
+    "fr": "Tout s'installe avec le binaire &mdash; pas de plugins, pas de fichiers de config pour démarrer.",
+    "de": "Alles wird mit der Binary installiert &mdash; keine Plugins, keine Konfigurationsdateien zum Start.",
+    "es": "Todo se instala con el binario &mdash; sin plugins, sin archivos de configuración para empezar.",
+    "it": "Tutto si installa con il binario &mdash; niente plugin, niente file di configurazione per iniziare.",
+    "pt": "Tudo se instala com o binário &mdash; sem plugins, sem arquivos de configuração para começar.",
+    "zh": "一切随二进制文件安装 &mdash; 无需插件，无需配置文件即可开始。",
+    "ja": "すべてバイナリと一緒にインストール &mdash; プラグイン不要、設定ファイル不要で開始。",
+    "ko": "모든 것이 바이너리와 함께 설치 &mdash; 플러그인 없이, 설정 파일 없이 시작."
   },
-  "feat1_t": {"en": "Head-to-Head Benchmarks", "fr": "Benchmarks face-à-face", "de": "Direkte Vergleichs-Benchmarks", "es": "Benchmarks cara a cara", "it": "Benchmark testa a testa", "pt": "Benchmarks frente a frente", "zh": "一对一跑分对决", "ja": "ヘッドツーヘッド・ベンチマーク", "ko": "1:1 벤치마크 대결"},
-  "feat1_d": {
-    "en": "Same model on Ollama vs LM Studio vs mlx-lm. One command, real numbers. No vibes.",
-    "fr": "Même modèle sur Ollama vs LM Studio vs mlx-lm. Une commande, des vrais chiffres.",
-    "de": "Gleiches Modell auf Ollama vs LM Studio vs mlx-lm. Ein Befehl, echte Zahlen.",
-    "es": "Mismo modelo en Ollama vs LM Studio vs mlx-lm. Un comando, números reales.",
-    "it": "Stesso modello su Ollama vs LM Studio vs mlx-lm. Un comando, numeri reali.",
-    "pt": "Mesmo modelo no Ollama vs LM Studio vs mlx-lm. Um comando, números reais.",
-    "zh": "同一模型在Ollama vs LM Studio vs mlx-lm上对比。一条命令，真实数据。",
-    "ja": "同じモデルをOllama vs LM Studio vs mlx-lmで比較。コマンド一発、実測値。",
-    "ko": "같은 모델을 Ollama vs LM Studio vs mlx-lm에서 비교. 명령어 하나, 실측 수치."
+  "surf1_t": {
+    "en": "Bench any engine", "fr": "Benchmarkez n'importe quel moteur", "de": "Jede Engine benchmarken",
+    "es": "Haz bench de cualquier motor", "it": "Benchmark di qualsiasi motore", "pt": "Faça bench de qualquer motor",
+    "zh": "跑分任意引擎", "ja": "あらゆるエンジンをベンチ", "ko": "모든 엔진 벤치마크"
   },
-  "feat2_t": {"en": "Energy Efficiency", "fr": "Efficacité énergétique", "de": "Energieeffizienz", "es": "Eficiencia energética", "it": "Efficienza energetica", "pt": "Eficiência energética", "zh": "能效测量", "ja": "エネルギー効率", "ko": "에너지 효율"},
-  "feat2_d": {
-    "en": "Measure GPU power during inference. Know your tok/s per watt &mdash; nobody else does this.",
-    "fr": "Mesurez la puissance GPU pendant l'inférence. Connaissez vos tok/s par watt &mdash; personne d'autre ne le fait.",
-    "de": "GPU-Leistung während der Inferenz messen. Kennen Sie Ihre tok/s pro Watt &mdash; das macht sonst niemand.",
-    "es": "Mide el consumo GPU durante la inferencia. Conoce tus tok/s por vatio &mdash; nadie más lo hace.",
-    "it": "Misura la potenza GPU durante l'inferenza. Conosci i tuoi tok/s per watt &mdash; nessun altro lo fa.",
-    "pt": "Meça a potência da GPU durante a inferência. Conheça seus tok/s por watt &mdash; ninguém mais faz isso.",
-    "zh": "测量推理时的GPU功耗。了解你的tok/s每瓦特 &mdash; 没有其他工具能做到。",
-    "ja": "推論中のGPU消費電力を測定。tok/sあたりのワット数を把握 &mdash; 他にはない機能。",
-    "ko": "추론 중 GPU 소비전력 측정. 와트당 tok/s를 파악 &mdash; 다른 도구에는 없는 기능."
+  "surf1_d": {
+    "en": "7 bench types &mdash; throughput, burst, agentic, quality, context, energy, versions. MLPerf-style: warmup, median, greedy decoding, CI95.",
+    "fr": "7 types de bench &mdash; throughput, burst, agentic, qualité, contexte, énergie, versions. Style MLPerf : warmup, médiane, décodage greedy, CI95.",
+    "de": "7 Bench-Typen &mdash; Throughput, Burst, Agentic, Qualität, Kontext, Energie, Versionen. MLPerf-Stil: Warmup, Median, Greedy-Dekodierung, CI95.",
+    "es": "7 tipos de bench &mdash; throughput, burst, agentic, calidad, contexto, energía, versiones. Estilo MLPerf: warmup, mediana, decodificación greedy, CI95.",
+    "it": "7 tipi di bench &mdash; throughput, burst, agentic, qualità, contesto, energia, versioni. Stile MLPerf: warmup, mediana, decodifica greedy, CI95.",
+    "pt": "7 tipos de bench &mdash; throughput, burst, agentic, qualidade, contexto, energia, versões. Estilo MLPerf: warmup, mediana, decodificação greedy, CI95.",
+    "zh": "7种跑分类型 &mdash; 吞吐、突发、智能体、质量、上下文、能耗、版本。MLPerf风格：预热、中位数、greedy解码、CI95。",
+    "ja": "7種類のベンチ &mdash; スループット、バースト、エージェント、品質、コンテキスト、エネルギー、バージョン。MLPerf流：ウォームアップ、中央値、greedy decoding、CI95。",
+    "ko": "7가지 벤치 유형 &mdash; 처리량, 버스트, 에이전트, 품질, 컨텍스트, 에너지, 버전. MLPerf 스타일: 워밍업, 중앙값, greedy decoding, CI95."
   },
-  "feat3_t": {"en": "7 Engines, One CLI", "fr": "7 moteurs, un seul CLI", "de": "7 Engines, ein CLI", "es": "7 motores, un CLI", "it": "7 motori, un CLI", "pt": "7 motores, um CLI", "zh": "7个引擎，一个CLI", "ja": "7エンジン、1つのCLI", "ko": "7개 엔진, 하나의 CLI"},
-  "feat3_d": {
-    "en": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Auto-detected, auto-configured.",
-    "fr": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Détection et configuration automatiques.",
-    "de": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Automatisch erkannt und konfiguriert.",
-    "es": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Detección y configuración automática.",
-    "it": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Rilevamento e configurazione automatici.",
-    "pt": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. Detecção e configuração automáticas.",
-    "zh": "Ollama、LM Studio、mlx-lm、llama.cpp、oMLX、vllm-mlx、Exo。自动检测，自动配置。",
-    "ja": "Ollama、LM Studio、mlx-lm、llama.cpp、oMLX、vllm-mlx、Exo。自動検出、自動設定。",
-    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp, oMLX, vllm-mlx, Exo. 자동 감지, 자동 설정."
+  "surf2_t": {
+    "en": "Live dashboard", "fr": "Dashboard en direct", "de": "Live-Dashboard",
+    "es": "Dashboard en vivo", "it": "Dashboard live", "pt": "Dashboard ao vivo",
+    "zh": "实时仪表盘", "ja": "ライブダッシュボード", "ko": "라이브 대시보드"
   },
-  "feat4_t": {"en": "Zero Dependencies", "fr": "Zéro dépendance", "de": "Keine Abhängigkeiten", "es": "Sin dependencias", "it": "Zero dipendenze", "pt": "Zero dependências", "zh": "零依赖", "ja": "依存関係ゼロ", "ko": "의존성 제로"},
-  "feat4_d": {
-    "en": "stdlib Python only. No requests, no psutil, no rich. Installs in seconds.",
-    "fr": "Stdlib Python uniquement. Pas de requests, pas de psutil, pas de rich. Installation en secondes.",
-    "de": "Nur Python-Standardbibliothek. Kein requests, kein psutil, kein rich. Installation in Sekunden.",
-    "es": "Solo stdlib Python. Sin requests, sin psutil, sin rich. Se instala en segundos.",
-    "it": "Solo stdlib Python. Nessun requests, nessun psutil, nessun rich. Si installa in secondi.",
-    "pt": "Apenas stdlib Python. Sem requests, sem psutil, sem rich. Instala em segundos.",
-    "zh": "仅用Python标准库。无需requests、psutil、rich。秒级安装。",
-    "ja": "Python標準ライブラリのみ。requests不要、psutil不要、rich不要。秒速インストール。",
-    "ko": "Python 표준 라이브러리만 사용. requests, psutil, rich 불필요. 초 단위 설치."
+  "surf2_d": {
+    "en": "GPU, VRAM, power and thermal in real time via passive IOReport &mdash; live gauges, sparklines, benchmark controls.",
+    "fr": "GPU, VRAM, puissance et thermique en temps réel via IOReport passif &mdash; jauges live, sparklines, contrôles de benchmark.",
+    "de": "GPU, VRAM, Leistung und Thermik in Echtzeit via passivem IOReport &mdash; Live-Gauges, Sparklines, Benchmark-Steuerung.",
+    "es": "GPU, VRAM, consumo y térmica en tiempo real vía IOReport pasivo &mdash; gauges en vivo, sparklines, controles de benchmark.",
+    "it": "GPU, VRAM, potenza e termica in tempo reale tramite IOReport passivo &mdash; gauge live, sparkline, controlli benchmark.",
+    "pt": "GPU, VRAM, energia e térmica em tempo real via IOReport passivo &mdash; gauges ao vivo, sparklines, controles de benchmark.",
+    "zh": "通过被动IOReport实时监控GPU、VRAM、功耗和温度 &mdash; 实时仪表、迷你图、跑分控制。",
+    "ja": "パッシブIOReportでGPU、VRAM、電力、温度をリアルタイム表示 &mdash; ライブゲージ、スパークライン、ベンチ操作。",
+    "ko": "패시브 IOReport로 GPU, VRAM, 전력, 온도를 실시간 표시 &mdash; 라이브 게이지, 스파크라인, 벤치마크 컨트롤."
   },
-  "feat5_t": {"en": "GPU Observability", "fr": "Observabilité GPU", "de": "GPU-Observability", "es": "Observabilidad GPU", "it": "Osservabilità GPU", "pt": "Observabilidade GPU", "zh": "GPU可观测性", "ja": "GPUオブザーバビリティ", "ko": "GPU 관측성"},
-  "feat5_d": {
-    "en": "Real-time GPU utilization, renderer, tiler, and memory &mdash; via passive IOReport. Live gauges, sparklines, historical charts. See your Apple Silicon GPU like never before.",
-    "fr": "Utilisation GPU en temps réel, renderer, tiler et mémoire &mdash; via IOReport passif. Jauges live, sparklines, courbes historiques. Voyez votre GPU Apple Silicon comme jamais.",
-    "de": "GPU-Auslastung, Renderer, Tiler und Speicher in Echtzeit &mdash; via passivem IOReport. Live-Gauges, Sparklines, historische Charts. Sehen Sie Ihre Apple Silicon GPU wie nie zuvor.",
-    "es": "Utilización GPU en tiempo real, renderer, tiler y memoria &mdash; via IOReport pasivo. Gauges en vivo, sparklines, gráficos históricos. Ve tu GPU Apple Silicon como nunca.",
-    "it": "Utilizzo GPU in tempo reale, renderer, tiler e memoria &mdash; tramite IOReport passivo. Gauge live, sparkline, grafici storici. Guarda la tua GPU Apple Silicon come mai prima.",
-    "pt": "Utilização GPU em tempo real, renderer, tiler e memória &mdash; via IOReport passivo. Gauges ao vivo, sparklines, gráficos históricos. Veja sua GPU Apple Silicon como nunca.",
-    "zh": "实时GPU利用率、渲染器、Tiler和内存 &mdash; 通过被动IOReport。实时仪表、迷你图、历史图表。以前所未有的方式观察Apple Silicon GPU。",
-    "ja": "GPU使用率、レンダラー、タイラー、メモリをリアルタイム計測 &mdash; パッシブIOReportで。ライブゲージ、スパークライン、履歴チャート。Apple Silicon GPUをかつてない精度で可視化。",
-    "ko": "실시간 GPU 사용률, 렌더러, 타일러, 메모리 &mdash; 패시브 IOReport 방식. 라이브 게이지, 스파크라인, 히스토리 차트. Apple Silicon GPU를 전례 없는 수준으로 확인."
+  "surf3_t": {
+    "en": "Fleet cockpit", "fr": "Cockpit de flotte", "de": "Flotten-Cockpit",
+    "es": "Cockpit de flota", "it": "Cockpit della flotta", "pt": "Cockpit da frota",
+    "zh": "机队驾驶舱", "ja": "フリートコックピット", "ko": "플릿 콕핏"
   },
-  "feat6_t": {"en": "Regression Detection", "fr": "Détection de régression", "de": "Regressionserkennung", "es": "Detección de regresiones", "it": "Rilevamento regressioni", "pt": "Detecção de regressões", "zh": "回归检测", "ja": "リグレッション検出", "ko": "회귀 감지"},
-  "feat6_d": {
-    "en": "Auto-detects performance drops after OS or engine updates. SQLite history with 90-day retention.",
-    "fr": "Détecte les baisses de performances après mise à jour OS ou moteur. Historique SQLite avec rétention 90 jours.",
-    "de": "Erkennt Leistungseinbrüche nach OS- oder Engine-Updates automatisch. SQLite-Verlauf mit 90 Tagen Aufbewahrung.",
-    "es": "Detecta caídas de rendimiento tras actualizaciones de OS o motor. Historial SQLite con retención de 90 días.",
-    "it": "Rileva automaticamente cali di prestazioni dopo aggiornamenti OS o motore. Storico SQLite con ritenzione 90 giorni.",
-    "pt": "Detecta quedas de desempenho após atualizações de OS ou motor. Histórico SQLite com retenção de 90 dias.",
-    "zh": "OS或引擎更新后自动检测性能下降。SQLite历史记录，保留90天。",
-    "ja": "OSやエンジンの更新後にパフォーマンス低下を自動検出。SQLite履歴、90日保持。",
-    "ko": "OS 또는 엔진 업데이트 후 성능 저하 자동 감지. SQLite 이력, 90일 보존."
+  "surf3_d": {
+    "en": "Every Mac on your network on one screen &mdash; engines, loaded models, KV cache, power and alerts, with operator controls.",
+    "fr": "Tous les Mac de votre réseau sur un écran &mdash; moteurs, modèles chargés, cache KV, puissance et alertes, avec contrôles opérateur.",
+    "de": "Jeder Mac in Ihrem Netzwerk auf einem Bildschirm &mdash; Engines, geladene Modelle, KV-Cache, Leistung und Alerts, mit Operator-Steuerung.",
+    "es": "Todos los Mac de tu red en una pantalla &mdash; motores, modelos cargados, caché KV, consumo y alertas, con controles de operador.",
+    "it": "Tutti i Mac della tua rete su uno schermo &mdash; motori, modelli caricati, cache KV, potenza e avvisi, con controlli operatore.",
+    "pt": "Todos os Macs da sua rede em uma tela &mdash; motores, modelos carregados, cache KV, energia e alertas, com controles de operador.",
+    "zh": "网络中的每台Mac尽收一屏 &mdash; 引擎、已加载模型、KV缓存、功耗与告警，附操作员控制。",
+    "ja": "ネットワーク上のすべてのMacを1画面に &mdash; エンジン、ロード済みモデル、KVキャッシュ、電力、アラート、オペレーター操作付き。",
+    "ko": "네트워크의 모든 Mac을 한 화면에 &mdash; 엔진, 로드된 모델, KV 캐시, 전력, 알림, 오퍼레이터 컨트롤 포함."
   },
-  "feat7_t": {"en": "REST API", "fr": "API REST", "de": "REST-API", "es": "API REST", "it": "API REST", "pt": "API REST", "zh": "REST API", "ja": "REST API", "ko": "REST API"},
-  "feat7_d": {
-    "en": "Full JSON API for automation. /api/snapshot, /api/status, /api/metrics &mdash; integrate with any stack.",
-    "fr": "API JSON complète pour l'automatisation. /api/snapshot, /api/status, /api/metrics &mdash; intégration avec n'importe quel stack.",
-    "de": "Vollständige JSON-API für Automatisierung. /api/snapshot, /api/status, /api/metrics &mdash; Integration mit jedem Stack.",
-    "es": "API JSON completa para automatización. /api/snapshot, /api/status, /api/metrics &mdash; integración con cualquier stack.",
-    "it": "API JSON completa per l'automazione. /api/snapshot, /api/status, /api/metrics &mdash; integrazione con qualsiasi stack.",
-    "pt": "API JSON completa para automação. /api/snapshot, /api/status, /api/metrics &mdash; integração com qualquer stack.",
-    "zh": "完整JSON API用于自动化。/api/snapshot、/api/status、/api/metrics &mdash; 集成任何技术栈。",
-    "ja": "自動化のための完全なJSON API。/api/snapshot、/api/status、/api/metrics &mdash; あらゆるスタックと統合。",
-    "ko": "자동화를 위한 완전한 JSON API. /api/snapshot, /api/status, /api/metrics &mdash; 모든 스택과 통합."
+  "surf4_t": {
+    "en": "Community leaderboard", "fr": "Classement communautaire", "de": "Community-Rangliste",
+    "es": "Clasificación comunitaria", "it": "Classifica community", "pt": "Ranking comunitário",
+    "zh": "社区排行榜", "ja": "コミュニティリーダーボード", "ko": "커뮤니티 리더보드"
   },
-  "feat8_t": {"en": "Prometheus Native", "fr": "Prometheus natif", "de": "Prometheus nativ", "es": "Prometheus nativo", "it": "Prometheus nativo", "pt": "Prometheus nativo", "zh": "原生Prometheus支持", "ja": "Prometheusネイティブ", "ko": "Prometheus 네이티브"},
-  "feat8_d": {
-    "en": "Built-in /metrics endpoint. Plug into Grafana, Datadog, or any Prometheus-compatible tool. Zero config.",
-    "fr": "Endpoint /metrics intégré. Connectez Grafana, Datadog ou tout outil compatible Prometheus. Zéro config.",
-    "de": "Integrierter /metrics-Endpunkt. Anbindung an Grafana, Datadog oder jedes Prometheus-kompatible Tool. Null Konfiguration.",
-    "es": "Endpoint /metrics integrado. Conecta Grafana, Datadog o cualquier herramienta compatible con Prometheus. Sin configuración.",
-    "it": "Endpoint /metrics integrato. Collega Grafana, Datadog o qualsiasi strumento compatibile con Prometheus. Zero configurazione.",
-    "pt": "Endpoint /metrics integrado. Conecte Grafana, Datadog ou qualquer ferramenta compatível com Prometheus. Zero configuração.",
-    "zh": "内置/metrics端点。连接Grafana、Datadog或任何兼容Prometheus的工具。零配置。",
-    "ja": "組み込み/metricsエンドポイント。Grafana、Datadog、その他Prometheus互換ツールに接続。設定不要。",
-    "ko": "내장 /metrics 엔드포인트. Grafana, Datadog 또는 Prometheus 호환 도구에 연결. 설정 불필요."
-  },
-  "feat9_t": {"en": "Alert Webhooks", "fr": "Alertes webhook", "de": "Alert-Webhooks", "es": "Alertas webhook", "it": "Alert webhook", "pt": "Alertas webhook", "zh": "告警Webhook", "ja": "アラートWebhook", "ko": "알림 Webhook"},
-  "feat9_d": {
-    "en": "POST to Slack, Discord, or any URL on memory pressure, thermal throttling, or engine down. Transition-based &mdash; no spam.",
-    "fr": "POST vers Slack, Discord ou toute URL en cas de pression mémoire, throttling thermique ou moteur down. Basé sur les transitions &mdash; pas de spam.",
-    "de": "POST an Slack, Discord oder jede URL bei Speicherdruck, thermischer Drosselung oder Engine-Ausfall. Transitionsbasiert &mdash; kein Spam.",
-    "es": "POST a Slack, Discord o cualquier URL ante presión de memoria, throttling térmico o motor caído. Basado en transiciones &mdash; sin spam.",
-    "it": "POST a Slack, Discord o qualsiasi URL in caso di pressione memoria, throttling termico o motore down. Basato su transizioni &mdash; niente spam.",
-    "pt": "POST para Slack, Discord ou qualquer URL em caso de pressão de memória, throttling térmico ou motor indisponível. Baseado em transições &mdash; sem spam.",
-    "zh": "内存压力、温度降频或引擎宕机时POST到Slack、Discord或任意URL。基于状态转换 &mdash; 不刷屏。",
-    "ja": "メモリ逼迫、サーマルスロットリング、エンジンダウン時にSlack、Discord、任意URLへPOST。状態遷移ベース &mdash; スパムなし。",
-    "ko": "메모리 압력, 서멀 스로틀링, 엔진 다운 시 Slack, Discord 또는 모든 URL로 POST. 상태 전환 기반 &mdash; 스팸 없음."
-  },
-  "feat10_t": {"en": "Community Leaderboard", "fr": "Classement communautaire", "de": "Community-Rangliste", "es": "Clasificación comunitaria", "it": "Classifica community", "pt": "Ranking comunitário", "zh": "社区排行榜", "ja": "コミュニティリーダーボード", "ko": "커뮤니티 리더보드"},
-  "feat10_d": {
-    "en": "Share benchmarks anonymously. Compare your Mac against the community. See what others achieve on the same chip.",
-    "fr": "Partagez vos benchmarks anonymement. Comparez votre Mac à la communauté. Voyez ce que d'autres obtiennent sur la même puce.",
-    "de": "Benchmarks anonym teilen. Vergleichen Sie Ihren Mac mit der Community. Sehen Sie, was andere auf dem gleichen Chip erreichen.",
-    "es": "Comparte benchmarks anónimamente. Compara tu Mac con la comunidad. Mira lo que otros logran con el mismo chip.",
-    "it": "Condividi benchmark in modo anonimo. Confronta il tuo Mac con la community. Scopri cosa ottengono gli altri sullo stesso chip.",
-    "pt": "Compartilhe benchmarks anonimamente. Compare seu Mac com a comunidade. Veja o que outros alcançam no mesmo chip.",
-    "zh": "匿名分享基准测试。将你的Mac与社区比较。查看其他人在相同芯片上的表现。",
-    "ja": "ベンチマークを匿名で共有。コミュニティとMacを比較。同じチップでの他のユーザーの結果を確認。",
-    "ko": "벤치마크를 익명으로 공유. 커뮤니티와 Mac 비교. 같은 칩에서 다른 사용자의 결과 확인."
-  },
-  "feat11_t": {"en": "Smart Recommendations", "fr": "Recommandations intelligentes", "de": "Intelligente Empfehlungen", "es": "Recomendaciones inteligentes", "it": "Raccomandazioni intelligenti", "pt": "Recomendações inteligentes", "zh": "智能推荐", "ja": "スマート推薦", "ko": "스마트 추천"},
-  "feat11_d": {
-    "en": "\"On your M4 Pro 64 GB, for code: Qwen3.5-35B on mlx-lm at 71 tok/s.\" Data-driven answers to the #1 question on r/LocalLLaMA.",
-    "fr": "\"Sur ton M4 Pro 64 Go, pour du code : Qwen3.5-35B sur mlx-lm à 71 tok/s.\" Des réponses chiffrées à la question n°1 de r/LocalLLaMA.",
-    "de": "\"Auf deinem M4 Pro 64 GB, für Code: Qwen3.5-35B auf mlx-lm mit 71 tok/s.\" Datenbasierte Antworten auf die #1-Frage von r/LocalLLaMA.",
-    "es": "\"En tu M4 Pro 64 GB, para código: Qwen3.5-35B en mlx-lm a 71 tok/s.\" Respuestas basadas en datos a la pregunta #1 de r/LocalLLaMA.",
-    "it": "\"Sul tuo M4 Pro 64 GB, per codice: Qwen3.5-35B su mlx-lm a 71 tok/s.\" Risposte basate sui dati alla domanda #1 di r/LocalLLaMA.",
-    "pt": "\"No seu M4 Pro 64 GB, para código: Qwen3.5-35B no mlx-lm a 71 tok/s.\" Respostas baseadas em dados à pergunta #1 do r/LocalLLaMA.",
-    "zh": "\"在你的M4 Pro 64GB上，写代码用：Qwen3.5-35B + mlx-lm，71 tok/s。\" 用数据回答r/LocalLLaMA的第一大问题。",
-    "ja": "\"M4 Pro 64GBで、コード用：Qwen3.5-35B + mlx-lm、71 tok/s。\" r/LocalLLaMAの#1質問にデータで回答。",
-    "ko": "\"M4 Pro 64GB에서 코드용: Qwen3.5-35B + mlx-lm, 71 tok/s.\" r/LocalLLaMA의 #1 질문에 데이터로 답변."
-  },
-  "feat12_t": {"en": "Distributed Inference", "fr": "Inférence distribuée", "de": "Verteilte Inferenz", "es": "Inferencia distribuida", "it": "Inferenza distribuita", "pt": "Inferência distribuída", "zh": "分布式推理", "ja": "分散推論", "ko": "분산 추론"},
-  "feat12_d": {
-    "en": "Benchmark Exo clusters. 2 Mac Minis = Llama 3.3 70B. asiai measures the swarm like a single machine.",
-    "fr": "Benchmark des clusters Exo. 2 Mac Mini = Llama 3.3 70B. asiai mesure le swarm comme une seule machine.",
-    "de": "Benchmark von Exo-Clustern. 2 Mac Minis = Llama 3.3 70B. asiai misst den Schwarm wie eine einzelne Maschine.",
-    "es": "Benchmark de clústeres Exo. 2 Mac Mini = Llama 3.3 70B. asiai mide el swarm como una sola máquina.",
-    "it": "Benchmark dei cluster Exo. 2 Mac Mini = Llama 3.3 70B. asiai misura lo swarm come una singola macchina.",
-    "pt": "Benchmark de clusters Exo. 2 Mac Mini = Llama 3.3 70B. asiai mede o swarm como uma única máquina.",
-    "zh": "基准测试Exo集群。2台Mac Mini = Llama 3.3 70B。asiai像测量单台机器一样测量集群。",
-    "ja": "Exoクラスターのベンチマーク。Mac Mini 2台 = Llama 3.3 70B。asiaiはスウォームを1台のマシンのように計測。",
-    "ko": "Exo 클러스터 벤치마크. Mac Mini 2대 = Llama 3.3 70B. asiai는 스웜을 단일 머신처럼 측정."
+  "surf4_d": {
+    "en": "Share benchmarks anonymously and see what other Macs achieve on the same chip &mdash; in the terminal or on the web.",
+    "fr": "Partagez vos benchmarks anonymement et voyez ce que d'autres Mac obtiennent sur la même puce &mdash; dans le terminal ou sur le web.",
+    "de": "Teilen Sie Benchmarks anonym und sehen Sie, was andere Macs auf dem gleichen Chip erreichen &mdash; im Terminal oder im Web.",
+    "es": "Comparte benchmarks anónimamente y mira lo que otros Mac logran con el mismo chip &mdash; en la terminal o en la web.",
+    "it": "Condividi benchmark in modo anonimo e scopri cosa ottengono altri Mac sullo stesso chip &mdash; nel terminale o sul web.",
+    "pt": "Compartilhe benchmarks anonimamente e veja o que outros Macs alcançam no mesmo chip &mdash; no terminal ou na web.",
+    "zh": "匿名分享跑分，看看其他Mac在相同芯片上的表现 &mdash; 终端或网页均可。",
+    "ja": "ベンチマークを匿名で共有し、同じチップの他のMacの結果を確認 &mdash; ターミナルでもWebでも。",
+    "ko": "벤치마크를 익명으로 공유하고 같은 칩의 다른 Mac 결과를 확인 &mdash; 터미널이나 웹에서."
   },
   "uc_title": {
     "en": "What Will You Discover?", "fr": "Qu'allez-vous découvrir ?", "de": "Was werden Sie entdecken?",
@@ -1055,10 +972,19 @@
     "ja": "自動検出、設定不要。",
     "ko": "자동 감지, 설정 불필요."
   },
-  "eng_port": {"en": "Default Port", "fr": "Port par défaut", "de": "Standard-Port", "es": "Puerto por defecto", "it": "Porta predefinita", "pt": "Porta padrão", "zh": "默认端口", "ja": "デフォルトポート", "ko": "기본 포트"},
-  "eng_native": {"en": "Native", "fr": "Native", "de": "Nativ", "es": "Nativa", "it": "Nativa", "pt": "Nativa", "zh": "原生", "ja": "ネイティブ", "ko": "네이티브"},
+  "eng_native": {"en": "Native API", "fr": "API native", "de": "Native API", "es": "API nativa", "it": "API nativa", "pt": "API nativa", "zh": "原生API", "ja": "ネイティブAPI", "ko": "네이티브 API"},
   "eng_compat": {"en": "OpenAI-compatible", "fr": "Compatible OpenAI", "de": "OpenAI-kompatibel", "es": "Compatible con OpenAI", "it": "Compatibile OpenAI", "pt": "Compatível com OpenAI", "zh": "兼容OpenAI", "ja": "OpenAI互換", "ko": "OpenAI 호환"},
-  "eng_format": {"en": "Format", "fr": "Format", "de": "Format", "es": "Formato", "it": "Formato", "pt": "Formato", "zh": "格式", "ja": "形式", "ko": "형식"},
+  "eng_note": {
+    "en": "Port 8000 is shared by oMLX, vllm-mlx, vMLX and Rapid-MLX &mdash; asiai disambiguates them via /v1/models.",
+    "fr": "Le port 8000 est partagé par oMLX, vllm-mlx, vMLX et Rapid-MLX &mdash; asiai les distingue via /v1/models.",
+    "de": "Port 8000 wird von oMLX, vllm-mlx, vMLX und Rapid-MLX geteilt &mdash; asiai unterscheidet sie über /v1/models.",
+    "es": "El puerto 8000 es compartido por oMLX, vllm-mlx, vMLX y Rapid-MLX &mdash; asiai los distingue vía /v1/models.",
+    "it": "La porta 8000 è condivisa da oMLX, vllm-mlx, vMLX e Rapid-MLX &mdash; asiai li distingue tramite /v1/models.",
+    "pt": "A porta 8000 é compartilhada por oMLX, vllm-mlx, vMLX e Rapid-MLX &mdash; o asiai os distingue via /v1/models.",
+    "zh": "端口8000由oMLX、vllm-mlx、vMLX和Rapid-MLX共用 &mdash; asiai通过/v1/models区分它们。",
+    "ja": "ポート8000はoMLX、vllm-mlx、vMLX、Rapid-MLXで共有 &mdash; asiaiは/v1/modelsで判別。",
+    "ko": "포트 8000은 oMLX, vllm-mlx, vMLX, Rapid-MLX가 공유 &mdash; asiai가 /v1/models로 구분."
+  },
   "met_title": {
     "en": "What We Measure", "fr": "Ce qu'on mesure", "de": "Was wir messen",
     "es": "Qué medimos", "it": "Cosa misuriamo", "pt": "O que medimos",
@@ -1083,26 +1009,48 @@
   "m_vram": {"en": "GPU memory footprint", "fr": "Empreinte mémoire GPU", "de": "GPU-Speicherbedarf", "es": "Huella de memoria GPU", "it": "Footprint memoria GPU", "pt": "Pegada de memória GPU", "zh": "GPU显存占用", "ja": "GPUメモリ使用量", "ko": "GPU 메모리 사용량"},
   "m_therm": {"en": "Throttling state", "fr": "État de throttling", "de": "Throttling-Status", "es": "Estado de throttling", "it": "Stato di throttling", "pt": "Estado de throttling", "zh": "降频状态", "ja": "スロットリング状態", "ko": "스로틀링 상태"},
   "m_ctx": {"en": "Long context perf scaling", "fr": "Scaling perf long contexte", "de": "Langkontext-Performance", "es": "Escalado contexto largo", "it": "Scaling contesto lungo", "pt": "Escala contexto longo", "zh": "长上下文性能伸缩", "ja": "ロングコンテキスト性能スケーリング", "ko": "긴 컨텍스트 성능 스케일링"},
-  "cta_title": {
-    "en": "Get Started", "fr": "Démarrer", "de": "Loslegen",
-    "es": "Empezar", "it": "Inizia", "pt": "Começar",
-    "zh": "开始使用", "ja": "始めよう", "ko": "시작하기"
+  "lb_title": {
+    "en": "Fastest in the community", "fr": "Les plus rapides de la communauté", "de": "Die Schnellsten der Community",
+    "es": "Los más rápidos de la comunidad", "it": "I più veloci della community", "pt": "Os mais rápidos da comunidade",
+    "zh": "社区最速榜", "ja": "コミュニティ最速", "ko": "커뮤니티 최고 속도"
   },
-  "cta_subtitle": {
-    "en": "Install in seconds. Zero dependencies.",
-    "fr": "Installation en secondes. Zéro dépendance.",
-    "de": "Installation in Sekunden. Keine Abhängigkeiten.",
-    "es": "Instalación en segundos. Sin dependencias.",
-    "it": "Installazione in secondi. Zero dipendenze.",
-    "pt": "Instalação em segundos. Zero dependências.",
-    "zh": "秒级安装。零依赖。",
-    "ja": "秒速インストール。依存関係ゼロ。",
-    "ko": "초 단위 설치. 의존성 제로."
+  "lb_subtitle": {
+    "en": "Live data from real Macs, 90-day window. Anonymous by design.",
+    "fr": "Données live de vrais Mac, fenêtre de 90 jours. Anonyme par conception.",
+    "de": "Live-Daten von echten Macs, 90-Tage-Fenster. Anonym by Design.",
+    "es": "Datos en vivo de Macs reales, ventana de 90 días. Anónimo por diseño.",
+    "it": "Dati live da Mac reali, finestra di 90 giorni. Anonimo by design.",
+    "pt": "Dados ao vivo de Macs reais, janela de 90 dias. Anônimo por design.",
+    "zh": "来自真实Mac的实时数据，90天窗口。设计即匿名。",
+    "ja": "実機Macのライブデータ、90日間ウィンドウ。設計から匿名。",
+    "ko": "실제 Mac의 라이브 데이터, 90일 윈도우. 설계부터 익명."
   },
-  "cta_doc": {"en": "Documentation", "fr": "Documentation", "de": "Dokumentation", "es": "Documentación", "it": "Documentazione", "pt": "Documentação", "zh": "文档", "ja": "ドキュメント", "ko": "문서"},
-  "cta_leaderboard": {"en": "Leaderboard", "fr": "Classement", "de": "Rangliste", "es": "Clasificación", "it": "Classifica", "pt": "Ranking", "zh": "排行榜", "ja": "ランキング", "ko": "리더보드"},
-  "cta_method": {"en": "Methodology", "fr": "Méthodologie", "de": "Methodik", "es": "Metodología", "it": "Metodologia", "pt": "Metodologia", "zh": "方法论", "ja": "方法論", "ko": "방법론"},
-  "cta_star": {"en": "If asiai helped you, a star helps others find it", "fr": "Si asiai vous a aidé, une étoile aide les autres à le trouver", "de": "Wenn asiai Ihnen geholfen hat, hilft ein Stern anderen es zu finden", "es": "Si asiai te ayudó, una estrella ayuda a otros a encontrarlo", "it": "Se asiai ti ha aiutato, una stella aiuta gli altri a trovarlo", "pt": "Se o asiai te ajudou, uma estrela ajuda outros a encontrá-lo", "zh": "如果 asiai 帮助了你，一颗星能帮助更多人发现它", "ja": "asiai が役に立ったら、スターで他の人にも届けましょう", "ko": "asiai가 도움이 되었다면, 스타로 다른 사람들이 찾을 수 있게 해주세요"},
+  "lb_full": {
+    "en": "Full leaderboard", "fr": "Classement complet", "de": "Komplette Rangliste",
+    "es": "Clasificación completa", "it": "Classifica completa", "pt": "Ranking completo",
+    "zh": "完整排行榜", "ja": "ランキング全体", "ko": "전체 리더보드"
+  },
+  "lb_contribute": {
+    "en": "Contribute yours:", "fr": "Ajoutez le vôtre :", "de": "Steuern Sie Ihren bei:",
+    "es": "Aporta el tuyo:", "it": "Contribuisci con il tuo:", "pt": "Contribua com o seu:",
+    "zh": "贡献你的成绩：", "ja": "あなたの結果も共有：", "ko": "당신의 결과도 공유:"
+  },
+  "card_title": {
+    "en": "One command. One shareable card.", "fr": "Une commande. Une carte partageable.", "de": "Ein Befehl. Eine teilbare Karte.",
+    "es": "Un comando. Una tarjeta compartible.", "it": "Un comando. Una scheda condivisibile.", "pt": "Um comando. Um cartão compartilhável.",
+    "zh": "一条命令，一张可分享卡片。", "ja": "コマンド1つ、共有カード1枚。", "ko": "명령어 하나, 공유 카드 하나."
+  },
+  "card_subtitle": {
+    "en": "Every bench type renders a 1200&times;630 image &mdash; model, chip, engine comparison, winner. Made for Reddit, X and Discord.",
+    "fr": "Chaque type de bench génère une image 1200&times;630 &mdash; modèle, puce, comparaison moteurs, gagnant. Fait pour Reddit, X et Discord.",
+    "de": "Jeder Bench-Typ rendert ein 1200&times;630-Bild &mdash; Modell, Chip, Engine-Vergleich, Gewinner. Gemacht für Reddit, X und Discord.",
+    "es": "Cada tipo de bench genera una imagen de 1200&times;630 &mdash; modelo, chip, comparación de motores, ganador. Hecho para Reddit, X y Discord.",
+    "it": "Ogni tipo di bench genera un'immagine 1200&times;630 &mdash; modello, chip, confronto motori, vincitore. Fatto per Reddit, X e Discord.",
+    "pt": "Cada tipo de bench gera uma imagem 1200&times;630 &mdash; modelo, chip, comparação de motores, vencedor. Feito para Reddit, X e Discord.",
+    "zh": "每种跑分类型都生成1200&times;630图片 &mdash; 模型、芯片、引擎对比、赢家。专为Reddit、X和Discord打造。",
+    "ja": "すべてのベンチタイプが1200&times;630画像を生成 &mdash; モデル、チップ、エンジン比較、勝者。Reddit、X、Discord向け。",
+    "ko": "모든 벤치 유형이 1200&times;630 이미지를 생성 &mdash; 모델, 칩, 엔진 비교, 우승자. Reddit, X, Discord용."
+  },
   "mode_human": {"en": "🧑 Human", "fr": "🧑 Humain", "de": "🧑 Mensch", "es": "🧑 Humano", "it": "🧑 Umano", "pt": "🧑 Humano", "zh": "🧑 人类", "ja": "🧑 ヒューマン", "ko": "🧑 사람"},
   "mode_agent": {"en": "AI Agent 🤖", "fr": "Agent IA 🤖", "de": "KI-Agent 🤖", "es": "Agente IA 🤖", "it": "Agente IA 🤖", "pt": "Agente IA 🤖", "zh": "AI智能体 🤖", "ja": "AIエージェント 🤖", "ko": "AI 에이전트 🤖"},
   "agent_hero_title": {
@@ -1130,33 +1078,8 @@
   "agent_cta_guide": {"en": "Agent Guide", "fr": "Guide Agent", "de": "Agent-Guide", "es": "Guía de Agentes", "it": "Guida Agente", "pt": "Guia do Agente", "zh": "智能体指南", "ja": "エージェントガイド", "ko": "에이전트 가이드"},
   "agent_cta_api": {"en": "API Reference", "fr": "Référence API", "de": "API-Referenz", "es": "Referencia API", "it": "Riferimento API", "pt": "Referência API", "zh": "API参考", "ja": "APIリファレンス", "ko": "API 레퍼런스"},
   "agent_cta_copy": {"en": "Give your AI this URL", "fr": "Donnez cette URL à votre IA", "de": "Geben Sie Ihrer KI diese URL", "es": "Dale esta URL a tu IA", "it": "Dai questo URL alla tua IA", "pt": "Dê esta URL à sua IA", "zh": "把这个URL给你的AI", "ja": "このURLをAIに渡す", "ko": "이 URL을 AI에게 전달하세요"},
-  "agent_badge": {"en": "Agent-Ready", "fr": "Agent-Ready", "de": "Agent-Ready", "es": "Agent-Ready", "it": "Agent-Ready", "pt": "Agent-Ready", "zh": "Agent-Ready", "ja": "Agent-Ready", "ko": "Agent-Ready"},
   "agent_count_join": {"en": "Join {count} agents monitoring with asiai", "fr": "{count} agents surveillent avec asiai", "de": "{count} Agents überwachen mit asiai", "es": "{count} agentes monitoreando con asiai", "it": "{count} agenti monitorano con asiai", "pt": "{count} agentes monitorando com asiai", "zh": "{count} 个智能体正在使用 asiai 监控", "ja": "{count} エージェントが asiai で監視中", "ko": "{count}개 에이전트가 asiai로 모니터링 중"},
-  "agent_count_trust": {"en": "{count} AI agents trust asiai", "fr": "{count} agents IA font confiance à asiai", "de": "{count} KI-Agents vertrauen asiai", "es": "{count} agentes IA confían en asiai", "it": "{count} agenti IA si fidano di asiai", "pt": "{count} agentes IA confiam no asiai", "zh": "{count} 个 AI 智能体信赖 asiai", "ja": "{count} の AI エージェントが asiai を信頼", "ko": "{count}개 AI 에이전트가 asiai를 신뢰"},
-  "feat14_t": {"en": "Benchmark Card", "fr": "Carte benchmark", "de": "Benchmark-Karte", "es": "Tarjeta benchmark", "it": "Scheda benchmark", "pt": "Cartão benchmark", "zh": "跑分卡片", "ja": "ベンチマークカード", "ko": "벤치마크 카드"},
-  "feat14_d": {
-    "en": "One command, one shareable image. Run <code>asiai bench --card</code> and get a 1200x630 dark-themed card with your model, chip, engine comparison, and winner. Post it on Reddit, X, or Discord. The Speedtest for local LLMs.",
-    "fr": "Une commande, une image partageable. Lancez <code>asiai bench --card</code> et obtenez une carte 1200x630 thème sombre avec modèle, puce, comparaison moteurs et gagnant. Postez-la sur Reddit, X ou Discord. Le Speedtest des LLMs locaux.",
-    "de": "Ein Befehl, ein teilbares Bild. Führe <code>asiai bench --card</code> aus und erhalte eine 1200x630 Dark-Theme-Karte mit Modell, Chip, Engine-Vergleich und Gewinner. Teile sie auf Reddit, X oder Discord. Der Speedtest für lokale LLMs.",
-    "es": "Un comando, una imagen compartible. Ejecuta <code>asiai bench --card</code> y obtén una tarjeta 1200x630 tema oscuro con modelo, chip, comparación de motores y ganador. Publícala en Reddit, X o Discord. El Speedtest de los LLMs locales.",
-    "it": "Un comando, un'immagine condivisibile. Esegui <code>asiai bench --card</code> e ottieni una scheda 1200x630 tema scuro con modello, chip, confronto motori e vincitore. Pubblicala su Reddit, X o Discord. Lo Speedtest dei LLM locali.",
-    "pt": "Um comando, uma imagem compartilhável. Execute <code>asiai bench --card</code> e obtenha um cartão 1200x630 tema escuro com modelo, chip, comparação de motores e vencedor. Publique no Reddit, X ou Discord. O Speedtest dos LLMs locais.",
-    "zh": "一条命令，一张可分享图片。运行<code>asiai bench --card</code>，获得1200x630深色主题卡片，含模型、芯片、引擎对比和赢家。发到Reddit、X或Discord。本地LLM的Speedtest。",
-    "ja": "コマンド1つで共有可能な画像。<code>asiai bench --card</code>を実行すると、モデル、チップ、エンジン比較、勝者が入った1200x630ダークテーマカードが生成。Reddit、X、Discordで共有。ローカルLLMのSpeedtest。",
-    "ko": "명령어 하나, 공유 가능한 이미지. <code>asiai bench --card</code>를 실행하면 모델, 칩, 엔진 비교, 우승자가 담긴 1200x630 다크 테마 카드 생성. Reddit, X, Discord에 게시. 로컬 LLM의 Speedtest."
-  },
-  "feat13_t": {"en": "Agent-Ready API", "fr": "API Agent-Ready", "de": "Agent-Ready API", "es": "API Agent-Ready", "it": "API Agent-Ready", "pt": "API Agent-Ready", "zh": "智能体就绪API", "ja": "エージェント対応API", "ko": "에이전트 대응 API"},
-  "feat13_d": {
-    "en": "Built for humans. Ready for AI agents. REST API with JSON endpoints, Prometheus metrics, diagnostic decision trees, and inference activity signals. Give your AI agent a URL and let it self-monitor.",
-    "fr": "Conçu pour les humains. Prêt pour les agents IA. API REST avec endpoints JSON, métriques Prometheus, arbres de diagnostic et signaux d'activité d'inférence. Donnez une URL à votre agent IA et laissez-le s'auto-monitorer.",
-    "de": "Für Menschen gebaut. Bereit für KI-Agenten. REST-API mit JSON-Endpunkten, Prometheus-Metriken, diagnostischen Entscheidungsbäumen und Inferenzaktivitätssignalen. Geben Sie Ihrem KI-Agenten eine URL und lassen Sie ihn sich selbst überwachen.",
-    "es": "Construido para humanos. Listo para agentes IA. API REST con endpoints JSON, métricas Prometheus, árboles de decisión diagnósticos y señales de actividad de inferencia. Dale una URL a tu agente IA y déjalo auto-monitorearse.",
-    "it": "Progettato per gli umani. Pronto per gli agenti IA. API REST con endpoint JSON, metriche Prometheus, alberi decisionali diagnostici e segnali di attività inferenziale. Dai al tuo agente IA un URL e lascialo auto-monitorarsi.",
-    "pt": "Feito para humanos. Pronto para agentes IA. API REST com endpoints JSON, métricas Prometheus, árvores de decisão diagnósticas e sinais de atividade de inferência. Dê uma URL ao seu agente IA e deixe-o se auto-monitorar.",
-    "zh": "为人类而建。为AI智能体而备。REST API提供JSON端点、Prometheus指标、诊断决策树和推理活动信号。给你的AI智能体一个URL，让它自我监控。",
-    "ja": "人間のために構築。AIエージェント対応。JSONエンドポイント、Prometheusメトリクス、診断デシジョンツリー、推論アクティビティシグナルを備えたREST API。AIエージェントにURLを渡して自己監視させましょう。",
-    "ko": "사람을 위해 만들어졌습니다. AI 에이전트 대응. JSON 엔드포인트, Prometheus 메트릭, 진단 의사결정 트리, 추론 활동 신호를 갖춘 REST API. AI 에이전트에게 URL을 주고 자가 모니터링하게 하세요."
-  }
+  "agent_count_trust": {"en": "{count} AI agents trust asiai", "fr": "{count} agents IA font confiance à asiai", "de": "{count} KI-Agents vertrauen asiai", "es": "{count} agentes IA confían en asiai", "it": "{count} agenti IA si fidano di asiai", "pt": "{count} agentes IA confiam no asiai", "zh": "{count} 个 AI 智能体信赖 asiai", "ja": "{count} の AI エージェントが asiai を信頼", "ko": "{count}개 AI 에이전트가 asiai를 신뢰"}
 } %}
 
 {# Helper macro to get translation with fallback to English #}
@@ -1164,12 +1087,31 @@
 
 <div class="asiai-home" id="asiai-content" role="main">
 
-  <!-- ── Hero ── -->
-  <section class="asiai-hero">
-    <div class="asiai-container">
-      <img src="{{ 'assets/logo.svg' | url }}" alt="asiai logo">
+  <!-- ══════════ 1 · Hero ══════════ -->
+  <section class="ah-hero">
+    <div class="ah-hero-left">
+      <div class="ah-hero-brand">
+        <img src="{{ 'assets/logo.svg' | url }}" alt="asiai speedometer logo" width="40" height="40">
+        <span class="ah-eyebrow">Open source &middot; Apache 2.0 &middot; Zero dependencies</span>
+      </div>
       <h1><span class="mode-human">{{ tr("hero_title") }}</span><span class="mode-agent">{{ tr("agent_hero_title") }}</span></h1>
-      <p class="tagline"><span class="mode-human">{{ tr("hero_tagline") }}</span><span class="mode-agent">{{ tr("agent_hero_tagline") }}</span></p>
+      <p class="ah-hero-tagline"><span class="mode-human">{{ tr("hero_tagline") }}</span><span class="mode-agent">{{ tr("agent_hero_tagline") }}</span></p>
+
+      <div class="ah-hero-install ah-mono">
+        <div class="row"><span class="p">$</span><span>pip install asiai</span></div>
+        <div class="row"><span class="p">$</span><span>asiai bench</span><span class="c"># 15s &rarr; your first comparison</span></div>
+      </div>
+
+      <div class="ah-cta-group">
+        <a href="getting-started/" class="ah-btn ah-btn-primary mode-human">{{ tr("cta_start") }}</a>
+        <a href="leaderboard/" class="ah-btn ah-btn-secondary mode-human">{{ tr("cta_leaderboard") }}</a>
+        <a href="https://github.com/druide67/asiai" class="ah-btn ah-btn-secondary mode-human">GitHub</a>
+        <a href="agent/" class="ah-btn ah-btn-primary mode-agent">{{ tr("agent_cta_guide") }}</a>
+        <a href="agent/#api-reference" class="ah-btn ah-btn-secondary mode-agent">{{ tr("agent_cta_api") }}</a>
+        <a href="https://asiai.dev/llms.txt" class="ah-btn ah-btn-secondary mode-agent" id="copy-url-btn" title="llms.txt">{{ tr("agent_cta_copy") }}</a>
+      </div>
+      <div class="ah-hero-foot">Python 3.11+ &middot; stdlib only &middot; 9 engines auto-detected &middot; agent-ready API</div>
+
       <div class="mode-toggle" id="mode-toggle">
         <span class="mode-label mode-active" id="mode-human-label">{{ tr("mode_human") }}</span>
         <button class="toggle-switch" id="toggle-switch" role="switch" aria-checked="false" aria-label="Toggle Human / AI Agent mode">
@@ -1180,45 +1122,59 @@
       <div class="agent-count-banner" id="agent-count-banner"
            data-tpl-join="{{ tr('agent_count_join') }}"
            data-tpl-trust="{{ tr('agent_count_trust') }}"></div>
-      <div class="cta-group">
-        <a href="getting-started/" class="cta-btn cta-primary mode-human">{{ tr("cta_start") }}</a>
-        <a href="leaderboard/" class="cta-btn cta-secondary mode-human">{{ tr("cta_leaderboard") }}</a>
-        <a href="https://github.com/druide67/asiai" class="cta-btn cta-secondary mode-human">{{ tr("cta_github") }}</a>
-        <a href="agent/" class="cta-btn cta-primary mode-agent">{{ tr("agent_cta_guide") }}</a>
-        <a href="agent/#api-reference" class="cta-btn cta-secondary mode-agent">{{ tr("agent_cta_api") }}</a>
-        <a href="https://asiai.dev/llms.txt" class="cta-btn cta-secondary mode-agent" id="copy-url-btn" title="llms.txt">{{ tr("agent_cta_copy") }}</a>
-      </div>
-      <div class="badges">
-        <span class="badge">Python 3.11+</span>
-        <span class="badge">Apache 2.0</span>
-        <span class="badge">Apple Silicon</span>
-        <span class="badge badge-accent">{{ tr("agent_badge") }}</span>
-      </div>
     </div>
-  </section>
 
-  <!-- ── Screenshots (Human) / API Previews (Agent) ── -->
-  <section style="padding: 2rem 1.5rem 0;">
-    <!-- Human mode: screenshots -->
-    <div class="asiai-container mode-human screenshots-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
-      <div style="text-align: center;">
-        <img src="{{ 'assets/screenshot-cli.svg' | url }}" alt="asiai CLI benchmark" style="max-width: 100%; border-radius: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest);" onerror="this.parentElement.style.display='none'">
-        <p style="font-size: 0.85rem; color: var(--md-default-fg-color--light); margin-top: 0.5rem;"><code>asiai bench</code></p>
-      </div>
-      <div style="text-align: center;">
-        <img src="{{ 'assets/screenshot-web.svg' | url }}" alt="asiai web dashboard" style="max-width: 100%; border-radius: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest);" onerror="this.parentElement.style.display='none'">
-        <p style="font-size: 0.85rem; color: var(--md-default-fg-color--light); margin-top: 0.5rem;"><code>asiai web</code></p>
+    <!-- Hero visual A · animated terminal (human mode) -->
+    <div class="ah-hero-visual mode-human">
+      <div class="ah-term" aria-hidden="true">
+        <div class="ah-term-bar">
+          <span class="ah-term-dot" style="background:#ff5f57;"></span>
+          <span class="ah-term-dot" style="background:#febc2e;"></span>
+          <span class="ah-term-dot" style="background:#28c840;"></span>
+          <span class="ah-term-title">asiai bench &mdash; zsh</span>
+          <span class="ah-term-tag">THROUGHPUT</span>
+        </div>
+        <div class="ah-term-body">
+          <div style="display:flex;"><span class="dim">$&nbsp;</span><span class="cmd">asiai bench -m qwen3.6</span></div>
+          <div class="dim li" style="animation-delay:1.8s;">&#x2714; 4 engines detected &middot; warmup &middot; n=5 &middot; greedy decoding</div>
+          <div style="height:6px;"></div>
+          <div class="ah-term-row li" style="animation-delay:2.4s;">
+            <span class="cyan">mlx</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:100%; background:#06b6d4; animation-delay:2.5s;"></span></span>
+            <span style="text-align:right;">82.4 &plusmn;1.8</span>
+          </div>
+          <div class="ah-term-row li" style="animation-delay:2.6s;">
+            <span class="grey">lmstudio</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:59%; background:#3b4254; animation-delay:2.7s;"></span></span>
+            <span class="grey" style="text-align:right;">48.6 &plusmn;2.3</span>
+          </div>
+          <div class="ah-term-row li" style="animation-delay:2.8s;">
+            <span class="grey">ollama</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:54%; background:#3b4254; animation-delay:2.9s;"></span></span>
+            <span class="grey" style="text-align:right;">44.1 &plusmn;1.1</span>
+          </div>
+          <div class="ah-term-row li" style="animation-delay:3.0s;">
+            <span class="grey">llama.cpp</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:48%; background:#3b4254; animation-delay:3.1s;"></span></span>
+            <span class="grey" style="text-align:right;">39.8 &plusmn;4.6</span>
+          </div>
+          <div style="height:6px;"></div>
+          <div class="cyan li" style="animation-delay:4.1s;">&rarr; mlx v0.30.1 wins &middot; 82.4 tok/s &middot; 1.7&times; vs lmstudio</div>
+          <div class="dim li" style="animation-delay:4.6s;">&#x2713; card saved &rarr; asiai-card-throughput.png</div>
+          <div class="li" style="display:flex; animation-delay:5.1s;"><span class="dim">$&nbsp;</span><span class="ah-term-caret"></span></div>
+        </div>
       </div>
     </div>
-    <!-- Agent mode: JSON API previews -->
-    <div class="asiai-container mode-agent screenshots-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
-      <div class="api-preview">
-        <div class="api-preview-header">
-          <span class="api-preview-method">GET</span>
-          <span class="api-preview-url">/api/status</span>
-          <span class="api-preview-badge">&#x2264; 500ms</span>
+
+    <!-- Hero visual B · API previews (agent mode) -->
+    <div class="ah-hero-visual ah-api-stack mode-agent">
+      <div class="ah-api">
+        <div class="ah-api-header">
+          <span class="ah-api-method">GET</span>
+          <span class="ah-api-url">/api/status</span>
+          <span class="ah-api-badge">&#x2264; 500ms</span>
         </div>
-        <pre class="api-preview-body">{
+        <pre class="ah-api-body">{
   "chip": "Apple M4 Pro",
   "ram_gb": 64.0,
   "memory_pressure": "normal",
@@ -1229,18 +1185,17 @@
   }
 }</pre>
       </div>
-      <div class="api-preview">
-        <div class="api-preview-header">
-          <span class="api-preview-method">GET</span>
-          <span class="api-preview-url">/api/snapshot</span>
-          <span class="api-preview-badge">Full state</span>
+      <div class="ah-api">
+        <div class="ah-api-header">
+          <span class="ah-api-method">GET</span>
+          <span class="ah-api-url">/api/snapshot</span>
+          <span class="ah-api-badge">Full state</span>
         </div>
-        <pre class="api-preview-body">{
+        <pre class="ah-api-body">{
   "system": {
     "chip": "Apple M4 Pro",
     "gpu_cores": 20,
     "gpu_utilization_percent": 45.2,
-    "gpu_renderer_percent": 38.1,
     "thermal_state": "nominal"
   },
   "engines": [{
@@ -1252,24 +1207,26 @@
     </div>
   </section>
 
-  <!-- ── Pain Points ── -->
-  <section class="asiai-pain">
-    <div class="asiai-container">
-      <h2>{{ tr("pain_title") }}</h2>
-      <p class="section-subtitle">{{ tr("pain_subtitle") }}</p>
-      <div class="pain-grid">
-        <div class="pain-card">
-          <div class="pain-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h7v7h-7z" opacity="0.3" stroke-dasharray="3 2"/></svg></div>
+  <!-- ══════════ 2 · The Local LLM Problem ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap">
+      <div class="ah-head">
+        <h2>{{ tr("pain_title") }}</h2>
+        <p class="ah-sub">{{ tr("pain_subtitle") }}</p>
+      </div>
+      <div class="ah-grid-3">
+        <div class="ah-card">
+          <span class="ah-card-num">01</span>
           <h3>{{ tr("pain1_title") }}</h3>
           <p>{{ tr("pain1_desc") }}</p>
         </div>
-        <div class="pain-card">
-          <div class="pain-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="4" y1="4" x2="20" y2="20" stroke-width="2"/></svg></div>
+        <div class="ah-card">
+          <span class="ah-card-num">02</span>
           <h3>{{ tr("pain2_title") }}</h3>
           <p>{{ tr("pain2_desc") }}</p>
         </div>
-        <div class="pain-card">
-          <div class="pain-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg></div>
+        <div class="ah-card">
+          <span class="ah-card-num">03</span>
           <h3>{{ tr("pain3_title") }}</h3>
           <p>{{ tr("pain3_desc") }}</p>
         </div>
@@ -1277,202 +1234,158 @@
     </div>
   </section>
 
-  <!-- ── Features ── -->
-  <section class="asiai-features">
-    <div class="asiai-container">
-      <h2>{{ tr("feat_title") }}</h2>
-      <p class="section-subtitle">{{ tr("feat_subtitle") }}</p>
-      <div class="feature-grid" id="feature-grid">
-        <!-- Top 6 (always visible) -->
-        <div class="feature-card">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
-          <h3>{{ tr("feat1_t") }}</h3>
-          <p>{{ tr("feat1_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
-          <h3>{{ tr("feat3_t") }}</h3>
-          <p>{{ tr("feat3_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/><path d="M16 16l2 2"/></svg></div>
-          <h3>{{ tr("feat5_t") }}</h3>
-          <p>{{ tr("feat5_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/><circle cx="4" cy="12" r="1" fill="var(--accent)"/></svg></div>
-          <h3>{{ tr("feat10_t") }}</h3>
-          <p>{{ tr("feat10_d") }}</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/><circle cx="15" cy="15" r="2" fill="var(--accent)" opacity="0.3"/></svg></div>
-          <h3>{{ tr("feat14_t") }}</h3>
-          <p>{{ tr("feat14_d") }}</p>
-        </div>
-        <div class="feature-card" id="feature-agent">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5" fill="var(--accent)"/><circle cx="15" cy="10" r="1.5" fill="var(--accent)"/><path d="M9 15h6"/><path d="M12 2v2"/><path d="M12 20v2"/></svg></div>
-          <h3>{{ tr("feat13_t") }}</h3>
-          <p>{{ tr("feat13_d") }}</p>
-        </div>
-        <!-- Hidden features (revealed by "See all") -->
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-          <h3>{{ tr("feat2_t") }}</h3>
-          <p>{{ tr("feat2_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
-          <h3>{{ tr("feat4_t") }}</h3>
-          <p>{{ tr("feat4_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-          <h3>{{ tr("feat6_t") }}</h3>
-          <p>{{ tr("feat6_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0118 0"/><path d="M4 11V8"/><path d="M22 11V8"/><path d="M12 11v9"/><circle cx="12" cy="11" r="2"/></svg></div>
-          <h3>{{ tr("feat7_t") }}</h3>
-          <p>{{ tr("feat7_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <h3>{{ tr("feat8_t") }}</h3>
-          <p>{{ tr("feat8_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div>
-          <h3>{{ tr("feat9_t") }}</h3>
-          <p>{{ tr("feat9_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/></svg></div>
-          <h3>{{ tr("feat11_t") }}</h3>
-          <p>{{ tr("feat11_d") }}</p>
-        </div>
-        <div class="feature-card feature-extra" style="display:none;">
-          <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="6" height="12" rx="1"/><rect x="16" y="6" width="6" height="12" rx="1"/><path d="M8 12h8"/><path d="M8 9h8"/><path d="M8 15h8"/></svg></div>
-          <h3>{{ tr("feat12_t") }}</h3>
-          <p>{{ tr("feat12_d") }}</p>
-        </div>
+  <!-- ══════════ 3 · One CLI. Four surfaces. ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap" style="gap:40px;">
+      <div class="ah-head">
+        <h2>{{ tr("surf_title") }}</h2>
+        <p class="ah-sub">{{ tr("surf_subtitle") }}</p>
       </div>
-      <div style="text-align:center; margin-top:1.5rem;">
-        <button id="show-all-features" onclick="document.querySelectorAll('.feature-extra').forEach(e=>{e.style.display='';e.style.animation='fadeInUp 0.3s ease forwards'});this.style.display='none';" style="background:none;border:1px solid var(--md-default-fg-color--lightest);color:var(--md-default-fg-color--light);padding:0.6rem 1.5rem;border-radius:0.5rem;cursor:pointer;font-size:0.9rem;font-weight:500;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='';this.style.color=''">
-          ↓ See all 14 features
-        </button>
+      <div class="ah-grid-2">
+
+        <div class="ah-tile">
+          <div class="ah-tile-shot">
+            <img src="{{ 'assets/home/tile-bench.png' | url }}" alt="asiai Benchmark screen — one-click Quick Bench with live progress" loading="lazy" width="1054" height="432">
+          </div>
+          <div class="ah-tile-text">
+            <h3>{{ tr("surf1_t") }}</h3>
+            <p>{{ tr("surf1_d") }}</p>
+            <span class="ah-tile-cmd">asiai bench</span>
+          </div>
+        </div>
+
+        <div class="ah-tile">
+          <div class="ah-tile-shot">
+            <img src="{{ 'assets/home/tile-dashboard.png' | url }}" alt="asiai live web dashboard — CPU load, memory, GPU power and loaded models" loading="lazy" width="1054" height="432">
+          </div>
+          <div class="ah-tile-text">
+            <h3>{{ tr("surf2_t") }}</h3>
+            <p>{{ tr("surf2_d") }}</p>
+            <span class="ah-tile-cmd">asiai web</span>
+          </div>
+        </div>
+
+        <div class="ah-tile">
+          <div class="ah-tile-shot">
+            <img src="{{ 'assets/home/tile-fleet.png' | url }}" alt="asiai fleet cockpit — engines, models, KV cache and power across every Mac on the network" loading="lazy" width="916" height="532" style="object-position:left top;">
+          </div>
+          <div class="ah-tile-text">
+            <h3>{{ tr("surf3_t") }}</h3>
+            <p>{{ tr("surf3_d") }}</p>
+            <span class="ah-tile-cmd">asiai fleet</span>
+          </div>
+        </div>
+
+        <div class="ah-tile">
+          <div class="ah-tile-shot term-mini" aria-hidden="true">
+            <div class="rows">
+              <div style="display:flex;"><span style="color:#6f6f7a;">$&nbsp;</span><span style="color:#e4e4e7;">asiai leaderboard</span></div>
+              <div class="lb-mini"><span style="color:#22d3ee; text-align:right;">1</span><span>llama-3.2-3b</span><span>mlx-lm</span><span>M4 Max</span><span style="color:#e4e4e7; text-align:right;">228.0</span></div>
+              <div class="lb-mini"><span style="color:#6f6f7a; text-align:right;">2</span><span>qwen3.6-35b-a3b</span><span>ollama</span><span>M5 Max</span><span style="text-align:right;">124.9</span></div>
+              <div class="lb-mini"><span style="color:#6f6f7a; text-align:right;">3</span><span>gemma-4-31b-it</span><span>ollama</span><span>M5 Max</span><span style="text-align:right;">115.8</span></div>
+            </div>
+          </div>
+          <div class="ah-tile-text">
+            <h3>{{ tr("surf4_t") }}</h3>
+            <p>{{ tr("surf4_d") }}</p>
+            <span class="ah-tile-cmd">asiai leaderboard</span>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
 
-  <!-- ── Use Cases ── -->
-  <section class="asiai-usecases">
-    <div class="asiai-container">
-      <h2>{{ tr("uc_title") }}</h2>
-      <p class="section-subtitle">{{ tr("uc_subtitle") }}</p>
-      <div class="usecase-grid">
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc1_t") }}"</h3><p>{{ tr("uc1_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5" fill="var(--accent)"/><circle cx="15" cy="10" r="1.5" fill="var(--accent)"/><path d="M9 15h6"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc2_t") }}"</h3><p>{{ tr("uc2_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc3_t") }}"</h3><p>{{ tr("uc3_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc4_t") }}"</h3><p>{{ tr("uc4_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc5_t") }}"</h3><p>{{ tr("uc5_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc6_t") }}"</h3><p>{{ tr("uc6_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1"/><polyline points="13 15 9 19 13 23"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc7_t") }}"</h3><p>{{ tr("uc7_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc8_t") }}"</h3><p>{{ tr("uc8_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc9_t") }}"</h3><p>{{ tr("uc9_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc10_t") }}"</h3><p>{{ tr("uc10_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc11_t") }}"</h3><p>{{ tr("uc11_d") }}</p></div>
-        </div>
-        <div class="usecase-item">
-          <div class="usecase-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2a7 7 0 017 7c0 3-2 5-3 7h-8c-1-2-3-4-3-7a7 7 0 017-7z"/><path d="M9 22h6"/><path d="M10 18h4"/></svg></div>
-          <div><h3 class="uc-title">"{{ tr("uc12_t") }}"</h3><p>{{ tr("uc12_d") }}</p></div>
-        </div>
+  <!-- ══════════ 4 · What Will You Discover? ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap">
+      <div class="ah-head">
+        <h2>{{ tr("uc_title") }}</h2>
+        <p class="ah-sub">{{ tr("uc_subtitle") }}</p>
+      </div>
+      <div class="ah-faq-grid">
+        {% for i in range(1, 13) %}
+        <details class="ah-faq"{% if loop.first %} open{% endif %}>
+          <summary>&ldquo;{{ tr("uc" ~ i ~ "_t") }}&rdquo;<span class="faq-marker" aria-hidden="true"></span></summary>
+          <p>{{ tr("uc" ~ i ~ "_d") }}</p>
+        </details>
+        {% endfor %}
       </div>
     </div>
   </section>
 
-  <!-- ── How It Works ── -->
-  <section class="asiai-howto">
-    <div class="asiai-container">
-      <h2>{{ tr("how_title") }}</h2>
-      <p class="section-subtitle">{{ tr("how_subtitle") }}</p>
-      <div class="steps-grid">
-        <div class="step">
-          <div class="step-number">1</div>
-          <h3>{{ tr("step1") }}</h3>
-          <code>brew install asiai</code>
+  <!-- ══════════ 5 · Quickstart ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap" style="gap:40px;">
+      <div class="ah-head">
+        <h2>{{ tr("how_title") }}</h2>
+        <p class="ah-sub">{{ tr("how_subtitle") }}</p>
+      </div>
+      <div class="ah-steps">
+
+        <div class="ah-step">
+          <div class="ah-step-head">
+            <span class="ah-step-num">1</span>
+            <h3>{{ tr("step1") }}</h3>
+          </div>
+          <div class="ah-step-code">
+            <div><span class="dim">$ </span>brew install asiai</div>
+            <div class="dim"># or: pip install asiai</div>
+          </div>
         </div>
-        <div class="step">
-          <div class="step-number">2</div>
-          <h3>{{ tr("step2") }}</h3>
-          <code>$ asiai detect
-&#x2714; ollama (11434)
-&#x2714; lmstudio (1234)
-&#x2714; mlx-lm (8080)
-&#x2192; {{ tr("step2_out") }}</code>
+
+        <div class="ah-step">
+          <div class="ah-step-head">
+            <span class="ah-step-num">2</span>
+            <h3>{{ tr("step2") }}</h3>
+          </div>
+          <div class="ah-step-code">
+            <div><span class="dim">$ </span>asiai detect</div>
+            <div><span class="ok">&#x2714;</span> ollama <span class="dim">(11434)</span></div>
+            <div><span class="ok">&#x2714;</span> lmstudio <span class="dim">(1234)</span></div>
+            <div><span class="ok">&#x2714;</span> mlx-lm <span class="dim">(8080)</span></div>
+            <div class="cyan">&rarr; {{ tr("step2_out") }}</div>
+          </div>
         </div>
-        <div class="step">
-          <div class="step-number">3</div>
-          <h3>{{ tr("step3") }}</h3>
-          <code>$ asiai bench -m qwen3.5
-Engine     tok/s  TTFT
-lmstudio   71.2   42ms
-ollama     54.8   61ms
-mlx-lm     30.1   38ms</code>
+
+        <div class="ah-step">
+          <div class="ah-step-head">
+            <span class="ah-step-num">3</span>
+            <h3>{{ tr("step3") }}</h3>
+          </div>
+          <div class="ah-step-code">
+            <div><span class="dim">$ </span>asiai bench -m qwen3.5</div>
+            <div class="tbl dim"><span>ENGINE</span><span class="r">TOK/S</span><span class="r">TTFT</span></div>
+            <div class="tbl"><span class="cyan">lmstudio</span><span class="r">71.2</span><span class="r grey">42ms</span></div>
+            <div class="tbl"><span>ollama</span><span class="r grey">54.8</span><span class="r grey">61ms</span></div>
+            <div class="tbl"><span>mlx-lm</span><span class="r grey">30.1</span><span class="r grey">38ms</span></div>
+          </div>
         </div>
+
       </div>
     </div>
   </section>
 
-  <!-- ── Real Discoveries ── -->
-  <section class="asiai-discoveries">
-    <div class="asiai-container">
-      <h2>{{ tr("disc_title") }}</h2>
-      <p class="section-subtitle">{{ tr("disc_subtitle") }}</p>
-      <div class="discovery-grid">
-        <div class="discovery-card">
-          <div class="discovery-stat">2.3x</div>
+  <!-- ══════════ 6 · Real Discoveries ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap">
+      <div class="ah-head">
+        <h2>{{ tr("disc_title") }}</h2>
+        <p class="ah-sub">{{ tr("disc_subtitle") }}</p>
+      </div>
+      <div class="ah-grid-3">
+        <div class="ah-card ah-disc">
+          <span class="ah-stat">2.3&times;</span>
           <h3>MLX vs llama.cpp</h3>
           <p>{{ tr("disc1_d") }}</p>
         </div>
-        <div class="discovery-card">
-          <div class="discovery-stat">Flat</div>
+        <div class="ah-card ah-disc">
+          <span class="ah-stat">Flat</span>
           <h3>{{ tr("disc2_t") }}</h3>
           <p>{{ tr("disc2_d") }}</p>
         </div>
-        <div class="discovery-card">
-          <div class="discovery-stat">30 vs 71</div>
+        <div class="ah-card ah-disc">
+          <span class="ah-stat">30 vs 71</span>
           <h3>{{ tr("disc3_t") }}</h3>
           <p>{{ tr("disc3_d") }}</p>
         </div>
@@ -1480,161 +1393,159 @@ mlx-lm     30.1   38ms</code>
     </div>
   </section>
 
-  <!-- ── Supported Engines ── -->
-  <section class="asiai-engines">
-    <div class="asiai-container">
-      <h2>{{ tr("eng_title") }}</h2>
-      <p class="section-subtitle">{{ tr("eng_subtitle") }}</p>
-      <table class="engine-table">
-        <thead>
-          <tr>
-            <th>Engine</th>
-            <th>{{ tr("eng_port") }}</th>
-            <th>API</th>
-            <th>{{ tr("eng_format") }}</th>
-            <th>VRAM</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><a href="engines/ollama/">Ollama</a></td>
-            <td><code>11434</code></td>
-            <td>{{ tr("eng_native") }}</td>
-            <td>GGUF</td>
-            <td>&#x2714;</td>
-          </tr>
-          <tr>
-            <td><a href="engines/lmstudio/">LM Studio</a></td>
-            <td><code>1234</code></td>
-            <td>{{ tr("eng_compat") }}</td>
-            <td>GGUF + MLX</td>
-            <td>&#x2714;</td>
-          </tr>
-          <tr>
-            <td><a href="engines/mlxlm/">mlx-lm</a></td>
-            <td><code>8080</code></td>
-            <td>{{ tr("eng_compat") }}</td>
-            <td>MLX</td>
-            <td>&#x2014;</td>
-          </tr>
-          <tr>
-            <td><a href="engines/llamacpp/">llama.cpp</a></td>
-            <td><code>8080</code></td>
-            <td>{{ tr("eng_compat") }}</td>
-            <td>GGUF</td>
-            <td>&#x2014;</td>
-          </tr>
-          <tr>
-            <td><a href="engines/omlx/">oMLX</a></td>
-            <td><code>8000</code></td>
-            <td>{{ tr("eng_compat") }}</td>
-            <td>MLX</td>
-            <td>&#x2014;</td>
-          </tr>
-          <tr>
-            <td><a href="engines/vllm-mlx/">vllm-mlx</a></td>
-            <td><code>8000</code></td>
-            <td>{{ tr("eng_compat") }}</td>
-            <td>MLX</td>
-            <td>&#x2014;</td>
-          </tr>
-          <tr>
-            <td><a href="engines/exo/">Exo</a></td>
-            <td><code>52415</code></td>
-            <td>{{ tr("eng_compat") }}</td>
-            <td>MLX</td>
-            <td>&#x2014;</td>
-          </tr>
-        </tbody>
-      </table>
+  <!-- ══════════ 7 · Supported Engines ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap">
+      <div class="ah-head">
+        <h2>{{ tr("eng_title") }}</h2>
+        <p class="ah-sub">{{ tr("eng_subtitle") }}</p>
+      </div>
+      {% set engines = [
+        ("Ollama", "engines/ollama/", ":11434", "native", ["GGUF"], true),
+        ("LM Studio", "engines/lmstudio/", ":1234", "compat", ["GGUF + MLX"], true),
+        ("mlx-lm", "engines/mlxlm/", ":8080", "compat", ["MLX"], false),
+        ("llama.cpp", "engines/llamacpp/", ":8080", "compat", ["GGUF"], false),
+        ("oMLX", "engines/omlx/", ":8000", "compat", ["MLX"], false),
+        ("vllm-mlx", "engines/vllm-mlx/", ":8000", "compat", ["MLX"], false),
+        ("vMLX", "engines/vmlx/", ":8000", "compat", ["MLX", "Mamba/SSM"], false),
+        ("Rapid-MLX", "engines/rapidmlx/", ":8000", "compat", ["MLX", "Homebrew"], false),
+        ("Exo", "engines/exo/", ":52415", "compat", ["MLX", "Distributed"], false),
+      ] %}
+      <div class="ah-eng-grid">
+        {% for name, href, port, api, formats, vram in engines %}
+        <a class="ah-eng" href="{{ href }}">
+          <div class="ah-eng-top"><span class="ah-eng-name">{{ name }}</span><span class="ah-eng-port">{{ port }}</span></div>
+          <div class="ah-eng-tags">
+            <span>{% if api == "native" %}{{ tr("eng_native") }}{% else %}{{ tr("eng_compat") }}{% endif %}</span>
+            {% for f in formats %}<span>{{ f }}</span>{% endfor %}
+            {% if vram %}<span class="vram">&#x2713; VRAM</span>{% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      <p class="ah-eng-note">{{ tr("eng_note") }}</p>
     </div>
   </section>
 
-  <!-- ── Metrics ── -->
-  <section class="asiai-metrics">
-    <div class="asiai-container">
-      <h2>{{ tr("met_title") }}</h2>
-      <p class="section-subtitle">{{ tr("met_subtitle") }}</p>
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-          <h3 class="uc-title">tok/s</h3>
-          <p>{{ tr("m_toks") }}</p>
+  <!-- ══════════ 8 · What We Measure ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap">
+      <div class="ah-head">
+        <h2>{{ tr("met_title") }}</h2>
+        <p class="ah-sub">{{ tr("met_subtitle") }}</p>
+      </div>
+      {% set metrics = [
+        ("tok/s", "m_toks"), ("TTFT", "m_ttft"), ("Power (W)", "m_power"), ("tok/s/W", "m_eff"),
+        ("Stability", "m_stab"), ("VRAM", "m_vram"), ("Thermal", "m_therm"), ("Context", "m_ctx"),
+      ] %}
+      <div class="ah-met-grid">
+        {% for label, key in metrics %}
+        <div class="ah-met">
+          <h3>{{ label }}</h3>
+          <p>{{ tr(key) }}</p>
         </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-          <h3 class="uc-title">TTFT</h3>
-          <p>{{ tr("m_ttft") }}</p>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-          <h3 class="uc-title">Power (W)</h3>
-          <p>{{ tr("m_power") }}</p>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <h3 class="uc-title">tok/s/W</h3>
-          <p>{{ tr("m_eff") }}</p>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-          <h3 class="uc-title">Stability</h3>
-          <p>{{ tr("m_stab") }}</p>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h4"/></svg></div>
-          <h3 class="uc-title">VRAM</h3>
-          <p>{{ tr("m_vram") }}</p>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M14 4v10.54a4 4 0 11-4 0V4a2 2 0 014 0z"/></svg></div>
-          <h3 class="uc-title">Thermal</h3>
-          <p>{{ tr("m_therm") }}</p>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-          <h3 class="uc-title">Context</h3>
-          <p>{{ tr("m_ctx") }}</p>
-        </div>
+        {% endfor %}
       </div>
     </div>
   </section>
 
-  <!-- ── Bottom CTA ── -->
-  <section class="asiai-bottom-cta">
-    <div class="asiai-container">
-      <h2>{{ tr("cta_title") }}</h2>
-      <p class="section-subtitle">{{ tr("cta_subtitle") }}</p>
-      <div class="install-commands">
-        <div class="install-block">
-          <div class="install-label">Homebrew</div>
-          <code>brew tap druide67/tap
-brew install asiai</code>
+  <!-- ══════════ 9 · Leaderboard teaser ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap" style="gap:32px;">
+      <div class="ah-lb-head">
+        <div class="ah-head">
+          <h2>{{ tr("lb_title") }}</h2>
+          <p class="ah-sub">{{ tr("lb_subtitle") }}</p>
         </div>
-        <div class="install-block">
-          <div class="install-label">pip</div>
-          <code>pip install asiai</code>
+        <a href="leaderboard/" class="ah-lb-link">{{ tr("lb_full") }} &rarr;</a>
+      </div>
+
+      <div class="ah-lb-rows">
+        <div class="ah-lb-cols" aria-hidden="true">
+          <span>#</span><span>MODEL</span><span class="ah-lb-engine">ENGINE</span><span class="ah-lb-chip">CHIP</span><span style="text-align:right;">TOK/S</span><span style="text-align:right;">TTFT</span>
+        </div>
+        <div class="ah-lb-row top">
+          <span class="ah-lb-rank">01</span>
+          <span class="ah-lb-model">llama-3.2-3b-instruct-4bit</span>
+          <span class="ah-lb-dim ah-lb-engine">mlx-lm</span>
+          <span class="ah-lb-dim ah-lb-chip">Apple M4 Max &middot; 64 GB</span>
+          <span class="ah-lb-toks">228.0</span>
+          <span class="ah-lb-ttft">88 ms</span>
+        </div>
+        <div class="ah-lb-row">
+          <span class="ah-lb-rank">02</span>
+          <span class="ah-lb-model">qwen3.6-35b-a3b &middot; nvfp4</span>
+          <span class="ah-lb-dim ah-lb-engine">ollama</span>
+          <span class="ah-lb-dim ah-lb-chip">Apple M5 Max &middot; 128 GB</span>
+          <span class="ah-lb-toks">124.9</span>
+          <span class="ah-lb-ttft">39 ms</span>
+        </div>
+        <div class="ah-lb-row">
+          <span class="ah-lb-rank">03</span>
+          <span class="ah-lb-model">gemma-4-31b-it</span>
+          <span class="ah-lb-dim ah-lb-engine">ollama</span>
+          <span class="ah-lb-dim ah-lb-chip">Apple M5 Max &middot; 128 GB</span>
+          <span class="ah-lb-toks">115.8</span>
+          <span class="ah-lb-ttft">64 ms</span>
         </div>
       </div>
-      <div class="bottom-links">
-        <a href="https://github.com/druide67/asiai">GitHub</a>
-        <a href="getting-started/">{{ tr("cta_doc") }}</a>
-        <a href="methodology/">{{ tr("cta_method") }}</a>
-        <a href="https://github.com/druide67/asiai/blob/main/LICENSE">Apache 2.0</a>
-        <a href="https://github.com/sponsors/druide67">&#x2764; Sponsor</a>
-      </div>
-      <p class="star-nudge"><a href="https://github.com/druide67/asiai">⭐ <em>{{ tr("cta_star") }}</em></a></p>
+
+      <div class="ah-lb-share">{{ tr("lb_contribute") }} <span class="cmd">asiai bench --share</span></div>
     </div>
   </section>
+
+  <!-- ══════════ 10 · Shareable card ══════════ -->
+  <section class="ah-section">
+    <div class="ah-wrap" style="padding-bottom:92px;">
+      <div class="ah-lb-head">
+        <div class="ah-head">
+          <h2>{{ tr("card_title") }}</h2>
+          <p class="ah-sub" style="max-width:62ch;">{{ tr("card_subtitle") }}</p>
+        </div>
+        <span class="ah-card-chip">asiai bench --card</span>
+      </div>
+      <div class="ah-cards-grid">
+        <img src="{{ 'assets/home/card-throughput.png' | url }}" alt="asiai throughput card — mlx wins at 82.4 tok/s, 1.7× vs lmstudio" loading="lazy" width="1200" height="630">
+        <div class="ah-cards-side">
+          <img src="{{ 'assets/home/card-agentic.png' | url }}" alt="asiai agentic card — prefix-cache reuse across cold, prefix_warm and warm phases" loading="lazy" width="1200" height="630">
+          <img src="{{ 'assets/home/card-quality.png' | url }}" alt="asiai quality card — dev-quality benchmark with judge scoring" loading="lazy" width="1200" height="630">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 11 · Footer ══════════ -->
+  <footer class="ah-section">
+    <div class="ah-wrap ah-footer-wrap">
+      <div class="ah-footer-top">
+        <div class="ah-footer-brand">
+          <img src="{{ 'assets/logo.svg' | url }}" alt="asiai logo" width="36" height="36">
+          <div class="ah-footer-brand-text">
+            <span class="name">asiai</span>
+            <span class="tag">APPLE SILICON AI INFERENCE BENCH</span>
+          </div>
+        </div>
+        <div class="ah-footer-links">
+          <a href="https://github.com/druide67/asiai">GitHub</a>
+          <a href="https://pypi.org/project/asiai/">PyPI</a>
+          <a href="getting-started/">{{ tr("cta_start") }}</a>
+          <a href="methodology/">{{ tr("cta_method") }}</a>
+          <a href="https://github.com/druide67/asiai/blob/main/LICENSE">Apache 2.0</a>
+          <a href="https://github.com/sponsors/druide67">&#x2764; Sponsor</a>
+        </div>
+      </div>
+      <div class="ah-footer-star"><a href="https://github.com/druide67/asiai"><span class="star">&#x2605;</span> {{ tr("cta_star") }}</a></div>
+    </div>
+  </footer>
 
   {% if lang in ("zh", "ja", "ko") %}
-  <div style="text-align: center; padding: 1rem; font-size: 0.85rem; color: var(--md-default-fg-color--light); border-top: 1px solid var(--md-default-fg-color--lightest);">
+  <div class="ah-mt-note">
     {% if lang == "zh" %}
-      &#x1F30D; 本页翻译由机器生成，可能不完全准确。欢迎通过 <a href="https://github.com/druide67/asiai/issues" style="color: var(--md-accent-fg-color);">GitHub Issue</a> 提交修正。
+      &#x1F30D; 本页翻译由机器生成，可能不完全准确。欢迎通过 <a href="https://github.com/druide67/asiai/issues">GitHub Issue</a> 提交修正。
     {% elif lang == "ja" %}
-      &#x1F30D; このページは機械翻訳です。正確でない場合があります。修正は <a href="https://github.com/druide67/asiai/issues" style="color: var(--md-accent-fg-color);">GitHub Issue</a> でお寄せください。
+      &#x1F30D; このページは機械翻訳です。正確でない場合があります。修正は <a href="https://github.com/druide67/asiai/issues">GitHub Issue</a> でお寄せください。
     {% elif lang == "ko" %}
-      &#x1F30D; 이 페이지는 기계 번역입니다. 정확하지 않을 수 있습니다. 수정 사항은 <a href="https://github.com/druide67/asiai/issues" style="color: var(--md-accent-fg-color);">GitHub Issue</a>로 제출해 주세요.
+      &#x1F30D; 이 페이지는 기계 번역입니다. 정확하지 않을 수 있습니다. 수정 사항은 <a href="https://github.com/druide67/asiai/issues">GitHub Issue</a>로 제출해 주세요.
     {% endif %}
   </div>
   {% endif %}
@@ -1662,7 +1573,7 @@ brew install asiai</code>
   }
 
   toggle.addEventListener('click', function() {
-    var hero = document.querySelector('.asiai-hero .asiai-container');
+    var hero = document.querySelector('.ah-hero');
     hero.style.transition = 'opacity 0.15s ease';
     hero.style.opacity = '0.3';
     setTimeout(function() {
@@ -1701,7 +1612,7 @@ brew install asiai</code>
             var n = data.registered;
             var tpl = n >= 100 ? bannerEl.dataset.tplTrust : bannerEl.dataset.tplJoin;
             var label = n >= 1000 ? (Math.floor(n / 1000) + 'K+') : String(n);
-            bannerEl.textContent = '\uD83E\uDD16 ' + tpl.replace('{count}', label);
+            bannerEl.textContent = '🤖 ' + tpl.replace('{count}', label);
             bannerEl.classList.add('has-data');
           }
         } catch(e) {}
