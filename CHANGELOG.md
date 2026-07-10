@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.26.0](https://github.com/druide67/asiai/compare/v1.25.0...v1.26.0) — 2026-07-10
+
+### Added
+
+- **Model picker on the six bench modes** (#65): the mode forms gain a real model
+  select — loaded models of the chosen engine, Ollama installed models tagged
+  "will load", and a custom free-text fallback. Empty still means auto.
+- **Leaderboard v2 in the dashboard** (#64, #67): sortable columns, engine chips,
+  tok/s bars and a result counter; new Quant / W / tok-s-per-W / Last-seen columns
+  with freshness badges; a 30/90/365-day window selector; and a per-row drill-down
+  listing individual submissions (served by the community API v2) with a link to
+  each shareable card. Defensive rendering throughout — absent fields show "—".
+- **Stacked UMA bars** (#63): the install modal's memory advisory now shows two
+  bars on one scale — current use (with the to-be-freed portion hatched) and the
+  projected after-load state, the preset cost tinted by verdict with its
+  low→high uncertainty band.
+
+### Changed
+
+- Docs leaderboard page: the style and script previously duplicated across all
+  nine locales moved to shared assets; the page gains the v2 columns (#66).
+- Docs JSON-LD now derives softwareVersion and dateModified from the build
+  instead of hardcoded stale values (#62).
+
 ## [1.25.0](https://github.com/druide67/asiai/compare/v1.24.0...v1.25.0) — 2026-07-09
 
 ### Added
