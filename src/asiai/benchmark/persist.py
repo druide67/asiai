@@ -37,6 +37,12 @@ def _num(value: Any) -> float | None:
 def _headline_standard(payload: dict) -> tuple[float | None, str, int]:
     bench = payload.get("benchmark") or {}
     engines = bench.get("engines") or {}
+    gates = payload.get("quality_gates") or {}
+    failed = 0
+    if (gates.get("thermal") or {}).get("throttled"):
+        failed += 1
+    if (gates.get("memory_pressure") or {}).get("alerted"):
+        failed += 1
     # The export payload's winner is _determine_winner's dict
     # ({"name", "tok_s_delta", ...}); tolerate a bare name string too.
     winner = bench.get("winner")
@@ -47,11 +53,11 @@ def _headline_standard(payload: dict) -> tuple[float | None, str, int]:
         # self-contradicting — a tie falls back to the best median.
         winner_name = None
     if winner_name and winner_name in engines:
-        return _num(engines[winner_name].get("median_tok_s")), "winner_median_tok_s", 0
+        return _num(engines[winner_name].get("median_tok_s")), "winner_median_tok_s", failed
     # No winner (single engine, or validity gate refused a ranking):
     # fall back to the best median rather than nothing.
     medians = [m for e in engines.values() if (m := _num(e.get("median_tok_s"))) is not None]
-    return (max(medians) if medians else None), "best_median_tok_s", 0
+    return (max(medians) if medians else None), "best_median_tok_s", failed
 
 
 def _is_ci95_tie(engines: dict) -> bool:
@@ -197,10 +203,11 @@ def extract_headline(bench_type: str, payload: dict) -> tuple[float | None, str,
 def persist_standard_session(db_path: str, payload: dict) -> int | None:
     """Persist a standard-mode session row, skipping empty shells.
 
-    A model-compare session built through ``build_report`` has no
-    ``benchmark.engines`` — persisting it would write a ghost row
-    (engine="", model="", score NULL). Compare-session history is a
-    follow-up; until then, skip rather than pollute.
+    Every measured session gets its row — engine, model AND matrix compare
+    alike (``build_export_payload`` keys ``benchmark.engines`` by slot label
+    for all session types). Only a payload with nothing measured at all is
+    skipped: persisting it would write a ghost row (engine="", model="",
+    score NULL).
     """
     if not (payload.get("benchmark") or {}).get("engines"):
         logger.debug("Skipping bench_runs session row: no engines in payload")
@@ -248,12 +255,25 @@ def persist_bench_run(db_path: str, bench_type: str, payload: dict) -> int | Non
 def _first_engine(payload: dict) -> str:
     if payload.get("engine"):
         return str(payload["engine"])
-    # Standard session payload nests engines under benchmark.engines.
+    # Standard session payload nests engines under benchmark.engines. Keys
+    # are slot labels ("model / engine" in a matrix session); prefer each
+    # entry's own "engine" field so the column stays a bare engine name.
     engines = (payload.get("benchmark") or {}).get("engines") or {}
-    return ",".join(sorted(engines)) if engines else ""
+    names = {
+        str(e.get("engine")) if isinstance(e, dict) and e.get("engine") else str(label)
+        for label, e in engines.items()
+    }
+    return ",".join(sorted(names)) if names else ""
 
 
 def _model_name(payload: dict) -> str:
     if payload.get("model"):
         return str(payload["model"])
-    return str((payload.get("benchmark") or {}).get("model") or "")
+    bench = payload.get("benchmark") or {}
+    if bench.get("model"):
+        return str(bench["model"])
+    # Compare session: no single session model — list the distinct slot
+    # models (parity with _first_engine's joined engine list).
+    engines = bench.get("engines") or {}
+    models = {str(e["model"]) for e in engines.values() if isinstance(e, dict) and e.get("model")}
+    return ",".join(sorted(models))

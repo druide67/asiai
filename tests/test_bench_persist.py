@@ -479,12 +479,12 @@ class TestMigrationAndRetention:
         finally:
             os.unlink(path)
 
-    def test_compare_session_ghost_rows_skipped(self):
+    def test_empty_session_ghost_rows_skipped(self):
         from asiai.benchmark.persist import persist_standard_session
 
         path = _make_db()
         try:
-            # build_report output has no benchmark.engines → skip, no ghost.
+            # Nothing measured (no engines at all) → skip, no ghost.
             assert persist_standard_session(path, {"benchmark": {"slots": []}}) is None
             assert query_bench_runs(path) == []
             # A real session payload still persists.
@@ -493,6 +493,43 @@ class TestMigrationAndRetention:
                 {"timestamp": NOW, "benchmark": {"model": "m", "engines": {"e": {}}}},
             )
             assert ok is not None
+        finally:
+            os.unlink(path)
+
+    def test_compare_session_persists_a_row(self):
+        """Regression: a multi-model compare session left bench_runs EMPTY
+        (the old 'ghost row' skip keyed on the empty benchmark.engines the
+        old export produced for compare reports)."""
+        from asiai.benchmark.persist import persist_standard_session
+        from tests.test_result_model import _compare_session_payload
+
+        payload = _compare_session_payload()
+        path = _make_db()
+        try:
+            row_id = persist_standard_session(path, payload)
+            assert row_id is not None
+            assert len(query_bench_runs(path)) == 1
+            from asiai.storage.db import get_bench_run
+
+            row = get_bench_run(path, row_id)
+            assert row["bench_type"] == "standard"
+            # engine/model columns: bare names, joined and sorted — never
+            # the "model / engine" slot labels.
+            assert row["engine"] == "llamacpp,mlxlm,ollama"
+            assert row["model"] == (
+                "Qwen3.6-27B-UD-Q8_K_XL.gguf,"
+                "qwen3.6:27b-instruct-q4_K_M,"
+                "unsloth/Qwen3.6-27B-UD-MLX-4bit"
+            )
+            # headline = the winner's median, explicitly labeled
+            assert row["score_label"] == "winner_median_tok_s"
+            winner_key = payload["benchmark"]["winner"]["name"]
+            expected = payload["benchmark"]["engines"][winner_key]["median_tok_s"]
+            assert row["score_primary"] == expected
+            # session gates (thermal serious + memory pressure) counted
+            assert row["gates_failed"] == 2
+            # payload stored VERBATIM
+            assert json.loads(row["payload"]) == payload
         finally:
             os.unlink(path)
 

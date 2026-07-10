@@ -16,9 +16,11 @@ from asiai.benchmark.reporter import (
     _pooled_stddev,
     aggregate_results,
     aggregate_slots,
+    build_export_payload,
     build_report,
     detect_session_type,
     report_to_slots,
+    slot_label,
 )
 from asiai.benchmark.runner import (
     _check_model_availability,
@@ -1553,3 +1555,101 @@ class TestCrossModelReporter:
         assert len(slots) == 2
         # Should be sorted by median_tok_s desc
         assert slots[0]["median_tok_s"] >= slots[1]["median_tok_s"]
+
+
+class TestCompareExportPayload:
+    """build_export_payload must export EVERY session type.
+
+    Regression: a model/matrix compare session produced a payload with an
+    empty ``benchmark.engines`` — empty 'unknown model' card, empty markdown
+    report, and no bench_runs session row."""
+
+    def _matrix_results(self) -> list[dict]:
+        results = []
+        for engine, model, tok in (
+            ("llamacpp", "Qwen3.6-27B-UD-Q8_K_XL.gguf", 29.5),
+            ("ollama", "qwen3.6:27b-instruct-q4_K_M", 67.4),
+            ("mlxlm", "unsloth/Qwen3.6-27B-UD-MLX-4bit", 19.8),
+        ):
+            for run_index in range(3):
+                results.append(
+                    _raw(
+                        engine,
+                        model,
+                        tok + run_index * 0.4,
+                        run_index=run_index,
+                        thermal_level="serious" if engine == "ollama" else "nominal",
+                        thermal_speed_limit=100,
+                    )
+                )
+        return results
+
+    def test_matrix_payload_exports_one_entry_per_slot(self):
+        results = self._matrix_results()
+        payload = build_export_payload(results, build_report(results))
+        bench = payload["benchmark"]
+        assert bench["session_type"] == "matrix"
+        assert len(bench["engines"]) == 3
+        for label, entry in bench["engines"].items():
+            # every entry self-describes its slot — label matches CLI naming
+            assert label == f"{entry['model']} / {entry['engine']}"
+            assert entry["median_tok_s"] > 0
+            assert len(entry["raw_runs"]) == 3
+            # raw runs belong to THIS slot only (engine+model, not engine-only)
+            assert all(r["run_index"] in (0, 1, 2) for r in entry["raw_runs"])
+
+    def test_matrix_winner_name_is_an_engines_key(self):
+        results = self._matrix_results()
+        payload = build_export_payload(results, build_report(results))
+        bench = payload["benchmark"]
+        assert isinstance(bench["winner"], dict)  # export winner stays a dict
+        assert bench["winner"]["name"] in bench["engines"]
+        assert bench["winner"]["name"] == ("qwen3.6:27b-instruct-q4_K_M / ollama")
+
+    def test_engine_session_keeps_legacy_keys(self):
+        """Same model on N engines: keyed by engine name, session model set."""
+        results = [_raw("ollama", "qwen:4b", 50.0, run_index=i) for i in range(2)] + [
+            _raw("lmstudio", "qwen:4b", 60.0, run_index=i) for i in range(2)
+        ]
+        report = build_report(results)
+        payload = build_export_payload(results, report)
+        bench = payload["benchmark"]
+        assert bench["session_type"] == "engine"
+        assert bench["model"] == "qwen:4b"
+        assert set(bench["engines"]) == {"ollama", "lmstudio"}
+        for name, entry in bench["engines"].items():
+            assert entry["engine"] == name
+
+    def test_quality_gates_thermal_from_measured_rows(self):
+        results = self._matrix_results()
+        payload = build_export_payload(results, build_report(results))
+        thermal = payload["quality_gates"]["thermal"]
+        assert thermal == {
+            "observed": True,
+            "worst_level": "serious",
+            "throttled": True,
+            "min_speed_limit": 100,
+        }
+
+    def test_memory_gate_only_when_run_errors_known(self):
+        results = self._matrix_results()
+        report = build_report(results)
+        # No run context → unknown is OMITTED, never reported as passed.
+        payload = build_export_payload(results, report)
+        assert "memory_pressure" not in payload["quality_gates"]
+        # Run context with an alert → alerted.
+        alert = "Memory pressure during benchmark: swap grew 900 MB"
+        payload = build_export_payload(results, report, errors=[alert])
+        assert payload["quality_gates"]["memory_pressure"] == {
+            "alerted": True,
+            "alert_reason": alert,
+        }
+        # Run context without an alert → passed.
+        payload = build_export_payload(results, report, errors=["ollama: not reachable"])
+        assert payload["quality_gates"]["memory_pressure"]["alerted"] is False
+
+    def test_slot_label_scheme(self):
+        slot = {"engine": "ollama", "model": "qwen:4b"}
+        assert slot_label(slot, "engine") == "ollama"
+        assert slot_label(slot, "model") == "qwen:4b"
+        assert slot_label(slot, "matrix") == "qwen:4b / ollama"

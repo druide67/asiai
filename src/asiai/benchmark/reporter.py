@@ -313,6 +313,7 @@ def export_benchmark(
     raw_results: list[dict],
     report: dict,
     output_path: str,
+    errors: list[str] | None = None,
 ) -> str:
     """Export benchmark results to a standardized JSON file.
 
@@ -320,22 +321,69 @@ def export_benchmark(
         raw_results: Raw per-run result dicts from BenchmarkRun.results.
         report: Aggregated report from aggregate_results().
         output_path: File path to write the JSON.
+        errors: Optional run-level warnings (``BenchmarkRun.errors``).
 
     Returns:
         The path written to.
     """
-    export = build_export_payload(raw_results, report)
+    export = build_export_payload(raw_results, report, errors=errors)
     with open(output_path, "w") as f:
         json.dump(export, f, indent=2)
 
     return output_path
 
 
-def build_export_payload(raw_results: list[dict], report: dict) -> dict:
+def _session_quality_gates(raw_results: list[dict], errors: list[str] | None) -> dict:
+    """Derive session-level quality gates from measured data only.
+
+    Thermal comes from the per-run samples; memory pressure comes from the
+    MemoryWatcher alert surfaced in ``BenchmarkRun.errors``. When ``errors``
+    is None (payload rebuilt without run context) the memory gate is
+    *omitted* — unknown is never reported as passed.
+    """
+    gates: dict = {}
+    order = {"nominal": 0, "fair": 1, "serious": 2, "critical": 3}
+    levels = [str(r.get("thermal_level")) for r in raw_results if r.get("thermal_level")]
+    if levels:
+        worst = max(levels, key=lambda level: order.get(level, 0))
+        speed_limits = [
+            r["thermal_speed_limit"]
+            for r in raw_results
+            if isinstance(r.get("thermal_speed_limit"), (int, float))
+            and 0 < r["thermal_speed_limit"] <= 100
+        ]
+        throttled = order.get(worst, 0) >= order["serious"] or (
+            bool(speed_limits) and min(speed_limits) < 100
+        )
+        gates["thermal"] = {
+            "observed": True,
+            "worst_level": worst,
+            "throttled": throttled,
+        }
+        if speed_limits:
+            gates["thermal"]["min_speed_limit"] = min(speed_limits)
+    if errors is not None:
+        alerts = [e for e in errors if "memory pressure" in e.lower()]
+        gates["memory_pressure"] = {
+            "alerted": bool(alerts),
+            "alert_reason": alerts[0] if alerts else "",
+        }
+    return gates
+
+
+def build_export_payload(
+    raw_results: list[dict],
+    report: dict,
+    errors: list[str] | None = None,
+) -> dict:
     """Build the standardized session payload (export schema v2) as a dict.
 
     Shared by ``export_benchmark`` (writes it to a file) and the
     ``bench_runs`` session persistence, so both surfaces stay one format.
+
+    Works for every session type: engine comparison (legacy shape, keyed by
+    engine name) and model/matrix comparison (keyed by the slot label the CLI
+    table uses, each entry carrying its own ``engine`` and ``model``).
     """
     from asiai import __version__
 
@@ -351,10 +399,18 @@ def build_export_payload(raw_results: list[dict], report: dict) -> dict:
     run_indices = {r.get("run_index", 0) for r in raw_results}
     runs_per_prompt = len(run_indices)
 
-    # Build per-engine export
+    # Build per-slot export. report_to_slots() unifies the legacy engine
+    # report and the compare report — a model/matrix session must not export
+    # an empty engines dict (that was the "unknown model / empty card" bug).
+    slots = report_to_slots(report)
+    session_type = report.get("session_type") or detect_session_type(slots)
+
     engines_export: dict[str, dict] = {}
-    for engine_name, data in report.get("engines", {}).items():
+    for data in slots:
+        engine_name = slot_label(data, session_type)
         engine_data: dict = {
+            "engine": data.get("engine", ""),
+            "model": data.get("model", ""),
             "median_tok_s": data.get("median_tok_s", 0.0),
             "avg_tok_s": data.get("avg_tok_s", 0.0),
             "std_dev_tok_s": data.get("std_dev_tok_s", 0.0),
@@ -383,8 +439,14 @@ def build_export_payload(raw_results: list[dict], report: dict) -> dict:
         if data.get("output_valid_pct") is not None:
             engine_data["output_valid_pct"] = data["output_valid_pct"]
 
-        # Engine version and model metadata from raw results
-        engine_results = [r for r in raw_results if r.get("engine") == engine_name]
+        # Engine version and model metadata from this slot's raw runs.
+        # The slot carries them directly — filtering raw_results by engine
+        # name alone would mix models in a matrix session.
+        engine_results = data.get("prompt_results") or [
+            r
+            for r in raw_results
+            if r.get("engine") == data.get("engine") and r.get("model") == data.get("model")
+        ]
         if engine_results:
             er = engine_results[0]
             engine_data["engine_version"] = er.get("engine_version", "")
@@ -458,6 +520,7 @@ def build_export_payload(raw_results: list[dict], report: dict) -> dict:
         },
         "benchmark": {
             "model": report.get("model", ""),
+            "session_type": session_type,
             "runs_per_prompt": runs_per_prompt,
             "prompts": prompts,
             "context_size": first.get("context_size", 0),
@@ -465,6 +528,9 @@ def build_export_payload(raw_results: list[dict], report: dict) -> dict:
             "winner": report.get("winner"),
         },
     }
+    quality_gates = _session_quality_gates(raw_results, errors)
+    if quality_gates:
+        export["quality_gates"] = quality_gates
     return export
 
 
@@ -521,6 +587,20 @@ def detect_session_type(slots: list[dict]) -> str:
     return "matrix"
 
 
+def slot_label(slot: dict, session_type: str) -> str:
+    """Display label for a slot — the same naming the CLI table uses.
+
+    engine session → engine name (legacy shape), model session → model name,
+    matrix session → "model / engine". One scheme everywhere so winner names,
+    export keys and rendered labels always match.
+    """
+    if session_type == "model":
+        return str(slot.get("model", ""))
+    if session_type == "matrix":
+        return f"{slot.get('model', '')} / {slot.get('engine', '')}"
+    return str(slot.get("engine", ""))
+
+
 def _determine_winner_slots(slots: list[dict]) -> dict | None:
     """Pick winner by median tok/s from a list of slots."""
 
@@ -559,13 +639,10 @@ def _determine_winner_slots(slots: list[dict]) -> dict | None:
         sign = "+" if vram_pct >= 0 else ""
         vram_delta = f"{sign}{vram_pct:.0f}% VRAM"
 
-    # Build winner label based on what differs between best and second
-    if best["model"] != second["model"] and best["engine"] != second["engine"]:
-        winner_name = f"{best['model']} / {best['engine']}"
-    elif best["model"] != second["model"]:
-        winner_name = best["model"]
-    else:
-        winner_name = best["engine"]
+    # Winner label follows the session-wide slot naming (not just what
+    # differs between best and second): the name must match the export keys
+    # and the CLI/card row labels, or the crown silently detaches.
+    winner_name = slot_label(best, detect_session_type(slots))
 
     return {"name": winner_name, "tok_s_delta": tok_s_delta, "vram_delta": vram_delta}
 

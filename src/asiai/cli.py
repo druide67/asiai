@@ -1578,7 +1578,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.benchmark.persist import persist_standard_session
         from asiai.benchmark.reporter import build_export_payload
 
-        persist_standard_session(db_path, build_export_payload(bench_run.results, report))
+        persist_standard_session(
+            db_path, build_export_payload(bench_run.results, report, errors=bench_run.errors)
+        )
 
     # Export if requested — format by extension (.json unchanged, .md report)
     # A failed export flips the final exit code (the user asked for an
@@ -1591,10 +1593,12 @@ def cmd_bench(args: argparse.Namespace) -> int:
             from asiai.benchmark.reporter import build_export_payload
 
             export_rc = _export_mode_result(
-                args, "standard", build_export_payload(bench_run.results, report)
+                args,
+                "standard",
+                build_export_payload(bench_run.results, report, errors=bench_run.errors),
             )
         else:
-            path = export_benchmark(bench_run.results, report, export_path)
+            path = export_benchmark(bench_run.results, report, export_path, errors=bench_run.errors)
             from asiai.display.formatters import green
 
             print(f"  {green('✓')} Exported to {path}")
@@ -1615,7 +1619,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
         from asiai.display.formatters import dim, green
 
         try:
-            session_payload = build_export_payload(bench_run.results, report)
+            session_payload = build_export_payload(
+                bench_run.results, report, errors=bench_run.errors
+            )
             if kv_cache_type:
                 session_payload.setdefault("benchmark", {})["kv_cache_type"] = kv_cache_type
             card_svg = generate_card(build_result("standard", session_payload))

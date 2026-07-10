@@ -5,9 +5,62 @@ from __future__ import annotations
 import pytest
 
 from asiai.benchmark.report_md import render_markdown
-from asiai.benchmark.result_model import build_result
+from asiai.benchmark.result_model import build_result, display_model
 
 NOW = 1783900000
+
+# Slots mirroring the real bug repro: 3 slots, a DIFFERENT model per slot.
+COMPARE_SLOTS = (
+    ("llamacpp", "Qwen3.6-27B-UD-Q8_K_XL.gguf", 29.5),
+    ("ollama", "qwen3.6:27b-instruct-q4_K_M", 67.4),
+    ("mlxlm", "unsloth/Qwen3.6-27B-UD-MLX-4bit", 19.8),
+)
+
+
+def _compare_raw_results(slots=COMPARE_SLOTS) -> list[dict]:
+    """Raw per-run results for a multi-model compare session."""
+    results = []
+    for engine, model, tok in slots:
+        for run_index in range(3):
+            for prompt_type in ("code", "reasoning"):
+                results.append(
+                    {
+                        "ts": NOW,
+                        "engine": engine,
+                        "model": model,
+                        "tok_per_sec": tok + run_index * 0.4,
+                        "ttft_ms": 120.0,
+                        "ttft_client_ms": 140.0,
+                        "tokens_generated": 500,
+                        "total_duration_ms": 9000.0,
+                        "vram_bytes": 28_000_000_000,
+                        "thermal_level": "serious" if engine == "ollama" else "nominal",
+                        "thermal_speed_limit": 100,
+                        "prompt_type": prompt_type,
+                        "run_index": run_index,
+                        "hw_chip": "Apple M5 Max",
+                        "os_version": "26.5.1",
+                        "ram_gb": 128,
+                        "gpu_cores": 40,
+                        "context_size": 0,
+                        "engine_version": "1.0",
+                        "model_format": "gguf",
+                        "model_quantization": "Q8_0",
+                    }
+                )
+    return results
+
+
+def _compare_session_payload(errors: list[str] | None = None) -> dict:
+    """Compare-session payload built through the REAL producer chain
+    (raw results → build_report → build_export_payload), never a
+    hand-invented fixture."""
+    from asiai.benchmark.reporter import build_export_payload, build_report
+
+    results = _compare_raw_results()
+    if errors is None:
+        errors = ["Memory pressure during benchmark: swap grew 900 MB"]
+    return build_export_payload(results, build_report(results), errors=errors)
 
 
 def _standard_payload() -> dict:
@@ -370,3 +423,77 @@ class TestRenderMarkdown:
         ]
         md = render_markdown(build_result("code", payload))
         assert "judged 1/1 tasks" in md
+
+
+class TestDisplayModel:
+    def test_single_name_passes_through(self):
+        assert display_model(["qwen3.5:4b", "qwen3.5:4b", ""]) == "qwen3.5:4b"
+
+    def test_empty_is_empty(self):
+        assert display_model([]) == ""
+        assert display_model(["", ""]) == ""
+
+    def test_clean_family_prefix(self):
+        assert display_model(["qwen3-4b-q4", "qwen3-4b-q8"]) == "qwen3-4b (2 models)"
+
+    def test_prefix_equal_to_one_name_is_kept_whole(self):
+        # commonprefix is "qwen3-4b" — a full name, not a partial token.
+        assert display_model(["qwen3-4b", "qwen3-4b-q8"]) == "qwen3-4b (2 models)"
+
+    def test_no_clean_prefix_falls_back_to_generic(self):
+        models = [m for _e, m, _t in COMPARE_SLOTS]
+        assert display_model(models) == "3-model comparison"
+
+    def test_short_prefix_is_not_a_family(self):
+        # "qwen" alone is too short to claim a family — generic label instead.
+        assert display_model(["qwenA-27b", "qwenB-4b"]) == "2-model comparison"
+
+
+class TestFromStandardCompare:
+    """Regression: a multi-model compare session used to build a payload with
+    NO benchmark.engines — empty card titled 'unknown model'."""
+
+    def test_subjects_carry_their_own_model_and_engine(self):
+        result = build_result("standard", _compare_session_payload())
+        assert len(result.subjects) == 3
+        by_engine = {s.engine: s for s in result.subjects}
+        assert set(by_engine) == {"llamacpp", "ollama", "mlxlm"}
+        for engine, model, _tok in COMPARE_SLOTS:
+            assert by_engine[engine].model == model
+            assert by_engine[engine].label == f"{model} / {engine}"
+
+    def test_title_is_not_unknown(self):
+        result = build_result("standard", _compare_session_payload())
+        assert result.title == "Throughput — 3-model comparison"
+
+    def test_winner_label_matches_a_subject(self):
+        result = build_result("standard", _compare_session_payload())
+        assert result.winner == "qwen3.6:27b-instruct-q4_K_M / ollama"
+        assert result.winner in {s.label for s in result.subjects}
+
+    def test_session_gates_surface(self):
+        result = build_result("standard", _compare_session_payload())
+        gates = {g.name: g for g in result.gates}
+        assert gates["thermal"].passed is False  # worst level "serious"
+        assert "serious" in gates["thermal"].detail
+        assert gates["memory_pressure"].passed is False
+        assert "swap grew 900 MB" in gates["memory_pressure"].detail
+
+    def test_memory_gate_passes_when_run_had_no_alert(self):
+        result = build_result("standard", _compare_session_payload(errors=[]))
+        gates = {g.name: g for g in result.gates}
+        assert gates["memory_pressure"].passed is True
+
+    def test_engine_session_subjects_unchanged(self):
+        # Non-regression: the historical same-model/N-engines payload keeps
+        # the session model on every subject and engine names as labels.
+        result = build_result("standard", _standard_payload())
+        assert {s.label for s in result.subjects} == {"llamacpp", "ollama"}
+        assert {s.model for s in result.subjects} == {"qwen3.5:4b"}
+        assert result.title == "Throughput — qwen3.5:4b"
+        assert result.gates == []  # no gates block in the legacy payload
+
+    def test_markdown_report_lists_all_slots(self):
+        md = render_markdown(build_result("standard", _compare_session_payload()))
+        for engine, model, _tok in COMPARE_SLOTS:
+            assert f"{model} / {engine}" in md
