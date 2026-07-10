@@ -467,6 +467,7 @@ Every shared card includes asiai branding — the [Speedtest.net model](https://
 | [oMLX](https://github.com/jundot/omlx) | 8000 | `brew tap jundot/omlx && brew install omlx` | OpenAI-compatible |
 | [vllm-mlx](https://github.com/vllm-project/vllm) | 8000 | `pip install vllm-mlx` | OpenAI-compatible |
 | [vMLX](https://vmlx.net) | 8000 | `pip install vmlx` | OpenAI-compatible |
+| [MTPLX](https://github.com/youssofal/MTPLX) | custom | `brew tap youssofal/mtplx && brew install mtplx` | OpenAI-compatible |
 | [Exo](https://github.com/exo-explore/exo) | 52415 | `pip install exo` | OpenAI-compatible |
 
 ## What it measures
