@@ -1187,6 +1187,10 @@
        reload mid-run): attach to the live stream instead of sitting blind. */
     if (root && root.dataset.benchRunning === '1') {
         disableAllBenchButtons();
+        /* Same visual state as a run launched from this page: forms collapsed
+           behind a visible summary bar, so the "done" handler's Edit & rerun
+           button appears somewhere the user can actually see. */
+        collapseForms('benchmark', 'in progress (started elsewhere)', true);
         showBenchProgress('benchmark in progress (started elsewhere)');
         startBenchSSE();
     }
