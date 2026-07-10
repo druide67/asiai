@@ -253,8 +253,8 @@
   .ah-term .cmd {
     overflow: hidden;
     white-space: nowrap;
-    width: 22ch;
-    animation: ah-type 1.1s steps(22, end) .4s both;
+    width: 47ch;
+    animation: ah-type 1.4s steps(47, end) .4s both;
   }
   .ah-term .dim { color: #6f6f7a; }
   .ah-term .cyan { color: #22d3ee; }
@@ -1041,15 +1041,15 @@
     "zh": "一条命令，一张可分享卡片。", "ja": "コマンド1つ、共有カード1枚。", "ko": "명령어 하나, 공유 카드 하나."
   },
   "card_subtitle": {
-    "en": "Every bench type renders a 1200&times;630 image &mdash; model, chip, engine comparison, winner. Made for Reddit, X and Discord.",
-    "fr": "Chaque type de bench génère une image 1200&times;630 &mdash; modèle, puce, comparaison moteurs, gagnant. Fait pour Reddit, X et Discord.",
-    "de": "Jeder Bench-Typ rendert ein 1200&times;630-Bild &mdash; Modell, Chip, Engine-Vergleich, Gewinner. Gemacht für Reddit, X und Discord.",
-    "es": "Cada tipo de bench genera una imagen de 1200&times;630 &mdash; modelo, chip, comparación de motores, ganador. Hecho para Reddit, X y Discord.",
-    "it": "Ogni tipo di bench genera un'immagine 1200&times;630 &mdash; modello, chip, confronto motori, vincitore. Fatto per Reddit, X e Discord.",
-    "pt": "Cada tipo de bench gera uma imagem 1200&times;630 &mdash; modelo, chip, comparação de motores, vencedor. Feito para Reddit, X e Discord.",
-    "zh": "每种跑分类型都生成1200&times;630图片 &mdash; 模型、芯片、引擎对比、赢家。专为Reddit、X和Discord打造。",
-    "ja": "すべてのベンチタイプが1200&times;630画像を生成 &mdash; モデル、チップ、エンジン比較、勝者。Reddit、X、Discord向け。",
-    "ko": "모든 벤치 유형이 1200&times;630 이미지를 생성 &mdash; 모델, 칩, 엔진 비교, 우승자. Reddit, X, Discord용."
+    "en": "Every bench type renders a 1200&times;630 image &mdash; model, chip, measured medians, honesty gates. Made for Reddit, X and Discord.",
+    "fr": "Chaque type de bench génère une image 1200&times;630 &mdash; modèle, puce, médianes mesurées, gates d'honnêteté. Fait pour Reddit, X et Discord.",
+    "de": "Jeder Bench-Typ rendert ein 1200&times;630-Bild &mdash; Modell, Chip, gemessene Mediane, Ehrlichkeits-Gates. Gemacht für Reddit, X und Discord.",
+    "es": "Cada tipo de bench genera una imagen de 1200&times;630 &mdash; modelo, chip, medianas medidas, gates de honestidad. Hecho para Reddit, X y Discord.",
+    "it": "Ogni tipo di bench genera un'immagine 1200&times;630 &mdash; modello, chip, mediane misurate, gate di onestà. Fatto per Reddit, X e Discord.",
+    "pt": "Cada tipo de bench gera uma imagem 1200&times;630 &mdash; modelo, chip, medianas medidas, gates de honestidade. Feito para Reddit, X e Discord.",
+    "zh": "每种跑分类型都生成1200&times;630图片 &mdash; 模型、芯片、实测中位数、诚实性关卡。专为Reddit、X和Discord打造。",
+    "ja": "すべてのベンチタイプが1200&times;630画像を生成 &mdash; モデル、チップ、実測中央値、オネスティゲート。Reddit、X、Discord向け。",
+    "ko": "모든 벤치 유형이 1200&times;630 이미지를 생성 &mdash; 모델, 칩, 실측 중앙값, 정직성 게이트. Reddit, X, Discord용."
   },
   "mode_human": {"en": "🧑 Human", "fr": "🧑 Humain", "de": "🧑 Mensch", "es": "🧑 Humano", "it": "🧑 Umano", "pt": "🧑 Humano", "zh": "🧑 人类", "ja": "🧑 ヒューマン", "ko": "🧑 사람"},
   "mode_agent": {"en": "AI Agent 🤖", "fr": "Agent IA 🤖", "de": "KI-Agent 🤖", "es": "Agente IA 🤖", "it": "Agente IA 🤖", "pt": "Agente IA 🤖", "zh": "AI智能体 🤖", "ja": "AIエージェント 🤖", "ko": "AI 에이전트 🤖"},
@@ -1135,32 +1135,32 @@
           <span class="ah-term-tag">THROUGHPUT</span>
         </div>
         <div class="ah-term-body">
-          <div style="display:flex;"><span class="dim">$&nbsp;</span><span class="cmd">asiai bench -m qwen3.6</span></div>
-          <div class="dim li" style="animation-delay:1.8s;">&#x2714; 4 engines detected &middot; warmup &middot; n=5 &middot; greedy decoding</div>
+          <div style="display:flex;"><span class="dim">$&nbsp;</span><span class="cmd">asiai bench -m mtplx-qwen36-27b-optimized-speed</span></div>
+          <div class="dim li" style="animation-delay:1.8s;">&#x2714; mlx-lm 0.31.3_2 detected &middot; warmup &middot; n=5 per prompt</div>
           <div style="height:6px;"></div>
           <div class="ah-term-row li" style="animation-delay:2.4s;">
-            <span class="cyan">mlx</span>
+            <span class="cyan">reasoning</span>
             <span class="ah-term-track"><span class="ah-term-fill" style="width:100%; background:#06b6d4; animation-delay:2.5s;"></span></span>
-            <span style="text-align:right;">82.4 &plusmn;1.8</span>
+            <span style="text-align:right;">52.4</span>
           </div>
           <div class="ah-term-row li" style="animation-delay:2.6s;">
-            <span class="grey">lmstudio</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:59%; background:#3b4254; animation-delay:2.7s;"></span></span>
-            <span class="grey" style="text-align:right;">48.6 &plusmn;2.3</span>
+            <span class="grey">code</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:95%; background:#3b4254; animation-delay:2.7s;"></span></span>
+            <span class="grey" style="text-align:right;">49.7</span>
           </div>
           <div class="ah-term-row li" style="animation-delay:2.8s;">
-            <span class="grey">ollama</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:54%; background:#3b4254; animation-delay:2.9s;"></span></span>
-            <span class="grey" style="text-align:right;">44.1 &plusmn;1.1</span>
+            <span class="grey">tool_call</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:91%; background:#3b4254; animation-delay:2.9s;"></span></span>
+            <span class="grey" style="text-align:right;">47.7</span>
           </div>
           <div class="ah-term-row li" style="animation-delay:3.0s;">
-            <span class="grey">llama.cpp</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:48%; background:#3b4254; animation-delay:3.1s;"></span></span>
-            <span class="grey" style="text-align:right;">39.8 &plusmn;4.6</span>
+            <span class="grey">long_gen</span>
+            <span class="ah-term-track"><span class="ah-term-fill" style="width:85%; background:#3b4254; animation-delay:3.1s;"></span></span>
+            <span class="grey" style="text-align:right;">44.5</span>
           </div>
           <div style="height:6px;"></div>
-          <div class="cyan li" style="animation-delay:4.1s;">&rarr; mlx v0.30.1 wins &middot; 82.4 tok/s &middot; 1.7&times; vs lmstudio</div>
-          <div class="dim li" style="animation-delay:4.6s;">&#x2713; card saved &rarr; asiai-card-throughput.png</div>
+          <div class="cyan li" style="animation-delay:4.1s;">&rarr; median 48.2 tok/s &plusmn;1 CI95 &middot; Apple M5 Max</div>
+          <div class="dim li" style="animation-delay:4.6s;">&#x2713; card saved &rarr; ~/.local/share/asiai/cards/</div>
           <div class="li" style="display:flex; animation-delay:5.1s;"><span class="dim">$&nbsp;</span><span class="ah-term-caret"></span></div>
         </div>
       </div>
@@ -1505,10 +1505,10 @@
         <span class="ah-card-chip">asiai bench --card</span>
       </div>
       <div class="ah-cards-grid">
-        <img src="{{ 'assets/home/card-throughput.png' | url }}" alt="asiai throughput card — mlx wins at 82.4 tok/s, 1.7× vs lmstudio" loading="lazy" width="1200" height="630">
+        <img src="{{ 'assets/home/card-throughput.png' | url }}" alt="asiai throughput card — mtplx-qwen36-27b-optimized-speed on mlx-lm at 48.2 tok/s median (±1 CI95, n=5), Apple M5 Max" loading="lazy" width="1200" height="630">
         <div class="ah-cards-side">
-          <img src="{{ 'assets/home/card-agentic.png' | url }}" alt="asiai agentic card — prefix-cache reuse across cold, prefix_warm and warm phases" loading="lazy" width="1200" height="630">
-          <img src="{{ 'assets/home/card-quality.png' | url }}" alt="asiai quality card — dev-quality benchmark with judge scoring" loading="lazy" width="1200" height="630">
+          <img src="{{ 'assets/home/card-agentic.png' | url }}" alt="asiai agentic card — prefix-cache reuse fraction 0.80 across cold, warm and prefix phases, Qwen3.6-27B on llama.cpp" loading="lazy" width="1200" height="630">
+          <img src="{{ 'assets/home/card-quality.png' | url }}" alt="asiai code-quality card — tool_call, recovery and thinking suites at 100%, deterministic grading, Qwen3.6-27B on llama.cpp" loading="lazy" width="1200" height="630">
         </div>
       </div>
     </div>
