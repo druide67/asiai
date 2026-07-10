@@ -537,7 +537,12 @@ def _run_single(
             "tokens_source": gen.tokens_source,
             "prompt_tokens": gen.prompt_tokens,
             "prefill_tok_s": gen.prefill_tok_s,
-            "output_degenerate": check_degenerate(gen.text)["degenerate"],
+            # Gate the COMPLETE generated text: with a thinking-default model
+            # (Qwen3.6 chat) the whole budget can land in reasoning deltas and
+            # `text` stays empty — reasoning IS generated output, and flagging
+            # it "empty" branded every healthy thinking run degenerate. A
+            # stuck n-gram loop inside the reasoning still trips the detector.
+            "output_degenerate": check_degenerate(gen.text + gen.reasoning_text)["degenerate"],
             "ttft_ms": gen.ttft_ms,
             "ttft_client_ms": gen.ttft_client_ms,
             "ttft_source": "server" if gen.prompt_eval_duration_ms > 0 else "client",

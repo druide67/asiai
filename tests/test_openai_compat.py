@@ -275,6 +275,51 @@ class TestOpenAICompatGenerateChat:
         assert result.error != ""
         assert result.tokens_generated == 0
 
+    def test_reasoning_deltas_exposed_separately(self):
+        # llama.cpp thinking mode: reasoning streams in delta.reasoning_content.
+        # It stays out of `text` (clean output) but must reach the result —
+        # output gates evaluate the complete generated text.
+        chunks = [
+            {"choices": [{"delta": {"role": "assistant"}}]},
+            {"choices": [{"delta": {"reasoning_content": "thinking"}}]},
+            {"choices": [{"delta": {"reasoning_content": " harder"}}]},
+            {"choices": [{"delta": {"content": "42"}}]},
+            {"choices": [{"delta": {}}], "usage": {"completion_tokens": 30}},
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 0.3, 0.4]
+            engine = _ChatEngine("http://localhost:8080")
+            result = engine.generate("m", "go", 64)
+
+        assert result.text == "42"
+        assert result.reasoning_text == "thinking harder"
+        assert result.error == ""
+
+    def test_reasoning_only_stream_is_a_valid_run(self):
+        # mlx-lm thinking mode (delta.reasoning), whole budget in reasoning:
+        # content is empty but this is a real, timed generation — not an error.
+        chunks = [
+            {"choices": [{"delta": {"reasoning": "step one"}}]},
+            {"choices": [{"delta": {"reasoning": " step two"}}]},
+            {"choices": [{"delta": {}}], "usage": {"completion_tokens": 20}},
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.9, 1.0]
+            engine = _ChatEngine("http://localhost:8080")
+            result = engine.generate("m", "go", 64)
+
+        assert result.text == ""
+        assert result.reasoning_text == "step one step two"
+        assert result.error == ""
+        assert result.tokens_generated == 20
+        assert result.tok_per_sec > 0
+
 
 class TestOpenAICompatGenerateCompletions:
     def test_generate_completions_success(self):

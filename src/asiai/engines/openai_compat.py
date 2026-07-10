@@ -241,6 +241,7 @@ class OpenAICompatEngine(InferenceEngine):
 
         return GenerateResult(
             text=text,
+            reasoning_text="".join(reasoning_parts),
             tokens_generated=completion_tokens,
             tok_per_sec=round(tok_s, 2),
             ttft_ms=ttft_ms,

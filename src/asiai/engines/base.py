@@ -23,6 +23,11 @@ class GenerateResult:
     """Result of a text generation request with timing metrics."""
 
     text: str = ""
+    # Thinking/reasoning tokens streamed separately from `text` (Qwen3-family
+    # thinking mode: delta.reasoning_content on llama.cpp, delta.reasoning on
+    # mlx-lm). Kept out of `text` (clean output) but they ARE generated text —
+    # output gates must see them.
+    reasoning_text: str = ""
     tokens_generated: int = 0
     tok_per_sec: float = 0.0
     ttft_ms: float = 0.0

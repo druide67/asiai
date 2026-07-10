@@ -1364,6 +1364,64 @@ def _raw(engine: str, model: str, tok: float, **overrides: object) -> dict:
     return base
 
 
+class TestOutputGateSeesReasoning:
+    """Regression: with a thinking-default model (Qwen3-family chat) the
+    whole token budget can land in reasoning deltas and ``text`` stays empty.
+    Gating on content alone branded every healthy thinking run as 'empty' —
+    the gate must evaluate the COMPLETE generated text (content + reasoning).
+    """
+
+    def _bench_row(self, gen: GenerateResult) -> dict:
+        engine = _mock_engine(generate_result=gen)
+        run = run_benchmark([engine], "test-model", ["code"])
+        assert run.results, run.errors
+        return run.results[0]
+
+    def test_reasoning_only_run_is_not_degenerate(self):
+        gen = GenerateResult(
+            text="",
+            reasoning_text=(
+                "The user asks for a sorting routine. First consider the input "
+                "shape, then pick an algorithm; quicksort fits, but the edge "
+                "cases around duplicates and empty lists deserve explicit "
+                "handling before writing any code."
+            ),
+            tokens_generated=400,
+            tok_per_sec=50.0,
+            ttft_ms=120.0,
+            total_duration_ms=8000.0,
+            model="test-model",
+            engine="ollama",
+        )
+        assert self._bench_row(gen)["output_degenerate"] is False
+
+    def test_truly_empty_run_stays_degenerate(self):
+        gen = GenerateResult(
+            text="",
+            reasoning_text="",
+            tokens_generated=10,
+            tok_per_sec=50.0,
+            ttft_ms=120.0,
+            total_duration_ms=1000.0,
+            model="test-model",
+            engine="ollama",
+        )
+        assert self._bench_row(gen)["output_degenerate"] is True
+
+    def test_ngram_loop_in_reasoning_is_degenerate(self):
+        gen = GenerateResult(
+            text="",
+            reasoning_text="wait no wait " * 40,  # stuck decoding loop
+            tokens_generated=400,
+            tok_per_sec=50.0,
+            ttft_ms=120.0,
+            total_duration_ms=8000.0,
+            model="test-model",
+            engine="ollama",
+        )
+        assert self._bench_row(gen)["output_degenerate"] is True
+
+
 class TestCrossModelReporter:
     # -- aggregate_slots --
 
