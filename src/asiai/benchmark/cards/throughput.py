@@ -40,6 +40,19 @@ def _engine_label(s: Subject) -> str:
     return f"{s.label} {ver.value}" if ver and ver.value else s.label
 
 
+def _shorten(label: str, limit: int, engine: str = "") -> str:
+    """Ellipsize a long slot label, keeping the trailing engine visible.
+
+    Only labels beyond ``limit`` change, so single-model cards (short engine
+    labels) render byte-identical to before compare support."""
+    if len(label) <= limit:
+        return label
+    suffix = f" / {engine}"
+    if engine and label.endswith(suffix) and limit - len(suffix) - 1 >= 4:
+        return label[: limit - len(suffix) - 1] + "…" + suffix
+    return label[: limit - 1] + "…"
+
+
 def render(result: BenchResult) -> str:
     subjects = sorted(result.subjects, key=lambda s: _hero_value(s), reverse=True)
     is_tie = bool(result.co_leaders)
@@ -48,10 +61,21 @@ def render(result: BenchResult) -> str:
     if no_winner or is_tie:
         subjects = sorted(result.subjects, key=lambda s: s.label)  # alphabetical — no crown
 
+    # Multi-model comparison: slot labels carry "model / engine" and are far
+    # wider than engine names — shorten them and move the ×-ratio block below
+    # the bars so nothing collides. Single-model layout is untouched.
+    multi_model = len({s.model for s in subjects if s.model}) > 1
+
     quant = result.conditions.get("quantizations", "")
     model_chips = [(quant, "neutral")] if quant else []
     if single and subjects:
         model_chips.append((_engine_label(subjects[0]), "neutral"))
+    # Session gates (thermal, memory pressure) — never hidden, pass AND fail.
+    # The throughput bottom block is the per-engine chip rows, so gates live
+    # as header chips next to the model name.
+    for gate in result.gates:
+        glyph = "✓" if gate.passed else "✗"
+        model_chips.append((f"{glyph} {gate.name}", "green" if gate.passed else "red"))
 
     rail = AMBER if no_winner else ACCENT
     p = [
@@ -76,6 +100,12 @@ def render(result: BenchResult) -> str:
     vmax = max((_hero_value(s) for s in subjects), default=0.0)
     winner = next((s for s in result.subjects if s.label == result.winner), None)
 
+    # Bar geometry (needed by the hero column when multi_model moves the
+    # ratio block below the bars).
+    pitch = 31
+    y0 = body_y0(len(subjects) * pitch - 9)
+    bars_bottom = y0 + len(subjects) * pitch - 9
+
     # ── hero column ──────────────────────────────────────────────────
     if is_tie:
         p.append(text(54, 232, "TIE", size=52, weight=700, fill=ACCENT))
@@ -83,8 +113,9 @@ def render(result: BenchResult) -> str:
         for name in result.co_leaders:
             s = next((x for x in result.subjects if x.label == name), None)
             if s:
+                label = _shorten(name, 22, s.engine) if multi_model else name
                 p.append(
-                    text(54, y, f"{name}  {fmt_num(_hero_value(s))} tok/s", size=15, fill=TEXT)
+                    text(54, y, f"{label}  {fmt_num(_hero_value(s))} tok/s", size=15, fill=TEXT)
                 )
                 y += 22
         p.append(
@@ -133,12 +164,17 @@ def render(result: BenchResult) -> str:
         )
         if not invalid and "validity" in note:
             note = "no comparable measurements — ranking unavailable"
-        p.append(wrap_text(54, 268, note, 300))
-        if invalid:
+        # multi_model: the wide bar labels reach into the left column — the
+        # note and the invalid count move below the bar stack instead.
+        note_y = max(354.0, bars_bottom + 24) if multi_model else 268.0
+        invalid_y = note_y + 38 if multi_model else 340.0
+        if note_y <= 396:
+            p.append(wrap_text(54, note_y, note, 420 if multi_model else 300))
+        if invalid and invalid_y <= 408:
             p.append(
                 text(
                     54,
-                    340,
+                    invalid_y,
                     f"{len(invalid)} of {len(subjects)} engines produced invalid output",
                     size=13,
                     fill=AMBER,
@@ -163,25 +199,38 @@ def render(result: BenchResult) -> str:
         elif len(subjects) >= 2:
             runner = subjects[1] if subjects[0] is top else subjects[0]
             rv = _hero_value(runner)
-            if rv > 0:
+            # multi_model: long labels — the ratio + wins lines move below
+            # the bar stack so they never cross the bar labels.
+            ratio_y, wins_y = (
+                (max(352.0, bars_bottom + 24), max(380.0, bars_bottom + 52))
+                if multi_model
+                else (330.0, 366.0)
+            )
+            vs_label = _shorten(runner.label, 24, runner.engine) if multi_model else runner.label
+            if rv > 0 and wins_y <= 410:
                 p.append(
-                    text(54, 330, f"{_hero_value(top) / rv:.1f}×", size=30, weight=700, fill=TEXT)
+                    text(
+                        54, ratio_y, f"{_hero_value(top) / rv:.1f}×", size=30, weight=700, fill=TEXT
+                    )
                 )
                 p.append(
                     text(
                         54 + mono_w(f"{_hero_value(top) / rv:.1f}×", 30) + 8,
-                        330,
-                        f"vs {runner.label}",
+                        ratio_y,
+                        f"vs {vs_label}",
                         size=14,
                         family=SANS,
                         fill=TEXT2,
                     )
                 )
-            p.append(text(54, 366, f"{_engine_label(top)} wins", size=14, fill=ACCENT))
+            if wins_y <= 410:
+                # multi_model: keep the "model / engine" identity (the version
+                # lives in the conditions strip) instead of a version-bloated
+                # label that would truncate the engine away.
+                wins = _shorten(top.label, 34, top.engine) if multi_model else _engine_label(top)
+                p.append(text(54, wins_y, f"{wins} wins", size=14, fill=ACCENT))
 
     # ── bars ─────────────────────────────────────────────────────────
-    pitch = 31
-    y0 = body_y0(len(subjects) * pitch - 9)
     for i, s in enumerate(subjects):
         v = _hero_value(s)
         invalid = no_winner and _subject_invalid(s)
@@ -200,7 +249,7 @@ def render(result: BenchResult) -> str:
         p.append(
             bar_row(
                 y,
-                s.label,
+                _shorten(s.label, 30, s.engine) if multi_model else s.label,
                 (v / vmax) if vmax else 0,
                 value,
                 bar_color=color,
@@ -216,7 +265,7 @@ def render(result: BenchResult) -> str:
             )
 
     # ── bottom block: per-engine chip rows (spec: rows OR gates, not both) ──
-    p.append(_engine_chip_rows(result, subjects, winner))
+    p.append(_engine_chip_rows(result, subjects, winner, wide_labels=multi_model))
     p.append(chrome_close(result))
     return "".join(p)
 
@@ -234,16 +283,28 @@ def _subject_invalid(s: Subject) -> bool:
     )
 
 
-def _engine_chip_rows(result: BenchResult, subjects: list[Subject], winner: Subject | None) -> str:
-    """One chip row per engine under the divider (≤4 rows, pitch 27)."""
+def _engine_chip_rows(
+    result: BenchResult,
+    subjects: list[Subject],
+    winner: Subject | None,
+    *,
+    wide_labels: bool = False,
+) -> str:
+    """One chip row per engine under the divider (≤4 rows, pitch 27).
+
+    ``wide_labels`` (multi-model compare) widens the label column so the
+    "model / engine" slot names stay identifiable."""
     stroke = 'stroke="rgba(255,255,255,0.05)" stroke-width="1"'
     p = [f'<line x1="54" y1="424" x2="1146" y2="424" {stroke}/>']
     y = 436
     for s in subjects[:4]:
         m = metric_map(s)
         label_color = ACCENT if winner is s else TEXT2
-        p.append(text(54, y + 14, _engine_label(s)[:20], size=12, fill=label_color))
-        cx = 192.0
+        if wide_labels:
+            p.append(text(54, y + 14, _shorten(s.label, 34, s.engine), size=12, fill=label_color))
+        else:
+            p.append(text(54, y + 14, _engine_label(s)[:20], size=12, fill=label_color))
+        cx = 320.0 if wide_labels else 192.0
         chips: list[str] = []
         if m.get("median_ttft_ms"):
             chips.append(f"{fmt_num(m['median_ttft_ms'].value, 0)}ms TTFT")
