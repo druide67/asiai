@@ -34,6 +34,7 @@ _PORT_PROCESS_MAP: dict[str, str] = {
     "exo": "exo",
     "ollama": "ollama",
     "rapid-mlx": "rapidmlx",
+    "mtplx": "mtplx",
 }
 
 _TURBO_CACHE_PATTERNS = ["turbo2", "turbo3", "turbo4"]
@@ -209,9 +210,10 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
          2b. GET /health {"status":"ok"} + /props       -> llama.cpp
          2c. owned_by:"omlx" or /admin/info             -> oMLX
          2d. owned_by:"rapid-mlx"                       -> Rapid-MLX
-         2e. owned_by:"vmlx" / "vllm-mlx" or /version   -> vMLX / vllm-mlx
-         2f. detect_port_process(port)                  -> lsof result
-         2g. fallback                                   -> mlx-lm
+         2e. owned_by:"mtplx"                           -> MTPLX
+         2f. owned_by:"vmlx" / "vllm-mlx" or /version   -> vMLX / vllm-mlx
+         2g. detect_port_process(port)                  -> lsof result
+         2h. fallback                                   -> mlx-lm
       3. Otherwise -> "unknown"
     """
     base_url = base_url.rstrip("/")
@@ -295,7 +297,28 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                         pass
                     return "rapidmlx", ver
 
-        # 2e. vMLX / vllm-mlx — both expose /version, discriminate by name/owned_by.
+        # 2e. MTPLX — owned_by="mtplx" in /v1/models entries.
+        if isinstance(data, dict):
+            for model_entry in data.get("data", []):
+                if isinstance(model_entry, dict) and model_entry.get("owned_by") == "mtplx":
+                    ver = ""
+                    try:
+                        out = subprocess.run(
+                            ["brew", "list", "--versions", "mtplx"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                        ).stdout.strip()
+                        # Output: "mtplx 2.0.2" -> "2.0.2"
+                        if out:
+                            parts = out.split()
+                            if len(parts) >= 2:
+                                ver = parts[-1]
+                    except Exception:
+                        pass
+                    return "mtplx", ver
+
+        # 2f. vMLX / vllm-mlx — both expose /version, discriminate by name/owned_by.
         # Check /v1/models owned_by first (most reliable signal).
         if isinstance(data, dict):
             for model_entry in data.get("data", []):
@@ -327,14 +350,14 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                 # Plain /version with no discriminator — historical default to vllm-mlx
                 return "vllm_mlx", ver_resp["version"]
 
-        # 2f. Process detection via lsof
+        # 2g. Process detection via lsof
         port = extract_port(base_url)
         if port:
             process_engine = detect_port_process(port)
             if process_engine:
                 return process_engine, ""
 
-        # 2g. Fallback: mlx-lm
+        # 2h. Fallback: mlx-lm
         return "mlxlm", ""
 
     return "unknown", ""

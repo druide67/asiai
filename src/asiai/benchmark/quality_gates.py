@@ -129,6 +129,8 @@ _ENGINE_PROCESS_PATTERNS = {
     "turboquant": "llama-server-turboquant",
     "vllmmlx": "vllm-mlx",
     "rapidmlx": "rapid-mlx",
+    # MTPLX runs as "python -m mtplx.server.openai …" — match the module path.
+    "mtplx": "mtplx.server",
 }
 
 
