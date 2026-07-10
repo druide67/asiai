@@ -16,6 +16,7 @@ from asiai.engines.detect import (
 from asiai.engines.llamacpp import LlamaCppEngine
 from asiai.engines.lmstudio import LMStudioEngine
 from asiai.engines.mlxlm import MlxLmEngine
+from asiai.engines.mtplx import MtplxEngine
 from asiai.engines.ollama import OllamaEngine
 from asiai.engines.vllm_mlx import VllmMlxEngine
 from asiai.engines.vmlx import VmlxEngine
@@ -852,6 +853,67 @@ class TestVmlxEngine:
         assert models[0].format == "MLX"
 
 
+class TestMtplxEngine:
+    def test_name(self):
+        engine = MtplxEngine("http://localhost:8005")
+        assert engine.name == "mtplx"
+
+    def test_version_via_brew(self):
+        class _Out:
+            stdout = "mtplx 2.0.2\n"
+
+        with patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()):
+            engine = MtplxEngine("http://localhost:8005")
+            assert engine.version() == "2.0.2"
+
+    def test_version_not_installed(self):
+        class _Out:
+            stdout = ""
+
+        with patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()):
+            engine = MtplxEngine("http://localhost:8005")
+            assert engine.version() == ""
+
+    def test_generate_uses_chat_mode(self):
+        chunks = [
+            {"choices": [{"delta": {"content": "mt"}}]},
+            {"choices": [{"delta": {"content": "plx"}}], "usage": {"completion_tokens": 100}},
+        ]
+        with (
+            patch("asiai.engines.openai_compat.urlopen", return_value=_sse_response(chunks)),
+            patch("asiai.engines.openai_compat.time") as mock_time,
+        ):
+            # t0, first (0.1), last (0.5), elapsed. (100-1)/0.4 = 247.5.
+            mock_time.monotonic.side_effect = [0.0, 0.1, 0.5, 0.6]
+            engine = MtplxEngine("http://localhost:8005")
+            result = engine.generate("model", "hi", 256)
+
+        assert result.text == "mtplx"
+        assert result.tok_per_sec == 247.5
+        assert result.engine == "mtplx"
+
+    def test_list_running(self):
+        data = {"data": [{"id": "mtplx-qwen36-27b-optimized-speed", "owned_by": "mtplx"}]}
+        with patch("asiai.engines.openai_compat.http_get_json", return_value=(data, {})):
+            engine = MtplxEngine("http://localhost:8005")
+            models = engine.list_running()
+        assert len(models) == 1
+        assert models[0].format == "MLX"
+
+    def test_cli_engine_map_instantiates_mtplx(self):
+        """cli._discover_engines maps the 'mtplx' detection result to MtplxEngine."""
+        from asiai import cli
+
+        with patch(
+            "asiai.engines.detect.detect_engines",
+            return_value=[("http://localhost:8005", "mtplx", "2.0.2")],
+        ):
+            engines = cli._discover_engines(["http://localhost:8005"])
+
+        assert len(engines) == 1
+        assert isinstance(engines[0], MtplxEngine)
+
+
 class TestDetectCascade:
     """Full cascade detection tests for all 5 engines."""
 
@@ -1029,6 +1091,65 @@ class TestDetectCascade:
 
         assert engine == "vmlx"
         assert version == "1.5.38"
+
+    def test_detect_mtplx_via_owned_by(self):
+        """MTPLX: /v1/models with owned_by:'mtplx' -> detected as mtplx, version via brew."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {
+                    "data": [
+                        {
+                            "id": "mtplx-qwen36-27b-optimized-speed",
+                            "owned_by": "mtplx",
+                            "context_length": 262144,
+                        }
+                    ]
+                }, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                # MTPLX /health is rich JSON with "ok" (not "status"), so 2b won't match.
+                return {"ok": True, "generation_mode": "mtp"}, {}
+            return None, {}
+
+        class _Out:
+            stdout = "mtplx 2.0.2\n"
+
+        with (
+            patch("asiai.engines.detect.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.detect.subprocess.run", return_value=_Out()),
+        ):
+            engine, version = detect_engine_type("http://localhost:8005")
+
+        assert engine == "mtplx"
+        assert version == "2.0.2"
+
+    def test_detect_no_mtplx_owned_by_stays_mlxlm(self):
+        """/v1/models WITHOUT owned_by:'mtplx' must not match -> mlx-lm fallback."""
+
+        def mock_get(url, timeout=5):
+            if "/api/version" in url:
+                return None, {}
+            if "/v1/models" in url:
+                return {"data": [{"id": "some-model", "owned_by": "someone-else"}]}, {}
+            if "/lms/version" in url:
+                return None, {}
+            if "/health" in url:
+                return None, {}
+            if "/version" in url:
+                return None, {}
+            return None, {}
+
+        with (
+            patch("asiai.engines.detect.http_get_json", side_effect=mock_get),
+            patch("asiai.engines.detect.detect_port_process", return_value=""),
+        ):
+            engine, _ = detect_engine_type("http://localhost:8006")
+
+        assert engine == "mlxlm"
 
     def test_detect_mlxlm_fallback(self):
         """mlx-lm: /v1/models OK, no other markers -> fallback."""
