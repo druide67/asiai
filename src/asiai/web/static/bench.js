@@ -665,7 +665,13 @@
         showBenchProgress(summary.pill + ' · ' + summary.text);
 
         fetch('/bench/run', { method: 'POST', body: formData })
-            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                /* Non-JSON body (HTML error page from the server or a proxy):
+                   surface a readable message instead of a parse error. */
+                return res.json().catch(function () {
+                    return { error: 'HTTP ' + res.status + ' — server error' };
+                });
+            })
             .then(function (data) {
                 if (data.error) {
                     showError(data.error);
