@@ -104,6 +104,25 @@ class TestModeDispatchValidation:
         )
         assert resp.status_code == 422
 
+    def test_empty_burst_sizes_uses_cli_default(self, client, app_state):
+        """An empty (untouched) burst_sizes field must fall back to the CLI
+        default, not 500 — parse_burst_sizes(None) raised AttributeError."""
+        from asiai.benchmark.burst import DEFAULT_BURST_SIZES
+
+        payload = {"engine": "llamacpp", "model": "m", "started_at": NOW, "burst_results": {}}
+        with patch("asiai.benchmark.burst.run_burst", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={"bench_type": "burst", "mode_engine": "llamacpp", "burst_sizes": ""},
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert m.call_args.kwargs["burst_sizes"] == DEFAULT_BURST_SIZES
+        assert app_state.get_bench_snapshot()["error"] == ""
+
     def test_running_bench_409(self, client, app_state):
         app_state.reset_bench(running=True)
         resp = client.post("/bench/run", data={"bench_type": "agentic", "mode_engine": "llamacpp"})

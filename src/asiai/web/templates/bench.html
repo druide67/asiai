@@ -1,384 +1,532 @@
 {% extends "base.html" %}
 {% block title %}asiai — Benchmark{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/bench.css?v=1.0.0">
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2>Benchmark</h2>
     <p>Run cross-engine benchmarks with live progress</p>
 </div>
 
-<!-- Quick Bench CTA -->
-<div class="card card-accent fade-in" style="margin-bottom: 1.5rem;">
-    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
-        <button type="button" id="quick-bench-btn" class="btn btn-quick"
+<div class="bn-layout fade-in" id="bn-root" data-bench-running="{{ '1' if bench_running else '0' }}">
+<div class="bn-main">
+
+    <!-- Quick Bench hero -->
+    <div class="bn-hero">
+        <button type="button" id="quick-bench-btn" class="bn-run-btn bn-hero-btn"
                 {% if bench_running %}disabled{% endif %}>
-            &#9654; Quick Bench
+            <svg width="11" height="12" viewBox="0 0 11 12" fill="none" aria-hidden="true"><path d="M1 1.3v9.4c0 .8.9 1.3 1.6.9l7.4-4.7c.6-.4.6-1.4 0-1.8L2.6.4C1.9 0 1 .5 1 1.3Z" fill="currentColor"/></svg>
+            <span>Quick Bench</span>
         </button>
-        <div>
-            <div class="text-sm" style="color: var(--text-secondary); font-weight: 500;">One-click inference benchmark</div>
-            <span class="text-neutral-500 text-xs">
-                1 prompt &middot; 1 run &middot; ~15s &middot; shareable card
-            </span>
+        <div class="bn-hero-copy">
+            <div class="bn-hero-title">One-click inference benchmark</div>
+            <div class="bn-hero-meta">1 prompt &middot; 1 run &middot; ~15 s &middot; shareable card</div>
+        </div>
+        <div class="bn-hero-side">
+            {% set reachable_engines = engines | selectattr('reachable') | list %}
+            {% if reachable_engines | length == 1 %}
+            <div>uses <span class="bn-mono-accent">{{ reachable_engines[0].name }}</span> &middot; first loaded model</div>
+            {% elif reachable_engines %}
+            <div>auto-detected engines &middot; first common loaded model</div>
+            {% else %}
+            <div>no engine reachable</div>
+            {% endif %}
+            <div class="bn-hero-sub">zero configuration &middot; <a href="https://asiai.dev/commands/bench/" target="_blank" rel="noopener">documentation</a></div>
         </div>
     </div>
-    <p class="help-hint" style="margin-top: 0.75rem;">
-        <a href="https://asiai.dev/commands/bench/" target="_blank" rel="noopener">Documentation</a>
-        &middot; Compare your Apple Silicon inference speed across engines
-    </p>
-</div>
 
-<!-- Bench type selector -->
-<div class="filter-bar fade-in" style="margin-bottom: 1rem;">
-    <span class="text-xs text-neutral-500 filter-label" style="margin-right: 0.5rem;">Bench type:</span>
-    <button class="filter-chip active" data-btype="" onclick="setWebBenchType('', this)">throughput</button>
-    <button class="filter-chip" data-btype="agentic" onclick="setWebBenchType('agentic', this)">agentic</button>
-    <button class="filter-chip" data-btype="burst" onclick="setWebBenchType('burst', this)">burst</button>
-    <button class="filter-chip" data-btype="code" onclick="setWebBenchType('code', this)">code</button>
-    <button class="filter-chip" data-btype="language" onclick="setWebBenchType('language', this)">language</button>
-    <button class="filter-chip" data-btype="instruct" onclick="setWebBenchType('instruct', this)">instruct</button>
-    <button class="filter-chip" data-btype="thinking-ablation" onclick="setWebBenchType('thinking-ablation', this)">thinking</button>
-</div>
+    <!-- Divider -->
+    <div class="bn-divider"><span class="bn-divider-label">or configure a full run</span></div>
 
-<div class="fade-in" style="max-width: 720px;">
-    <!-- Mode form (non-throughput bench types) -->
-    <div class="card" id="mode-form-card" style="display: none;">
-        <h3 class="card-title" id="mode-form-title">Bench options</h3>
-        <p class="text-neutral-500 text-xs" id="mode-form-hint" style="margin-bottom: 0.75rem;"></p>
-        <form id="mode-form">
-            <div class="form-group">
-                <label class="form-label">Engine (one target)</label>
-                <select name="mode_engine" class="form-select" id="mode-engine">
-                    {% for engine in engines %}
-                    <option value="{{ engine.name }}">{{ engine.name }}{% if not engine.reachable %} (unreachable){% endif %}</option>
-                    {% endfor %}
-                </select>
+    <!-- Bench type selector: 7 types as primary navigation -->
+    <div class="bn-types" role="tablist" aria-label="Bench type">
+        <div class="bn-type-group">
+            <span class="bn-group-label">Performance</span>
+            <div class="bn-chip-row">
+                <button type="button" class="bn-chip active" data-btype="">throughput</button>
+                <button type="button" class="bn-chip" data-btype="agentic">agentic</button>
+                <button type="button" class="bn-chip" data-btype="burst">burst</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Model</label>
-                <select name="mode_model" class="form-select" id="mode-model-select">
-                    <option value="" selected>(auto — first loaded model)</option>
-                    <option value="__custom__">Custom…</option>
-                </select>
-                <input type="text" class="form-input" id="mode-model-custom"
-                       placeholder="model name" style="margin-top: 0.5rem; display: none;">
+        </div>
+        <span class="bn-type-sep" aria-hidden="true"></span>
+        <div class="bn-type-group">
+            <span class="bn-group-label">Quality</span>
+            <div class="bn-chip-row">
+                <button type="button" class="bn-chip" data-btype="code">code</button>
+                <button type="button" class="bn-chip" data-btype="language">language</button>
+                <button type="button" class="bn-chip" data-btype="instruct">instruct</button>
+                <button type="button" class="bn-chip" data-btype="thinking-ablation">thinking</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Runs / repeats: <span id="mode-runs-value">1</span></label>
-                <input type="range" name="mode_runs" class="form-range" min="1" max="10" value="1"
-                       oninput="document.getElementById('mode-runs-value').textContent = this.value">
-            </div>
+        </div>
+    </div>
+    <div class="bn-type-desc"><span class="bn-caret">&rsaquo;</span> <span id="bn-type-desc"></span></div>
 
-            <!-- agentic -->
-            <div class="form-group mode-group" data-modes="agentic" style="display: none;">
-                <label class="form-checkbox">
-                    <input type="checkbox" name="agentic_skip_long">
-                    Skip long phases
-                </label>
-            </div>
+    <!-- Collapsed run summary (shown while running / after a run) -->
+    <div class="bn-summary" id="bn-run-summary" hidden>
+        <span class="bn-summary-pill" id="bn-summary-type">throughput</span>
+        <span class="bn-summary-text" id="bn-summary-text"></span>
+        <button type="button" class="bn-ghost-btn" id="bn-edit-rerun" hidden>Edit &amp; re-run &blacktriangleright;</button>
+    </div>
 
-            <!-- burst -->
-            <div class="form-group mode-group" data-modes="burst" style="display: none;">
-                <label class="form-label">Burst sizes <span class="text-neutral-500 text-xs">(comma-separated)</span></label>
-                <input type="text" name="burst_sizes" class="form-input" placeholder="10,30,60">
-                <label class="form-label" style="margin-top: 0.5rem;">Max tokens per call</label>
-                <input type="number" name="burst_max_tokens" class="form-input" value="64" min="1" max="4096">
-            </div>
+    <!-- ══ Standard (throughput) form ══ -->
+    <div class="bn-form-card" id="standard-form-card">
+        <form id="bench-form">
+            <!-- 01 TARGET -->
+            <section class="bn-section">
+                <div class="bn-section-head">
+                    <span class="bn-step">01</span>
+                    <span class="bn-section-title">Target</span>
+                    <span class="bn-section-hint">engines &middot; model &middot; runs</span>
+                </div>
 
-            <!-- code -->
-            <div class="form-group mode-group" data-modes="code" style="display: none;">
-                <label class="form-label">Suites</label>
-                {% for suite in code_suites %}
-                <label class="form-checkbox">
-                    <input type="checkbox" name="code_suites" value="{{ suite }}"
-                           {% if suite in ('tool-call', 'recovery', 'thinking') %}checked{% endif %}>
-                    {{ suite }}
-                </label>
-                {% endfor %}
-            </div>
+                <div class="bn-field" id="engines-group">
+                    <span class="bn-label">Engines</span>
+                    <div class="bn-engine-grid">
+                        {% for engine in engines %}
+                        <label class="bn-engine-card">
+                            <input type="checkbox" name="engines" value="{{ engine.name }}"
+                                   {% if engine.reachable %}checked{% else %}disabled{% endif %}>
+                            <span class="bn-engine-face">
+                                <span class="bn-engine-row">
+                                    <span class="fl-dot sm {{ 'st-running' if engine.reachable else 'st-stopped' }}"></span>
+                                    <span class="bn-engine-name">{{ engine.name }}</span>
+                                </span>
+                                <span class="bn-engine-meta">{% if engine.reachable %}serving &middot; {{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}{% else %}offline{% endif %}</span>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if not engines %}
+                    <p class="bn-empty">No engines detected</p>
+                    {% endif %}
+                </div>
 
-            <!-- language -->
-            <div class="form-group mode-group" data-modes="language" style="display: none;">
-                <label class="form-label">Language</label>
-                <select name="language" class="form-select">
-                    {% for lang in languages %}
-                    <option value="{{ lang }}">{{ lang }}</option>
-                    {% endfor %}
-                </select>
-                <label class="form-label" style="margin-top: 0.5rem;">Suites</label>
-                {% for suite in language_suites %}
-                <label class="form-checkbox">
-                    <input type="checkbox" name="language_suites" value="{{ suite }}"
-                           {% if suite != 'fluency' %}checked{% endif %}>
-                    {{ suite }}
-                </label>
-                {% endfor %}
-            </div>
+                <div class="bn-target-grid">
+                    <div class="bn-field" id="model-group">
+                        <span class="bn-label">Model</span>
+                        <select name="model" class="bn-select" id="model-select">
+                            <option value="">(auto-detect)</option>
+                            {% for engine in engines %}
+                            {% if engine.reachable %}
+                            {% for model in engine.models %}
+                            <option value="{{ model }}">{{ model }} ({{ engine.name }})</option>
+                            {% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="model_custom" class="bn-input" id="model-custom"
+                               placeholder="or type a model name" style="margin-top: 0.5rem; display: none;">
+                        <a href="#" id="model-custom-toggle" class="bn-mini-link">Type custom model name</a>
+                        <div class="bn-note">blank = first loaded model common to the selected engines</div>
+                    </div>
+                    <div class="bn-field">
+                        <span class="bn-label">Runs</span>
+                        <div class="bn-seg" id="runs-seg">
+                            <button type="button" data-val="1">1</button>
+                            <button type="button" data-val="3" class="active">3</button>
+                            <button type="button" data-val="5">5</button>
+                            <button type="button" data-val="10">10</button>
+                        </div>
+                        {# Kept for the form contract (name="runs"); driven by the segments. #}
+                        <input type="range" name="runs" class="bn-visually-hidden" min="1" max="10" value="3"
+                               id="runs-range" tabindex="-1" aria-hidden="true">
+                        <div class="bn-note bn-mono" id="runs-ci-note">CI95 on every number &middot; n=3</div>
+                    </div>
+                </div>
+            </section>
 
-            <!-- instruct -->
-            <div class="form-group mode-group" data-modes="instruct" style="display: none;">
-                <label class="form-label">Scenarios <span class="text-neutral-500 text-xs">(none = default set)</span></label>
-                {% for scenario in instruct_scenarios %}
-                <label class="form-checkbox">
-                    <input type="checkbox" name="instruct_scenarios" value="{{ scenario }}">
-                    {{ scenario }}
-                </label>
-                {% endfor %}
-            </div>
+            <!-- 02 OPTIONS -->
+            <section class="bn-section">
+                <div class="bn-section-head">
+                    <span class="bn-step">02</span>
+                    <span class="bn-section-title">Options</span>
+                    <span class="bn-section-type">throughput</span>
+                </div>
 
-            <!-- judge (code + language) -->
-            <div class="form-group mode-group" data-modes="code language" style="display: none;">
-                <label class="form-label">LLM judge <span class="text-neutral-500 text-xs">(optional — API key comes from the SERVER env, never this form)</span></label>
-                <input type="text" name="judge_url" class="form-input" placeholder="judge URL (blank = deterministic checks only)">
-                <input type="text" name="judge_model" class="form-input" placeholder="judge model" style="margin-top: 0.5rem;">
-            </div>
+                <div class="bn-field">
+                    <span class="bn-label">Prompts</span>
+                    <div class="bn-suites">
+                        {% for prompt in prompts %}
+                        <label class="bn-suite">
+                            <input type="checkbox" name="prompts" value="{{ prompt.name }}" checked>
+                            <span class="bn-suite-box"></span>
+                            <span class="bn-suite-label">{{ prompt.label }}</span>
+                            <span class="bn-suite-meta">{{ prompt.max_tokens }} tok</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
 
-            <div class="form-group">
-                <label class="form-label">extra_body <span class="text-neutral-500 text-xs">(optional JSON — sampling params)</span></label>
-                <input type="text" name="mode_extra_body" class="form-input"
-                       placeholder='{"chat_template_kwargs": {"enable_thinking": false}}'>
-            </div>
+                <div class="bn-opt-row">
+                    <div class="bn-field bn-w-190">
+                        <span class="bn-label">Context fill</span>
+                        <select name="context_size" class="bn-select">
+                            <option value="">None (default prompts)</option>
+                            <option value="4k">4K tokens</option>
+                            <option value="16k">16K tokens</option>
+                            <option value="32k">32K tokens</option>
+                            <option value="64k">64K tokens</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
 
-            <button type="submit" id="mode-submit" class="btn btn-primary"
-                    {% if bench_running %}disabled{% endif %}>
-                Run bench
-            </button>
+            <!-- 03 ADVANCED -->
+            <details class="bn-adv" id="advanced-options">
+                <summary>
+                    <span class="bn-step bn-step-muted">03</span>
+                    <span class="bn-section-title">Advanced</span>
+                    <span class="bn-adv-note" id="std-adv-note">compare: off &middot; card + share on</span>
+                    <span class="bn-adv-chevron">&blacktriangleright;</span>
+                </summary>
+                <div class="bn-adv-body">
+                    <div class="bn-adv-col">
+                        <span class="bn-label">Compare mode</span>
+                        <label class="bn-switch">
+                            <input type="checkbox" id="compare-toggle" name="compare_mode">
+                            <span class="bn-switch-track"></span>
+                            <span class="bn-switch-label">Compare multiple models</span>
+                        </label>
+                        <div class="bn-field" id="compare-group" style="display: none;">
+                            <span class="bn-label">Compare models (select 2&ndash;8)</span>
+                            <select name="compare_models" class="bn-select" id="compare-select" multiple
+                                    size="4" style="min-height: 100px;">
+                                {% for engine in engines %}
+                                {% if engine.reachable %}
+                                {% for model in engine.models %}
+                                <option value="{{ model }}@{{ engine.name }}">{{ model }} @ {{ engine.name }}</option>
+                                {% endfor %}
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <div class="bn-note">Hold Cmd/Ctrl to select multiple. Format: model@engine.</div>
+                        </div>
+                    </div>
+                    <div class="bn-adv-col">
+                        <span class="bn-label">Power &middot; card &middot; share</span>
+                        {% if ioreport_power %}
+                        <div class="bn-note" style="margin-top: 0;">Power monitoring: always-on via IOReport (no sudo needed)</div>
+                        {% if power_available %}
+                        <label class="bn-switch">
+                            <input type="checkbox" name="power">
+                            <span class="bn-switch-track"></span>
+                            <span class="bn-switch-label">Cross-validate with powermetrics (sudo)</span>
+                        </label>
+                        {% endif %}
+                        {% else %}
+                        <label class="bn-switch">
+                            <input type="checkbox" name="power" {% if not power_available %}disabled{% endif %}>
+                            <span class="bn-switch-track"></span>
+                            <span class="bn-switch-label">Measure power (tok/s per watt){% if not power_available %} &mdash; unavailable{% endif %}</span>
+                        </label>
+                        {% if not power_available %}
+                        <div class="bn-note">Enable with: <code>echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/powermetrics" | sudo tee /etc/sudoers.d/powermetrics</code></div>
+                        {% endif %}
+                        {% endif %}
+                        <label class="bn-switch">
+                            <input type="checkbox" name="card" checked>
+                            <span class="bn-switch-track"></span>
+                            <span class="bn-switch-label">Generate shareable card</span>
+                        </label>
+                        <label class="bn-switch">
+                            <input type="checkbox" name="share" checked>
+                            <span class="bn-switch-track"></span>
+                            <span class="bn-switch-label">Share to community</span>
+                            <span class="bn-switch-hint">api.asiai.dev</span>
+                        </label>
+                    </div>
+                </div>
+            </details>
+
+            <!-- footer -->
+            <div class="bn-footer">
+                <button type="submit" id="bench-submit" class="bn-run-btn"
+                        {% if bench_running %}disabled{% endif %}>
+                    <svg width="10" height="11" viewBox="0 0 11 12" fill="none" aria-hidden="true"><path d="M1 1.3v9.4c0 .8.9 1.3 1.6.9l7.4-4.7c.6-.4.6-1.4 0-1.8L2.6.4C1.9 0 1 .5 1 1.3Z" fill="currentColor"/></svg>
+                    <span id="bench-submit-label">Run throughput bench</span>
+                </button>
+                <span class="bn-est" id="std-est"></span>
+                <button type="button" class="bn-ghost-btn" id="std-reset">Reset</button>
+            </div>
         </form>
     </div>
 
-    <!-- Benchmark form -->
-    <div class="card" id="standard-form-card">
-        <details id="advanced-options">
-            <summary class="card-title advanced-toggle">
-                <span class="chevron">&#9654;</span> Advanced options
-            </summary>
-            <form id="bench-form" style="margin-top: 1rem;">
-                <!-- Model (dropdown of loaded models + free text) -->
-                <div class="form-group">
-                    <label class="form-label">Model</label>
-                    <select name="model" class="form-select" id="model-select">
-                        <option value="">(auto-detect)</option>
-                        {% for engine in engines %}
-                        {% if engine.reachable %}
-                        {% for model in engine.models %}
-                        <option value="{{ model }}">{{ model }} ({{ engine.name }})</option>
-                        {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </select>
-                    <input type="text" name="model_custom" class="form-input" id="model-custom"
-                           placeholder="or type a model name" style="margin-top: 0.5rem; display: none;">
-                    <a href="#" id="model-custom-toggle" class="text-xs" style="margin-top: 0.25rem; display: inline-block;">
-                        Type custom model name
-                    </a>
+    <!-- ══ Mode form (agentic / burst / code / language / instruct / thinking) ══ -->
+    <div class="bn-form-card" id="mode-form-card" style="display: none;">
+        <form id="mode-form">
+            <!-- 01 TARGET -->
+            <section class="bn-section">
+                <div class="bn-section-head">
+                    <span class="bn-step">01</span>
+                    <span class="bn-section-title">Target</span>
+                    <span class="bn-section-hint">engine &middot; model &middot; runs</span>
                 </div>
 
-                <!-- Compare mode -->
-                <div class="form-group" id="compare-group" style="display: none;">
-                    <label class="form-label">Compare models (select 2-8)</label>
-                    <select name="compare_models" class="form-select" id="compare-select" multiple
-                            size="4" style="min-height: 100px;">
+                <div class="bn-field">
+                    <span class="bn-label">Engine (one target)</span>
+                    <div class="bn-engine-grid" id="mode-engine-cards">
                         {% for engine in engines %}
-                        {% if engine.reachable %}
-                        {% for model in engine.models %}
-                        <option value="{{ model }}@{{ engine.name }}">{{ model }} @ {{ engine.name }}</option>
+                        <button type="button" class="bn-engine-face{% if loop.first %} active{% endif %}"
+                                data-engine="{{ engine.name }}">
+                            <span class="bn-engine-row">
+                                <span class="fl-dot sm {{ 'st-running' if engine.reachable else 'st-stopped' }}"></span>
+                                <span class="bn-engine-name">{{ engine.name }}</span>
+                            </span>
+                            <span class="bn-engine-meta">{% if engine.reachable %}serving &middot; {{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}{% else %}unreachable{% endif %}</span>
+                        </button>
                         {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </select>
-                    <p class="help-hint" style="margin-top: 0.25rem;">
-                        <span class="text-neutral-500 text-xs">Hold Cmd/Ctrl to select multiple. Format: model@engine.</span>
-                    </p>
-                </div>
-                <div class="form-group">
-                    <label class="form-checkbox">
-                        <input type="checkbox" id="compare-toggle" name="compare_mode">
-                        Compare multiple models
-                    </label>
-                </div>
-
-                <!-- Engines -->
-                <div class="form-group" id="engines-group">
-                    <label class="form-label">Engines</label>
-                    {% for engine in engines %}
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="engines" value="{{ engine.name }}"
-                               {% if engine.reachable %}checked{% else %}disabled{% endif %}>
-                        <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
-                        {{ engine.name }}
-                        {% if not engine.reachable %}<span class="text-neutral-500">(offline)</span>{% endif %}
-                    </label>
-                    {% endfor %}
+                    </div>
                     {% if not engines %}
-                    <p class="text-neutral-400 text-sm">No engines detected</p>
+                    <p class="bn-empty">No engines detected</p>
                     {% endif %}
-                </div>
-
-                <!-- Prompts -->
-                <div class="form-group">
-                    <label class="form-label">Prompts</label>
-                    {% for prompt in prompts %}
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="prompts" value="{{ prompt.name }}" checked>
-                        {{ prompt.label }} <span class="text-neutral-500 text-xs">({{ prompt.max_tokens }} tokens)</span>
-                    </label>
-                    {% endfor %}
-                </div>
-
-                <!-- Runs -->
-                <div class="form-group">
-                    <label class="form-label">Runs: <span id="runs-value">3</span></label>
-                    <input type="range" name="runs" class="form-range" min="1" max="10" value="3"
-                           oninput="document.getElementById('runs-value').textContent = this.value">
-                </div>
-
-                <!-- Context fill -->
-                <div class="form-group">
-                    <label class="form-label">Context fill</label>
-                    <select name="context_size" class="form-select">
-                        <option value="">None (default prompts)</option>
-                        <option value="4k">4K tokens</option>
-                        <option value="16k">16K tokens</option>
-                        <option value="32k">32K tokens</option>
-                        <option value="64k">64K tokens</option>
+                    {# Kept for the form contract (name="mode_engine"); driven by the cards. #}
+                    <select name="mode_engine" class="bn-visually-hidden" id="mode-engine" tabindex="-1" aria-hidden="true">
+                        {% for engine in engines %}
+                        <option value="{{ engine.name }}">{{ engine.name }}{% if not engine.reachable %} (unreachable){% endif %}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
-                <!-- Power -->
-                <div class="form-group">
-                    {% if ioreport_power %}
-                    <p class="help-hint" style="margin-left: 0;">
-                        <span class="text-neutral-400 text-xs">Power monitoring: always-on via IOReport (no sudo needed)</span>
-                    </p>
-                    {% if power_available %}
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="power">
-                        Cross-validate with powermetrics (sudo)
-                        <span class="text-neutral-500 text-xs">(stores both readings for comparison)</span>
-                    </label>
-                    {% endif %}
-                    {% else %}
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="power" {% if not power_available %}disabled{% endif %}>
-                        Measure power (tok/s per watt)
-                        {% if power_available %}
-                        <span class="text-neutral-500 text-xs">(via powermetrics)</span>
-                        {% else %}
-                        <span class="text-neutral-500 text-xs">(unavailable)</span>
-                        {% endif %}
-                    </label>
-                    {% if not power_available %}
-                    <p class="help-hint" style="margin-top: 0.25rem; margin-left: 1.5rem;">
-                        Enable with: <code style="font-size: 0.7rem; background: var(--bg-elevated); padding: 0.1rem 0.4rem; border-radius: 0.25rem;">echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/powermetrics" | sudo tee /etc/sudoers.d/powermetrics</code>
-                    </p>
-                    {% endif %}
-                    {% endif %}
+                <div class="bn-target-grid">
+                    <div class="bn-field">
+                        <span class="bn-label">Model</span>
+                        <select name="mode_model" class="bn-select" id="mode-model-select">
+                            <option value="" selected>(auto — first loaded model)</option>
+                            <option value="__custom__">Custom…</option>
+                        </select>
+                        <input type="text" class="bn-input" id="mode-model-custom"
+                               placeholder="model name" style="margin-top: 0.5rem; display: none;">
+                        <div class="bn-note">blank = first loaded model &middot; installed models load on first request</div>
+                    </div>
+                    <div class="bn-field">
+                        <span class="bn-label">Runs</span>
+                        <div class="bn-seg" id="mode-runs-seg">
+                            <button type="button" data-val="1" class="active">1</button>
+                            <button type="button" data-val="3">3</button>
+                            <button type="button" data-val="5">5</button>
+                            <button type="button" data-val="10">10</button>
+                        </div>
+                        {# Kept for the form contract (name="mode_runs"); driven by the segments. #}
+                        <input type="range" name="mode_runs" class="bn-visually-hidden" min="1" max="10" value="1"
+                               id="mode-runs-range" tabindex="-1" aria-hidden="true">
+                        <div class="bn-note bn-mono" id="mode-runs-ci-note"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 02 OPTIONS (per-type groups) -->
+            <section class="bn-section">
+                <div class="bn-section-head">
+                    <span class="bn-step">02</span>
+                    <span class="bn-section-title">Options</span>
+                    <span class="bn-section-type" id="mode-options-type"></span>
                 </div>
 
-                <!-- Card & Share -->
-                <div class="form-group">
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="card" checked>
-                        Generate shareable card
-                    </label>
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="share" checked>
-                        Share to community
-                        <span class="text-neutral-500 text-xs">(api.asiai.dev)</span>
-                    </label>
+                <!-- agentic -->
+                <div class="bn-field mode-group" data-modes="agentic" style="display: none;">
+                    <div class="bn-opt-row" style="align-items: center;">
+                        <label class="bn-switch">
+                            <input type="checkbox" name="agentic_skip_long">
+                            <span class="bn-switch-track"></span>
+                            <span class="bn-switch-label">Skip long phases</span>
+                        </label>
+                        <span class="bn-switch-hint">prefix-cache reuse &middot; cold &rarr; warm &middot; verdict + reuse % stamped on the card</span>
+                    </div>
                 </div>
 
-                <button type="submit" id="bench-submit" class="btn btn-primary"
+                <!-- burst -->
+                <div class="bn-field mode-group" data-modes="burst" style="display: none;">
+                    <div class="bn-opt-row">
+                        <div class="bn-w-190">
+                            <span class="bn-label">Burst sizes <span style="text-transform: none; letter-spacing: 0;">(comma-separated)</span></span>
+                            <input type="text" name="burst_sizes" class="bn-input" value="30,60">
+                        </div>
+                        <div class="bn-w-170">
+                            <span class="bn-label">Max tokens per call</span>
+                            <input type="number" name="burst_max_tokens" class="bn-input" value="64" min="1" max="4096">
+                        </div>
+                    </div>
+                    <div class="bn-note bn-mono">p50 / p95 / p99 per size &middot; aggregate tok/s</div>
+                </div>
+
+                <!-- code -->
+                <div class="bn-field mode-group" data-modes="code" style="display: none;">
+                    <span class="bn-label">Suites</span>
+                    <div class="bn-suites">
+                        {% for suite in code_suites %}
+                        <label class="bn-suite">
+                            <input type="checkbox" name="code_suites" value="{{ suite }}"
+                                   {% if suite in ('tool-call', 'recovery', 'thinking') %}checked{% endif %}>
+                            <span class="bn-suite-box"></span>
+                            <span class="bn-suite-label">{{ suite }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="bn-note">deterministic gates run always &middot; LLM judge optional (Advanced)</div>
+                </div>
+
+                <!-- language -->
+                <div class="bn-field mode-group" data-modes="language" style="display: none;">
+                    <div class="bn-opt-row">
+                        <div class="bn-w-190">
+                            <span class="bn-label">Language</span>
+                            <select name="language" class="bn-select">
+                                {% for lang in languages %}
+                                <option value="{{ lang }}">{{ lang }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="bn-field">
+                            <span class="bn-label">Suites</span>
+                            <div class="bn-suites">
+                                {% for suite in language_suites %}
+                                <label class="bn-suite">
+                                    <input type="checkbox" name="language_suites" value="{{ suite }}"
+                                           {% if suite != 'fluency' %}checked{% endif %}>
+                                    <span class="bn-suite-box"></span>
+                                    <span class="bn-suite-label">{{ suite }}</span>
+                                    {% if suite == 'fluency' %}<span class="bn-suite-note">needs judge</span>{% endif %}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- instruct -->
+                <div class="bn-field mode-group" data-modes="instruct" style="display: none;">
+                    <span class="bn-label">Scenarios <span style="text-transform: none; letter-spacing: 0;">(none = default set)</span></span>
+                    <div class="bn-suites">
+                        {% for scenario in instruct_scenarios %}
+                        <label class="bn-suite">
+                            <input type="checkbox" name="instruct_scenarios" value="{{ scenario }}">
+                            <span class="bn-suite-box"></span>
+                            <span class="bn-suite-label">{{ scenario }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- thinking-ablation has no extra options -->
+                <div class="bn-field mode-group" data-modes="thinking-ablation" style="display: none;">
+                    <div class="bn-note bn-mono" style="margin-top: 0;">thinking on/off ablation on a tool-call-stress load &middot; no extra options</div>
+                </div>
+            </section>
+
+            <!-- 03 ADVANCED -->
+            <details class="bn-adv" id="mode-advanced">
+                <summary>
+                    <span class="bn-step bn-step-muted">03</span>
+                    <span class="bn-section-title">Advanced</span>
+                    <span class="bn-adv-note" id="mode-adv-note">judge: off &middot; sampling: engine defaults</span>
+                    <span class="bn-adv-chevron">&blacktriangleright;</span>
+                </summary>
+                <div class="bn-adv-body">
+                    <div class="bn-adv-col mode-group" data-modes="code language" style="display: none;">
+                        <span class="bn-label">LLM judge &middot; optional</span>
+                        <input type="text" name="judge_url" class="bn-input"
+                               placeholder="judge URL — blank = deterministic checks only">
+                        <input type="text" name="judge_model" class="bn-input" placeholder="judge model">
+                        <div class="bn-key-note">
+                            <svg width="11" height="12" viewBox="0 0 10 12" fill="none" aria-hidden="true"><rect y="5" width="10" height="7" rx="1.5" fill="#52525b"/><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" stroke="#52525b" stroke-width="1.4" fill="none"/></svg>
+                            <span>API key is read from the server env (<code>ASIAI_JUDGE_API_KEY</code>) &mdash; never sent from this form. Web judges must target loopback.</span>
+                        </div>
+                    </div>
+                    <div class="bn-adv-col">
+                        <span class="bn-label">Sampling params</span>
+                        <div class="bn-presets" id="mode-presets">
+                            <button type="button" class="bn-preset active" data-preset="">Engine defaults</button>
+                            <button type="button" class="bn-preset" data-preset='{"temperature": 0, "seed": 42}'>Deterministic</button>
+                            <button type="button" class="bn-preset" data-preset='{"temperature": 0.9, "top_p": 0.95}'>Creative</button>
+                            <button type="button" class="bn-preset" data-preset='{"chat_template_kwargs": {"enable_thinking": false}}'>Thinking off</button>
+                        </div>
+                        <input type="text" name="mode_extra_body" class="bn-input" id="mode-extra-body"
+                               placeholder='{"chat_template_kwargs": {"enable_thinking": false}}'>
+                        <div class="bn-note">extra_body &mdash; optional JSON forwarded to the engine</div>
+                    </div>
+                </div>
+            </details>
+
+            <!-- footer -->
+            <div class="bn-footer">
+                <button type="submit" id="mode-submit" class="bn-run-btn"
                         {% if bench_running %}disabled{% endif %}>
-                    {% if bench_running %}
-                    <span class="spinner"></span> Running...
-                    {% else %}
-                    Run Benchmark
-                    {% endif %}
+                    <svg width="10" height="11" viewBox="0 0 11 12" fill="none" aria-hidden="true"><path d="M1 1.3v9.4c0 .8.9 1.3 1.6.9l7.4-4.7c.6-.4.6-1.4 0-1.8L2.6.4C1.9 0 1 .5 1 1.3Z" fill="currentColor"/></svg>
+                    <span id="mode-submit-label">Run bench</span>
                 </button>
-            </form>
-        </details>
+                <span class="bn-est" id="mode-est"></span>
+                <button type="button" class="bn-ghost-btn" id="mode-reset">Reset</button>
+            </div>
+        </form>
     </div>
 
-    <!-- Progress & Status (below form, same column) -->
-    <div class="card" id="status-card" style="margin-top: 1rem;">
-        <h3 class="card-title">Status</h3>
+    <!-- Status panel (idle / running / completed / error) -->
+    <div class="bn-status" id="status-card">
         <div id="bench-status">
             {% if bench_running %}
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <span class="spinner"></span>
-                <span class="text-sm animate-pulse">Benchmark in progress...</span>
+            <div class="bn-status-row is-running">
+                <span class="bn-dot-live"></span>
+                <span class="bn-status-title">Running</span>
+                <span class="bn-status-meta">benchmark in progress&hellip;</span>
             </div>
             {% else %}
-            <p class="text-neutral-400 text-sm">Ready. Click Quick Bench or configure advanced options.</p>
+            <div class="bn-status-row">
+                <span class="bn-dot-idle"></span>
+                <span class="bn-status-title">Ready</span>
+                <span class="bn-status-meta">waiting &mdash; Quick Bench or Run bench &middot; progress + live log appear here</span>
+            </div>
             {% endif %}
         </div>
     </div>
+
+    <!-- Results area (mode report / standard results table) -->
+    <div id="bench-results"></div>
+
+    <!-- Charts -->
+    <div class="card-grid-2" id="bench-charts-row" style="display: none;">
+        <div class="card">
+            <h3 class="card-title">Throughput (tok/s)</h3>
+            <div id="bench-tok-chart" class="chart-container"></div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">Time to First Token (ms)</h3>
+            <div id="bench-ttft-chart" class="chart-container"></div>
+        </div>
+    </div>
+
+    <!-- Share section (populated by JS after a standard bench completes) -->
+    <div id="bench-share-section" style="display: none;"></div>
 </div>
 
-<!-- System summary -->
-<div class="card-grid mt-6 fade-in-delay-1" id="bench-system-info">
-    {% if snapshot %}
-    <div class="card">
-        <h3 class="card-title">System</h3>
-        <div class="metric-row">
-            <div>
-                <div class="metric-label">CPU</div>
-                <div class="metric-value text-sm">{{ snapshot.cpu_cores }} cores &middot; load {{ snapshot.cpu_load_1 | format_number }}</div>
+<!-- Right rail -->
+<aside class="bn-rail">
+    <div class="bn-rail-panel">
+        <div class="bn-rail-title">Engines</div>
+        <div class="bn-rail-rows">
+            {% for engine in engines %}
+            <div class="bn-rail-row">
+                <span class="fl-dot sm {{ 'st-running' if engine.reachable else 'st-stopped' }}"></span>
+                <span class="bn-rail-engine">{{ engine.name }}</span>
+                <span class="bn-rail-meta">{% if engine.reachable %}{{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}{% else %}offline{% endif %}</span>
             </div>
-            <div class="text-right">
-                <div class="metric-label">Memory</div>
-                <div class="metric-value text-sm">{{ snapshot.mem_used | format_bytes }} / {{ snapshot.mem_total | format_bytes }}</div>
-            </div>
+            {% else %}
+            <p class="bn-empty">No engines detected</p>
+            {% endfor %}
         </div>
-        {% if snapshot.gpu_utilization_pct is defined and snapshot.gpu_utilization_pct >= 0 %}
-        <div class="metric-row" style="margin-top: 0.5rem;">
-            <div>
-                <div class="metric-label">GPU</div>
-                <div class="metric-value text-sm">{{ snapshot.gpu_utilization_pct | format_number }}%</div>
-            </div>
-            <div class="text-right">
-                <div class="metric-label">GPU Memory</div>
-                <div class="metric-value text-sm">{{ snapshot.gpu_mem_in_use | format_bytes }}</div>
-            </div>
-        </div>
-        {% endif %}
     </div>
-    {% endif %}
-    <div class="card">
-        <h3 class="card-title">Engines</h3>
-        {% for engine in engines %}
-        <div class="metric-row" {% if not loop.first %}style="margin-top: 0.5rem;"{% endif %}>
-            <span>
-                <span class="status-dot {% if engine.reachable %}green{% else %}gray{% endif %}"></span>
-                {{ engine.name }}
-                {% if engine.version %}<span class="text-neutral-500 text-xs">{{ engine.version }}</span>{% endif %}
-            </span>
-            <span class="text-neutral-500 text-xs">{{ engine.models | length }} model{{ 's' if engine.models | length != 1 }}</span>
+    <div class="bn-rail-panel">
+        <div class="bn-rail-head">
+            <span class="bn-rail-title">Card conditions</span>
+            <span class="bn-cond-badge" id="bn-cond-badge">auto</span>
         </div>
-        {% endfor %}
-        {% if not engines %}
-        <p class="text-neutral-400 text-sm">No engines detected</p>
-        {% endif %}
+        <div class="bn-cond-rows" id="bn-cond-rows"></div>
+        <div class="bn-rail-note">Stamped on every shareable card &mdash; a number never travels without its conditions.</div>
     </div>
+</aside>
 </div>
-
-<!-- Results area -->
-<div id="bench-results" class="mt-6"></div>
-
-<!-- Charts -->
-<div class="card-grid-2 mt-6" id="bench-charts-row" style="display: none;">
-    <div class="card">
-        <h3 class="card-title">Throughput (tok/s)</h3>
-        <div id="bench-tok-chart" class="chart-container"></div>
-    </div>
-    <div class="card">
-        <h3 class="card-title">Time to First Token (ms)</h3>
-        <div id="bench-ttft-chart" class="chart-container"></div>
-    </div>
-</div>
-
-<!-- Share section (populated by JS after bench completes) -->
-<div id="bench-share-section" class="mt-6" style="display: none;"></div>
 {% endblock %}
 
 {% block scripts %}
@@ -386,666 +534,5 @@
    script block only — NEVER inside an HTML attribute (it does not escape
    double quotes; see the 1.23.0 leaderboard chip regression). #}
 <script type="application/json" id="mode-model-data">{{ engines | tojson }}</script>
-<script>
-    const form = document.getElementById('bench-form');
-    const submitBtn = document.getElementById('bench-submit');
-    const quickBtn = document.getElementById('quick-bench-btn');
-    const statusDiv = document.getElementById('bench-status');
-    const resultsDiv = document.getElementById('bench-results');
-    var benchTokChart = null;
-    var benchTtftChart = null;
-
-    /* Model: custom text toggle */
-    var customToggle = document.getElementById('model-custom-toggle');
-    var customInput = document.getElementById('model-custom');
-    var modelSelect = document.getElementById('model-select');
-    if (customToggle) {
-        customToggle.addEventListener('click', function(e) {
-            e.preventDefault();
-            if (customInput.style.display === 'none') {
-                customInput.style.display = '';
-                modelSelect.style.display = 'none';
-                customToggle.textContent = 'Use model dropdown';
-            } else {
-                customInput.style.display = 'none';
-                modelSelect.style.display = '';
-                customToggle.textContent = 'Type custom model name';
-                customInput.value = '';
-            }
-        });
-    }
-
-    /* Compare mode toggle */
-    var compareToggle = document.getElementById('compare-toggle');
-    var compareGroup = document.getElementById('compare-group');
-    var enginesGroup = document.getElementById('engines-group');
-    var modelGroup = modelSelect ? modelSelect.closest('.form-group') : null;
-    if (compareToggle) {
-        compareToggle.addEventListener('change', function() {
-            if (this.checked) {
-                compareGroup.style.display = '';
-                if (enginesGroup) enginesGroup.style.display = 'none';
-                if (modelGroup) modelGroup.style.display = 'none';
-            } else {
-                compareGroup.style.display = 'none';
-                if (enginesGroup) enginesGroup.style.display = '';
-                if (modelGroup) modelGroup.style.display = '';
-            }
-        });
-    }
-
-    function showBenchProgress() {
-        statusDiv.textContent = '';
-        var progressRow = document.createElement('div');
-        progressRow.style.display = 'flex';
-        progressRow.style.alignItems = 'center';
-        progressRow.style.gap = '0.75rem';
-        var progressSpinner = document.createElement('span');
-        progressSpinner.className = 'spinner';
-        progressRow.appendChild(progressSpinner);
-        var progressText = document.createElement('span');
-        progressText.className = 'text-sm animate-pulse';
-        progressText.id = 'progress-text';
-        progressText.textContent = 'Starting benchmark...';
-        progressRow.appendChild(progressText);
-        statusDiv.appendChild(progressRow);
-    }
-
-    function disableAllBenchButtons() {
-        submitBtn.disabled = true;
-        submitBtn.textContent = '';
-        var spinner = document.createElement('span');
-        spinner.className = 'spinner';
-        submitBtn.appendChild(spinner);
-        submitBtn.appendChild(document.createTextNode(' Running...'));
-        quickBtn.disabled = true;
-    }
-
-    function enableAllBenchButtons() {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Run Benchmark';
-        quickBtn.disabled = false;
-    }
-
-    // ── Bench type switcher (mode forms) ─────────────────────────
-    var webBenchType = '';
-    var MODE_HINTS = {
-        'agentic': '8-run prefix-cache reuse protocol — several minutes per repeat.',
-        'burst': 'N-parallel concurrent calls — heavy load on the engine while it runs.',
-        'code': 'Deterministic dev-quality suites; the optional LLM judge grades coding tasks.',
-        'language': 'Multilingual retention suites; fluency needs the optional judge.',
-        'instruct': 'Instruction-following: IFEval-style verifiable + agentic deliverables.',
-        'thinking-ablation': 'Thinking on/off ablation on a tool-call-stress load.'
-    };
-
-    function setWebBenchType(type, btn) {
-        webBenchType = type || '';
-        document.querySelectorAll('.filter-chip[data-btype]').forEach(function(c) {
-            c.classList.remove('active');
-        });
-        btn.classList.add('active');
-        var modeCard = document.getElementById('mode-form-card');
-        var stdCard = document.getElementById('standard-form-card');
-        if (!webBenchType) {
-            modeCard.style.display = 'none';
-            stdCard.style.display = '';
-            quickBtn.disabled = false;
-            return;
-        }
-        stdCard.style.display = 'none';
-        modeCard.style.display = '';
-        quickBtn.disabled = true;
-        document.getElementById('mode-form-title').textContent = webBenchType + ' bench';
-        document.getElementById('mode-form-hint').textContent = MODE_HINTS[webBenchType] || '';
-        document.querySelectorAll('#mode-form .mode-group').forEach(function(g) {
-            var modes = (g.dataset.modes || '').split(' ');
-            g.style.display = modes.indexOf(webBenchType) >= 0 ? '' : 'none';
-        });
-    }
-    window.setWebBenchType = setWebBenchType;
-
-    /* Mode model picker: options follow the engine selected in mode_engine */
-    var MODE_CUSTOM = '__custom__';
-    var modeEngineSelect = document.getElementById('mode-engine');
-    var modeModelSelect = document.getElementById('mode-model-select');
-    var modeModelCustom = document.getElementById('mode-model-custom');
-    var modeEngineData = [];
-    try {
-        modeEngineData = JSON.parse(
-            document.getElementById('mode-model-data').textContent || '[]');
-    } catch (e) { /* malformed data: picker degrades to auto + custom */ }
-
-    function rebuildModeModelOptions() {
-        var engineName = modeEngineSelect ? modeEngineSelect.value : '';
-        var entry = null;
-        for (var i = 0; i < modeEngineData.length; i++) {
-            if (modeEngineData[i].name === engineName) { entry = modeEngineData[i]; break; }
-        }
-        modeModelSelect.textContent = '';
-        var autoOpt = document.createElement('option');
-        autoOpt.value = '';
-        autoOpt.textContent = '(auto — first loaded model)';
-        modeModelSelect.appendChild(autoOpt);
-        if (entry) {
-            (entry.models || []).forEach(function(name) {
-                var opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name;
-                modeModelSelect.appendChild(opt);
-            });
-            (entry.available || []).forEach(function(name) {
-                var opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name + ' — will load';
-                modeModelSelect.appendChild(opt);
-            });
-        }
-        var customOpt = document.createElement('option');
-        customOpt.value = MODE_CUSTOM;
-        customOpt.textContent = 'Custom…';
-        modeModelSelect.appendChild(customOpt);
-        modeModelSelect.value = '';
-        if (modeModelCustom) {
-            modeModelCustom.style.display = 'none';
-            modeModelCustom.value = '';
-        }
-    }
-    if (modeModelSelect) {
-        modeModelSelect.addEventListener('change', function() {
-            if (!modeModelCustom) return;
-            var isCustom = this.value === MODE_CUSTOM;
-            modeModelCustom.style.display = isCustom ? '' : 'none';
-            if (!isCustom) modeModelCustom.value = '';
-        });
-        if (modeEngineSelect) {
-            modeEngineSelect.addEventListener('change', rebuildModeModelOptions);
-        }
-        rebuildModeModelOptions();
-    }
-
-    var modeForm = document.getElementById('mode-form');
-    var modeSubmit = document.getElementById('mode-submit');
-    modeForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (!webBenchType) return;
-        modeSubmit.disabled = true;
-        disableAllBenchButtons();
-        showBenchProgress();
-
-        var formData = new FormData(modeForm);
-        formData.append('bench_type', webBenchType);
-        if (modeModelSelect && modeModelSelect.value === MODE_CUSTOM) {
-            // The custom input has no name= — its value replaces the select's.
-            // Empty custom = auto, same server behavior as an empty field.
-            formData.set('mode_model', modeModelCustom ? modeModelCustom.value.trim() : '');
-        }
-
-        fetch('/bench/run', { method: 'POST', body: formData })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                if (data.error) {
-                    modeSubmit.disabled = false;
-                    showError(data.error);
-                    return;
-                }
-                startBenchSSE();
-            })
-            .catch(function(err) {
-                modeSubmit.disabled = false;
-                showError(err.message);
-            });
-    });
-
-    function renderModeResult(data) {
-        var container = document.getElementById('bench-results');
-        container.textContent = '';
-        var card = document.createElement('div');
-        card.className = 'card';
-        var title = document.createElement('h3');
-        title.className = 'card-title';
-        title.textContent = data.bench_type + ' bench — report';
-        card.appendChild(title);
-
-        var actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;';
-        var copyBtn = document.createElement('button');
-        copyBtn.className = 'btn';
-        copyBtn.textContent = 'Copy markdown';
-        var cardLink = document.createElement('a');
-        cardLink.className = 'btn';
-        cardLink.textContent = 'Open card .svg';
-        cardLink.href = '/bench/card/' + data.result_run_id + '.svg';
-        cardLink.target = '_blank';
-        actions.appendChild(cardLink);
-        var dlLink = document.createElement('a');
-        dlLink.className = 'btn';
-        dlLink.textContent = 'Open .md';
-        dlLink.href = '/bench/report/' + data.result_run_id + '.md';
-        dlLink.target = '_blank';
-        var histLink = document.createElement('a');
-        histLink.className = 'btn';
-        histLink.textContent = 'View in History';
-        histLink.href = '/history';
-        actions.appendChild(copyBtn);
-        actions.appendChild(dlLink);
-        actions.appendChild(histLink);
-        card.appendChild(actions);
-
-        var img = document.createElement('img');
-        img.src = '/bench/card/' + data.result_run_id + '.svg';
-        img.alt = 'bench result card';
-        img.style.cssText = 'max-width:100%;border-radius:0.6rem;margin-bottom:0.75rem;';
-        img.addEventListener('error', function() { img.remove(); });
-        card.appendChild(img);
-
-        var pre = document.createElement('pre');
-        pre.style.cssText = 'max-height:420px;overflow:auto;font-size:0.72rem;' +
-            'background:var(--bg-elevated);padding:0.9rem;border-radius:0.4rem;white-space:pre-wrap;';
-        pre.textContent = 'Loading report…';
-        card.appendChild(pre);
-        container.appendChild(card);
-
-        fetch('/bench/report/' + data.result_run_id + '.md')
-            .then(function(res) { return res.ok ? res.text() : null; })
-            .then(function(md) {
-                pre.textContent = md || 'Report unavailable.';
-                copyBtn.addEventListener('click', function() {
-                    navigator.clipboard.writeText(md || '').then(function() {
-                        copyBtn.textContent = 'Copied ✓';
-                        setTimeout(function() { copyBtn.textContent = 'Copy markdown'; }, 1500);
-                    });
-                });
-            })
-            .catch(function() { pre.textContent = 'Report unavailable.'; });
-    }
-
-    // Quick Bench button
-    quickBtn.addEventListener('click', function() {
-        disableAllBenchButtons();
-        showBenchProgress();
-
-        var formData = new FormData();
-        formData.append('quick', 'on');
-
-        fetch('/bench/run', { method: 'POST', body: formData })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                if (data.error) {
-                    showError(data.error);
-                    return;
-                }
-                startBenchSSE();
-            })
-            .catch(function(err) {
-                showError(err.message);
-            });
-    });
-
-    // Advanced form submit
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        disableAllBenchButtons();
-        showBenchProgress();
-
-        var formData = new FormData(form);
-
-        fetch('/bench/run', { method: 'POST', body: formData })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                if (data.error) {
-                    showError(data.error);
-                    return;
-                }
-                startBenchSSE();
-            })
-            .catch(function(err) {
-                showError(err.message);
-            });
-    });
-
-    function startBenchSSE() {
-        var evtSource = new EventSource('/bench/stream');
-
-        evtSource.onmessage = function(event) {
-            var data = JSON.parse(event.data);
-
-            var progressText = document.getElementById('progress-text');
-            if (progressText) {
-                progressText.textContent = data.progress || 'Running...';
-            }
-
-            if (data.error) {
-                evtSource.close();
-                showError(data.error);
-                return;
-            }
-
-            if (data.done) {
-                evtSource.close();
-
-                statusDiv.textContent = '';
-                var doneP = document.createElement('p');
-                doneP.className = 'text-green-400 text-sm';
-                doneP.textContent = 'Benchmark complete!';
-                statusDiv.appendChild(doneP);
-
-                enableAllBenchButtons();
-                if (modeSubmit) modeSubmit.disabled = false;
-
-                if (data.bench_type && data.result_run_id) {
-                    // Mode bench: render the markdown report panel.
-                    renderModeResult(data);
-                    return;
-                }
-
-                // Render share section from SSE data
-                renderShareSection(data);
-
-                // Fetch results via JSON API and render with safe DOM methods
-                fetchAndRenderResults();
-            }
-        };
-
-        evtSource.onerror = function() {
-            evtSource.close();
-            showError('Lost connection to benchmark stream');
-        };
-    }
-
-    function fetchAndRenderResults() {
-        fetch('/api/benchmarks?hours=1')
-            .then(function(res) { return res.json(); })
-            .then(function(rows) {
-                if (!rows || rows.length === 0) return;
-
-                // Group by engine
-                var engines = {};
-                rows.forEach(function(r) {
-                    if (!engines[r.engine]) {
-                        engines[r.engine] = { tok_s_sum: 0, ttft_sum: 0, ttft_client_sum: 0, ttft_client_count: 0, count: 0, vram: r.vram_bytes };
-                    }
-                    engines[r.engine].tok_s_sum += r.tok_per_sec;
-                    engines[r.engine].ttft_sum += r.ttft_ms;
-                    if (r.ttft_client_ms && r.ttft_client_ms > 0) {
-                        engines[r.engine].ttft_client_sum += r.ttft_client_ms;
-                        engines[r.engine].ttft_client_count++;
-                    }
-                    engines[r.engine].count++;
-                });
-
-                renderResultsTable(engines);
-                renderResultsCharts(engines);
-            })
-            .catch(function() { /* ignore render errors */ });
-    }
-
-    function renderResultsTable(engines) {
-        resultsDiv.textContent = '';
-
-        var card = document.createElement('div');
-        card.className = 'card fade-in';
-
-        var title = document.createElement('h3');
-        title.className = 'card-title';
-        title.textContent = 'Results';
-        card.appendChild(title);
-
-        var wrapper = document.createElement('div');
-        wrapper.className = 'overflow-x-auto';
-
-        var table = document.createElement('table');
-        table.className = 'results-table';
-
-        // Header
-        var thead = document.createElement('thead');
-        var headerRow = document.createElement('tr');
-        ['Engine', 'Avg tok/s', 'Avg TTFT', 'Avg TTFT Client', 'VRAM'].forEach(function(text) {
-            var th = document.createElement('th');
-            th.textContent = text;
-            th.className = text === 'Engine' ? 'text-left' : 'text-right';
-            headerRow.appendChild(th);
-        });
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-
-        // Find winner
-        var bestTokS = 0;
-        var winnerName = '';
-        Object.keys(engines).forEach(function(name) {
-            var avg = engines[name].tok_s_sum / engines[name].count;
-            if (avg > bestTokS) { bestTokS = avg; winnerName = name; }
-        });
-
-        // Body
-        var tbody = document.createElement('tbody');
-        Object.keys(engines).forEach(function(name) {
-            var e = engines[name];
-            var avgTok = e.tok_s_sum / e.count;
-            var avgTtft = e.ttft_sum / e.count;
-
-            var tr = document.createElement('tr');
-            if (name === winnerName && Object.keys(engines).length > 1) {
-                tr.className = 'winner-row';
-            }
-
-            var tdName = document.createElement('td');
-            tdName.className = 'font-medium';
-            tdName.style.fontFamily = 'var(--font-sans)';
-            tdName.textContent = name;
-            tr.appendChild(tdName);
-
-            var tdTok = document.createElement('td');
-            tdTok.className = 'text-right font-mono';
-            tdTok.textContent = avgTok.toFixed(1);
-            tr.appendChild(tdTok);
-
-            var tdTtft = document.createElement('td');
-            tdTtft.className = 'text-right font-mono';
-            tdTtft.textContent = avgTtft.toFixed(0) + ' ms';
-            tr.appendChild(tdTtft);
-
-            var tdTtftClient = document.createElement('td');
-            tdTtftClient.className = 'text-right font-mono';
-            if (e.ttft_client_count > 0) {
-                var avgTtftClient = e.ttft_client_sum / e.ttft_client_count;
-                if (Math.abs(avgTtftClient - avgTtft) > 10) {
-                    tdTtftClient.textContent = avgTtftClient.toFixed(0) + ' ms';
-                } else {
-                    tdTtftClient.textContent = '\u2014';
-                }
-            } else {
-                tdTtftClient.textContent = '\u2014';
-            }
-            tr.appendChild(tdTtftClient);
-
-            var tdVram = document.createElement('td');
-            tdVram.className = 'text-right font-mono';
-            var vramText = formatBytes(e.vram);
-            var nativeVramEngines = ['ollama', 'lmstudio'];
-            if (e.vram > 0 && nativeVramEngines.indexOf(name) === -1) {
-                vramText += ' (est.)';
-            }
-            tdVram.textContent = vramText;
-            tr.appendChild(tdVram);
-
-            tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        wrapper.appendChild(table);
-        card.appendChild(wrapper);
-        resultsDiv.appendChild(card);
-    }
-
-    function renderResultsCharts(engines) {
-        var names = Object.keys(engines);
-        if (names.length === 0) return;
-
-        var tokValues = names.map(function(n) {
-            return parseFloat((engines[n].tok_s_sum / engines[n].count).toFixed(1));
-        });
-        var ttftValues = names.map(function(n) {
-            return parseFloat((engines[n].ttft_sum / engines[n].count).toFixed(0));
-        });
-        var ttftClientValues = names.map(function(n) {
-            if (engines[n].ttft_client_count > 0) {
-                return parseFloat((engines[n].ttft_client_sum / engines[n].ttft_client_count).toFixed(0));
-            }
-            return 0;
-        });
-        var hasClientTtft = ttftClientValues.some(function(v) { return v > 0; });
-
-        document.getElementById('bench-charts-row').style.display = '';
-
-        if (benchTokChart) { benchTokChart.destroy(); benchTokChart = null; }
-        if (benchTtftChart) { benchTtftChart.destroy(); benchTtftChart = null; }
-
-        benchTokChart = createBarChart('bench-tok-chart', names, tokValues, {
-            label: 'Throughput', unit: 'tok/s', height: 200,
-        });
-        if (hasClientTtft) {
-            benchTtftChart = createBarChart('bench-ttft-chart', names, ttftValues, {
-                label: 'TTFT', unit: 'ms', height: 200,
-                extraSeries: [{ name: 'TTFT Client', data: ttftClientValues }],
-            });
-        } else {
-            benchTtftChart = createBarChart('bench-ttft-chart', names, ttftValues, {
-                label: 'TTFT', unit: 'ms', height: 200,
-            });
-        }
-    }
-
-    function showError(msg) {
-        statusDiv.textContent = '';
-        var errP = document.createElement('p');
-        errP.className = 'text-red-400 text-sm';
-        errP.textContent = 'Error: ' + msg;
-        statusDiv.appendChild(errP);
-        enableAllBenchButtons();
-    }
-
-    function renderShareSection(data) {
-        var section = document.getElementById('bench-share-section');
-        section.textContent = '';
-
-        var cardImgUrl = data.card_png_url || data.card_svg_url;
-        if (!cardImgUrl && !data.share_url) {
-            section.style.display = 'none';
-            return;
-        }
-
-        section.style.display = '';
-        var card = document.createElement('div');
-        card.className = 'card fade-in';
-
-        var title = document.createElement('h3');
-        title.className = 'card-title';
-        title.textContent = 'Share';
-        card.appendChild(title);
-
-        // Card image preview
-        if (cardImgUrl) {
-            var img = document.createElement('img');
-            img.src = cardImgUrl;
-            img.alt = 'Benchmark card';
-            img.className = 'bench-card-preview';
-            card.appendChild(img);
-        }
-
-        // Share URL pill (only if online share succeeded)
-        if (data.share_url) {
-            var urlRow = document.createElement('div');
-            urlRow.className = 'share-url-row';
-
-            var urlInput = document.createElement('input');
-            urlInput.type = 'text';
-            urlInput.readOnly = true;
-            urlInput.value = data.share_url;
-            urlInput.className = 'form-input share-url-input';
-            urlRow.appendChild(urlInput);
-
-            var copyBtn = document.createElement('button');
-            copyBtn.type = 'button';
-            copyBtn.className = 'btn btn-primary';
-            copyBtn.textContent = 'Copy link';
-            copyBtn.addEventListener('click', function() {
-                // Clipboard API requires HTTPS; fallback for HTTP
-                if (navigator.clipboard && window.isSecureContext) {
-                    navigator.clipboard.writeText(data.share_url).then(function() {
-                        copyBtn.textContent = 'Copied!';
-                        setTimeout(function() { copyBtn.textContent = 'Copy link'; }, 2000);
-                    });
-                } else {
-                    urlInput.select();
-                    document.execCommand('copy');
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(function() { copyBtn.textContent = 'Copy link'; }, 2000);
-                }
-            });
-            urlRow.appendChild(copyBtn);
-
-            card.appendChild(urlRow);
-        }
-
-        // Action buttons
-        var actions = document.createElement('div');
-        actions.className = 'share-actions';
-
-        // Download PNG (or SVG fallback)
-        var downloadUrl = data.card_png_url || data.card_svg_url;
-        if (downloadUrl) {
-            var dlBtn = document.createElement('a');
-            dlBtn.href = downloadUrl;
-            dlBtn.download = '';
-            dlBtn.className = 'btn btn-primary';
-            dlBtn.textContent = data.card_png_url ? 'Download PNG' : 'Download SVG';
-            actions.appendChild(dlBtn);
-        }
-
-        // Share on X (only if share_url exists)
-        if (data.share_url) {
-            var xBtn = document.createElement('a');
-            xBtn.href = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(data.share_url) + '&text=' + encodeURIComponent('My local LLM benchmark results via asiai');
-            xBtn.target = '_blank';
-            xBtn.rel = 'noopener noreferrer';
-            xBtn.className = 'btn';
-            xBtn.textContent = 'Share on X';
-            actions.appendChild(xBtn);
-
-            var redditBtn = document.createElement('a');
-            redditBtn.href = 'https://reddit.com/submit?url=' + encodeURIComponent(data.share_url) + '&title=' + encodeURIComponent('asiai benchmark results');
-            redditBtn.target = '_blank';
-            redditBtn.rel = 'noopener noreferrer';
-            redditBtn.className = 'btn';
-            redditBtn.textContent = 'Share on Reddit';
-            actions.appendChild(redditBtn);
-        }
-
-        // Export JSON
-        var exportBtn = document.createElement('a');
-        exportBtn.href = '/bench/export';
-        exportBtn.className = 'btn btn-muted';
-        exportBtn.textContent = 'Export JSON';
-        actions.appendChild(exportBtn);
-
-        card.appendChild(actions);
-
-        // Card error message (if any)
-        if (data.card_error) {
-            var errP = document.createElement('p');
-            errP.className = 'text-neutral-500 text-xs';
-            errP.textContent = 'Card generation note: ' + data.card_error;
-            card.appendChild(errP);
-        }
-
-        section.appendChild(card);
-    }
-
-    // Cleanup: destroy charts when leaving page
-    function cleanupBench() {
-        if (benchTokChart) { benchTokChart.destroy(); benchTokChart = null; }
-        if (benchTtftChart) { benchTtftChart.destroy(); benchTtftChart = null; }
-    }
-    window.addEventListener('pagehide', cleanupBench);
-    window.addEventListener('beforeunload', cleanupBench);
-</script>
+<script src="/static/bench.js?v=1.0.0"></script>
 {% endblock %}

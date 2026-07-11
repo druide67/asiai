@@ -305,10 +305,13 @@ def _start_mode_bench(state, bench_type: str, form) -> JSONResponse:
 
     opts: dict = {"runs": runs, "extra_body": extra_body}
     if bench_type == "burst":
-        from asiai.benchmark.burst import parse_burst_sizes
+        from asiai.benchmark.burst import DEFAULT_BURST_SIZES, parse_burst_sizes
 
+        # Empty field = the CLI default — parse_burst_sizes() has no None
+        # path and would raise AttributeError (500) on the untouched form.
+        raw_sizes = (form.get("burst_sizes") or "").strip()
         try:
-            opts["burst_sizes"] = parse_burst_sizes((form.get("burst_sizes") or "").strip() or None)
+            opts["burst_sizes"] = parse_burst_sizes(raw_sizes) if raw_sizes else DEFAULT_BURST_SIZES
             opts["max_tokens"] = max(1, min(int(form.get("burst_max_tokens") or 64), 4096))
         except (TypeError, ValueError) as e:
             return JSONResponse({"error": f"burst options: {e}"}, status_code=422)
