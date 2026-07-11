@@ -358,21 +358,48 @@ def _check_llamacpp() -> CheckResult:
     )
 
 
+def _is_vllm_version_payload(data: object) -> bool:
+    """True when a ``/version`` response plausibly comes from a vllm server.
+
+    Any local HTTP service can answer ``/version`` with a JSON body carrying a
+    ``version`` field (dashboards, unrelated containers squatting :8000, ...),
+    so a version number alone is not proof of vllm. Mirrors the discriminator
+    in ``asiai.engines.detect``: when identity fields are present they must
+    name vllm, otherwise the payload names another product.
+    """
+    if not isinstance(data, dict) or "version" not in data:
+        return False
+    identity = " ".join(
+        str(data.get(key, "")) for key in ("engine", "name", "server", "service")
+    ).lower()
+    if identity.strip() and "vllm" not in identity:
+        return False
+    return True
+
+
 def _check_vllm_mlx() -> CheckResult:
     """Check vllm-mlx installation and reachability."""
     # Check if installed via pip (through sys.executable, PATH-independent)
     version = _pip_version("vllm-mlx") or ""
     installed = bool(version)
 
-    # Check if server is running on any known port
+    # Check if a vllm server is running on any known port. A bare /version
+    # answer is not enough: the port must also serve the OpenAI API
+    # (/v1/models with a "data" list), otherwise a third-party service on
+    # the same port would be reported as a running vllm-mlx.
     urls = _get_engine_urls("vllm_mlx", "http://localhost:8000")
     data = None
-    reachable_url = ""
+    models_data: dict | None = None
     for url in urls:
-        data, _ = http_get_json(f"{url}/version")
-        if data is not None:
-            reachable_url = url
-            break
+        ver_data, _ = http_get_json(f"{url}/version")
+        if not _is_vllm_version_payload(ver_data):
+            continue
+        candidate, _ = http_get_json(f"{url}/v1/models")
+        if not (isinstance(candidate, dict) and isinstance(candidate.get("data"), list)):
+            continue
+        data = ver_data
+        models_data = candidate
+        break
 
     if not installed and data is None:
         return CheckResult(
@@ -393,7 +420,6 @@ def _check_vllm_mlx() -> CheckResult:
         )
 
     server_version = data.get("version", version)
-    models_data, _ = http_get_json(f"{reachable_url}/v1/models")
     models = models_data.get("data", []) if models_data else []
     if models:
         names = ", ".join(m.get("id", "?") for m in models)

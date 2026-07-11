@@ -300,6 +300,98 @@ class TestCheckVllmMlx:
         assert result.status == "ok"
         assert "mlx-model" in result.message
 
+    def test_running_no_models(self):
+        """A real vllm server with no model loaded is still detected."""
+
+        def mock_get(url, timeout=5):
+            if "/version" in url and "/v1" not in url:
+                return {"version": "0.1.2"}, {}
+            if "/v1/models" in url:
+                return {"object": "list", "data": []}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor._pip_version", return_value="0.1.2"),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            result = _check_vllm_mlx()
+        assert result.status == "ok"
+        assert "server running" in result.message
+
+    def test_third_party_service_on_port_not_vllm(self):
+        """A third-party service answering /version on :8000 is not vllm.
+
+        Regression: any JSON body with a "version" field used to be taken
+        as a running vllm-mlx server, so an unrelated local web service
+        exposing {"service": ..., "version": ...} produced a false
+        "server running" report.
+        """
+
+        def mock_get(url, timeout=5):
+            if "/version" in url and "/v1" not in url:
+                return {"service": "some-dashboard", "version": "0.1.0"}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor._pip_version", return_value=None),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            result = _check_vllm_mlx()
+        assert result.status == "fail"
+        assert "not installed" in result.message
+
+    def test_version_endpoint_without_openai_api_rejected(self):
+        """/version alone is not enough: /v1/models must have OpenAI shape."""
+
+        def mock_get(url, timeout=5):
+            if "/version" in url and "/v1" not in url:
+                return {"version": "0.1.0"}, {}
+            if "/v1/models" in url:
+                return {"detail": "Not Found"}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor._pip_version", return_value=None),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            result = _check_vllm_mlx()
+        assert result.status == "fail"
+        assert "not installed" in result.message
+
+    def test_installed_with_third_party_on_port(self):
+        """Installed vllm-mlx + foreign service on the port = not running."""
+
+        def mock_get(url, timeout=5):
+            if "/version" in url and "/v1" not in url:
+                return {"service": "some-dashboard", "version": "0.1.0"}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor._pip_version", return_value="0.1.2"),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            result = _check_vllm_mlx()
+        assert result.status == "warn"
+        assert "not running" in result.message
+
+    def test_version_payload_naming_vllm_accepted(self):
+        """A /version payload whose identity fields name vllm is accepted."""
+
+        def mock_get(url, timeout=5):
+            if "/version" in url and "/v1" not in url:
+                return {"name": "vllm-mlx", "version": "0.1.2"}, {}
+            if "/v1/models" in url:
+                return {"object": "list", "data": [{"id": "mlx-model"}]}, {}
+            return None, {}
+
+        with (
+            patch("asiai.doctor._pip_version", return_value="0.1.2"),
+            patch("asiai.doctor.http_get_json", side_effect=mock_get),
+        ):
+            result = _check_vllm_mlx()
+        assert result.status == "ok"
+        assert "mlx-model" in result.message
+
 
 class TestCheckOllamaConfig:
     def test_ollama_not_running_returns_empty(self):
