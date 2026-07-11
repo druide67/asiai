@@ -21,7 +21,7 @@ import time
 from typing import Any
 from xml.sax.saxutils import escape
 
-from asiai.benchmark.result_model import BenchResult, MetricValue, Subject
+from asiai.benchmark.result_model import BenchResult, MetricValue, Subject, display_model
 
 # ── tokens (spec §1) ─────────────────────────────────────────────────
 BG = "#0f1117"
@@ -248,8 +248,10 @@ def conditions_string(result: BenchResult) -> str:
         parts.append(f"KV {c['kv_cache_type']}")
     if c.get("powermode"):
         parts.append(f"power: {_power_mode_label(c['powermode'])}")
+    # Use the bare engine name, not the slot label — a matrix slot label
+    # already contains the model and would bloat the strip.
     versions = [
-        f"{s.label} {m['engine_version'].value}"
+        f"{s.engine or s.label} {m['engine_version'].value}"
         for s in result.subjects
         if (m := metric_map(s)).get("engine_version")
     ]
@@ -338,8 +340,9 @@ def chrome_open(
         p.append(text(bx + 12, 47, label, size=13, family=SANS, fill=CHIP_TEXT_HEADER))
         bx -= 8
 
-    # Model row
-    model = next((s.model for s in result.subjects if s.model), "") or "unknown model"
+    # Model row — one name, a clean family prefix, or "N-model comparison";
+    # a multi-model card must never crown the first subject's model.
+    model = display_model([s.model for s in result.subjects]) or "unknown model"
     p.append(text(36, 104, model, size=25, family=SANS, weight=600, fill=TEXT))
     cx = 36 + sans_w(model, 25) + 16
     for label, style in model_chips or []:
@@ -418,6 +421,8 @@ def chrome_close(result: BenchResult) -> str:
     ts = prov.get("started_at", "")
     if ts.isdigit():
         footer_bits.append(time.strftime("%Y-%m-%d", time.localtime(int(ts))))
+    if prov.get("reconstructed"):
+        footer_bits.append("reconstructed post-hoc")
     p.append(
         text(36, 606, " · ".join(footer_bits) or "provenance not recorded", size=11, fill=TEXT3)
     )

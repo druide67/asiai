@@ -537,7 +537,16 @@ def _run_single(
             "tokens_source": gen.tokens_source,
             "prompt_tokens": gen.prompt_tokens,
             "prefill_tok_s": gen.prefill_tok_s,
-            "output_degenerate": check_degenerate(gen.text)["degenerate"],
+            # Gate the visible content when there is any; fall back to the
+            # reasoning text only when content is empty — with a
+            # thinking-default model (Qwen3.6 chat) the whole budget can land
+            # in reasoning deltas, and flagging that "empty" branded every
+            # healthy thinking run degenerate. Never concatenate the two: a
+            # long diverse reasoning would dilute the n-gram/diversity ratios
+            # and hide a degenerate loop in the actual answer.
+            "output_degenerate": check_degenerate(
+                gen.text if gen.text.strip() else gen.reasoning_text
+            )["degenerate"],
             "ttft_ms": gen.ttft_ms,
             "ttft_client_ms": gen.ttft_client_ms,
             "ttft_source": "server" if gen.prompt_eval_duration_ms > 0 else "client",

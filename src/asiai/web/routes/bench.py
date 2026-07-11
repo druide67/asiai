@@ -605,7 +605,10 @@ def _run_benchmark_thread(
             from asiai.benchmark.persist import persist_standard_session
             from asiai.benchmark.reporter import build_export_payload
 
-            persist_standard_session(state.db_path, build_export_payload(bench_run.results, report))
+            persist_standard_session(
+                state.db_path,
+                build_export_payload(bench_run.results, report, errors=bench_run.errors),
+            )
 
         # --- Card generation (never blocks benchmark completion) ---
         if not generate_card:
@@ -629,7 +632,10 @@ def _run_benchmark_thread(
             if not bench_run.results:
                 raise ValueError("no results to render")
             svg = render_card(
-                build_result("standard", build_export_payload(bench_run.results, report))
+                build_result(
+                    "standard",
+                    build_export_payload(bench_run.results, report, errors=bench_run.errors),
+                )
             )
             svg_path = save_card(svg, fmt="svg")
             svg_filename = os.path.basename(svg_path)

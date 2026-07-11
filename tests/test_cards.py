@@ -10,8 +10,10 @@ from asiai.benchmark.cards import generate_card
 from asiai.benchmark.result_model import build_result
 from tests.test_result_model import (
     _ALL,
+    COMPARE_SLOTS,
     _agentic_payload,
     _code_payload,
+    _compare_session_payload,
     _standard_payload,
 )
 
@@ -76,6 +78,50 @@ class TestThroughputStates:
         assert "no winner declared" in svg
         assert "#f59e0b" in svg  # amber rail
         assert "tok/s shown for transparency" in svg
+
+
+class TestThroughputCompare:
+    """Regression: the multi-model compare card rendered 'unknown model'
+    with an entirely empty chart."""
+
+    def test_compare_card_has_bars_and_title(self):
+        svg = _svg("standard", _compare_session_payload())
+        assert "unknown model" not in svg
+        assert "3-model comparison" in svg
+        # one labeled bar per slot — engine stays visible in the label even
+        # when the model part is ellipsized
+        for engine, _model, _tok in COMPARE_SLOTS:
+            assert f"/ {engine}" in svg
+        assert "wins" in svg  # winner declared (no CI overlap in fixture)
+
+    def test_compare_card_shows_session_gates(self):
+        svg = _svg("standard", _compare_session_payload())
+        assert "✗ thermal" in svg  # tripped gate NEVER hidden
+        assert "✗ memory_pressure" in svg
+
+    def test_compare_card_passed_gates_render_too(self):
+        svg = _svg("standard", _compare_session_payload(errors=[]))
+        assert "✓ memory_pressure" in svg  # pass AND fail render (spec §5)
+
+    def test_single_model_card_never_shows_comparison_label(self):
+        svg = _svg("standard", _standard_payload())
+        assert "model comparison" not in svg
+        assert "qwen3.5:4b" in svg
+
+    def test_compare_no_winner_state(self):
+        """The real repro: every slot degenerate → validity gate refuses the
+        ranking, and the note must not collide with the wide bar labels."""
+        from asiai.benchmark.reporter import build_export_payload, build_report
+        from tests.test_result_model import _compare_raw_results
+
+        rows = [dict(r, output_degenerate=True) for r in _compare_raw_results()]
+        payload = build_export_payload(rows, build_report(rows))
+        svg = _svg("standard", payload)
+        assert "unknown model" not in svg
+        assert "no winner declared" in svg
+        assert "invalid ✗" in svg
+        assert "3 of 3 engines produced invalid output" in svg
+        assert "wins" not in svg
 
 
 class TestQualityStates:

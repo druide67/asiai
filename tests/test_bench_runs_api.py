@@ -97,3 +97,45 @@ class TestBenchRunDetail:
 
     def test_non_numeric_id_422(self, client):
         assert client.get("/api/bench-runs/abc").status_code == 422
+
+
+class TestCompareSessionOnHistory:
+    """A compare session persisted through the real producer chain must be
+    listable, reportable and renderable — it used to never reach bench_runs."""
+
+    @pytest.fixture
+    def compare_client(self, tmp_path):
+        from asiai.benchmark.persist import persist_standard_session
+        from tests.test_result_model import _compare_session_payload
+
+        db_path = str(tmp_path / "bench.db")
+        init_db(db_path)
+        payload = _compare_session_payload()
+        payload["timestamp"] = NOW  # keep it inside the default hours window
+        row_id = persist_standard_session(db_path, payload)
+        assert row_id is not None
+        state = AppState(engines=[], db_path=db_path)
+        return TestClient(create_app(state)), row_id
+
+    def test_listed_in_history(self, compare_client):
+        client, _row_id = compare_client
+        body = client.get("/api/bench-runs?type=standard").json()
+        assert body["count"] == 1
+        run = body["runs"][0]
+        assert run["engine"] == "llamacpp,mlxlm,ollama"
+        assert run["score_label"] == "winner_median_tok_s"
+        assert run["gates_failed"] == 2  # thermal + memory pressure
+
+    def test_markdown_report_renders(self, compare_client):
+        client, row_id = compare_client
+        resp = client.get(f"/bench/report/{row_id}.md")
+        assert resp.status_code == 200
+        assert "3-model comparison" in resp.text
+        assert "qwen3.6:27b-instruct-q4_K_M / ollama" in resp.text
+
+    def test_card_svg_renders(self, compare_client):
+        client, row_id = compare_client
+        resp = client.get(f"/bench/card/{row_id}.svg")
+        assert resp.status_code == 200
+        assert "unknown model" not in resp.text
+        assert "✗ thermal" in resp.text

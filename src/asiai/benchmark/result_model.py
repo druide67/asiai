@@ -13,6 +13,7 @@ because the model never hands it one.
 
 from __future__ import annotations
 
+import os.path
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -98,6 +99,10 @@ def _provenance(payload: dict) -> dict[str, str]:
         "dataset_version": _fmt(payload.get("dataset_version")),
         "started_at": _fmt(payload.get("started_at") or payload.get("timestamp")),
     }
+    if payload.get("reconstructed"):
+        # Backfilled session: the payload was rebuilt post-hoc from the raw
+        # per-run rows — say so wherever provenance is shown.
+        out["reconstructed"] = "payload rebuilt post-hoc from raw per-run rows"
     return {k: v for k, v in out.items() if v}
 
 
@@ -123,6 +128,34 @@ def _pct(key: str, label: str, value: Any, *, n: int = 0, caveat: str = "") -> M
     return MetricValue(
         key=key, label=label, value=_num(value), unit="%", n=n, direction="higher", caveat=caveat
     )
+
+
+_MODEL_NAME_SEPARATORS = "-_./@: "
+
+
+def display_model(models: list[str]) -> str:
+    """One display name for a set of model names.
+
+    A single distinct name is returned as-is. Several names collapse to the
+    common family prefix when it is clean — cut at a separator boundary and
+    long enough to mean something — else the generic "N-model comparison".
+    A fabricated family name would be worse than the generic label.
+    """
+    distinct = sorted({m for m in models if m})
+    if not distinct:
+        return ""
+    if len(distinct) == 1:
+        return distinct[0]
+    prefix = os.path.commonprefix(distinct)
+    # Never end mid-token: unless the prefix IS one of the names, cut back
+    # to the last separator, then strip trailing separators.
+    if prefix not in distinct and not prefix.endswith(tuple(_MODEL_NAME_SEPARATORS)):
+        cut = max(prefix.rfind(c) for c in _MODEL_NAME_SEPARATORS)
+        prefix = prefix[: cut + 1] if cut >= 0 else ""
+    prefix = prefix.rstrip(_MODEL_NAME_SEPARATORS)
+    if len(prefix) >= 6:
+        return f"{prefix} ({len(distinct)} models)"
+    return f"{len(distinct)}-model comparison"
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +236,11 @@ def from_standard(payload: dict) -> BenchResult:
         subjects.append(
             Subject(
                 label=name,
-                engine=name,
-                model=bench.get("model", ""),
+                # Compare payloads carry the slot's own engine/model; the
+                # session-level model (engine comparison) stays authoritative
+                # when present — it is the user-requested name.
+                engine=str(e.get("engine") or name),
+                model=str(bench.get("model") or e.get("model") or ""),
                 hero=hero,
                 metrics=[m for m in metrics if m.value is not None],
             )
@@ -255,15 +291,33 @@ def from_standard(payload: dict) -> BenchResult:
         }
     )
 
+    # Session-level quality gates (thermal from per-run samples, memory
+    # pressure from the run's MemoryWatcher) — present only when measured.
+    gates: list[Gate] = []
+    qg = payload.get("quality_gates") or {}
+    thermal = qg.get("thermal") or {}
+    if thermal.get("observed"):
+        detail = f"worst {thermal.get('worst_level', '?')}"
+        msl = _num(thermal.get("min_speed_limit"))
+        if msl is not None and msl < 100:  # only when it actually limited
+            detail += f", min speed limit {msl:g}%"
+        gates.append(Gate("thermal", not thermal.get("throttled"), detail))
+    mp = qg.get("memory_pressure")
+    if mp is not None:
+        gates.append(Gate("memory_pressure", not mp.get("alerted"), _fmt(mp.get("alert_reason"))))
+
+    model_display = str(bench.get("model") or "") or display_model(
+        [s.model for s in subjects],
+    )
     return BenchResult(
         bench_type="standard",
-        title=f"Throughput — {bench.get('model', '?')}",
+        title=f"Throughput — {model_display or '?'}",
         subjects=subjects,
         winner=winner_name,
         winner_note=winner_note,
         co_leaders=co_leaders,
         conditions=conditions,
-        gates=[],
+        gates=gates,
         provenance=_provenance(payload),
         headline=_headline_metric("standard", payload),
         raw=payload,
