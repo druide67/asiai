@@ -24,6 +24,16 @@ brew install mtplx
 | Detection | `owned_by: "mtplx"` in `/v1/models`, version via `brew list --versions mtplx` |
 | Requirements | Apple Silicon (M1+), macOS, Homebrew |
 
+## Authentication
+
+When the server is started with an API key, it requires `Authorization: Bearer <key>` on all routes — an unconfigured asiai then sees only 401s and cannot detect or monitor it. Point the engine's config entry at a file containing the key (the key itself never lives in the config):
+
+```bash
+asiai config add mtplx http://localhost:8080 --api-key-file ~/.config/asiai/keys/mtplx.key
+```
+
+asiai attaches the Bearer header to every request to this engine only (detection, monitoring, benchmarks). A missing or empty key file simply drops the header — no key material is ever logged. See [config](../commands/config.md#engine-api-keys---api-key-file) for details.
+
 ## Notes
 
 - MTPLX has no fixed default port; asiai finds it on any scanned port through the `owned_by` field of `/v1/models`, and on non-standard ports through process discovery (`python -m mtplx.server.openai`).
