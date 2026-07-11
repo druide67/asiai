@@ -90,8 +90,14 @@ def upsert_engine(
     version: str = "",
     source: str = "auto",
     label: str = "",
+    api_key_file: str | None = None,
 ) -> None:
-    """Add or update an engine entry. Updates last_seen timestamp."""
+    """Add or update an engine entry. Updates last_seen timestamp.
+
+    ``api_key_file`` is the path to a file holding this engine's API key
+    (never the key itself). ``None`` leaves any existing value untouched;
+    an empty string clears it.
+    """
     with _config_lock():
         config = load_config()
         now = int(time.time())
@@ -106,20 +112,65 @@ def upsert_engine(
                     entry["source"] = source
                 if label:
                     entry["label"] = label
+                if api_key_file is not None:
+                    entry["api_key_file"] = api_key_file
                 save_config(config)
                 return
 
-        config["engines"].append(
-            {
-                "url": url,
-                "engine": engine,
-                "version": version,
-                "last_seen": now,
-                "source": source,
-                "label": label,
-            }
-        )
+        new_entry = {
+            "url": url,
+            "engine": engine,
+            "version": version,
+            "last_seen": now,
+            "source": source,
+            "label": label,
+        }
+        if api_key_file:
+            new_entry["api_key_file"] = api_key_file
+        config["engines"].append(new_entry)
         save_config(config)
+
+
+def get_api_key_file(url: str) -> str:
+    """Return the configured ``api_key_file`` path for an engine URL.
+
+    Exact URL match (modulo trailing slash). Returns "" when the URL is
+    unknown or has no key file configured.
+    """
+    url = url.rstrip("/")
+    config = load_config()
+    for entry in config["engines"]:
+        if isinstance(entry, dict) and str(entry.get("url", "")).rstrip("/") == url:
+            return str(entry.get("api_key_file") or "")
+    return ""
+
+
+def read_api_key_file(path: str) -> str:
+    """Read an API key from a file, stripped of surrounding whitespace.
+
+    Fail-soft: returns "" when the path is empty, the file is absent,
+    unreadable, or contains only whitespace — the caller then sends no
+    Authorization header and any 401 surfaces honestly. The key content
+    is never logged.
+    """
+    if not path:
+        return ""
+    try:
+        with open(os.path.expanduser(path)) as f:
+            return f.read().strip()
+    except OSError as e:
+        # Log the exception class only: no key material, no OS error string.
+        logger.debug("api_key_file %s not readable (%s)", path, e.__class__.__name__)
+        return ""
+
+
+def resolve_api_key(url: str) -> str:
+    """Resolve the API key configured for an engine URL ("" when none).
+
+    The returned key is bound to that exact URL: callers must only attach
+    it to requests targeting this engine's base URL, never another host.
+    """
+    return read_api_key_file(get_api_key_file(url))
 
 
 def remove_engine(url: str) -> bool:

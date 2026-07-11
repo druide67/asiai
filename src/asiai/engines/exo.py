@@ -29,7 +29,7 @@ class ExoEngine(OpenAICompatEngine):
     def version(self) -> str:
         """Return Exo version via API or CLI fallback."""
         # Try API endpoint first
-        data, _ = http_get_json(f"{self.base_url}/api/version")
+        data, _ = http_get_json(f"{self.base_url}/api/version", **self._http_kwargs())
         if data and isinstance(data, dict) and "version" in data:
             return data["version"]
         # Fallback: exo --version
@@ -53,7 +53,7 @@ class ExoEngine(OpenAICompatEngine):
         """List running models, enriched with cluster topology if available."""
         models = super().list_running()
         # Try to get cluster/topology info from Exo API
-        data, _ = http_get_json(f"{self.base_url}/api/topology")
+        data, _ = http_get_json(f"{self.base_url}/api/topology", **self._http_kwargs())
         if data and isinstance(data, dict):
             nodes = data.get("nodes", [])
             if isinstance(nodes, list) and len(nodes) > 1:

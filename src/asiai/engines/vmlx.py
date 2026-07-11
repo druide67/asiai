@@ -33,7 +33,7 @@ class VmlxEngine(OpenAICompatEngine):
 
     def version(self) -> str:
         """Return vMLX version via /version endpoint, fallback to `pip show vmlx`."""
-        data, _ = http_get_json(f"{self.base_url}/version")
+        data, _ = http_get_json(f"{self.base_url}/version", **self._http_kwargs())
         if data and isinstance(data, dict) and "version" in data:
             return data["version"]
         try:
@@ -54,4 +54,6 @@ class VmlxEngine(OpenAICompatEngine):
         """Scrape vMLX /metrics for inference activity."""
         from asiai.collectors.inference import scrape_prometheus_metrics
 
-        return scrape_prometheus_metrics(f"{self.base_url}/metrics")
+        return scrape_prometheus_metrics(
+            f"{self.base_url}/metrics", headers=self.auth_headers() or None
+        )

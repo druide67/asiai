@@ -33,7 +33,7 @@ class OpenAICompatEngine(InferenceEngine):
     _model_format: str = ""
 
     def is_reachable(self) -> bool:
-        data, _ = http_get_json(f"{self.base_url}/v1/models")
+        data, _ = http_get_json(f"{self.base_url}/v1/models", **self._http_kwargs())
         return data is not None
 
     def _is_local(self) -> bool:
@@ -62,7 +62,7 @@ class OpenAICompatEngine(InferenceEngine):
         return os.path.basename(model_id)
 
     def list_running(self) -> list[ModelInfo]:
-        data, _ = http_get_json(f"{self.base_url}/v1/models")
+        data, _ = http_get_json(f"{self.base_url}/v1/models", **self._http_kwargs())
         if data is None:
             return []
         models = []
@@ -154,6 +154,8 @@ class OpenAICompatEngine(InferenceEngine):
             body = json.dumps(payload).encode()
             req = Request(url, data=body, method="POST")
             req.add_header("Content-Type", "application/json")
+            for key, value in self.auth_headers().items():
+                req.add_header(key, value)
 
             with urlopen(req, timeout=300) as resp:
                 for raw_line in resp:

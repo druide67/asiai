@@ -30,7 +30,7 @@ class LlamaCppEngine(OpenAICompatEngine):
     def version(self) -> str:
         """Return llama.cpp version via /props or brew."""
         # Try /props endpoint first (has build_info)
-        data, _ = http_get_json(f"{self.base_url}/props")
+        data, _ = http_get_json(f"{self.base_url}/props", **self._http_kwargs())
         if data and isinstance(data, dict):
             build_info = data.get("build_info", {})
             if isinstance(build_info, dict) and "version" in build_info:
@@ -53,7 +53,7 @@ class LlamaCppEngine(OpenAICompatEngine):
 
     def is_reachable(self) -> bool:
         """Check /health endpoint (unique to llama.cpp)."""
-        data, _ = http_get_json(f"{self.base_url}/health")
+        data, _ = http_get_json(f"{self.base_url}/health", **self._http_kwargs())
         if data and isinstance(data, dict):
             return data.get("status") == "ok"
         return False
@@ -69,7 +69,7 @@ class LlamaCppEngine(OpenAICompatEngine):
         ctx_len = 0
         alias = ""
         resolved = ""
-        data, _ = http_get_json(f"{self.base_url}/props")
+        data, _ = http_get_json(f"{self.base_url}/props", **self._http_kwargs())
         if data and isinstance(data, dict):
             gen_settings = data.get("default_generation_settings", {})
             if isinstance(gen_settings, dict):
@@ -110,4 +110,6 @@ class LlamaCppEngine(OpenAICompatEngine):
         """Scrape llama.cpp /metrics for inference activity."""
         from asiai.collectors.inference import scrape_prometheus_metrics
 
-        return scrape_prometheus_metrics(f"{self.base_url}/metrics")
+        return scrape_prometheus_metrics(
+            f"{self.base_url}/metrics", headers=self.auth_headers() or None
+        )

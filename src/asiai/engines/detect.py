@@ -88,13 +88,20 @@ EXTENDED_SCAN_PORTS = [
 ]
 
 
-def http_get_json(url: str, timeout: int = 5) -> tuple[dict | None, dict[str, str]]:
+def http_get_json(
+    url: str,
+    timeout: int = 5,
+    headers: dict[str, str] | None = None,
+) -> tuple[dict | None, dict[str, str]]:
     """Generic HTTP GET returning parsed JSON and lowercase headers.
 
-    Returns (None, {}) on any failure.
+    ``headers`` are extra request headers (e.g. an engine-bound
+    Authorization header). Returns (None, {}) on any failure.
     """
     try:
         req = Request(url)
+        for key, value in (headers or {}).items():
+            req.add_header(key, value)
         with urlopen(req, timeout=timeout) as resp:
             raw = resp.read(_MAX_RESPONSE_BYTES + 1)
             if len(raw) > _MAX_RESPONSE_BYTES:
@@ -112,16 +119,20 @@ def http_post_json(
     url: str,
     data: dict,
     timeout: int = 300,
+    headers: dict[str, str] | None = None,
 ) -> tuple[dict | None, dict[str, str]]:
     """HTTP POST with JSON body, returning parsed JSON and lowercase headers.
 
-    Returns (None, {}) on any failure. On error, returns a dict with an
-    "error" key describing the failure if possible.
+    ``headers`` are extra request headers (e.g. an engine-bound
+    Authorization header). Returns (None, {}) on any failure. On error,
+    returns a dict with an "error" key describing the failure if possible.
     """
     try:
         body = json.dumps(data).encode()
         req = Request(url, data=body, method="POST")
         req.add_header("Content-Type", "application/json")
+        for key, value in (headers or {}).items():
+            req.add_header(key, value)
         with urlopen(req, timeout=timeout) as resp:
             raw = resp.read(_MAX_RESPONSE_BYTES + 1)
             if len(raw) > _MAX_RESPONSE_BYTES:
@@ -200,8 +211,16 @@ def extract_port(base_url: str) -> int:
     return 0
 
 
-def detect_engine_type(base_url: str) -> tuple[str, str]:
+def detect_engine_type(
+    base_url: str,
+    headers: dict[str, str] | None = None,
+) -> tuple[str, str]:
     """Detect which engine is running at the given URL.
+
+    ``headers`` are attached to every probe of ``base_url`` (and only to
+    ``base_url``) — used to authenticate against engines that require an
+    API key on all routes, which would otherwise answer 401 and stay
+    undetected.
 
     Detection cascade:
       1. GET /api/version          -> Ollama (unique endpoint)
@@ -217,20 +236,23 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
       3. Otherwise -> "unknown"
     """
     base_url = base_url.rstrip("/")
+    # Passing the kwarg only when headers exist keeps the no-key path
+    # byte-identical to before per-engine API keys existed.
+    _kw: dict = {"headers": headers} if headers else {}
 
     # 1. Ollama: unique /api/version endpoint
-    data, _ = http_get_json(f"{base_url}/api/version")
+    data, _ = http_get_json(f"{base_url}/api/version", **_kw)
     if data and "version" in data:
         return "ollama", data["version"]
 
     # 2. OpenAI-compatible: /v1/models
-    data, headers = http_get_json(f"{base_url}/v1/models")
+    data, resp_headers = http_get_json(f"{base_url}/v1/models", **_kw)
     if data is not None:
         # 2a. LM Studio signatures
-        version = headers.get("x-lm-studio-version", "")
+        version = resp_headers.get("x-lm-studio-version", "")
         if version:
             return "lmstudio", version
-        ver_data, _ = http_get_json(f"{base_url}/lms/version")
+        ver_data, _ = http_get_json(f"{base_url}/lms/version", **_kw)
         if ver_data and isinstance(ver_data, dict):
             if "version" in ver_data:
                 return "lmstudio", ver_data["version"]
@@ -238,10 +260,10 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                 return "lmstudio", _lmstudio_version_from_app()
 
         # 2b. llama.cpp: /health {"status":"ok"} AND /props must respond
-        health_data, _ = http_get_json(f"{base_url}/health")
+        health_data, _ = http_get_json(f"{base_url}/health", **_kw)
         if health_data and isinstance(health_data, dict):
             if health_data.get("status") == "ok":
-                props_data, _ = http_get_json(f"{base_url}/props")
+                props_data, _ = http_get_json(f"{base_url}/props", **_kw)
                 if props_data and isinstance(props_data, dict):
                     ver = ""
                     build_info = props_data.get("build_info", "")
@@ -257,13 +279,13 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
             for model_entry in data.get("data", []):
                 if isinstance(model_entry, dict) and model_entry.get("owned_by") == "omlx":
                     # Try to get version from /admin/info
-                    admin_data, _ = http_get_json(f"{base_url}/admin/info")
+                    admin_data, _ = http_get_json(f"{base_url}/admin/info", **_kw)
                     ver = ""
                     if admin_data and isinstance(admin_data, dict):
                         ver = admin_data.get("version", "")
                     return "omlx", ver
 
-        admin_data, _ = http_get_json(f"{base_url}/admin/info")
+        admin_data, _ = http_get_json(f"{base_url}/admin/info", **_kw)
         if admin_data and isinstance(admin_data, dict):
             ver = admin_data.get("version", "")
             return "omlx", ver
@@ -271,7 +293,7 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
         try:
             from urllib.request import urlopen as _urlopen
 
-            with _urlopen(f"{base_url}/admin", timeout=3) as resp:
+            with _urlopen(Request(f"{base_url}/admin", headers=headers or {}), timeout=3) as resp:
                 body = resp.read(1024).decode(errors="ignore")
                 if "omlx" in body.lower() or "oMLX" in body:
                     return "omlx", ""
@@ -324,7 +346,7 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
             for model_entry in data.get("data", []):
                 if isinstance(model_entry, dict):
                     if model_entry.get("owned_by") == "vmlx":
-                        ver_resp, _ = http_get_json(f"{base_url}/version")
+                        ver_resp, _ = http_get_json(f"{base_url}/version", **_kw)
                         ver = ""
                         if isinstance(ver_resp, dict):
                             ver = ver_resp.get("version", "")
@@ -333,7 +355,7 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
                         return "vllm_mlx", ""
 
         # Fallback: probe /version and discriminate by an explicit name/engine field.
-        ver_resp, _ = http_get_json(f"{base_url}/version")
+        ver_resp, _ = http_get_json(f"{base_url}/version", **_kw)
         if ver_resp and isinstance(ver_resp, dict):
             engine_id = (
                 str(ver_resp.get("engine", ""))
@@ -361,6 +383,34 @@ def detect_engine_type(base_url: str) -> tuple[str, str]:
         return "mlxlm", ""
 
     return "unknown", ""
+
+
+def _config_auth_headers(base_url: str) -> dict[str, str] | None:
+    """Authorization header for probing ``base_url``, from user config.
+
+    Resolved from the ``api_key_file`` configured for that exact URL in
+    engines.json; None when no key is configured or the file is unreadable
+    (fail-soft — the probe then runs unauthenticated). The header is bound
+    to ``base_url``: callers must not reuse it for any other URL.
+    """
+    from asiai.engines.config import resolve_api_key
+
+    key = resolve_api_key(base_url)
+    if key:
+        return {"Authorization": f"Bearer {key}"}
+    return None
+
+
+def _detect_with_config_auth(base_url: str) -> tuple[str, str]:
+    """``detect_engine_type`` with the user-configured key for that URL.
+
+    Without a configured key the call is identical to the historical
+    unauthenticated probe.
+    """
+    auth = _config_auth_headers(base_url)
+    if auth:
+        return detect_engine_type(base_url, headers=auth)
+    return detect_engine_type(base_url)
 
 
 def discover_via_processes() -> list[tuple[str, int]]:
@@ -442,11 +492,12 @@ def detect_engines(
     Returns:
         List of (base_url, engine_name, version) for each reachable engine.
     """
-    # Explicit URLs: scan only those, no config interaction
+    # Explicit URLs: scan only those, no config persistence (a configured
+    # api_key_file for the same URL is still honored to authenticate probes)
     if urls is not None:
         found: list[tuple[str, str, str]] = []
         for url in urls:
-            engine, version = detect_engine_type(url)
+            engine, version = _detect_with_config_auth(url)
             if engine != "unknown":
                 found.append((url, engine, version))
                 logger.info("Detected %s %s at %s", engine, version, url)
@@ -462,7 +513,7 @@ def detect_engines(
         """Probe a URL and add to results if an engine responds."""
         if url in found_urls:
             return
-        engine, version = detect_engine_type(url)
+        engine, version = _detect_with_config_auth(url)
         if engine != "unknown":
             found_urls.add(url)
             found.append((url, engine, version))
@@ -484,7 +535,7 @@ def detect_engines(
         if port not in _default_ports:
             url = f"http://localhost:{port}"
             if url not in found_urls:
-                engine, version = detect_engine_type(url)
+                engine, version = _detect_with_config_auth(url)
                 if engine != "unknown":
                     found_urls.add(url)
                     found.append((url, engine, version))
