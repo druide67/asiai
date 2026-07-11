@@ -915,7 +915,7 @@ class TestMtplxEngine:
 
 
 class TestDetectCascade:
-    """Full cascade detection tests for all 5 engines."""
+    """Full cascade detection tests for every engine in the cascade."""
 
     def test_detect_llamacpp(self):
         """llama.cpp: /v1/models OK, no LM Studio, /health OK."""
