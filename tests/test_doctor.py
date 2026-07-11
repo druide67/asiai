@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ from asiai.doctor import (
     CheckResult,
     _check_apple_silicon,
     _check_db,
+    _check_exo,
     _check_llamacpp,
     _check_lmstudio,
     _check_memory_pressure,
@@ -123,39 +125,24 @@ class TestCheckThermal:
 
 class TestCheckOllama:
     def test_not_installed(self):
-        mock_result = MagicMock()
-        mock_result.returncode = 1
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._which", return_value=None),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_ollama()
         assert result.status == "fail"
         assert "not installed" in result.message
 
     def test_installed_not_running(self):
-        mock_which = MagicMock()
-        mock_which.returncode = 0
-
-        def mock_subprocess_run(cmd, **kwargs):
-            if cmd[0] == "which":
-                return mock_which
-            return MagicMock(returncode=0)
-
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._which", return_value="/opt/homebrew/bin/ollama"),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.side_effect = mock_subprocess_run
             result = _check_ollama()
         assert result.status == "warn"
         assert "not running" in result.message
 
     def test_running_with_models(self):
-        mock_which = MagicMock()
-        mock_which.returncode = 0
-
         def mock_get(url, timeout=5):
             if "/api/version" in url:
                 return {"version": "0.17.4"}, {}
@@ -164,10 +151,9 @@ class TestCheckOllama:
             return None, {}
 
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._which", return_value="/opt/homebrew/bin/ollama"),
             patch("asiai.doctor.http_get_json", side_effect=mock_get),
         ):
-            mock_sub.run.return_value = mock_which
             result = _check_ollama()
         assert result.status == "ok"
         assert "gemma2:9b" in result.message
@@ -209,43 +195,33 @@ class TestCheckLMStudio:
 
 class TestCheckMlxLm:
     def test_not_installed(self):
-        mock_result = MagicMock()
-        mock_result.stdout = ""
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._brew_formula_version", return_value=None),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_mlxlm()
         assert result.status == "fail"
         assert "not installed" in result.message
 
     def test_installed_not_running(self):
-        mock_result = MagicMock()
-        mock_result.stdout = "mlx-lm 0.30.7"
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._brew_formula_version", return_value="0.30.7"),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_mlxlm()
         assert result.status == "warn"
         assert "not running" in result.message
 
     def test_running_with_models(self):
-        mock_result = MagicMock()
-        mock_result.stdout = "mlx-lm 0.30.7"
-
         def mock_get(url, timeout=5):
             if "/v1/models" in url:
                 return {"data": [{"id": "mlx-community/gemma-2-9b-4bit"}]}, {}
             return None, {}
 
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._brew_formula_version", return_value="0.30.7"),
             patch("asiai.doctor.http_get_json", side_effect=mock_get),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_mlxlm()
         assert result.status == "ok"
         assert "gemma-2-9b" in result.message
@@ -253,33 +229,24 @@ class TestCheckMlxLm:
 
 class TestCheckLlamaCpp:
     def test_not_installed(self):
-        mock_result = MagicMock()
-        mock_result.stdout = ""
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._brew_formula_version", return_value=None),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_llamacpp()
         assert result.status == "fail"
         assert "not installed" in result.message
 
     def test_installed_not_running(self):
-        mock_result = MagicMock()
-        mock_result.stdout = "llama.cpp 0.0.4567"
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._brew_formula_version", return_value="0.0.4567"),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_llamacpp()
         assert result.status == "warn"
         assert "not running" in result.message
 
     def test_running(self):
-        mock_result = MagicMock()
-        mock_result.stdout = "llama.cpp 0.0.4567"
-
         def mock_get(url, timeout=5):
             if "/health" in url:
                 return {"status": "ok"}, {}
@@ -288,10 +255,9 @@ class TestCheckLlamaCpp:
             return None, {}
 
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._brew_formula_version", return_value="0.0.4567"),
             patch("asiai.doctor.http_get_json", side_effect=mock_get),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_llamacpp()
         assert result.status == "ok"
         assert "my-model" in result.message
@@ -299,30 +265,26 @@ class TestCheckLlamaCpp:
 
 class TestCheckVllmMlx:
     def test_not_installed(self):
-        mock_result = MagicMock()
-        mock_result.stdout = ""
-        with patch("asiai.doctor.subprocess") as mock_sub:
-            mock_sub.run.return_value = mock_result
+        # http_get_json must be mocked too: without it the check would probe
+        # the real localhost ports and flake when anything answers on :8000.
+        with (
+            patch("asiai.doctor._pip_version", return_value=None),
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
             result = _check_vllm_mlx()
         assert result.status == "fail"
         assert "not installed" in result.message
 
     def test_installed_not_running(self):
-        mock_result = MagicMock()
-        mock_result.stdout = "Name: vllm-mlx\nVersion: 0.1.2\n"
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._pip_version", return_value="0.1.2"),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_vllm_mlx()
         assert result.status == "warn"
         assert "not running" in result.message
 
     def test_running_with_models(self):
-        mock_result = MagicMock()
-        mock_result.stdout = "Name: vllm-mlx\nVersion: 0.1.2\n"
-
         def mock_get(url, timeout=5):
             if "/version" in url and "/v1" not in url:
                 return {"version": "0.1.2"}, {}
@@ -331,10 +293,9 @@ class TestCheckVllmMlx:
             return None, {}
 
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._pip_version", return_value="0.1.2"),
             patch("asiai.doctor.http_get_json", side_effect=mock_get),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_vllm_mlx()
         assert result.status == "ok"
         assert "mlx-model" in result.message
@@ -471,9 +432,7 @@ class TestBinaryOrPort:
     """Tests for the binary-OR-port detection logic."""
 
     def test_ollama_no_binary_but_port_reachable(self):
-        """Ollama as LaunchDaemon (not in PATH) but reachable = OK."""
-        mock_result = MagicMock()
-        mock_result.returncode = 1  # which fails
+        """Ollama as LaunchDaemon (binary not found) but reachable = OK."""
 
         def mock_get(url, timeout=5):
             if "/api/version" in url:
@@ -483,10 +442,9 @@ class TestBinaryOrPort:
             return None, {}
 
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._which", return_value=None),
             patch("asiai.doctor.http_get_json", side_effect=mock_get),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_ollama()
         assert result.status == "ok"
         assert "0.17.7" in result.message
@@ -495,7 +453,7 @@ class TestBinaryOrPort:
         """oMLX reachable on non-standard port from config = OK."""
         with (
             patch("asiai.doctor.os.path.exists", return_value=False),
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._which", return_value=None),
             patch(
                 "asiai.doctor.load_config",
                 return_value={
@@ -506,7 +464,6 @@ class TestBinaryOrPort:
                 },
             ),
         ):
-            mock_sub.run.return_value = MagicMock(returncode=1)
 
             def mock_get(url, timeout=5):
                 if "8800" in url and "/v1/models" in url:
@@ -522,13 +479,10 @@ class TestBinaryOrPort:
 
     def test_engine_neither_binary_nor_port(self):
         """Neither binary found nor port responds = fail."""
-        mock_result = MagicMock()
-        mock_result.returncode = 1
         with (
-            patch("asiai.doctor.subprocess") as mock_sub,
+            patch("asiai.doctor._which", return_value=None),
             patch("asiai.doctor.http_get_json", return_value=(None, {})),
         ):
-            mock_sub.run.return_value = mock_result
             result = _check_ollama()
         assert result.status == "fail"
         assert "not installed" in result.message
@@ -548,3 +502,98 @@ class TestBinaryOrPort:
             result = _check_lmstudio()
         assert result.status == "ok"
         assert "model-1" in result.message
+
+
+# launchd LaunchAgents inherit a minimal PATH without Homebrew or user dirs.
+_LAUNCHD_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+
+class TestLaunchdMinimalPath:
+    """Doctor must find installed engines even under launchd's minimal PATH.
+
+    Regression tests: when doctor runs inside a LaunchAgent (web dashboard),
+    subprocess lookups like ``which ollama``, ``brew list`` and ``pip show``
+    used to inherit the minimal launchd PATH and report every engine as
+    "not installed" even though they were.
+    """
+
+    @staticmethod
+    def _fake_bin(directory, name, body="exit 0"):
+        directory.mkdir(exist_ok=True)
+        path = directory / name
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+        return path
+
+    def test_ollama_binary_found_outside_path(self, tmp_path, monkeypatch):
+        """Binary lives in a standard install dir not present on PATH."""
+        bin_dir = tmp_path / "brew-bin"
+        self._fake_bin(bin_dir, "ollama")
+        monkeypatch.setenv("PATH", _LAUNCHD_PATH)
+        monkeypatch.setattr("asiai.doctor._FALLBACK_BIN_DIRS", (str(bin_dir),), raising=False)
+        with patch("asiai.doctor.http_get_json", return_value=(None, {})):
+            result = _check_ollama()
+        assert result.status == "warn"
+        assert "not running" in result.message
+
+    def test_mlxlm_brew_resolved_from_standard_prefix(self, tmp_path, monkeypatch):
+        """brew is not on PATH but exists at a standard Homebrew prefix."""
+        fake_brew = self._fake_bin(tmp_path / "brew-bin", "brew", 'echo "mlx-lm 0.30.7"')
+        monkeypatch.setenv("PATH", _LAUNCHD_PATH)
+        monkeypatch.setattr("asiai.versions.collectors._BREW_CANDIDATES", (str(fake_brew),))
+        with patch("asiai.doctor.http_get_json", return_value=(None, {})):
+            result = _check_mlxlm()
+        assert result.status == "warn"
+        assert "0.30.7" in result.message
+        assert "not running" in result.message
+
+    def test_llamacpp_brew_resolved_from_standard_prefix(self, tmp_path, monkeypatch):
+        fake_brew = self._fake_bin(tmp_path / "brew-bin", "brew", 'echo "llama.cpp 8180"')
+        monkeypatch.setenv("PATH", _LAUNCHD_PATH)
+        monkeypatch.setattr("asiai.versions.collectors._BREW_CANDIDATES", (str(fake_brew),))
+        with patch("asiai.doctor.http_get_json", return_value=(None, {})):
+            result = _check_llamacpp()
+        assert result.status == "warn"
+        assert "8180" in result.message
+        assert "not running" in result.message
+
+    def test_vllm_mlx_pip_uses_interpreter_not_path(self, monkeypatch):
+        """pip lookup must go through sys.executable, immune to PATH."""
+        monkeypatch.setenv("PATH", _LAUNCHD_PATH)
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return MagicMock(returncode=0, stdout="Name: vllm-mlx\nVersion: 0.1.2\n")
+
+        with (
+            patch("asiai.versions.collectors.subprocess.run", side_effect=fake_run),
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
+            result = _check_vllm_mlx()
+        assert result.status == "warn"
+        assert "0.1.2" in result.message
+        assert captured["cmd"][0] == sys.executable
+
+    def test_exo_binary_found_outside_path(self, tmp_path, monkeypatch):
+        bin_dir = tmp_path / "user-bin"
+        self._fake_bin(bin_dir, "exo")
+        monkeypatch.setenv("PATH", _LAUNCHD_PATH)
+        monkeypatch.setattr("asiai.doctor._FALLBACK_BIN_DIRS", (str(bin_dir),), raising=False)
+        with patch("asiai.doctor.http_get_json", return_value=(None, {})):
+            result = _check_exo()
+        assert result.status == "warn"
+        assert "not running" in result.message
+
+    def test_omlx_binary_found_outside_path(self, tmp_path, monkeypatch):
+        bin_dir = tmp_path / "brew-bin"
+        self._fake_bin(bin_dir, "omlx")
+        monkeypatch.setenv("PATH", _LAUNCHD_PATH)
+        monkeypatch.setattr("asiai.doctor._FALLBACK_BIN_DIRS", (str(bin_dir),), raising=False)
+        with (
+            patch("asiai.doctor.os.path.exists", return_value=False),
+            patch("asiai.doctor.http_get_json", return_value=(None, {})),
+        ):
+            result = _check_omlx()
+        assert result.status == "warn"
+        assert "not running" in result.message

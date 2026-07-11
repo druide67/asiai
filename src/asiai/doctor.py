@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import platform
+import shutil
 import sqlite3
 import subprocess
 import time
@@ -17,8 +18,31 @@ from asiai.collectors.system import collect_machine_info, collect_memory, collec
 from asiai.engines.config import load_config
 from asiai.engines.detect import _lmstudio_version_from_app, http_get_json
 from asiai.storage.db import DEFAULT_DB_PATH
+from asiai.versions.collectors import _brew_formula_version, _pip_version
 
 logger = logging.getLogger("asiai.doctor")
+
+# Standard install dirs probed when a binary is not on PATH. Under launchd
+# (e.g. the web dashboard running as a LaunchAgent) PATH is minimal and does
+# not include Homebrew or user-local dirs, so PATH lookups alone would report
+# installed engines as missing.
+_FALLBACK_BIN_DIRS = (
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    os.path.expanduser("~/.local/bin"),
+)
+
+
+def _which(binary: str) -> str | None:
+    """Locate *binary* on PATH first, then in standard install dirs."""
+    found = shutil.which(binary)
+    if found:
+        return found
+    for directory in _FALLBACK_BIN_DIRS:
+        candidate = os.path.join(directory, binary)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
 
 
 @dataclass
@@ -129,18 +153,8 @@ def _get_engine_urls(engine_name: str, default_url: str) -> list[str]:
 
 def _check_ollama() -> CheckResult:
     """Check Ollama installation and reachability."""
-    # Check if installed (binary in PATH)
-    try:
-        result = subprocess.run(
-            ["which", "ollama"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        installed = result.returncode == 0
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.debug("Ollama 'which' check failed: %s", e)
-        installed = False
+    # Check if installed (binary on PATH or in a standard install dir)
+    installed = _which("ollama") is not None
 
     # Check if reachable on any known port
     urls = _get_engine_urls("ollama", "http://localhost:11434")
@@ -243,23 +257,9 @@ def _check_lmstudio() -> CheckResult:
 
 def _check_mlxlm() -> CheckResult:
     """Check mlx-lm installation and reachability."""
-    # Check if installed via brew
-    try:
-        result = subprocess.run(
-            ["brew", "list", "--versions", "mlx-lm"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        brew_out = result.stdout.strip()
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.debug("mlx-lm brew check failed: %s", e)
-        brew_out = ""
-
-    # Parse version
-    parts = brew_out.split() if brew_out else []
-    version = parts[-1] if len(parts) >= 2 else ""
-    installed = bool(brew_out)
+    # Check if installed via brew (resolved even when brew is not on PATH)
+    version = _brew_formula_version("mlx-lm") or ""
+    installed = bool(version)
 
     # Check if server is running on any known port
     urls = _get_engine_urls("mlxlm", "http://localhost:8080")
@@ -306,22 +306,9 @@ def _check_mlxlm() -> CheckResult:
 
 def _check_llamacpp() -> CheckResult:
     """Check llama.cpp installation and reachability."""
-    # Check if installed via brew
-    try:
-        result = subprocess.run(
-            ["brew", "list", "--versions", "llama.cpp"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        brew_out = result.stdout.strip()
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.debug("llama.cpp brew check failed: %s", e)
-        brew_out = ""
-
-    parts = brew_out.split() if brew_out else []
-    version = parts[-1] if len(parts) >= 2 else ""
-    installed = bool(brew_out)
+    # Check if installed via brew (resolved even when brew is not on PATH)
+    version = _brew_formula_version("llama.cpp") or ""
+    installed = bool(version)
 
     # Check if server is running on any known port
     urls = _get_engine_urls("llamacpp", "http://localhost:8080")
@@ -373,26 +360,8 @@ def _check_llamacpp() -> CheckResult:
 
 def _check_vllm_mlx() -> CheckResult:
     """Check vllm-mlx installation and reachability."""
-    # Check if installed via pip
-    try:
-        result = subprocess.run(
-            ["pip", "show", "vllm-mlx"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        pip_out = result.stdout.strip()
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.debug("vllm-mlx pip check failed: %s", e)
-        pip_out = ""
-
-    version = ""
-    if pip_out:
-        for line in pip_out.splitlines():
-            if line.startswith("Version:"):
-                version = line.split(":", 1)[1].strip()
-                break
-
+    # Check if installed via pip (through sys.executable, PATH-independent)
+    version = _pip_version("vllm-mlx") or ""
     installed = bool(version)
 
     # Check if server is running on any known port
@@ -444,19 +413,8 @@ def _check_vllm_mlx() -> CheckResult:
 
 def _check_omlx() -> CheckResult:
     """Check oMLX installation and reachability."""
-    # Check if installed via which or .app
-    installed = False
-    try:
-        result = subprocess.run(
-            ["which", "omlx"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        installed = result.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        pass
-
+    # Check if installed via binary lookup or .app
+    installed = _which("omlx") is not None
     if not installed:
         if os.path.exists("/Applications/oMLX.app"):
             installed = True
@@ -508,18 +466,8 @@ def _check_omlx() -> CheckResult:
 
 def _check_exo() -> CheckResult:
     """Check Exo installation and reachability."""
-    # Check if installed
-    try:
-        result = subprocess.run(
-            ["which", "exo"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        installed = result.returncode == 0
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.debug("Exo 'which' check failed: %s", e)
-        installed = False
+    # Check if installed (binary on PATH or in a standard install dir)
+    installed = _which("exo") is not None
 
     # Check if reachable on any known port
     urls = _get_engine_urls("exo", "http://localhost:52415")
