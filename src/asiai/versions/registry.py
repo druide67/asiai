@@ -74,6 +74,12 @@ _INTERNAL_SPECS: dict[str, EngineVersionSpec] = {
         brew_formula="rapid-mlx",
         version_cmd=("rapid-mlx", "--version"),
     ),
+    "mtplx": EngineVersionSpec(
+        "mtplx",
+        display="MTPLX",
+        brew_formula="mtplx",
+        github_repo="youssofal/MTPLX",
+    ),
     "vllm_mlx": EngineVersionSpec(
         "vllm_mlx",
         display="vllm-mlx",

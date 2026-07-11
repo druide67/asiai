@@ -65,6 +65,7 @@ nav:
       - vllm-mlx: engines/vllm-mlx.md
       - vMLX: engines/vmlx.md
       - Rapid-MLX: engines/rapidmlx.md
+      - MTPLX: engines/mtplx.md
       - Exo: engines/exo.md
   - Ollama vs LM Studio: ollama-vs-lmstudio.md
   - How to Benchmark LLMs on Mac: benchmark-llm-mac.md

@@ -43,6 +43,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.llamacpp import LlamaCppEngine
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
+    from asiai.engines.mtplx import MtplxEngine
     from asiai.engines.ollama import OllamaEngine
     from asiai.engines.omlx import OmlxEngine
     from asiai.engines.rapidmlx import RapidMlxEngine
@@ -56,6 +57,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "llamacpp": LlamaCppEngine,
         "omlx": OmlxEngine,
         "rapidmlx": RapidMlxEngine,
+        "mtplx": MtplxEngine,
         "vllm_mlx": VllmMlxEngine,
         "vmlx": VmlxEngine,
         "exo": ExoEngine,
