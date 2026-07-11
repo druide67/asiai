@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.27.0](https://github.com/druide67/asiai/compare/v1.26.0...v1.27.0) — 2026-07-11
+
+### Added
+
+- **Bench page v2** (#68): the Benchmark page is rebuilt as a guided flow — a
+  one-click Quick Bench hero, the seven bench types as primary navigation,
+  Target/Options/Advanced steps, live run states and a result panel; the
+  ~600 lines of inline JS move to `static/bench.js`.
+- **Docs homepage v2** (#69): asiai.dev landing rebuilt with real benchmark
+  cards, a terminal-style install snippet, feature tiles and a leaderboard
+  teaser; `<head>`/SEO and the nine locales untouched.
+- **MTPLX engine adapter** (#70): auto-detection via its `/v1/models`
+  `owned_by` signature, version through Homebrew, quality-gate and discovery
+  wiring — engine count reaches 10.
+- **`asiai bench --backfill-runs`** (#71): rebuild historic `bench_runs`
+  sessions from raw benchmark rows — dry-run by default, insert-only,
+  idempotent, NULL-safe on old or third-party databases.
+
+### Fixed
+
+- **Compare sessions persist real payloads** (#71): compare runs land in
+  `bench_runs` with per-slot payloads for every session type; the multi-model
+  compare card renders per-slot bars and an honest header instead of an empty
+  "unknown model" frame.
+- **Degenerate-output gate** (#71): gates the visible content when present and
+  falls back to reasoning text only when content is empty — a healthy thinking
+  run is not branded degenerate, and a long reasoning trace can no longer
+  dilute a stuck loop in the actual answer.
+- **Doctor under launchd** (#72): engine checks now resolve brew/pip/binaries
+  independently of PATH, so the web dashboard no longer reports installed
+  engines as missing; a third-party service answering `/version` on :8000 is
+  no longer mistaken for a running vllm-mlx.
+
 ## [1.26.0](https://github.com/druide67/asiai/compare/v1.25.0...v1.26.0) — 2026-07-10
 
 ### Added
