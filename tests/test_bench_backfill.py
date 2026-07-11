@@ -60,6 +60,34 @@ def _seed(path: str) -> None:
 
 
 class TestDetectSessions:
+    def test_null_numeric_columns_do_not_crash(self):
+        # Old or third-party DBs can carry NULLs in any numeric column the
+        # aggregator compares (None > 0 raises TypeError) — the backfill
+        # must sanitize them all, not just tok_per_sec/ttft_ms.
+        path = _make_db()
+        try:
+            rows = [
+                _row(
+                    TS_ENGINE,
+                    "ollama",
+                    "qwen:4b",
+                    50.0 + i,
+                    i,
+                    tokens_generated=None,
+                    total_duration_ms=None,
+                    ttft_client_ms=None,
+                    power_watts=None,
+                    soc_watts=None,
+                )
+                for i in range(3)
+            ]
+            store_benchmark(path, rows)
+            sessions = detect_sessions(path)
+            assert len(sessions) == 1
+            assert sessions[0].session_type == "engine"
+        finally:
+            os.unlink(path)
+
     def test_one_session_per_distinct_ts(self):
         path = _make_db()
         try:

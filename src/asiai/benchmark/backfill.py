@@ -29,9 +29,18 @@ from asiai.benchmark.persist import persist_standard_session
 from asiai.benchmark.reporter import build_export_payload, build_report, slot_label
 from asiai.storage.db import query_bench_runs, query_benchmarks
 
-# Raw-row fields the aggregator subscripts directly — a NULL there would
-# crash the whole backfill, so coerce to the neutral "not measured" zero.
-_REQUIRED_NUMERIC = ("tok_per_sec", "ttft_ms")
+# Raw-row fields the aggregator subscripts or compares directly — a NULL in
+# any of them (old or third-party DBs) would crash the whole backfill with a
+# TypeError, so coerce to the neutral "not measured" zero.
+_REQUIRED_NUMERIC = (
+    "tok_per_sec",
+    "ttft_ms",
+    "ttft_client_ms",
+    "tokens_generated",
+    "total_duration_ms",
+    "power_watts",
+    "soc_watts",
+)
 
 
 @dataclass

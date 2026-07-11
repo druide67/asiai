@@ -710,6 +710,7 @@ def _run_backfill_runs(db_path: str, apply: bool = False) -> int:
     print()
     missing = 0
     created = 0
+    failed = 0
     for s in sessions:
         when = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(s.ts))
         slots = ", ".join(s.slot_names) or "?"
@@ -723,6 +724,7 @@ def _run_backfill_runs(db_path: str, apply: bool = False) -> int:
             created += 1
         elif apply:
             status = yellow("write failed")  # persist logs the reason
+            failed += 1
         else:
             status = yellow("would create")
             missing += 1
@@ -730,6 +732,9 @@ def _run_backfill_runs(db_path: str, apply: bool = False) -> int:
     print()
     if apply:
         print(f"  {green('✓')} {created} session row(s) written to bench_runs.")
+        if failed:
+            print(f"  {yellow('!')} {failed} session(s) failed to write — see log above.")
+            return 1
     elif missing:
         print(
             f"  {missing} session(s) missing from bench_runs. "

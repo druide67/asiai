@@ -31,8 +31,8 @@ def check_degenerate(text: str, *, min_chars: int = 1) -> dict[str, object]:
     """Flag degenerate generations with cheap deterministic heuristics.
 
     Returns ``{"degenerate": bool, "reason": str | None}``. Detects:
-      - empty / whitespace-only output (e.g. a thinking-loop that never emits
-        user-facing content);
+      - empty / whitespace-only output (callers pick which text to gate:
+        the runner falls back to reasoning text when content is empty);
       - extreme n-gram repetition (a stuck decoding loop);
       - very low word diversity over a long output (garbage filler).
     """

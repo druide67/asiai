@@ -1368,7 +1368,9 @@ class TestOutputGateSeesReasoning:
     """Regression: with a thinking-default model (Qwen3-family chat) the
     whole token budget can land in reasoning deltas and ``text`` stays empty.
     Gating on content alone branded every healthy thinking run as 'empty' —
-    the gate must evaluate the COMPLETE generated text (content + reasoning).
+    the gate falls back to the reasoning text when content is empty, but
+    must NOT concatenate the two (a long diverse reasoning would dilute the
+    repetition ratios and hide a degenerate loop in the actual answer).
     """
 
     def _bench_row(self, gen: GenerateResult) -> dict:
@@ -1412,6 +1414,25 @@ class TestOutputGateSeesReasoning:
         gen = GenerateResult(
             text="",
             reasoning_text="wait no wait " * 40,  # stuck decoding loop
+            tokens_generated=400,
+            tok_per_sec=50.0,
+            ttft_ms=120.0,
+            total_duration_ms=8000.0,
+            model="test-model",
+            engine="ollama",
+        )
+        assert self._bench_row(gen)["output_degenerate"] is True
+
+    def test_degenerate_content_not_diluted_by_healthy_reasoning(self):
+        # A stuck loop in the ANSWER must trip the gate even when the
+        # reasoning is long and lexically diverse — concatenating the two
+        # would sink the trigram ratio below threshold and hide the loop.
+        diverse_reasoning = " ".join(
+            f"consider aspect number {i} of the problem" for i in range(60)
+        )
+        gen = GenerateResult(
+            text="the answer is the answer is " * 15,
+            reasoning_text=diverse_reasoning,
             tokens_generated=400,
             tok_per_sec=50.0,
             ttft_ms=120.0,
