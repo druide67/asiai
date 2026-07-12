@@ -10,7 +10,7 @@ Manage persistent engine configuration. Engines discovered by `asiai detect` are
 
 ```bash
 asiai config show              # Show known engines
-asiai config add <engine> <url> [--label NAME]  # Add engine manually
+asiai config add <engine> <url> [--label NAME] [--api-key-file PATH]  # Add engine manually
 asiai config remove <url>      # Remove an engine
 asiai config reset             # Clear all configuration
 ```
@@ -36,6 +36,28 @@ Manually register an engine on a non-standard port. Manual engines are never aut
 ```bash
 asiai config add omlx http://localhost:8800 --label desktop
 asiai config add ollama http://192.0.2.10:11434 --label remote
+asiai config add mtplx http://localhost:8080 --api-key-file ~/.config/asiai/keys/mtplx.key
+```
+
+### Engine API keys (`--api-key-file`)
+
+Some servers require `Authorization: Bearer <key>` on every route (for example MTPLX started with an API key, or llama.cpp with `--api-key`). Point the engine entry at a **file containing the key** — the key itself is never stored in the config:
+
+```json
+{
+  "url": "http://localhost:8080",
+  "engine": "mtplx",
+  "source": "manual",
+  "api_key_file": "/path/to/mtplx.key"
+}
+```
+
+When `api_key_file` is set, asiai sends the Bearer header on every request to **that engine's URL only** — detection probes, monitoring, the web dashboard, and benchmarks. If the file is missing, unreadable, or empty, requests are sent without the header and the server's 401 surfaces honestly. The key is never written to logs or error messages.
+
+Keep the key file readable only by your user:
+
+```bash
+chmod 600 ~/.config/asiai/keys/mtplx.key
 ```
 
 ### remove

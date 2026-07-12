@@ -29,7 +29,7 @@ class OmlxEngine(OpenAICompatEngine):
     def version(self) -> str:
         """Return oMLX version via /admin/info or fallback."""
         # Try /admin/info (oMLX-specific)
-        data, _ = http_get_json(f"{self.base_url}/admin/info")
+        data, _ = http_get_json(f"{self.base_url}/admin/info", **self._http_kwargs())
         if data and isinstance(data, dict) and "version" in data:
             return data["version"]
         return ""

@@ -176,7 +176,9 @@ def collect_engines_status(engines: list[InferenceEngine]) -> list[dict]:
                 # grow the endpoint, so probing them every poll is waste.
                 ratio = entry["kv_cache_usage_ratio"]
                 if engine.name == "llamacpp" and isinstance(ratio, (int, float)) and ratio < 0:
-                    slots_kv = scrape_slots_kv(engine.base_url)
+                    slots_kv = scrape_slots_kv(
+                        engine.base_url, headers=engine.auth_headers() or None
+                    )
                     if slots_kv:
                         entry["kv_cache_usage_ratio"] = slots_kv["kv_cache_usage_ratio"]
                         if not entry["kv_cache_tokens"]:

@@ -58,8 +58,30 @@ class InferenceEngine(ABC):
     Each engine (Ollama, LM Studio, mlx-lm, etc.) implements this interface.
     """
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, api_key: str = "") -> None:
         self.base_url = base_url.rstrip("/")
+        # Optional per-engine API key (resolved from the user's api_key_file
+        # config). Bound to THIS engine's base_url: it must never be attached
+        # to a request targeting any other host. Never log it.
+        self.api_key = api_key
+
+    def auth_headers(self) -> dict[str, str]:
+        """Authorization header for this engine's API key ({} when none).
+
+        Only ever attach these headers to requests aimed at ``self.base_url``.
+        """
+        if self.api_key:
+            return {"Authorization": f"Bearer {self.api_key}"}
+        return {}
+
+    def _http_kwargs(self) -> dict:
+        """Keyword arguments for ``http_get_json``/``http_post_json`` calls.
+
+        Empty when no API key is configured, so keyless engines issue
+        byte-identical requests to before this feature existed.
+        """
+        headers = self.auth_headers()
+        return {"headers": headers} if headers else {}
 
     @property
     @abstractmethod

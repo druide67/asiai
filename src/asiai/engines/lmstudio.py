@@ -140,12 +140,12 @@ class LMStudioEngine(OpenAICompatEngine):
 
     def version(self) -> str:
         # Check header first
-        _, headers = http_get_json(f"{self.base_url}/v1/models")
+        _, headers = http_get_json(f"{self.base_url}/v1/models", **self._http_kwargs())
         version = headers.get("x-lm-studio-version", "")
         if version:
             return version
         # Fallback: /lms/version endpoint
-        data, _ = http_get_json(f"{self.base_url}/lms/version")
+        data, _ = http_get_json(f"{self.base_url}/lms/version", **self._http_kwargs())
         if data and isinstance(data, dict) and "version" in data:
             return data["version"]
         # Fallback: read version from app bundle plist

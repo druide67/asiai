@@ -47,7 +47,7 @@ def count_tcp_connections(port: int) -> int:
         return 0
 
 
-def scrape_slots_kv(base_url: str) -> dict:
+def scrape_slots_kv(base_url: str, headers: dict[str, str] | None = None) -> dict:
     """KV-cache occupancy via ``GET /slots`` (llama.cpp).
 
     Modern llama.cpp removed the KV gauges from ``/metrics`` (KV-cache
@@ -69,13 +69,13 @@ def scrape_slots_kv(base_url: str) -> dict:
     """
     import json
     from urllib.error import URLError
-    from urllib.request import urlopen
+    from urllib.request import Request, urlopen
 
     if not base_url or not base_url.startswith(("http://", "https://")):
         return {}
     url = base_url.rstrip("/") + "/slots"
     try:
-        with urlopen(url, timeout=2) as resp:
+        with urlopen(Request(url, headers=headers or {}), timeout=2) as resp:
             # Large cap: a 256K-context slot's JSON (prompt text included)
             # runs to megabytes; truncated JSON would parse-fail to {}.
             slots = json.loads(resp.read(8 * 1024 * 1024).decode("utf-8", errors="replace"))
@@ -103,7 +103,7 @@ def scrape_slots_kv(base_url: str) -> dict:
     }
 
 
-def scrape_prometheus_metrics(url: str) -> dict:
+def scrape_prometheus_metrics(url: str, headers: dict[str, str] | None = None) -> dict:
     """Scrape a Prometheus /metrics endpoint and extract key gauges.
 
     Parses simple Prometheus text format with regex. Returns a dict with
@@ -125,10 +125,10 @@ def scrape_prometheus_metrics(url: str) -> dict:
         Dict of extracted metric values, or {} on failure.
     """
     from urllib.error import URLError
-    from urllib.request import urlopen
+    from urllib.request import Request, urlopen
 
     try:
-        with urlopen(url, timeout=3) as resp:
+        with urlopen(Request(url, headers=headers or {}), timeout=3) as resp:
             text = resp.read(512 * 1024).decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError) as e:
         logger.debug("Failed to scrape %s: %s", url, e)

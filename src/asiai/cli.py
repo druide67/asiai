@@ -63,12 +63,16 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "exo": ExoEngine,
     }
 
+    from asiai.engines.config import resolve_api_key
+
     found = detect_engines(urls)
     engines = []
     for url, name, _version in found:
         cls = engine_map.get(name)
         if cls:
-            engines.append(cls(url))
+            # The key resolved for this URL is bound to this engine instance
+            # and only ever sent to its own base_url.
+            engines.append(cls(url, api_key=resolve_api_key(url)))
     return engines
 
 
@@ -2077,15 +2081,20 @@ def cmd_config(args: argparse.Namespace) -> int:
             ver_str = f" v{version}" if version else ""
             label_str = f" [{label}]" if label else ""
             source_str = dim(f"({source})") if source == "auto" else green(f"({source})")
+            # Show only that a key file is configured, never its content.
+            auth_str = dim(" (api key)") if entry.get("api_key_file") else ""
 
-            print(f"  {engine}{ver_str} at {url}{label_str}  {source_str}  last seen {ago}")
+            print(
+                f"  {engine}{ver_str} at {url}{label_str}{auth_str}  {source_str}  last seen {ago}"
+            )
         return 0
 
     if action == "add":
         engine = args.engine_name
         url = args.engine_url
         label = getattr(args, "label", "") or ""
-        upsert_engine(url, engine, source="manual", label=label)
+        api_key_file = getattr(args, "api_key_file", None)
+        upsert_engine(url, engine, source="manual", label=label, api_key_file=api_key_file)
         print(green(f"Added {engine} at {url}"))
         return 0
 
@@ -2688,6 +2697,15 @@ def main(argv: list[str] | None = None) -> int:
     config_add_p.add_argument("engine_name", help="Engine type (ollama, lmstudio, omlx, ...)")
     config_add_p.add_argument("engine_url", help="Engine URL (e.g. http://localhost:8800)")
     config_add_p.add_argument("--label", help="Optional label (e.g. desktop)")
+    config_add_p.add_argument(
+        "--api-key-file",
+        dest="api_key_file",
+        help=(
+            "Path to a file containing this engine's API key (the key itself is "
+            "never stored in the config). Sent as 'Authorization: Bearer' on "
+            "every request to this engine only."
+        ),
+    )
     config_remove_p = config_sub.add_parser("remove", help="Remove an engine by URL")
     config_remove_p.add_argument("engine_url", help="URL to remove")
     config_sub.add_parser("reset", help="Clear all engine configuration")

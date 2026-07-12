@@ -24,17 +24,17 @@ class OllamaEngine(InferenceEngine):
         return "ollama"
 
     def version(self) -> str:
-        data, _ = http_get_json(f"{self.base_url}/api/version")
+        data, _ = http_get_json(f"{self.base_url}/api/version", **self._http_kwargs())
         if data and "version" in data:
             return data["version"]
         return ""
 
     def is_reachable(self) -> bool:
-        data, _ = http_get_json(f"{self.base_url}/api/version")
+        data, _ = http_get_json(f"{self.base_url}/api/version", **self._http_kwargs())
         return data is not None
 
     def list_running(self) -> list[ModelInfo]:
-        data, _ = http_get_json(f"{self.base_url}/api/ps")
+        data, _ = http_get_json(f"{self.base_url}/api/ps", **self._http_kwargs())
         if data is None:
             return []
         models = []
@@ -53,7 +53,7 @@ class OllamaEngine(InferenceEngine):
         return models
 
     def list_available(self) -> list[ModelInfo]:
-        data, _ = http_get_json(f"{self.base_url}/api/tags")
+        data, _ = http_get_json(f"{self.base_url}/api/tags", **self._http_kwargs())
         if data is None:
             return []
         models = []
@@ -80,6 +80,7 @@ class OllamaEngine(InferenceEngine):
                 "options": {"num_predict": 1},
             },
             timeout=120,
+            **self._http_kwargs(),
         )
         if data and "load_duration" in data:
             return round(data["load_duration"] / 1e6, 1)  # ns -> ms
@@ -93,6 +94,7 @@ class OllamaEngine(InferenceEngine):
             f"{self.base_url}/api/show",
             {"model": model_name},
             timeout=10,
+            **self._http_kwargs(),
         )
         if data is None:
             return 0
@@ -111,6 +113,7 @@ class OllamaEngine(InferenceEngine):
                 f"{self.base_url}/api/generate",
                 {"model": model, "keep_alive": 0},
                 timeout=10,
+                **self._http_kwargs(),
             )
             logger.info("Unloaded %s from Ollama", model)
             return True
@@ -157,6 +160,8 @@ class OllamaEngine(InferenceEngine):
                 method="POST",
             )
             req.add_header("Content-Type", "application/json")
+            for key, value in self.auth_headers().items():
+                req.add_header(key, value)
 
             with urlopen(req, timeout=300) as resp:
                 for raw_line in resp:
