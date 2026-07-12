@@ -18,10 +18,11 @@
     --border-hover: #2a2a2e;
     --border-active: #3a3a3f;
 
-    /* Text */
+    /* Text — muted must clear WCAG AA 4.5:1 on every content surface
+       (#52525b sat at 2.1-2.6:1, unreadable tertiary labels) */
     --text-primary: #fafafa;
     --text-secondary: #a1a1aa;
-    --text-muted: #52525b;
+    --text-muted: #82828d;
 
     /* Accent — asiai Cyan (signature) */
     --accent: #06b6d4;
@@ -77,19 +78,24 @@
     --bg-hover: #e4e4e7;
     --border: #e4e4e7;
     --border-hover: #d4d4d8;
-    --border-active: #a1a1aa;
+    /* Active borders are UI indicators — WCAG 3:1 (was #a1a1aa, 2.5:1) */
+    --border-active: #82828d;
     --text-primary: #09090b;
     --text-secondary: #52525b;
-    --text-muted: #a1a1aa;
+    /* Muted text must clear AA 4.5:1 on white (was #a1a1aa, 2.0-2.6:1) */
+    --text-muted: #6b6b74;
     --accent: #0891b2;
     --accent-dim: rgba(8, 145, 178, 0.08);
     --accent-glow: rgba(8, 145, 178, 0.15);
-    --green: #16a34a;
-    --yellow: #ca8a04;
-    --red: #dc2626;
-    --green-dim: rgba(22, 163, 74, 0.08);
-    --yellow-dim: rgba(202, 138, 4, 0.08);
-    --red-dim: rgba(220, 38, 38, 0.08);
+    /* Semantic colors double as TEXT on light surfaces (status labels,
+       badge captions) — one shade darker so they clear AA 4.5:1 while
+       staying recognizably green/gold/red (were 2.3-3.3:1). */
+    --green: #15803d;
+    --yellow: #996208;
+    --red: #b91c1c;
+    --green-dim: rgba(21, 128, 61, 0.08);
+    --yellow-dim: rgba(153, 98, 8, 0.08);
+    --red-dim: rgba(185, 28, 28, 0.08);
 }
 
 /* ── Reset & Base ──────────────────────────────────────────── */
