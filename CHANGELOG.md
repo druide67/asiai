@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.28.0](https://github.com/druide67/asiai/compare/v1.27.0...v1.28.0) — 2026-07-12
+
+### Added
+
+- **Per-engine API keys** (#74): new `api_key_file` field in the engines
+  config (`asiai config add <engine> <url> --api-key-file PATH`) — the
+  file's key is sent as `Authorization: Bearer` on every request to that
+  engine's URL only. Detection, bench, the web dashboard, MCP tools and
+  the /slots KV scraper all authenticate; auth-gated engines (MTPLX on
+  non-loopback binds, llama.cpp with `--api-key`) are visible again.
+  Fail-soft on a missing/empty file; the key never appears in the
+  config, logs or error messages.
+
+### Fixed
+
+- **WCAG AA contrast** (#73): `--text-muted` cleared the 4.5:1 threshold
+  in both themes (it sat at 2.0-2.6:1), light-theme semantic colors
+  darkened one shade for text usage, light active borders reach the 3:1
+  UI minimum.
+
 ## [1.27.0](https://github.com/druide67/asiai/compare/v1.26.0...v1.27.0) — 2026-07-11
 
 ### Added
