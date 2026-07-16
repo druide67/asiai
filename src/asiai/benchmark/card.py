@@ -456,7 +456,7 @@ def generate_card_svg(
         f'font-family="{_SANS}" font-weight="500">{url_text}</text>'
     )
 
-    esc_model = _escape(model)
+    esc_model = _escape(_truncate_middle(model, _MODEL_TITLE_MAX_CHARS))
 
     svg_lines = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">',
@@ -667,6 +667,27 @@ def _format_vram(vram_bytes: int) -> str:
     if vram_gb == int(vram_gb):
         return f"{int(vram_gb)} GB VRAM"
     return f"{vram_gb:.1f} GB VRAM"
+
+
+# Title budget: the header renders at font-size 26 bold from x=60 on a
+# 1200px card (~14.5px/glyph average for the sans stack) — beyond this the
+# name collides with the right edge. SVG has no text-overflow.
+_MODEL_TITLE_MAX_CHARS = 68
+
+
+def _truncate_middle(name: str, max_chars: int) -> str:
+    """Ellipsize a model name that would overflow its SVG text budget.
+
+    Middle truncation keeps both the family prefix and the quant/variant
+    suffix — the discriminating parts of long model names like
+    'Qwen3.6-27B-...-Optimized-Speed-UD-Q8_K_XL'.
+    """
+    if len(name) <= max_chars:
+        return name
+    keep = max_chars - 1
+    head = keep * 2 // 3
+    tail = keep - head
+    return name[:head] + "\u2026" + name[-tail:]
 
 
 def _format_model_name(name: str) -> str:
