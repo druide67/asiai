@@ -28,6 +28,7 @@ class _FakeModel:
 class _FakeEngine:
     name = "llamacpp"
     base_url = "http://127.0.0.1:9999"
+    api_key = ""
 
     def list_running(self):
         return [_FakeModel()]
@@ -239,6 +240,9 @@ class TestModeThread:
         assert kwargs["suites"] == ["tool-call"]
         assert kwargs["repeats"] == 2
         assert kwargs["model"] == "qwen3.5:4b"  # auto-resolved from loaded models
+        # The web→runner seam forwards the engine's resolved key (None when
+        # the engine has none — _FakeEngine.api_key is "").
+        assert kwargs["api_key"] is None
 
         # The persisted run is fetchable and renders a markdown report.
         run_id = snap["result_run_id"]
@@ -248,6 +252,33 @@ class TestModeThread:
         assert report.status_code == 200
         assert "## Conditions" in report.text
         assert "## Provenance" in report.text
+
+    def test_mode_thread_forwards_engine_api_key(self, client, app_state, monkeypatch):
+        """A keyed engine's resolved api_key crosses the web→runner seam."""
+        monkeypatch.setattr(_FakeEngine, "api_key", "sk-fake-for-seam-test")
+        payload = {
+            "schema_version": "code-v3",
+            "engine": "llamacpp",
+            "model": "qwen3.5:4b",
+            "started_at": NOW,
+            "finished_at": NOW + 5,
+            "code_results": {},
+        }
+        with patch("asiai.benchmark.code_eval.run_code_eval", return_value=payload) as m:
+            resp = client.post(
+                "/bench/run",
+                data={
+                    "bench_type": "code",
+                    "mode_engine": "llamacpp",
+                    "code_suites": "tool-call",
+                },
+            )
+            assert resp.status_code == 200
+            for _ in range(50):
+                if app_state.get_bench_snapshot()["done"]:
+                    break
+                time.sleep(0.05)
+        assert m.call_args.kwargs["api_key"] == "sk-fake-for-seam-test"
 
     def test_mode_thread_error_surfaces(self, client, app_state):
         with patch(

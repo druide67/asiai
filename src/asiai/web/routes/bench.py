@@ -390,6 +390,9 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
         # Judge API key comes from the server environment ONLY — the form
         # never carries a secret (secrets discipline).
         judge_api_key = os.environ.get("ASIAI_JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        # Target key comes from the engine config's api_key_file (resolved at
+        # engine discovery) — mirrors the CLI bench paths.
+        api_key = engine.api_key or None
 
         extra_body = opts.get("extra_body")
         runs = opts.get("runs", 1)
@@ -405,6 +408,7 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
                 repeats=runs,
                 engine_version=engine_version,
                 on_run=lambda run: progress(f"[{run.phase}] done"),
+                api_key=api_key,
             )
         elif bench_type == "burst":
             from asiai.benchmark.burst import run_burst
@@ -418,6 +422,7 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
                 extra_body=extra_body,
                 runs=runs,
                 engine_version=engine_version,
+                api_key=api_key,
             )
         elif bench_type == "code":
             from asiai.benchmark.code_eval import run_code_eval
@@ -432,6 +437,7 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
                 judge_url=opts.get("judge_url"),
                 judge_model=opts.get("judge_model"),
                 judge_api_key=judge_api_key,
+                api_key=api_key,
                 engine_version=engine_version,
                 on_progress=progress,
             )
@@ -447,6 +453,7 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
                 judge_url=opts.get("judge_url"),
                 judge_model=opts.get("judge_model"),
                 judge_api_key=judge_api_key,
+                api_key=api_key,
                 engine_version=engine_version,
                 on_progress=progress,
             )
@@ -463,6 +470,7 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
                 model=model,
                 repeats=runs,
                 extra_body=extra_body,
+                api_key=api_key,
                 engine_version=engine_version,
                 on_progress=progress,
             )
@@ -478,6 +486,7 @@ def _run_mode_thread(state, bench_type: str, engine, model: str, opts: dict) -> 
                 engine_name=engine.name,
                 model=model,
                 extra_body=extra_body,
+                api_key=api_key,
                 engine_version=engine_version,
                 on_progress=progress,
             )

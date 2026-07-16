@@ -586,7 +586,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
 
     if getattr(args, "agentic_auto_restart", False):
         print(f"  {dim('●')} aisctl restart {engine.name}...")
-        ok, msg = auto_restart_engine(engine.name, engine.base_url)
+        ok, msg = auto_restart_engine(engine.name, engine.base_url, api_key=engine.api_key or None)
         if ok:
             print(f"  {dim('●')} {msg}")
         else:
@@ -652,7 +652,9 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
 
         def on_repeat(repeat_idx: int) -> None:
             print(f"  {dim('●')} aisctl restart {engine.name} (repeat {repeat_idx + 1})...")
-            ok, msg = auto_restart_engine(engine.name, engine.base_url)
+            ok, msg = auto_restart_engine(
+                engine.name, engine.base_url, api_key=engine.api_key or None
+            )
             print(f"  {dim('●')} {msg}" if ok else yellow(f"  ⚠ restart skipped: {msg}"))
 
     result = run_agentic_bench(
@@ -668,6 +670,7 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         repeats=max(1, getattr(args, "runs", 1) or 1),
         engine_version=engine_version,
         on_repeat=on_repeat,
+        api_key=engine.api_key or None,
     )
 
     reuse = result.get("prefix_cache_reuse", {})
@@ -889,6 +892,7 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
         stream=not getattr(args, "burst_no_stream", False),
         runs=getattr(args, "burst_runs", 1),
         engine_version=engine_version,
+        api_key=engine.api_key or None,
     )
 
     def _fmt(v, unit=""):
@@ -1042,6 +1046,7 @@ def _run_code_bench(args: argparse.Namespace) -> int:
         judge_url=judge_url,
         judge_model=judge_model,
         judge_api_key=judge_api_key,
+        api_key=engine.api_key or None,
         out_path=args.code_output,
         engine_version=engine_version,
         on_progress=print,
@@ -1186,6 +1191,7 @@ def _run_language_bench(args: argparse.Namespace) -> int:
             judge_url=judge_url,
             judge_model=judge_model,
             judge_api_key=judge_api_key,
+            api_key=engine.api_key or None,
             out_path=args.language_output,
             engine_version=engine_version,
             on_progress=print,
@@ -1307,6 +1313,7 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
         scenarios=scenarios,
         repeats=max(1, getattr(args, "runs", 1) or 1),
         extra_body=extra_body,
+        api_key=engine.api_key or None,
         out_path=args.instruct_output,
         engine_version=engine_version,
         on_progress=print,
@@ -1412,6 +1419,7 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
         engine_name=engine.name,
         model=model_id,
         extra_body=extra_body,
+        api_key=engine.api_key or None,
         out_path=args.thinking_ablation_output,
         engine_version=engine_version,
         on_progress=print,

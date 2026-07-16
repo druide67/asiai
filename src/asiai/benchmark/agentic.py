@@ -139,6 +139,7 @@ def _do_single_run(
     timeout: int = 900,
     extra_body: dict[str, Any] | None = None,
     probe: PowerThermalProbe | None = None,
+    api_key: str | None = None,
 ) -> AgenticRun:
     """Send a single chat completion and parse SSE stream for usage.
 
@@ -165,10 +166,13 @@ def _do_single_run(
     if extra_body:
         payload.update(extra_body)
     body = json.dumps(payload).encode()
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     req = urllib.request.Request(
         f"{base_url.rstrip('/')}/v1/chat/completions",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
 
     t0 = time.perf_counter()
@@ -190,7 +194,8 @@ def _do_single_run(
     # Reset the power/energy baseline right before the request so the window
     # measured by ``probe.read()`` covers this run's prefill + decode only.
     # KVCacheSampler polls /slots during the stream to capture the KV peak.
-    kv_sampler = KVCacheSampler(base_url) if probe is not None else None
+    kv_auth = {"Authorization": f"Bearer {api_key}"} if api_key else None
+    kv_sampler = KVCacheSampler(base_url, headers=kv_auth) if probe is not None else None
     # base_url enables the port-based RAM fallback even when the engine_name
     # doesn't match the process by name (versioned/custom labels).
     mem_sampler = (
@@ -593,6 +598,7 @@ def run_agentic_bench(
     repeats: int = 1,
     engine_version: str = "",
     on_repeat: Any = None,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -674,6 +680,7 @@ def run_agentic_bench(
                     timeout=timeout,
                     extra_body=extra_body,
                     probe=probe,
+                    api_key=api_key,
                 )
                 run.repeat = repeat_idx
                 runs.append(run)

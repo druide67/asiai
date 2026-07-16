@@ -93,6 +93,7 @@ def _run_adherence(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     prompts = list(profile.probes)
     if profile.code_comment_prompt:
@@ -105,6 +106,7 @@ def _run_adherence(
             [{"role": "user", "content": prompt}],
             max_tokens=512,
             extra_body=extra_body,
+            api_key=api_key,
             timeout=timeout,
         )
         ratio = _adherence_ratio(res.text or "", profile)
@@ -155,6 +157,7 @@ def _run_diacritics(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     if not profile.diacritic_traps:
         return {
@@ -168,6 +171,7 @@ def _run_diacritics(
             [{"role": "user", "content": trap["prompt"]}],
             max_tokens=256,
             extra_body=extra_body,
+            api_key=api_key,
             timeout=timeout,
         )
         low = (res.text or "").lower()
@@ -275,6 +279,7 @@ def run_language_eval(
     judge_url: str | None = None,
     judge_model: str | None = None,
     judge_api_key: str | None = None,
+    api_key: str | None = None,
     timeout: int = 900,
     out_path: str | None = None,
     include_host: bool = False,
@@ -302,6 +307,7 @@ def run_language_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
         if "adherence" in requested:
             results["adherence"] = adherence
@@ -313,6 +319,7 @@ def run_language_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
     if "fluency" in requested:
         results["fluency"] = _run_fluency_judge(
