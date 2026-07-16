@@ -26,6 +26,10 @@
 
     /* Accent — asiai Cyan (signature) */
     --accent: #06b6d4;
+    /* Accent as TEXT: same hue, guaranteed AA 4.5:1 on the theme surfaces
+       (dark: identical to --accent; light: one shade darker). Use for any
+       color: on normal-size text; --accent stays for borders/fills/UI. */
+    --accent-text: #06b6d4;
     --accent-dim: rgba(6, 182, 212, 0.12);
     --accent-glow: rgba(6, 182, 212, 0.25);
 
@@ -85,6 +89,9 @@
     /* Muted text must clear AA 4.5:1 on white (was #a1a1aa, 2.0-2.6:1) */
     --text-muted: #6b6b74;
     --accent: #0891b2;
+    /* #0891b2 as body text is 3.3-3.7:1 on light surfaces (AA fail for
+       normal text) — cyan-700 clears 4.5:1 while keeping the hue. */
+    --accent-text: #0e7490;
     --accent-dim: rgba(8, 145, 178, 0.08);
     --accent-glow: rgba(8, 145, 178, 0.15);
     /* Semantic colors double as TEXT on light surfaces (status labels,
@@ -180,7 +187,7 @@ body::after {
 
 .sidebar-tagline {
     font-size: 0.625rem;
-    color: var(--accent);
+    color: var(--accent-text);
     line-height: 1.5;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -217,9 +224,9 @@ body::after {
 }
 
 .sidebar-nav a.active {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-dim);
-    border-left-color: var(--accent);
+    border-left-color: var(--accent-text);
 }
 
 .sidebar-nav .nav-icon {
@@ -267,7 +274,7 @@ body::after {
     font-weight: 800;
     line-height: 1;
     letter-spacing: -0.03em;
-    color: var(--accent);
+    color: var(--accent-text);
     text-shadow: 0 0 40px var(--accent-glow);
 }
 
@@ -297,7 +304,7 @@ body::after {
 }
 
 .hero-subtitle .accent {
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 /* Counter animation for hero numbers */
@@ -539,7 +546,7 @@ body::after {
 
 .badge-accent {
     background: var(--accent-dim);
-    color: var(--accent);
+    color: var(--accent-text);
     border: 1px solid rgba(6, 182, 212, 0.15);
 }
 
@@ -569,7 +576,7 @@ body::after {
 
 .btn-primary {
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--accent-text);
     color: #09090b;
     font-weight: 600;
 }
@@ -589,7 +596,7 @@ body::after {
 .btn-quick {
     display: inline-flex !important;
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--accent-text);
     color: #09090b;
     font-size: 0.9375rem;
     font-weight: 700;
@@ -648,7 +655,7 @@ body::after {
 .form-select:focus,
 .form-input:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--accent-text);
     box-shadow: 0 0 0 2px var(--accent-dim);
 }
 
@@ -662,7 +669,7 @@ body::after {
 }
 
 .form-checkbox input[type="checkbox"] {
-    accent-color: var(--accent);
+    accent-color: var(--accent-text);
 }
 
 .form-checkbox input[type="checkbox"]:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -670,7 +677,7 @@ body::after {
 
 .form-range {
     width: 100%;
-    accent-color: var(--accent);
+    accent-color: var(--accent-text);
 }
 
 /* ── Charts ────────────────────────────────────────────────── */
@@ -759,7 +766,7 @@ body::after {
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-sm);
     margin-top: var(--space-2);
-    color: var(--accent);
+    color: var(--accent-text);
     display: inline-block;
     cursor: pointer;
     border: 1px solid var(--border);
@@ -768,7 +775,7 @@ body::after {
 
 .check-fix:hover {
     background: var(--bg-surface);
-    border-color: var(--accent);
+    border-color: var(--accent-text);
 }
 
 /* ── Filter Bar ────────────────────────────────────────────── */
@@ -796,8 +803,8 @@ body::after {
 
 .filter-chip:hover,
 .filter-chip.active {
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--accent-text);
+    color: var(--accent-text);
     background: var(--accent-dim);
 }
 
@@ -813,7 +820,7 @@ body::after {
 }
 
 [data-theme="light"] .range-input { color-scheme: light; }
-.range-input:focus { outline: none; border-color: var(--accent); }
+.range-input:focus { outline: none; border-color: var(--accent-text); }
 
 /* ── Quick Actions ─────────────────────────────────────────── */
 
@@ -857,7 +864,7 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
 }
 
 .help-hint a {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
 }
 
@@ -921,7 +928,7 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
     width: 1rem;
     height: 1rem;
     border: 2px solid var(--border);
-    border-top-color: var(--accent);
+    border-top-color: var(--accent-text);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -1038,7 +1045,7 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
 .text-yellow-400 { color: var(--yellow); }
 .text-red-400 { color: var(--red); }
 .text-blue-400 { color: var(--data-2); }
-.text-cyan-400 { color: var(--accent); }
+.text-cyan-400 { color: var(--accent-text); }
 .text-neutral-400 { color: var(--text-secondary); }
 .text-neutral-500 { color: var(--text-muted); }
 .text-sm { font-size: 0.8125rem; }
@@ -1054,7 +1061,7 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
 }
 
 .results-table th.sortable:hover {
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 .results-table th.sortable::after {
@@ -1065,13 +1072,13 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
 .results-table th.sortable.sort-asc::after {
     content: " \2191";
     opacity: 1;
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 .results-table th.sortable.sort-desc::after {
     content: " \2193";
     opacity: 1;
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 /* Proportional tok/s mini-bar (leaderboard) */
@@ -1113,4 +1120,4 @@ details[open] .advanced-toggle .chevron { transform: rotate(90deg); }
 
 /* Backwards compat aliases */
 .accent-blue { color: var(--data-2); }
-.accent-cyan { color: var(--accent); }
+.accent-cyan { color: var(--accent-text); }

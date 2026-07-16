@@ -42,7 +42,7 @@
 
 .mn-ribbon-link {
     margin-left: auto;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.8rem;
     text-decoration: none;
     white-space: nowrap;
@@ -85,7 +85,7 @@
 
 .mn-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.mn-chip .tick { color: var(--accent); font-weight: 700; }
+.mn-chip .tick { color: var(--accent-text); font-weight: 700; }
 
 .mn-chip.off {
     border-color: var(--border);
@@ -173,7 +173,7 @@
     font-family: var(--font-mono);
     font-weight: 700;
     font-size: 1.3rem;
-    color: var(--accent);
+    color: var(--accent-text);
     line-height: 1.1;
 }
 
@@ -248,7 +248,7 @@
     display: block;
     text-align: right;
     margin-top: 0.55rem;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.78rem;
     text-decoration: none;
 }
@@ -280,7 +280,7 @@
     font-size: 0.56rem;
     font-weight: 700;
     letter-spacing: 0.09em;
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-dim);
     border: 1px solid rgba(6, 182, 212, 0.4);
     border-radius: 999px;
@@ -326,7 +326,7 @@
     font-family: var(--font-mono);
     font-size: 0.7rem;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--accent-text);
     font-variant-numeric: tabular-nums;
 }
 

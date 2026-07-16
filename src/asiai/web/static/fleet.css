@@ -250,7 +250,7 @@
     white-space: nowrap;
 }
 
-.fl-actor.operator { color: var(--accent); background: rgba(6, 182, 212, 0.1); }
+.fl-actor.operator { color: var(--accent-text); background: rgba(6, 182, 212, 0.1); }
 .fl-actor.machine { color: var(--fl-violet-text); background: rgba(139, 92, 246, 0.12); }
 .fl-actor.loopback { color: var(--fl-text-dim); background: rgba(113, 113, 122, 0.1); }
 
@@ -294,7 +294,7 @@
 
 .fl-banner-title { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .fl-banner.nominal .fl-banner-title { color: var(--fl-green-text); }
-.fl-banner.loading .fl-banner-title { color: var(--accent); }
+.fl-banner.loading .fl-banner-title { color: var(--accent-text); }
 .fl-banner.unhealthy .fl-banner-title { color: var(--fl-danger-text); }
 
 .fl-banner-sub {
@@ -315,7 +315,7 @@
     margin-left: auto;
     background: rgba(6, 182, 212, 0.12);
     border: 1px solid rgba(6, 182, 212, 0.35);
-    color: var(--accent);
+    color: var(--accent-text);
     border-radius: 8px;
     font-size: 11.5px;
     font-weight: 600;
@@ -379,7 +379,7 @@
     margin-top: 2px;
 }
 
-.fl-stat-value.power { color: var(--accent); text-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
+.fl-stat-value.power { color: var(--accent-text); text-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
 .fl-stat-value .unit { font-size: 11px; color: var(--fl-text-faint); text-shadow: none; }
 
 /* Unified memory card */
@@ -494,7 +494,7 @@
 .fl-progress-label {
     font-family: var(--font-mono);
     font-size: 10px;
-    color: var(--accent);
+    color: var(--accent-text);
     margin-top: 5px;
 }
 
@@ -548,7 +548,7 @@
 .fl-btn:active { transform: scale(0.97); }
 
 .fl-btn.primary { background: var(--accent); border: 1px solid var(--accent); color: #09090b; }
-.fl-btn.accent { background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.4); color: var(--accent); }
+.fl-btn.accent { background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.4); color: var(--accent-text); }
 .fl-btn.ghost { background: var(--fl-elevated); border: 1px solid var(--fl-border-elevated); color: var(--fl-text-body); }
 .fl-btn.ghost:hover { border-color: var(--fl-border-hover); color: var(--fl-text-strong); }
 .fl-btn.violet { background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--fl-violet-text); }
@@ -738,7 +738,7 @@
 }
 
 .fl-input::placeholder { color: var(--fl-text-disabled); }
-.fl-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12); }
+.fl-input:focus { border-color: var(--accent-text); box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12); }
 .fl-input.danger-focus:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1); }
 .fl-input.error { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08); }
 
@@ -753,7 +753,7 @@
     border-radius: 9px;
     background: rgba(6, 182, 212, 0.1);
     border: 1px solid rgba(6, 182, 212, 0.3);
-    color: var(--accent);
+    color: var(--accent-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -776,7 +776,7 @@
 .fl-terminal .prompt { color: var(--fl-text-faint); }
 .fl-terminal .cmd { color: var(--fl-text-strong); }
 .fl-terminal .hint { color: var(--fl-text-faint); }
-.fl-terminal .code { color: var(--accent); }
+.fl-terminal .code { color: var(--accent-text); }
 
 .fl-footnote {
     margin-top: 12px;
@@ -884,7 +884,7 @@
     flex: none;
 }
 
-.fl-plan-badge.advisory { color: var(--accent); border: 1px solid rgba(6, 182, 212, 0.3); }
+.fl-plan-badge.advisory { color: var(--accent-text); border: 1px solid rgba(6, 182, 212, 0.3); }
 
 /* Pre-flight verdict variants (advisory — informative colors, no blocking). */
 .fl-plan-badge.plan-fits { color: var(--fl-green-text); border: 1px solid rgba(34, 197, 94, 0.35); }
@@ -950,7 +950,7 @@
 
 .fl-drawer-footer { padding: 13px 18px; border-top: 1px solid var(--fl-border-subtle); }
 
-.fl-drawer-footer a { font-size: 12px; color: var(--accent); font-weight: 500; text-decoration: none; }
+.fl-drawer-footer a { font-size: 12px; color: var(--accent-text); font-weight: 500; text-decoration: none; }
 
 /* Audit entry (drawer) */
 .fl-audit-entry {
@@ -1000,7 +1000,7 @@
     margin-top: 8px;
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--accent);
+    color: var(--accent-text);
     background: none;
     border: none;
     padding: 0;
@@ -1064,7 +1064,7 @@
 }
 
 .fl-chip.active {
-    color: var(--accent);
+    color: var(--accent-text);
     background: rgba(6, 182, 212, 0.1);
     border-color: rgba(6, 182, 212, 0.35);
 }
@@ -1097,7 +1097,7 @@
 .fl-journal-row .verdict { width: 58px; flex: none; text-align: right; }
 
 .fl-journal-state { margin-top: 24px; font-size: 12.5px; color: var(--fl-text-dim); }
-.fl-journal-state a { color: var(--accent); }
+.fl-journal-state a { color: var(--accent-text); }
 
 /* ── Toasts ────────────────────────────────────────────────── */
 
@@ -1135,7 +1135,7 @@
     width: 12px;
     height: 12px;
     border: 2px solid var(--fl-border);
-    border-top-color: var(--accent);
+    border-top-color: var(--accent-text);
     border-radius: 50%;
     animation: spinLoad 0.8s linear infinite;
     margin-top: 2px;
