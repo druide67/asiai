@@ -107,3 +107,82 @@ class TestFetchLifecycleStates:
         # TEST-NET port that refuses immediately on loopback
         monkeypatch.setattr(snap, "AISCTL_SERVE_URL", "http://127.0.0.1:9")
         assert snap._fetch_lifecycle_states() is None
+
+
+class TestSharedPortIdentity:
+    """Two manifests on ONE port is a documented install pattern (a preset
+    taking over a production slot, the standby keeping its port). The merge
+    must never let the standby's manifest overwrite the verified identity of
+    the process actually answering — the fleet used to caption the mtplx
+    production slot as 'llamacpp'."""
+
+    ENTRIES = [
+        {
+            "name": "llamacpp",
+            "display": "llama.cpp (main)",
+            "port": 8080,
+            "state": "stopped",
+            "model": "standby.gguf",
+        },
+        {
+            "name": "mtplx",
+            "display": "MTPLX (Hermes agent)",
+            "port": 8080,
+            "state": "running",
+            "model": "qwen-mtplx.gguf",
+        },
+    ]
+
+    def test_detected_engine_joins_its_coherent_manifest(self, monkeypatch):
+        monkeypatch.setattr(snap, "_fetch_lifecycle_states", lambda: list(self.ENTRIES))
+        out = snap._merge_lifecycle_states([_detected("http://localhost:8080", name="mtplx")])
+        card = out[0]
+        assert card["engine_id"] == "mtplx"  # identity kept, not clobbered
+        assert card["state"] == "running"
+        assert card.get("port_conflict") is None
+        # the cold standby still shows up, with its own lifecycle state
+        standby = [e for e in out[1:] if e["engine_id"] == "llamacpp"]
+        assert len(standby) == 1
+        assert standby[0]["state"] == "stopped"
+        assert standby[0]["reachable"] is False
+
+    def test_family_prefix_still_matches(self, monkeypatch):
+        """Detection names every llama-server 'llamacpp'; the aux manifest
+        must still be allowed to refine it (pre-existing behavior)."""
+        monkeypatch.setattr(
+            snap,
+            "_fetch_lifecycle_states",
+            lambda: [
+                {
+                    "name": "llamacpp-aux-1",
+                    "display": "aux 1",
+                    "port": 8090,
+                    "state": "running",
+                    "model": "m.gguf",
+                }
+            ],
+        )
+        out = snap._merge_lifecycle_states([_detected("http://localhost:8090", name="llamacpp")])
+        assert out[0]["engine_id"] == "llamacpp-aux-1"
+
+    def test_no_coherent_manifest_flags_conflict_and_keeps_identity(self, monkeypatch):
+        monkeypatch.setattr(
+            snap,
+            "_fetch_lifecycle_states",
+            lambda: [
+                {
+                    "name": "llamacpp",
+                    "display": "llama.cpp (main)",
+                    "port": 8080,
+                    "state": "stopped",
+                    "model": "standby.gguf",
+                }
+            ],
+        )
+        out = snap._merge_lifecycle_states([_detected("http://localhost:8080", name="mtplx")])
+        card = out[0]
+        assert card["port_conflict"] is True
+        assert "engine_id" not in card  # verified identity untouched
+        assert card.get("state") is None or card.get("state") != "stopped"
+        # the incoherent manifest is NOT swallowed: it renders as its own entry
+        assert [e["engine_id"] for e in out[1:]] == ["llamacpp"]

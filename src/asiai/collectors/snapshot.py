@@ -230,24 +230,48 @@ def _merge_lifecycle_states(statuses: list[dict]) -> list[dict]:
       not_installed — nothing answers HTTP) is APPENDED as a minimal
       entry, so the fleet cockpit can finally show non-running engines.
 
-    If two manifests declare the same port (misconfiguration), the last
-    one wins in the index — harmless for display purposes.
+    Two manifests CAN legitimately declare the same port: taking over a
+    production slot (e.g. an mtplx preset replacing llamacpp main on 8080,
+    the standby keeping its port) is a documented install pattern, not a
+    misconfiguration. On a shared port, the manifest identity is therefore
+    NOT trustworthy on its own — probe_state on the standby's manifest gets
+    answered by whichever process actually holds the port. The join picks,
+    among the port's manifests, the one COHERENT with the HTTP-verified
+    identity (exact name or family prefix, e.g. detected "llamacpp" matches
+    manifest "llamacpp-aux-1"); incoherent manifests are never allowed to
+    overwrite a verified identity and fall through to the "not detected"
+    list below (rendered with their own lifecycle state).
     """
     entries = _fetch_lifecycle_states()
     if not entries:
         return statuses
 
-    by_port: dict[int, dict] = {}
+    by_port: dict[int, list[dict]] = {}
     for e in entries:
         port = e.get("port")
         if isinstance(port, int) and port > 0:
-            by_port[port] = e
+            by_port.setdefault(port, []).append(e)
 
-    matched_ports: set[int] = set()
+    def _coherent(manifest_name: str, detected_name: str) -> bool:
+        # Detection names every llama-server "llamacpp"; manifests refine it
+        # to a family instance ("llamacpp-aux-1", "llamacpp-embed"). A
+        # cross-engine overwrite ("mtplx" onto a detected "llamacpp" — or
+        # the reverse) is exactly the bug this guards against.
+        return manifest_name == detected_name or manifest_name.startswith(detected_name + "-")
+
+    consumed: set[int] = set()  # id() of consumed manifest entries
     for s in statuses:
         port = extract_port(str(s.get("url", "")))
-        m = by_port.get(port)
+        candidates = by_port.get(port)
+        if not candidates:
+            continue
+        detected = str(s.get("name") or "")
+        m = next((e for e in candidates if _coherent(str(e.get("name") or ""), detected)), None)
         if m is None:
+            # Every manifest on this port claims a DIFFERENT engine than the
+            # one actually answering: keep the HTTP-verified identity, flag
+            # the conflict, and leave the manifests to the unmatched list.
+            s["port_conflict"] = True
             continue
         s["state"] = m.get("state")
         # The manifest name is BOTH the compact display ("llamacpp-aux-1"
@@ -257,11 +281,12 @@ def _merge_lifecycle_states(statuses: list[dict]) -> list[dict]:
         s["engine_id"] = m.get("name")
         s["display_hint"] = m.get("display") or ""
         s["model"] = m.get("model")
-        matched_ports.add(port)
+        consumed.add(id(m))
 
-    for port, m in sorted(by_port.items()):
-        if port in matched_ports:
-            continue
+    unmatched = [
+        (port, e) for port, group in by_port.items() for e in group if id(e) not in consumed
+    ]
+    for port, m in sorted(unmatched, key=lambda pe: (pe[0], str(pe[1].get("name") or ""))):
         statuses.append(
             {
                 "name": m.get("name") or "engine",
