@@ -159,6 +159,7 @@ def _do_one_call(
     timeout: int,
     extra_body: dict[str, Any] | None = None,
     stream: bool = True,
+    api_key: str | None = None,
 ) -> BurstCallResult:
     """Single chat-completions POST. Returns latency, TTFT, token counts.
 
@@ -190,10 +191,13 @@ def _do_one_call(
         # Caller-provided keys override the defaults above.
         payload.update(extra_body)
     body = json.dumps(payload).encode()
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     req = urllib.request.Request(
         f"{base_url.rstrip('/')}/v1/chat/completions",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
 
     t0 = time.perf_counter()
@@ -475,6 +479,7 @@ def _run_one_burst_pass(
     timeout: int,
     extra_body: dict[str, Any] | None,
     stream: bool,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """One pass of N concurrent calls. Returns aggregated stats as a dict."""
     duplicates_before = check_duplicate_processes(engine)
@@ -507,6 +512,7 @@ def _run_one_burst_pass(
                         timeout,
                         extra_body,
                         stream,
+                        api_key,
                     )
                     for i in range(size)
                 ]
@@ -680,6 +686,7 @@ def run_burst(
     runs: int = 1,
     engine_version: str = "",
     include_host: bool = False,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """Run the burst-mode benchmark over multiple burst sizes.
 
@@ -739,6 +746,7 @@ def run_burst(
                 timeout=timeout,
                 extra_body=extra_body,
                 stream=stream,
+                api_key=api_key,
             )
             pass_dict["run_index"] = run_idx
             pass_results.append(pass_dict)

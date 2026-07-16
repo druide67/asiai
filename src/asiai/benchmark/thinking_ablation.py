@@ -117,6 +117,7 @@ def _run_one_config(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     eb = _ablation_extra(extra_body, cfg["enable_thinking"], cfg["preserve_thinking"])
     messages: list[dict[str, Any]] = [{"role": "system", "content": STRESS_TOOLCALL_SYSTEM}]
@@ -124,7 +125,14 @@ def _run_one_config(
     for idx, turn in enumerate(STRESS_TOOLCALL_TURNS):
         messages.append({"role": "user", "content": turn["user"]})
         res = chat(
-            base_url, model, messages, tools=TOOLS, max_tokens=1024, extra_body=eb, timeout=timeout
+            base_url,
+            model,
+            messages,
+            tools=TOOLS,
+            max_tokens=1024,
+            extra_body=eb,
+            api_key=api_key,
+            timeout=timeout,
         )
         score = score_toolcall_turn(
             res, turn["expected_tool"], TOOLS_BY_NAME[turn["expected_tool"]]
@@ -174,6 +182,7 @@ def run_thinking_ablation(
     *,
     configs: list[dict[str, Any]] | None = None,
     extra_body: dict[str, Any] | None = None,
+    api_key: str | None = None,
     timeout: int = 900,
     out_path: str | None = None,
     include_host: bool = False,
@@ -185,7 +194,13 @@ def run_thinking_ablation(
     cfgs = configs or ABLATION_CONFIGS
     cells = [
         _run_one_config(
-            base_url, model, c, extra_body=extra_body, timeout=timeout, on_progress=on_progress
+            base_url,
+            model,
+            c,
+            extra_body=extra_body,
+            timeout=timeout,
+            on_progress=on_progress,
+            api_key=api_key,
         )
         for c in cfgs
     ]

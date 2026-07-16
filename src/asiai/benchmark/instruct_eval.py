@@ -64,6 +64,7 @@ def _run_verifiable(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     per_prompt: list[dict[str, Any]] = []
     for rep in range(repeats):
@@ -74,6 +75,7 @@ def _run_verifiable(
                 [{"role": "user", "content": spec["prompt"]}],
                 max_tokens=1024,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             scored = evaluate_prompt(res.text or "", spec["instructions"])
@@ -194,6 +196,7 @@ def _run_agentic_scenario(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     cfg = AGENTIC_SCENARIOS[scenario]
     prompt, topics, sections = cfg["prompt"], cfg["topics"], cfg["sections"]
@@ -226,6 +229,7 @@ def _run_agentic_scenario(
                 tools=tools,
                 max_tokens=2048,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             if res.text:
@@ -293,6 +297,7 @@ def _run_loop_search_scenario(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """Probe the perfectionist research-loop failure mode.
 
@@ -333,6 +338,7 @@ def _run_loop_search_scenario(
                 tools=tools,
                 max_tokens=2048,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             if res.text:
@@ -447,6 +453,7 @@ def _run_code_fidelity_scenario(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     prompts = CODE_FIDELITY_SCENARIOS[scenario]
     scorer = _FIDELITY_SCORERS[scenario]
@@ -460,6 +467,7 @@ def _run_code_fidelity_scenario(
                 [{"role": "user", "content": spec["prompt"]}],
                 max_tokens=1536,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             pure = scorer(res.text or "", spec)
@@ -486,6 +494,7 @@ def run_instruct_eval(
     scenarios: tuple[str, ...] | list[str] = DEFAULT_SCENARIOS,
     repeats: int = 1,
     extra_body: dict[str, Any] | None = None,
+    api_key: str | None = None,
     timeout: int = 900,
     out_path: str | None = None,
     include_host: bool = False,
@@ -512,6 +521,7 @@ def run_instruct_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
     for scenario in _AGENTIC_NAMES:
         if scenario in requested:
@@ -523,6 +533,7 @@ def run_instruct_eval(
                 extra_body=extra_body,
                 timeout=timeout,
                 on_progress=on_progress,
+                api_key=api_key,
             )
     for scenario in _FIDELITY_NAMES:
         if scenario in requested:
@@ -534,6 +545,7 @@ def run_instruct_eval(
                 extra_body=extra_body,
                 timeout=timeout,
                 on_progress=on_progress,
+                api_key=api_key,
             )
     for scenario in _LOOP_SEARCH_NAMES:
         if scenario in requested:
@@ -545,6 +557,7 @@ def run_instruct_eval(
                 extra_body=extra_body,
                 timeout=timeout,
                 on_progress=on_progress,
+                api_key=api_key,
             )
 
     out = {

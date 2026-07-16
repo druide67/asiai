@@ -694,7 +694,9 @@ def summarize_thermal(runs: list) -> dict[str, Any]:
     }
 
 
-def read_kv_cache_tokens(base_url: str | None, timeout: float = 2.0) -> int | None:
+def read_kv_cache_tokens(
+    base_url: str | None, timeout: float = 2.0, headers: dict[str, str] | None = None
+) -> int | None:
     """KV-cache tokens currently held by the engine, via its Prometheus ``/metrics``.
 
     Reads ``llamacpp:kv_cache_tokens`` — the KV-cache *occupancy* (memory that
@@ -714,8 +716,9 @@ def read_kv_cache_tokens(base_url: str | None, timeout: float = 2.0) -> int | No
     if not base_url or not base_url.startswith(("http://", "https://")):
         return None
     url = base_url.rstrip("/") + "/metrics"
+    req = urllib.request.Request(url, headers=headers or {})
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read(1_000_000).decode("utf-8", errors="replace")
     except Exception:  # noqa: BLE001 — network/timeout/HTTP grab bag
         return None
@@ -758,16 +761,23 @@ class KVCacheSampler(_IntervalSampler):
     (callers map 0 → None).
     """
 
-    def __init__(self, base_url: str | None, interval: float = DEFAULT_KV_POLL_INTERVAL_SEC):
+    def __init__(
+        self,
+        base_url: str | None,
+        interval: float = DEFAULT_KV_POLL_INTERVAL_SEC,
+        headers: dict[str, str] | None = None,
+    ):
         self.base_url = base_url
+        self.headers = headers or {}
         enabled = bool(base_url) and base_url.startswith(("http://", "https://"))
         super().__init__(interval, enabled=enabled)
         self.result = KVCacheWatchResult()
 
     def _poll_once(self) -> int | None:
         url = self.base_url.rstrip("/") + "/slots"
+        req = urllib.request.Request(url, headers=self.headers)
         try:
-            with urllib.request.urlopen(url, timeout=2.0) as resp:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
                 slots = json.loads(resp.read(2_000_000).decode("utf-8", errors="replace"))
         except Exception:  # noqa: BLE001 — /slots disabled, network, json
             return None

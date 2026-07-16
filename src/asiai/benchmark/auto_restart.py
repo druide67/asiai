@@ -48,7 +48,7 @@ def is_aisctl_available() -> bool:
     return shutil.which("aisctl") is not None
 
 
-def _wait_healthy(base_url: str, timeout: int = 120) -> bool:
+def _wait_healthy(base_url: str, timeout: int = 120, headers: dict[str, str] | None = None) -> bool:
     """Poll ``base_url/health`` until it returns 'ok' or timeout elapses.
 
     Falls back to ``base_url/v1/models`` for engines that don't expose
@@ -59,8 +59,9 @@ def _wait_healthy(base_url: str, timeout: int = 120) -> bool:
     models_url = base_url.rstrip("/") + "/v1/models"
     while time.monotonic() < deadline:
         for url in (health_url, models_url):
+            req = urllib.request.Request(url, headers=headers or {})
             try:
-                with urllib.request.urlopen(url, timeout=2) as resp:
+                with urllib.request.urlopen(req, timeout=2) as resp:
                     if 200 <= resp.status < 300:
                         return True
             except (urllib.error.URLError, urllib.error.HTTPError, OSError):
@@ -73,6 +74,7 @@ def auto_restart_engine(
     engine_name: str,
     base_url: str,
     healthcheck_timeout: int = 120,
+    api_key: str | None = None,
 ) -> tuple[bool, str]:
     """Restart ``engine_name`` via ``aisctl restart`` and wait until healthy.
 
@@ -102,7 +104,8 @@ def auto_restart_engine(
         err = (proc.stderr or proc.stdout or "").strip()[:300]
         return False, f"aisctl restart returncode={proc.returncode}: {err}"
 
-    if not _wait_healthy(base_url, timeout=healthcheck_timeout):
+    auth = {"Authorization": f"Bearer {api_key}"} if api_key else None
+    if not _wait_healthy(base_url, timeout=healthcheck_timeout, headers=auth):
         return False, f"engine did not become healthy within {healthcheck_timeout}s"
 
     return True, f"{engine_name} restarted and healthy"

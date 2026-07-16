@@ -194,10 +194,11 @@ def chat(
     """One chat completion to an OpenAI-compat endpoint.
 
     ``extra_body`` is merged into the payload (caller keys win), e.g.
-    ``chat_template_kwargs={"enable_thinking": False}``. ``api_key`` (judge
-    endpoints only) sets a Bearer header; read it from the environment, never an
-    argument. Network/HTTP/JSON failures land in ``error``/``error_body`` rather
-    than raising, matching agentic.py's contract.
+    ``chat_template_kwargs={"enable_thinking": False}``. ``api_key`` sets a
+    Bearer header — target keys come from the engine config's ``api_key_file``,
+    judge keys from the environment; never a CLI argument, and never logged.
+    Network/HTTP/JSON failures land in ``error``/``error_body`` rather than
+    raising, matching agentic.py's contract.
     """
     payload: dict[str, Any] = {
         "model": model,
@@ -433,6 +434,7 @@ def _run_toolcall_suite(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
     turns: list[dict[str, Any]] = TOOLCALL_TURNS,
     edit_indices: list[int] = TOOLCALL_EDIT_TURNS,
     system: str = TOOLCALL_SYSTEM,
@@ -450,6 +452,7 @@ def _run_toolcall_suite(
                 tools=TOOLS,
                 max_tokens=1024,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             schema = TOOLS_BY_NAME[turn["expected_tool"]]
@@ -514,6 +517,7 @@ def _run_recovery_suite(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for rep in range(repeats):
@@ -527,6 +531,7 @@ def _run_recovery_suite(
                 tools=TOOLS,
                 max_tokens=1024,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             messages.extend(_continue_messages(res, turn["tool_result"]))
@@ -539,6 +544,7 @@ def _run_recovery_suite(
             tools=TOOLS,
             max_tokens=1024,
             extra_body=extra_body,
+            api_key=api_key,
             timeout=timeout,
         )
         messages.extend(_continue_messages(trig, RECOVERY_TOOL_ERROR))
@@ -552,6 +558,7 @@ def _run_recovery_suite(
                 tools=TOOLS,
                 max_tokens=1024,
                 extra_body=extra_body,
+                api_key=api_key,
                 timeout=timeout,
             )
             observed.append(r)
@@ -619,6 +626,7 @@ def _run_thinking_suite(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     probe_results: list[dict[str, Any]] = []
     for rep in range(repeats):
@@ -633,6 +641,7 @@ def _run_thinking_suite(
                 ],
                 max_tokens=probe["max_tokens"],
                 extra_body=eb,
+                api_key=api_key,
                 timeout=timeout,
             )
             passed = _check_thinking(probe["check"], res)
@@ -670,6 +679,7 @@ def _run_coding_task(
     extra_body: dict[str, Any] | None,
     timeout: int,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [{"role": "system", "content": task["system"]}]
     turns: list[dict[str, Any]] = []
@@ -679,7 +689,13 @@ def _run_coding_task(
         # 4096: the hard tasks regenerate a full module + tests on the last turn;
         # 2048 truncated the final answer (tests never emitted) for both models.
         res = chat(
-            base_url, model, messages, max_tokens=4096, extra_body=extra_body, timeout=timeout
+            base_url,
+            model,
+            messages,
+            max_tokens=4096,
+            extra_body=extra_body,
+            api_key=api_key,
+            timeout=timeout,
         )
         turns.append({"user": t, "assistant": res.text or "", "error": res.error})
         messages.append({"role": "assistant", "content": res.text or ""})
@@ -761,12 +777,15 @@ def _run_coding_judged(
     judge_model: str | None,
     judge_api_key: str | None,
     on_progress: Any,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """Run each coding task → transcript, optionally judged via ``judge_url``.
 
     When no ``judge_url`` is given the transcripts are still captured (schema
     ``code-v1`` stores them), so an external judge — including a human or a
     frontier model reading the JSON — can grade them after the fact.
+    ``api_key`` authenticates against the *target* only; the judge endpoint has
+    its own ``judge_api_key``.
     """
     task_results: list[dict[str, Any]] = []
     for task in tasks:
@@ -777,6 +796,7 @@ def _run_coding_judged(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
         entry: dict[str, Any] = {"task": task["name"], "transcript": transcript}
         if judge_url and judge_model:
@@ -809,6 +829,7 @@ def run_code_eval(
     judge_url: str | None = None,
     judge_model: str | None = None,
     judge_api_key: str | None = None,
+    api_key: str | None = None,
     timeout: int = 900,
     out_path: str | None = None,
     include_host: bool = False,
@@ -825,6 +846,8 @@ def run_code_eval(
     ``judge_url``/``judge_model`` are given, grade them 1-5 per criterion via that
     OpenAI-compat endpoint (otherwise transcripts are captured for offline
     judging). ``repeats`` repeats the deterministic suites for variance.
+    ``api_key`` (from the engine config's ``api_key_file``) authenticates every
+    request to the target; it is never persisted in the result dict.
     """
     started = int(time.time())
     code_results: dict[str, Any] = {}
@@ -838,6 +861,7 @@ def run_code_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
     if "tool-call-stress" in requested:
         code_results["tool_call_stress"] = _run_toolcall_suite(
@@ -847,6 +871,7 @@ def run_code_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
             turns=STRESS_TOOLCALL_TURNS,
             edit_indices=STRESS_EDIT_TURNS,
             system=STRESS_TOOLCALL_SYSTEM,
@@ -860,6 +885,7 @@ def run_code_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
     if "thinking" in requested:
         code_results["thinking"] = _run_thinking_suite(
@@ -869,6 +895,7 @@ def run_code_eval(
             extra_body=extra_body,
             timeout=timeout,
             on_progress=on_progress,
+            api_key=api_key,
         )
     if "coding" in requested:
         code_results["coding"] = _run_coding_judged(
@@ -881,6 +908,7 @@ def run_code_eval(
             judge_model=judge_model,
             judge_api_key=judge_api_key,
             on_progress=on_progress,
+            api_key=api_key,
         )
     if "coding-hard" in requested:
         code_results["coding_hard"] = _run_coding_judged(
@@ -893,6 +921,7 @@ def run_code_eval(
             judge_model=judge_model,
             judge_api_key=judge_api_key,
             on_progress=on_progress,
+            api_key=api_key,
         )
 
     out = {
