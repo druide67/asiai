@@ -911,3 +911,33 @@ class TestCardSessionTypes:
         # _format_model_name("qwen:4b") + " / " + "ollama" → "Qwen 4B / ollama"
         assert "Qwen 4B / ollama" in svg
         assert "Deepseek 7B / lmstudio" in svg
+
+
+class TestModelTitleTruncation:
+    def test_short_name_untouched(self):
+        from asiai.benchmark.card import _truncate_middle
+
+        assert _truncate_middle("Qwen 3.6 27B", 68) == "Qwen 3.6 27B"
+
+    def test_long_name_middle_ellipsized_within_budget(self):
+        from asiai.benchmark.card import _truncate_middle
+
+        name = "Qwen3.6-27B-MTPLX-Optimized-Speed-Instruct-2507-With-A-Very-Long-Suffix-UD-Q8_K_XL"
+        out = _truncate_middle(name, 68)
+        assert len(out) <= 68
+        assert "…" in out
+        assert out.startswith("Qwen3.6-27B")  # family prefix kept
+        assert out.endswith("Q8_K_XL")  # quant suffix kept
+
+    def test_card_title_never_exceeds_budget(self):
+        from asiai.benchmark.card import _MODEL_TITLE_MAX_CHARS, generate_card_svg
+
+        report = {
+            "model": "m" * 120,
+            "engine": "llamacpp",
+            "results": [],
+        }
+        svg = generate_card_svg(report)
+        # the raw 120-char run must not survive into the SVG
+        assert "m" * (_MODEL_TITLE_MAX_CHARS + 1) not in svg
+        assert "…" in svg
