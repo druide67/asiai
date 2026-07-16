@@ -16,7 +16,7 @@
 }
 
 .sh-node-open {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
     white-space: nowrap;
 }
@@ -48,7 +48,7 @@
 }
 
 .sh-session a {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
 }
 

@@ -103,7 +103,7 @@
 
 .st-running  { --st-color: var(--green); --st-glow: rgba(34, 197, 94, 0.45); }
 .st-unhealthy { --st-color: var(--red); --st-glow: rgba(239, 68, 68, 0.5); }
-.st-loading  { --st-color: var(--accent); --st-glow: rgba(6, 182, 212, 0.5); }
+.st-loading  { --st-color: var(--accent-text); --st-glow: rgba(6, 182, 212, 0.5); }
 .st-stopped  { --st-color: var(--text-secondary); --st-glow: transparent; }
 .st-disabled { --st-color: var(--fl-violet); --st-glow: rgba(139, 92, 246, 0.35); }
 .st-not_installed { --st-color: var(--fl-text-faint); --st-glow: transparent; }
@@ -137,7 +137,7 @@
 
 .fl-badge.st-running { color: var(--green); background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.25); }
 .fl-badge.st-unhealthy { color: var(--red); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); animation: pulseDot 1.4s infinite; }
-.fl-badge.st-loading { color: var(--accent); background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); }
+.fl-badge.st-loading { color: var(--accent-text); background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); }
 .fl-badge.st-stopped { color: var(--text-secondary); background: rgba(161, 161, 170, 0.08); border: 1px solid rgba(161, 161, 170, 0.2); }
 .fl-badge.st-disabled { color: var(--fl-violet); background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.28); }
 .fl-badge.st-not_installed { color: var(--fl-text-faint); background: rgba(82, 82, 91, 0.08); border: 1px solid rgba(82, 82, 91, 0.2); }

@@ -79,7 +79,7 @@
 
 .bn-hero-side .bn-mono-accent {
     font-family: var(--font-mono);
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 .bn-hero-sub {
@@ -211,8 +211,8 @@
 
 .bn-chip.active {
     background: var(--accent-dim);
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--accent-text);
+    color: var(--accent-text);
     box-shadow: 0 0 16px var(--accent-dim);
 }
 
@@ -223,7 +223,7 @@
     margin-top: -6px;
 }
 
-.bn-type-desc .bn-caret { color: var(--accent); }
+.bn-type-desc .bn-caret { color: var(--accent-text); }
 
 /* ── Collapsed run summary ("Edit & re-run") ──────────────── */
 
@@ -244,7 +244,7 @@
     font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-dim);
     padding: 3px 9px;
     border-radius: 999px;
@@ -292,7 +292,7 @@
     font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-dim);
     padding: 2px 7px;
     border-radius: 5px;
@@ -319,7 +319,7 @@
 .bn-section-type {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 .bn-field { min-width: 0; }
@@ -338,7 +338,7 @@
     font-size: 10.5px;
     margin-top: 4px;
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
 }
 
@@ -384,7 +384,7 @@ button.bn-engine-face:hover { border-color: var(--accent-glow); }
 .bn-engine-card input:checked + .bn-engine-face,
 button.bn-engine-face.active {
     background: var(--accent-dim);
-    border-color: var(--accent);
+    border-color: var(--accent-text);
 }
 
 .bn-engine-card input:disabled + .bn-engine-face {
@@ -411,7 +411,7 @@ button.bn-engine-face.active {
 }
 
 .bn-engine-card input:checked + .bn-engine-face .bn-engine-name,
-button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
+button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
 
 .bn-engine-meta {
     display: block;
@@ -450,7 +450,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
 
 .bn-select:focus,
 .bn-input:focus,
-.bn-textarea:focus { border-color: var(--accent); }
+.bn-textarea:focus { border-color: var(--accent-text); }
 
 .bn-select {
     appearance: none;
@@ -493,8 +493,8 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
 
 .bn-seg button.active {
     background: var(--accent-dim);
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--accent-text);
+    color: var(--accent-text);
 }
 
 /* Kept in the DOM so the name= contract survives; driven by the segments. */
@@ -573,7 +573,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
 
 .bn-suite input:checked ~ .bn-suite-box {
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--accent-text);
 }
 
 [data-theme="light"] .bn-suite input:checked ~ .bn-suite-box { color: #ffffff; }
@@ -634,7 +634,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
 
 .bn-switch input:checked ~ .bn-switch-track {
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--accent-text);
 }
 
 .bn-switch input:checked ~ .bn-switch-track::after { left: 17px; background: #fafafa; }
@@ -756,8 +756,8 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
 
 .bn-preset.active {
     background: var(--accent-dim);
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--accent-text);
+    color: var(--accent-text);
 }
 
 /* ── Form footer ──────────────────────────────────────────── */
@@ -818,7 +818,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
     color: var(--text-secondary);
 }
 
-.bn-status-row.is-running .bn-status-title { color: var(--accent); }
+.bn-status-row.is-running .bn-status-title { color: var(--accent-text); }
 .bn-status-row.is-done .bn-status-title { color: var(--green); }
 .bn-status-row.is-error .bn-status-title { color: var(--red); }
 
@@ -850,7 +850,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
     height: 100%;
     width: 100%;
     border-radius: 3px;
-    background-color: var(--accent);
+    background-color: var(--accent-text);
     transition: width 0.5s linear;
 }
 
@@ -938,7 +938,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
 .bn-result-tag {
     font-family: var(--font-mono);
     font-size: 10.5px;
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-dim);
     padding: 2px 8px;
     border-radius: 999px;
@@ -972,7 +972,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
     gap: 8px;
     background: var(--accent-dim);
     border: 1px solid var(--accent-glow);
-    color: var(--accent);
+    color: var(--accent-text);
     border-radius: 9px;
     font-family: var(--font-sans);
     font-size: 12px;
@@ -983,7 +983,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
     transition: all var(--duration) var(--ease);
 }
 
-.bn-action-primary:hover { border-color: var(--accent); }
+.bn-action-primary:hover { border-color: var(--accent-text); }
 .bn-action-primary.is-copied { color: var(--green); }
 
 .bn-action {
@@ -1009,7 +1009,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
     margin-left: auto;
     font-size: 12px;
     font-weight: 500;
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
 }
 
@@ -1106,7 +1106,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent); }
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-dim);
     padding: 1px 6px;
     border-radius: 999px;
