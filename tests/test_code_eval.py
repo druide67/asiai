@@ -236,6 +236,44 @@ def test_chat_stream_parses_tool_call():
     assert res.tool_calls[0]["name"] == "search_code"
     assert res.tool_calls[0]["arguments_parsed"] == {"pattern": "x"}
     assert res.completion_tokens == 5
+    assert res.cached_tokens is None  # engine did not report it
+
+
+def test_chat_stream_reads_cached_tokens_openai_shape():
+    chunks = [
+        {"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]},
+        {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "prompt_tokens_details": {"cached_tokens": 96},
+            },
+        },
+    ]
+    target = "asiai.benchmark.code_eval.urllib.request.urlopen"
+    with patch(target, return_value=_FakeStream(chunks)):
+        res = chat("http://localhost:8080", "m", [{"role": "user", "content": "hi"}])
+    assert res.cached_tokens == 96
+
+
+def test_chat_stream_reads_cached_tokens_flat_fallback():
+    chunks = [
+        {"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"prompt_tokens": 100, "cached_tokens": 42}},
+    ]
+    target = "asiai.benchmark.code_eval.urllib.request.urlopen"
+    with patch(target, return_value=_FakeStream(chunks)):
+        res = chat("http://localhost:8080", "m", [{"role": "user", "content": "hi"}])
+    assert res.cached_tokens == 42
+
+
+def test_cached_tokens_zero_is_kept_distinct_from_absent():
+    from asiai.benchmark.code_eval import _cached_tokens
+
+    assert _cached_tokens({"prompt_tokens_details": {"cached_tokens": 0}}) == 0
+    assert _cached_tokens({}) is None
+    assert _cached_tokens({"prompt_tokens_details": {"cached_tokens": "96"}}) is None
 
 
 # --- suites with mocked chat --------------------------------------------------

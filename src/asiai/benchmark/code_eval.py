@@ -120,6 +120,7 @@ class ChatResult:
     finish_reason: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    cached_tokens: int | None = None  # prefix-cache hit (usage.prompt_tokens_details)
     latency_ms: int | None = None
     error: str | None = None
     error_body: str | None = None
@@ -162,6 +163,20 @@ def _merge_streamed_tool_call(acc: dict[int, ToolCall], piece: dict[str, Any]) -
         tc.name = fn["name"]
     if fn.get("arguments"):
         tc.arguments_raw += fn["arguments"]
+
+
+def _cached_tokens(usage: dict[str, Any]) -> int | None:
+    """Prefix-cache hit from a usage block — same precedence as agentic.py.
+
+    OpenAI shape first (``prompt_tokens_details.cached_tokens`` — llama.cpp,
+    MTPLX >= 2.1), flat ``cached_tokens`` fallback. None when the engine does
+    not report it (a 0 means "reported, no reuse" — keep the distinction).
+    """
+    details = usage.get("prompt_tokens_details") or {}
+    cached = details.get("cached_tokens")
+    if cached is None:
+        cached = usage.get("cached_tokens")
+    return cached if isinstance(cached, int) else None
 
 
 def _parse_nonstream_choice(choice: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]]]:
@@ -304,6 +319,7 @@ def _chat_nonstream(req: urllib.request.Request, timeout: int, result: ChatResul
     usage = data.get("usage") or {}
     result.prompt_tokens = usage.get("prompt_tokens")
     result.completion_tokens = usage.get("completion_tokens")
+    result.cached_tokens = _cached_tokens(usage)
     result.timings = data.get("timings")
     choices = data.get("choices") or []
     if not choices:
@@ -369,6 +385,7 @@ def _chat_stream(req: urllib.request.Request, timeout: int, result: ChatResult) 
     if last_usage:
         result.prompt_tokens = last_usage.get("prompt_tokens")
         result.completion_tokens = last_usage.get("completion_tokens")
+        result.cached_tokens = _cached_tokens(last_usage)
     result.timings = last_timings
     return result
 
@@ -463,6 +480,7 @@ def _run_toolcall_suite(
                     "expected_tool": turn["expected_tool"],
                     "repeat": rep,
                     "error": res.error,
+                    "cached_tokens": res.cached_tokens,
                 }
             )
             per_turn.append(score)
