@@ -16,6 +16,43 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Fail closed BEFORE anything is built or published: a tag whose
+      # version disagrees with the source, or whose changelog entry was
+      # forgotten, must never reach PyPI (uploads are immutable).
+      - name: Release gates (version + changelog coherence)
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          VERSION="${TAG_NAME#v}"
+          VERSION_RE=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+          fail=0
+          PYPROJECT_V=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          INIT_V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/asiai/__init__.py | head -1)
+          if [ "$PYPROJECT_V" != "$VERSION" ]; then
+            echo "::error::pyproject.toml version ($PYPROJECT_V) != tag version ($VERSION)"
+            fail=1
+          fi
+          if [ "$INIT_V" != "$VERSION" ]; then
+            echo "::error::src/asiai/__init__.py __version__ ($INIT_V) != tag version ($VERSION)"
+            fail=1
+          fi
+          if ! grep -q "^## \[$VERSION_RE\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' entry — write it before tagging"
+            fail=1
+          fi
+          if grep -q "^## \[Unreleased\]" CHANGELOG.md; then
+            # An Unreleased section may coexist with the tagged entry only
+            # if it is EMPTY (heading directly followed by the next release
+            # heading) — otherwise finished work is about to ship undocumented.
+            UNRELEASED_BODY=$(awk '/^## \[Unreleased\]/{flag=1; next} /^## /{flag=0} flag' CHANGELOG.md | grep -cv '^[[:space:]]*$' || true)
+            if [ "$UNRELEASED_BODY" != "0" ]; then
+              echo "::error::CHANGELOG.md still has content under [Unreleased] — fold it into the $VERSION entry before tagging"
+              fail=1
+            fi
+          fi
+          exit $fail
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -29,11 +66,17 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+      # Idempotent: a re-run after a partial failure must not die on the
+      # already-existing release (the 2026-06-25 v1.14.1 incident class).
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG_NAME" dist/* \
-            --title "$TAG_NAME" \
-            --generate-notes
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" dist/* --clobber
+          else
+            gh release create "$TAG_NAME" dist/* \
+              --title "$TAG_NAME" \
+              --generate-notes
+          fi
