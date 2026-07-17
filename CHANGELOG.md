@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Hardened release gates**: the release workflow now fails closed —
+  before anything is built or published — when the tag, `pyproject.toml`
+  and `__init__.py` versions disagree, or when `CHANGELOG.md` has no
+  entry for the version being tagged (two releases had shipped with the
+  changelog silently forgotten). The GitHub Release step is now
+  idempotent (re-running a release run no longer fails on an existing
+  release — the 2026-06-25 v1.14.1 incident class).
+
+## [1.30.0](https://github.com/druide67/asiai/compare/v1.29.0...v1.30.0) — 2026-07-16
+
+### Fixed
+
+- **Bench suites forward the engine API key** (#78): the raw-HTTP bench
+  paths (code/instruct/language/thinking suites, agentic, burst, the
+  KV-cache probes and the auto-restart health wait) bypassed the
+  adapters' Bearer auth — every mode except the standard throughput
+  bench failed with 401 against a key-gated engine. All of them now
+  send the key resolved from the engine config's `api_key_file`; the
+  LLM judge keeps its own separate environment-only key. The key never
+  appears in argv, logs or persisted results; engines without a key
+  produce byte-identical unauthenticated requests.
+
+## [1.29.0](https://github.com/druide67/asiai/compare/v1.28.0...v1.29.0) — 2026-07-16
+
+### Fixed
+
+- **Fleet: shared-port identity** (#77): the dashboard merge joined
+  lifecycle states to HTTP-detected engines by port in last-one-wins
+  order, so a standby manifest declaring the same port as the active
+  engine (slot-switch pattern) clobbered the verified identity of the
+  card. The merge now only accepts the manifest whose name is coherent
+  with the detected engine (exact or family-prefix match), flags the
+  port conflict, and renders unmatched manifests as separate cards.
+- **WCAG AA contrast for accent-colored text** (#75, #73 follow-up):
+  new `--accent-text` token — unchanged cyan in the dark theme, cyan-700
+  in the light theme (4.87-5.36:1 measured) — applied to every
+  `color:`-only use of the accent; borders and fills keep `--accent`.
+- **Benchmark cards: long model names** (#76): the SVG title
+  middle-ellipsizes names over 68 characters, preserving the family
+  prefix and the quant suffix instead of overflowing the card header.
+
 ## [1.28.0](https://github.com/druide67/asiai/compare/v1.27.0...v1.28.0) — 2026-07-12
 
 ### Added
