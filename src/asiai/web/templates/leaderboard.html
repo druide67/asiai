@@ -2,6 +2,71 @@
 {% block title %}asiai — Leaderboard{% endblock %}
 {% block vendors %}{% endblock %}
 
+{% block head %}
+<style>
+/* "This machine vs community" panel (lbc-*) — page-local component. */
+#lb-compare { padding: 0; overflow: hidden; }
+.lbc-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 15px 20px; border-bottom: 1px solid var(--border);
+}
+.lbc-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+.lbc-sub {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--fl-text-dim); margin-top: 3px;
+}
+.lbc-chip-badge {
+    margin-left: auto; flex: none;
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-secondary); background: var(--bg-elevated);
+    border: 1px solid var(--border); padding: 3px 9px; border-radius: 999px;
+}
+.lbc-cols, .lbc-row {
+    display: grid; grid-template-columns: 1fr 92px 92px 96px;
+    gap: 10px; padding: 9px 20px; align-items: baseline;
+}
+.lbc-cols {
+    font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--fl-text-faint); font-weight: 600;
+    border-bottom: 1px solid var(--border);
+}
+.lbc-cols > span:not(:first-child), .lbc-row > span:not(:first-child) { text-align: right; }
+.lbc-row { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.lbc-row:last-of-type { border-bottom: none; }
+.lbc-engine {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+    color: var(--fl-text-strong);
+}
+.lbc-num { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.lbc-num.is-dim { color: var(--text-secondary); font-weight: 400; }
+.lbc-n { display: block; font-family: var(--font-mono); font-size: 9.5px; color: var(--fl-text-faint); }
+.lbc-delta { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; }
+.lbc-delta.is-up { color: var(--green); }
+.lbc-delta.is-down { color: var(--red); }
+.lbc-delta.is-none { color: var(--fl-text-faint); font-weight: 400; }
+.lbc-foot {
+    padding: 11px 20px; font-size: 10px; color: var(--fl-text-faint);
+    line-height: 1.5; border-top: 1px solid var(--border);
+}
+.lbc-empty {
+    padding: 26px 24px; display: flex; flex-direction: column;
+    align-items: center; gap: 8px; text-align: center;
+}
+.lbc-empty-mark {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px dashed var(--border-active);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 15px; color: var(--fl-text-faint);
+}
+.lbc-empty-title { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.lbc-empty-text { font-size: 11px; color: var(--fl-text-dim); line-height: 1.6; max-width: 380px; }
+@media (max-width: 700px) {
+    .lbc-cols, .lbc-row { grid-template-columns: 1fr 72px 72px 76px; padding-left: 14px; padding-right: 14px; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2>Community Leaderboard</h2>
@@ -31,6 +96,22 @@
     {# Chips are injected from the fetched entries (DOM API + textContent only). #}
     <span id="lb-engine-chips" style="display: inline-flex; gap: var(--space-2); flex-wrap: wrap;"></span>
     <span id="lb-count" class="text-xs text-neutral-500" style="margin-left: auto;"></span>
+</div>
+
+{# "This machine vs community" — shown only while the local-chip filter
+   is active; data from /api/v1/leaderboard/compare (ADR 0002). #}
+<div class="card fade-in" id="lb-compare" style="display: none; margin-top: var(--space-3);">
+    <div class="lbc-head">
+        <div>
+            <div class="lbc-title">This machine vs community</div>
+            <div class="lbc-sub" id="lbc-sub">&nbsp;</div>
+        </div>
+        <span class="lbc-chip-badge">{{ local_chip }}</span>
+    </div>
+    <div id="lbc-body"></div>
+    <div class="lbc-foot">Community medians: anonymized asiai submissions, same chip + model + engine
+        &mdash; all submitted conditions pooled. tok/s = generation only. Local medians come from this
+        machine's benchmark history over the same window.</div>
 </div>
 
 <div class="mt-6 fade-in-delay-1">
@@ -133,7 +214,144 @@
         });
     });
 
+    /* ══ "This machine vs community" panel (ADR 0002) ══ */
+    var localChipBtn = document.getElementById('lb-chip-local');
+    var localChip = localChipBtn ? (localChipBtn.getAttribute('data-chip') || '') : '';
+    var compareSeq = 0;
+
+    function compareCell(text, cls) {
+        var s = document.createElement('span');
+        if (cls) s.className = cls;
+        s.textContent = text;
+        return s;
+    }
+
+    function renderCompare(data) {
+        var body = document.getElementById('lbc-body');
+        var sub = document.getElementById('lbc-sub');
+        body.textContent = '';
+        var meta = (data && data.meta) || {};
+        var rows = (data && Array.isArray(data.rows)) ? data.rows : [];
+
+        if (!data) {
+            /* Fetch failed (network, rate limit) — not the same thing as
+               "no local benchmarks": say so instead of lying. */
+            sub.textContent = 'median tok/s · last ' + daysFilter + ' days';
+            var fail = document.createElement('div');
+            fail.className = 'lbc-empty';
+            fail.appendChild(compareCell('!', 'lbc-empty-mark'));
+            fail.appendChild(compareCell('Comparison unavailable', 'lbc-empty-title'));
+            fail.appendChild(compareCell(
+                'The compare request failed (server busy or unreachable). The table below is unaffected — retry in a moment.',
+                'lbc-empty-text'));
+            body.appendChild(fail);
+            return;
+        }
+
+        if (!rows.length) {
+            sub.textContent = 'median tok/s · last ' + (meta.window_days || daysFilter) + ' days';
+            var filtered = meta.reason === 'no_local_match';
+            var empty = document.createElement('div');
+            empty.className = 'lbc-empty';
+            empty.appendChild(compareCell('∅', 'lbc-empty-mark'));
+            empty.appendChild(compareCell(
+                filtered ? 'No local benchmarks match this filter'
+                         : 'No local benchmarks in this window',
+                'lbc-empty-title'));
+            empty.appendChild(compareCell(
+                filtered ? 'This machine has local runs in the window, but none whose model name contains the filter text.'
+                         : 'Run a bench on this machine (Benchmark page or `asiai bench`) to seed the comparison.',
+                'lbc-empty-text'));
+            body.appendChild(empty);
+            return;
+        }
+
+        sub.textContent = (meta.model || '?') + ' · median tok/s · last ' +
+            (meta.window_days || daysFilter) + ' days';
+
+        if (!meta.community_matched) {
+            var noMatch = document.createElement('div');
+            noMatch.className = 'lbc-empty';
+            noMatch.appendChild(compareCell('∅', 'lbc-empty-mark'));
+            noMatch.appendChild(compareCell('No matching community group', 'lbc-empty-title'));
+            noMatch.appendChild(compareCell(
+                'No submissions share this model + engine on this chip in the window. ' +
+                'Your local medians stand alone for now — fine-tuned or renamed models rarely match.',
+                'lbc-empty-text'));
+            body.appendChild(noMatch);
+        }
+
+        var cols = document.createElement('div');
+        cols.className = 'lbc-cols';
+        cols.appendChild(compareCell('Engine'));
+        cols.appendChild(compareCell('Local'));
+        cols.appendChild(compareCell('Community'));
+        cols.appendChild(compareCell('Δ'));
+        body.appendChild(cols);
+
+        rows.forEach(function (r) {
+            var row = document.createElement('div');
+            row.className = 'lbc-row';
+
+            row.appendChild(compareCell(String(r.engine || '?'), 'lbc-engine'));
+
+            var local = document.createElement('span');
+            local.appendChild(compareCell(
+                typeof r.local_median_tok_s === 'number' ? r.local_median_tok_s.toFixed(1) : '—',
+                'lbc-num'));
+            local.appendChild(compareCell('n=' + (r.local_n || 0), 'lbc-n'));
+            row.appendChild(local);
+
+            var comm = document.createElement('span');
+            if (typeof r.community_median_tok_s === 'number') {
+                comm.appendChild(compareCell(r.community_median_tok_s.toFixed(1), 'lbc-num is-dim'));
+                comm.appendChild(compareCell('n=' + (r.community_n || 0), 'lbc-n'));
+            } else {
+                comm.appendChild(compareCell('—', 'lbc-num is-dim'));
+            }
+            row.appendChild(comm);
+
+            if (typeof r.delta_pct === 'number' && r.delta_pct !== 0) {
+                var up = r.delta_pct > 0;
+                row.appendChild(compareCell(
+                    (up ? '▲ +' : '▼ −') + Math.abs(r.delta_pct).toFixed(1) + '%',
+                    'lbc-delta ' + (up ? 'is-up' : 'is-down')));
+            } else if (r.delta_pct === 0) {
+                row.appendChild(compareCell('±0.0%', 'lbc-delta is-none'));
+            } else {
+                row.appendChild(compareCell('—', 'lbc-delta is-none'));
+            }
+            body.appendChild(row);
+        });
+    }
+
+    function loadCompare() {
+        var panel = document.getElementById('lb-compare');
+        if (!panel) return;
+        if (!localChip || chipFilter !== localChip) {
+            panel.style.display = 'none';
+            compareSeq++; /* invalidate any in-flight fetch */
+            return;
+        }
+        panel.style.display = '';
+        var seq = ++compareSeq;
+        var params = ['days=' + daysFilter];
+        var model = document.getElementById('lb-model').value.trim();
+        if (model) params.push('model=' + encodeURIComponent(model.slice(0, 128)));
+        fetch('/api/v1/leaderboard/compare?' + params.join('&'))
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (seq !== compareSeq) return; /* a newer fetch superseded this one */
+                renderCompare(data);
+            })
+            .catch(function () {
+                if (seq !== compareSeq) return;
+                renderCompare(null);
+            });
+    }
+
     function loadLeaderboard() {
+        loadCompare();
         var params = [];
         if (chipFilter) params.push('chip=' + encodeURIComponent(chipFilter));
         var model = document.getElementById('lb-model').value.trim();
