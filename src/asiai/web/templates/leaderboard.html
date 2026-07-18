@@ -233,14 +233,34 @@
         var meta = (data && data.meta) || {};
         var rows = (data && Array.isArray(data.rows)) ? data.rows : [];
 
+        if (!data) {
+            /* Fetch failed (network, rate limit) — not the same thing as
+               "no local benchmarks": say so instead of lying. */
+            sub.textContent = 'median tok/s · last ' + daysFilter + ' days';
+            var fail = document.createElement('div');
+            fail.className = 'lbc-empty';
+            fail.appendChild(compareCell('!', 'lbc-empty-mark'));
+            fail.appendChild(compareCell('Comparison unavailable', 'lbc-empty-title'));
+            fail.appendChild(compareCell(
+                'The compare request failed (server busy or unreachable). The table below is unaffected — retry in a moment.',
+                'lbc-empty-text'));
+            body.appendChild(fail);
+            return;
+        }
+
         if (!rows.length) {
             sub.textContent = 'median tok/s · last ' + (meta.window_days || daysFilter) + ' days';
+            var filtered = meta.reason === 'no_local_match';
             var empty = document.createElement('div');
             empty.className = 'lbc-empty';
             empty.appendChild(compareCell('∅', 'lbc-empty-mark'));
-            empty.appendChild(compareCell('No local benchmarks in this window', 'lbc-empty-title'));
             empty.appendChild(compareCell(
-                'Run a bench on this machine (Benchmark page or `asiai bench`) to seed the comparison.',
+                filtered ? 'No local benchmarks match this filter'
+                         : 'No local benchmarks in this window',
+                'lbc-empty-title'));
+            empty.appendChild(compareCell(
+                filtered ? 'This machine has local runs in the window, but none whose model name contains the filter text.'
+                         : 'Run a bench on this machine (Benchmark page or `asiai bench`) to seed the comparison.',
                 'lbc-empty-text'));
             body.appendChild(empty);
             return;
@@ -291,11 +311,13 @@
             }
             row.appendChild(comm);
 
-            if (typeof r.delta_pct === 'number') {
-                var up = r.delta_pct >= 0;
+            if (typeof r.delta_pct === 'number' && r.delta_pct !== 0) {
+                var up = r.delta_pct > 0;
                 row.appendChild(compareCell(
                     (up ? '▲ +' : '▼ −') + Math.abs(r.delta_pct).toFixed(1) + '%',
                     'lbc-delta ' + (up ? 'is-up' : 'is-down')));
+            } else if (r.delta_pct === 0) {
+                row.appendChild(compareCell('±0.0%', 'lbc-delta is-none'));
             } else {
                 row.appendChild(compareCell('—', 'lbc-delta is-none'));
             }
@@ -308,6 +330,7 @@
         if (!panel) return;
         if (!localChip || chipFilter !== localChip) {
             panel.style.display = 'none';
+            compareSeq++; /* invalidate any in-flight fetch */
             return;
         }
         panel.style.display = '';

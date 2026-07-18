@@ -149,16 +149,27 @@ def _build_compare(db_path: str, chip: str, model_filter: str, days: int) -> dic
     meta: dict = {"chip": chip, "window_days": days, "community_matched": False}
     if not by_model:
         meta["model"] = ""
+        meta["reason"] = "no_local_runs"
         return {"rows": [], "meta": meta}
 
-    # No explicit model: pick the local model with the most runs in the
-    # window (deterministic; ties broken alphabetically).
+    # The page's model field is a SUBSTRING filter (same semantics as the
+    # leaderboard table it sits next to): pick the most-benched local
+    # model whose normalized name contains it. The strict-equality rule
+    # of ADR 0002 applies to the community match below, not to this
+    # local pre-selection. No filter: most runs wins (deterministic;
+    # ties broken alphabetically).
     if model_filter:
-        key = normalize_model_name(model_filter).lower()
+        needle = normalize_model_name(model_filter).lower()
+        candidates = [k for k in by_model if needle in k]
     else:
-        key = max(sorted(by_model), key=lambda k: len(by_model[k]))
-    picked = by_model.get(key, [])
-    display_model = picked[0][0] if picked else model_filter
+        candidates = list(by_model)
+    if not candidates:
+        meta["model"] = model_filter
+        meta["reason"] = "no_local_match"
+        return {"rows": [], "meta": meta}
+    key = max(sorted(candidates), key=lambda k: len(by_model[k]))
+    picked = by_model[key]
+    display_model = picked[0][0]
     meta["model"] = display_model
 
     by_engine: dict[str, list[float]] = {}
@@ -168,6 +179,7 @@ def _build_compare(db_path: str, chip: str, model_filter: str, days: int) -> dic
         if eng and isinstance(tok, (int, float)) and tok > 0:
             by_engine.setdefault(eng, []).append(float(tok))
     if not by_engine:
+        meta["reason"] = "no_local_runs"
         return {"rows": [], "meta": meta}
 
     # Community side: server filters by substring; the strict equality
@@ -182,10 +194,11 @@ def _build_compare(db_path: str, chip: str, model_filter: str, days: int) -> dic
             eng = str(e.get("engine") or "").strip()
             med = e.get("median_tok_s")
             if eng and isinstance(med, (int, float)) and med > 0:
-                community[eng.lower()] = {
-                    "median": float(med),
-                    "n": e.get("samples") if isinstance(e.get("samples"), int) else 0,
-                }
+                samples = e.get("samples")
+                # bool is an int subclass — untrusted upstream data must
+                # not surface as "n=true".
+                n = samples if isinstance(samples, int) and not isinstance(samples, bool) else 0
+                community[eng.lower()] = {"median": float(med), "n": n}
 
     out = []
     for eng in sorted(by_engine, key=str.lower):

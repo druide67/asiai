@@ -18,7 +18,10 @@ from asiai.web.routes.leaderboard import _build_compare  # noqa: E402
 from asiai.web.state import AppState  # noqa: E402
 
 NOW = int(time.time())
-CHIP = "Apple M5 Max"
+# A fictional chip: the endpoint test patches collect_hw_chip, and a
+# real chip name would let the test pass by accident on that hardware
+# if the patch target ever silently broke.
+CHIP = "Apple TestChip Z9"
 MODEL = "Qwen3-4B-Q5_K_XL.gguf"
 
 
@@ -118,6 +121,61 @@ class TestBuildCompare:
             data = _build_compare(db_path, CHIP, "", 30)
         assert data["meta"]["model"] == MODEL
         assert [r["engine"] for r in data["rows"]] == ["llamacpp", "mlx"]
+
+    def test_engine_match_is_case_insensitive(self, db_path):
+        """ADR: engines compare case-insensitively across the two sides."""
+        store_benchmark(db_path, [_local_run("llamacpp", 120.0)])
+        with patch(
+            "asiai.web.routes.leaderboard._cached_leaderboard",
+            return_value=[_group("LlamaCpp", 100.0)],
+        ):
+            data = _build_compare(db_path, CHIP, "", 30)
+        (row,) = data["rows"]
+        assert row["community_median_tok_s"] == 100.0
+
+    def test_nonpositive_tok_s_rows_are_ignored(self, db_path):
+        store_benchmark(
+            db_path,
+            [
+                _local_run("llamacpp", 120.0),
+                _local_run("llamacpp", 0.0),
+                _local_run("llamacpp", -5.0),
+            ],
+        )
+        with patch("asiai.web.routes.leaderboard._cached_leaderboard", return_value=[]):
+            data = _build_compare(db_path, CHIP, "", 30)
+        (row,) = data["rows"]
+        assert row["local_median_tok_s"] == 120.0
+        assert row["local_n"] == 1
+
+    def test_model_filter_is_a_substring_match(self, db_path):
+        """The page's model field filters by substring (same semantics as
+        the table): 'qwen' must select the Qwen model, not empty out."""
+        store_benchmark(db_path, [_local_run("llamacpp", 120.0)])
+        with patch("asiai.web.routes.leaderboard._cached_leaderboard", return_value=[]):
+            data = _build_compare(db_path, CHIP, "qwen", 30)
+        assert data["meta"]["model"] == MODEL
+        assert data["rows"][0]["local_median_tok_s"] == 120.0
+
+    def test_unmatched_filter_reports_no_local_match(self, db_path):
+        """Local runs exist but none contains the filter text — the reason
+        distinguishes this from an empty window."""
+        store_benchmark(db_path, [_local_run("llamacpp", 120.0)])
+        with patch("asiai.web.routes.leaderboard._cached_leaderboard", return_value=[]):
+            data = _build_compare(db_path, CHIP, "gemma", 30)
+        assert data["rows"] == []
+        assert data["meta"]["reason"] == "no_local_match"
+
+    def test_boolean_samples_from_upstream_is_not_a_count(self, db_path):
+        store_benchmark(db_path, [_local_run("llamacpp", 120.0)])
+        group = _group("llamacpp", 100.0)
+        group["samples"] = True
+        with patch(
+            "asiai.web.routes.leaderboard._cached_leaderboard",
+            return_value=[group],
+        ):
+            data = _build_compare(db_path, CHIP, "", 30)
+        assert data["rows"][0]["community_n"] == 0
 
     def test_no_local_runs_yields_empty_rows(self, db_path):
         with patch("asiai.web.routes.leaderboard._cached_leaderboard", return_value=[]):

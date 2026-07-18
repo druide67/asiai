@@ -50,7 +50,12 @@ Further consequences:
 - **Model selection** — the panel compares one model. The route takes
   `?model=`; when the client sends none, the server picks the local
   model with the most runs in the window (deterministic, documented in
-  the route). The page seeds it from the model filter when set.
+  the route). The page seeds it from its model filter, which is a
+  **substring** filter (same semantics as the table beside it): the
+  server picks the most-benched local model whose normalized name
+  contains it. Strict equality governs the *community* match, never
+  this local pre-selection — a substring here selects which local
+  model to compare, it cannot widen what it compares against.
 - **Window** — 30 days on both sides by default (`?days=`, 1–365).
   Same-window comparison only; local 30d vs community 90d would bias
   the delta toward whichever side saw a software upgrade first.
@@ -60,9 +65,11 @@ Further consequences:
 - **Fuzzy model matching** (prefix/stem match, dropping the quant
   suffix): produces cross-quant deltas that look like hardware or
   engine effects. Rejected — quant is identity.
-- **Server-side compare endpoint on api.asiai.dev**: the community API
-  never sees local data by design (privacy posture: local DB stays
-  local); the join must happen on the machine.
+- **Server-side compare endpoint on api.asiai.dev**: local
+  *measurements* never leave the machine; the join happens locally.
+  (The community fetch does send the selected model name and chip as
+  query parameters — the same metadata a leaderboard filter or a
+  submission already sends; the medians themselves stay local.)
 - **Matching on chip family with RAM tolerance**: memory bandwidth
   varies within a family; deltas would mix machine classes.
 
