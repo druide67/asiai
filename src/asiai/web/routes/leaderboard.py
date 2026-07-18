@@ -30,7 +30,8 @@ from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from asiai.auth.ratelimit import TokenRateLimiter
-from asiai.community import fetch_benchmarks, fetch_leaderboard
+from asiai.community import fetch_benchmarks, fetch_leaderboard, normalize_model_name
+from asiai.storage.db import query_benchmarks
 
 router = APIRouter(tags=["leaderboard"])
 
@@ -120,6 +121,119 @@ async def api_leaderboard(
     async with _fetch_semaphore:
         entries = await asyncio.to_thread(_cached_leaderboard, chip.strip(), model.strip(), days)
     return JSONResponse({"entries": entries, "count": len(entries)})
+
+
+def _build_compare(db_path: str, chip: str, model_filter: str, days: int) -> dict:
+    """Local medians vs community medians per engine, strict-matched.
+
+    Matching rule (ADR 0002): (chip, model, engine) compared strictly,
+    case-insensitive. The local model name goes through
+    ``normalize_model_name()`` — the submission-time normalizer — so a
+    machine matches exactly what it would submit. Quantization is part
+    of the name, hence part of the identity. Conditions are pooled, not
+    matched (the v2 aggregates carry one median per group).
+    """
+    from statistics import median
+
+    since = int(time.time()) - days * 86400
+    rows = query_benchmarks(db_path, since=since)
+
+    # Group local runs by normalized model name (display name kept).
+    by_model: dict[str, list[tuple[str, dict]]] = {}
+    for r in rows:
+        name = normalize_model_name(str(r.get("model") or ""))
+        if not name:
+            continue
+        by_model.setdefault(name.lower(), []).append((name, r))
+
+    meta: dict = {"chip": chip, "window_days": days, "community_matched": False}
+    if not by_model:
+        meta["model"] = ""
+        return {"rows": [], "meta": meta}
+
+    # No explicit model: pick the local model with the most runs in the
+    # window (deterministic; ties broken alphabetically).
+    if model_filter:
+        key = normalize_model_name(model_filter).lower()
+    else:
+        key = max(sorted(by_model), key=lambda k: len(by_model[k]))
+    picked = by_model.get(key, [])
+    display_model = picked[0][0] if picked else model_filter
+    meta["model"] = display_model
+
+    by_engine: dict[str, list[float]] = {}
+    for _name, r in picked:
+        eng = str(r.get("engine") or "").strip()
+        tok = r.get("tok_per_sec")
+        if eng and isinstance(tok, (int, float)) and tok > 0:
+            by_engine.setdefault(eng, []).append(float(tok))
+    if not by_engine:
+        return {"rows": [], "meta": meta}
+
+    # Community side: server filters by substring; the strict equality
+    # re-check below is what actually decides a match.
+    community: dict[str, dict] = {}
+    if chip:
+        for e in _cached_leaderboard(chip, display_model, days):
+            if str(e.get("hw_chip") or "").strip().lower() != chip.strip().lower():
+                continue
+            if str(e.get("model") or "").strip().lower() != display_model.strip().lower():
+                continue
+            eng = str(e.get("engine") or "").strip()
+            med = e.get("median_tok_s")
+            if eng and isinstance(med, (int, float)) and med > 0:
+                community[eng.lower()] = {
+                    "median": float(med),
+                    "n": e.get("samples") if isinstance(e.get("samples"), int) else 0,
+                }
+
+    out = []
+    for eng in sorted(by_engine, key=str.lower):
+        vals = by_engine[eng]
+        local_med = float(median(vals))
+        comm = community.get(eng.lower())
+        delta = None
+        if comm:
+            delta = round((local_med - comm["median"]) / comm["median"] * 100, 1)
+        out.append(
+            {
+                "engine": eng,
+                "local_median_tok_s": round(local_med, 1),
+                "local_n": len(vals),
+                "community_median_tok_s": round(comm["median"], 1) if comm else None,
+                "community_n": comm["n"] if comm else None,
+                "delta_pct": delta,
+            }
+        )
+    meta["community_matched"] = bool(community)
+    return {"rows": out, "meta": meta}
+
+
+@router.get("/api/v1/leaderboard/compare")
+async def api_leaderboard_compare(
+    request: Request,
+    model: str = Query(default="", max_length=128),
+    days: int = Query(default=30, ge=1, le=365),
+) -> JSONResponse:
+    """\"This machine vs community\" panel data (ADR 0002).
+
+    Compares local medians (benchmarks DB) against the community group
+    for the same (chip, model, engine), per engine, over the same
+    window. Without ``model``, the server picks the local model with
+    the most runs in the window.
+    """
+    early = _reject_early(request)
+    if early is not None:
+        return early
+    from asiai.collectors.system import collect_hw_chip
+
+    state = request.app.state.app_state
+    async with _fetch_semaphore:
+        chip = await asyncio.to_thread(collect_hw_chip)
+        data = await asyncio.to_thread(
+            _build_compare, state.db_path, (chip or "").strip(), model.strip(), days
+        )
+    return JSONResponse(data)
 
 
 @router.get("/api/v1/leaderboard/submissions")
