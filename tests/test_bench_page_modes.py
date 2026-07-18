@@ -460,6 +460,24 @@ class TestModeModelPicker:
         assert "(auto — first loaded model)" in resp.text
         assert 'id="mode-model-data"' in resp.text
 
+    def test_page_renders_model_dropdown_component(self, client):
+        """The visible picker is a button + menu; the select stays in the
+        DOM (visually hidden) so the name= contract survives."""
+        resp = client.get("/bench")
+        assert resp.status_code == 200
+        assert 'id="mode-model-btn"' in resp.text
+        assert 'id="mode-model-menu"' in resp.text
+        # The hidden select still carries the form field.
+        assert 'name="mode_model" class="bn-visually-hidden"' in resp.text
+
+    def test_page_renders_json_detail_toggle(self, client):
+        """extra_body lives behind an "edit JSON detail" reveal; the field
+        stays in the form (hidden inputs still submit)."""
+        resp = client.get("/bench")
+        assert resp.status_code == 200
+        assert 'id="mode-json-toggle"' in resp.text
+        assert 'name="mode_extra_body"' in resp.text
+
     def test_engines_for_form_has_available_key(self):
         from asiai.web.routes.bench import _get_engines_for_form
 
