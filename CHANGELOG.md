@@ -7,8 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.31.0](https://github.com/druide67/asiai/compare/v1.30.0...v1.31.0) — 2026-07-18
+
+### Added
+
+- **"This machine vs community" panel on the Leaderboard** (#82): local
+  medians (from this machine's benchmark history) next to community
+  medians per engine, with signed deltas and sample counts, for one
+  model over one window. Matching is strict on (chip, model, engine) —
+  quantization is part of the identity — per ADR 0002; a zero match
+  renders the local medians alone under an honest empty state. New
+  `GET /api/v1/leaderboard/compare` endpoint behind the same rate
+  limit, semaphore and cache discipline as the sibling community
+  proxies.
+- **Prefix-cache hits in code-suite results** (#80): `code_eval` reads
+  `usage.prompt_tokens_details.cached_tokens` (with the flat
+  `cached_tokens` fallback) per turn, so cache reuse on tool-call
+  sessions is measurable instead of invisible.
+
 ### Changed
 
+- **Bench page craft pass from the design handoff** (#81): the mode
+  form's model picker is a grouped dropdown (loaded models, installed
+  models tagged "will load", inline free-text entry) driving the same
+  hidden form field; a failed run keeps its live log with the error
+  line, a frozen progress bar, a Retry button and a Doctor link; the
+  running state shows an eta; `extra_body` sits behind an "edit JSON
+  detail" reveal. Form field contract unchanged.
 - **Hardened release gates**: the release workflow now fails closed —
   before anything is built or published — when the tag, `pyproject.toml`
   and `__init__.py` versions disagree, or when `CHANGELOG.md` has no
