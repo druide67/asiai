@@ -511,7 +511,9 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #f59e0b;
+    /* --fl-warn-text carries the light-theme override (#d97706) — a
+       hardcoded #f59e0b would sit at ~2.2:1 on white. */
+    color: var(--fl-warn-text);
     background: rgba(245, 158, 11, 0.12);
     border: 1px solid rgba(245, 158, 11, 0.3);
     padding: 2px 7px;
@@ -537,8 +539,13 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     border: 1px solid var(--fl-border);
     border-radius: 11px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-    overflow: hidden;
+    overflow: hidden auto;
+    /* An engine with dozens of installed models must scroll inside the
+       menu, not stretch it past the viewport. */
+    max-height: 320px;
 }
+
+[data-theme="light"] .bn-model-menu { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15); }
 
 .bn-model-menu[hidden] { display: none; }
 
@@ -1041,28 +1048,6 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     flex-wrap: wrap;
 }
 
-.bn-error-banner {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 9px;
-    background: var(--red-dim);
-    padding: 11px 14px;
-    font-size: 12px;
-    color: var(--fl-danger-text);
-    line-height: 1.5;
-}
-
-.bn-error-banner .bn-error-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    flex: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
     .bn-progress-fill.is-striped { animation: none; }
 }
@@ -1154,7 +1139,8 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     transition: all var(--duration) var(--ease);
 }
 
-.bn-action-danger:hover { border-color: var(--red); }
+.bn-action-danger:hover:not(:disabled) { border-color: var(--red); }
+.bn-action-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .bn-action {
     background: none;

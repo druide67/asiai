@@ -256,7 +256,7 @@
         return null;
     }
 
-    function setModeModel(value, kind) {
+    function applyModel(value, kind) {
         modeModelKind = kind;
         /* Sync the hidden select: one option per known model already
            exists; free-text values get a dedicated option on the fly. */
@@ -281,12 +281,31 @@
         } else {
             modelTag.hidden = true;
         }
-        closeModelMenu();
         renderConditions();
     }
 
-    function closeModelMenu() {
-        if (modelMenu) modelMenu.hidden = true;
+    function setModeModel(value, kind) {
+        applyModel(value, kind);
+        closeModelMenu();
+    }
+
+    function closeModelMenu(discard) {
+        if (!modelMenu || modelMenu.hidden) return;
+        /* A typed-but-not-committed custom value must not be silently
+           lost when the menu closes on outside click or submit — commit
+           it as if Enter had been pressed. Escape (discard) is the one
+           path that deliberately abandons it. */
+        if (!discard) {
+            var input = modelMenu.querySelector('.bn-menu-custom input');
+            var typed = input ? input.value.trim() : '';
+            if (typed && typed !== modeModelSelect.value) {
+                applyModel(typed, 'custom');
+            }
+        }
+        /* Hiding the menu while focus sits inside it would drop focus
+           to <body>; hand it back to the picker button instead. */
+        if (modelMenu.contains(document.activeElement)) modelBtn.focus();
+        modelMenu.hidden = true;
         if (modelBtn) modelBtn.setAttribute('aria-expanded', 'false');
     }
 
@@ -341,6 +360,9 @@
         input.type = 'text';
         input.className = 'bn-input';
         input.placeholder = 'custom model id — type and press ⏎';
+        /* Reopening the menu after a free-text pick shows the current
+           custom value instead of an empty field. */
+        if (modeModelKind === 'custom') input.value = modeModelSelect.value;
         input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -382,10 +404,12 @@
             }
         });
         modelMenu.addEventListener('click', function (e) { e.stopPropagation(); });
-        document.addEventListener('click', closeModelMenu);
+        /* Not `closeModelMenu` directly: the MouseEvent would land in the
+           `discard` parameter and silently drop a typed custom value. */
+        document.addEventListener('click', function () { closeModelMenu(false); });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && !modelMenu.hidden) {
-                closeModelMenu();
+                closeModelMenu(true); /* Escape = discard the typed value */
                 modelBtn.focus();
             }
         });
@@ -574,6 +598,11 @@
             stdCard.style.display = '';
             modeCard.style.display = 'none';
         }
+        /* The error panel's Retry replays a snapshot of the failed run;
+           once the form is reopened for edits, that snapshot is stale. */
+        statusDiv.querySelectorAll('.bn-action-danger').forEach(function (b) {
+            b.disabled = true;
+        });
     }
 
     editRerunBtn.addEventListener('click', expandForms);
@@ -677,7 +706,7 @@
                    a hint, not a promise. */
                 if (progressFootLeft && runEstSec > 0 && pct > 0 && pct < 100) {
                     var eta = Math.max(1, Math.round(runEstSec * (100 - pct) / 100));
-                    progressFootLeft.textContent = 'eta ' + fmtSec(eta) + ' est.';
+                    progressFootLeft.textContent = 'eta ' + fmtSec(eta);
                 }
             }
         }

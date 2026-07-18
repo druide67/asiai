@@ -467,8 +467,10 @@ class TestModeModelPicker:
         assert resp.status_code == 200
         assert 'id="mode-model-btn"' in resp.text
         assert 'id="mode-model-menu"' in resp.text
-        # The hidden select still carries the form field.
-        assert 'name="mode_model" class="bn-visually-hidden"' in resp.text
+        # The hidden select still carries the form field (two separate
+        # asserts: attribute order is not part of the contract).
+        assert 'name="mode_model"' in resp.text
+        assert "bn-visually-hidden" in resp.text
 
     def test_page_renders_json_detail_toggle(self, client):
         """extra_body lives behind an "edit JSON detail" reveal; the field
