@@ -2,7 +2,7 @@
 {% block title %}asiai — Benchmark{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/bench.css?v=1.0.0">
+<link rel="stylesheet" href="/static/bench.css?v=1.1.0">
 {% endblock %}
 
 {% block content %}
@@ -293,12 +293,20 @@
                 <div class="bn-target-grid">
                     <div class="bn-field">
                         <span class="bn-label">Model</span>
-                        <select name="mode_model" class="bn-select" id="mode-model-select">
+                        <div class="bn-model-picker" id="mode-model-picker">
+                            <button type="button" class="bn-model-btn" id="mode-model-btn"
+                                    aria-haspopup="listbox" aria-expanded="false">
+                                <span class="bn-model-value" id="mode-model-value">(auto — first loaded model)</span>
+                                <span class="bn-model-tag" id="mode-model-tag" hidden></span>
+                                <span class="bn-model-chev" aria-hidden="true">&#9662;</span>
+                            </button>
+                            <div class="bn-model-menu" id="mode-model-menu" hidden></div>
+                        </div>
+                        {# Kept for the form contract (name="mode_model"); driven by the picker. #}
+                        <select name="mode_model" class="bn-visually-hidden" id="mode-model-select"
+                                tabindex="-1" aria-hidden="true">
                             <option value="" selected>(auto — first loaded model)</option>
-                            <option value="__custom__">Custom…</option>
                         </select>
-                        <input type="text" class="bn-input" id="mode-model-custom"
-                               placeholder="model name" style="margin-top: 0.5rem; display: none;">
                         <div class="bn-note">blank = first loaded model &middot; installed models load on first request</div>
                     </div>
                     <div class="bn-field">
@@ -443,9 +451,15 @@
                             <button type="button" class="bn-preset" data-preset='{"temperature": 0.9, "top_p": 0.95}'>Creative</button>
                             <button type="button" class="bn-preset" data-preset='{"chat_template_kwargs": {"enable_thinking": false}}'>Thinking off</button>
                         </div>
-                        <input type="text" name="mode_extra_body" class="bn-input" id="mode-extra-body"
-                               placeholder='{"chat_template_kwargs": {"enable_thinking": false}}'>
-                        <div class="bn-note">extra_body &mdash; optional JSON forwarded to the engine</div>
+                        <button type="button" class="bn-json-toggle" id="mode-json-toggle">
+                            <span class="bn-json-chev" aria-hidden="true">&blacktriangleright;</span> edit JSON detail
+                        </button>
+                        {# [hidden] hides the editor but the field still submits with the form. #}
+                        <div id="mode-json-wrap" hidden>
+                            <input type="text" name="mode_extra_body" class="bn-input" id="mode-extra-body"
+                                   placeholder='{"chat_template_kwargs": {"enable_thinking": false}}'>
+                            <div class="bn-note">extra_body &mdash; optional JSON forwarded to the engine</div>
+                        </div>
                     </div>
                 </div>
             </details>
@@ -534,5 +548,5 @@
    script block only — NEVER inside an HTML attribute (it does not escape
    double quotes; see the 1.23.0 leaderboard chip regression). #}
 <script type="application/json" id="mode-model-data">{{ engines | tojson }}</script>
-<script src="/static/bench.js?v=1.0.0"></script>
+<script src="/static/bench.js?v=1.1.0"></script>
 {% endblock %}

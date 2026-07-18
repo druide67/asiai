@@ -231,60 +231,187 @@
         });
     }
 
-    /* ═══ Mode model picker: options follow the selected engine ═══ */
-    var MODE_CUSTOM = '__custom__';
+    /* ═══ Mode model picker: dropdown driving the hidden select ═══
+       The visible component is a button + menu (loaded models, installed
+       "will load" models, free-text input). The hidden select keeps the
+       name="mode_model" contract: picking an entry (re)creates its
+       <option> and selects it, so FormData needs no special casing. */
     var modeModelSelect = document.getElementById('mode-model-select');
-    var modeModelCustom = document.getElementById('mode-model-custom');
+    var modelBtn = document.getElementById('mode-model-btn');
+    var modelValue = document.getElementById('mode-model-value');
+    var modelTag = document.getElementById('mode-model-tag');
+    var modelMenu = document.getElementById('mode-model-menu');
+    var modeModelKind = 'auto'; /* auto | loaded | available | custom */
     var modeEngineData = [];
     try {
         modeEngineData = JSON.parse(
             document.getElementById('mode-model-data').textContent || '[]');
     } catch (e) { /* malformed data: picker degrades to auto + custom */ }
 
-    function rebuildModeModelOptions() {
+    function currentEngineEntry() {
         var engineName = modeEngineSelect ? modeEngineSelect.value : '';
-        var entry = null;
         for (var i = 0; i < modeEngineData.length; i++) {
-            if (modeEngineData[i].name === engineName) { entry = modeEngineData[i]; break; }
+            if (modeEngineData[i].name === engineName) return modeEngineData[i];
         }
+        return null;
+    }
+
+    function applyModel(value, kind) {
+        modeModelKind = kind;
+        /* Sync the hidden select: one option per known model already
+           exists; free-text values get a dedicated option on the fly. */
+        var found = false;
+        for (var i = 0; i < modeModelSelect.options.length; i++) {
+            if (modeModelSelect.options[i].value === value) { found = true; break; }
+        }
+        if (!found) {
+            var opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = value;
+            modeModelSelect.appendChild(opt);
+        }
+        modeModelSelect.value = value;
+        modelValue.textContent = value || '(auto — first loaded model)';
+        if (kind === 'available') {
+            modelTag.textContent = 'will load';
+            modelTag.hidden = false;
+        } else if (kind === 'custom') {
+            modelTag.textContent = 'free text';
+            modelTag.hidden = false;
+        } else {
+            modelTag.hidden = true;
+        }
+        renderConditions();
+    }
+
+    function setModeModel(value, kind) {
+        applyModel(value, kind);
+        closeModelMenu();
+    }
+
+    function closeModelMenu(discard) {
+        if (!modelMenu || modelMenu.hidden) return;
+        /* A typed-but-not-committed custom value must not be silently
+           lost when the menu closes on outside click or submit — commit
+           it as if Enter had been pressed. Escape (discard) is the one
+           path that deliberately abandons it. */
+        if (!discard) {
+            var input = modelMenu.querySelector('.bn-menu-custom input');
+            var typed = input ? input.value.trim() : '';
+            if (typed && typed !== modeModelSelect.value) {
+                applyModel(typed, 'custom');
+            }
+        }
+        /* Hiding the menu while focus sits inside it would drop focus
+           to <body>; hand it back to the picker button instead. */
+        if (modelMenu.contains(document.activeElement)) modelBtn.focus();
+        modelMenu.hidden = true;
+        if (modelBtn) modelBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function menuHead(text, tag) {
+        var head = document.createElement('div');
+        head.className = 'bn-menu-head';
+        var label = document.createElement('span');
+        label.textContent = text;
+        head.appendChild(label);
+        if (tag) {
+            var t = document.createElement('span');
+            t.className = 'bn-menu-tag';
+            t.textContent = tag;
+            head.appendChild(t);
+        }
+        return head;
+    }
+
+    function menuItem(name, kind) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'bn-menu-item' + (kind === 'available' ? ' is-available' : '');
+        b.textContent = name || '(auto — first loaded model)';
+        if (modeModelSelect.value === name) b.classList.add('is-selected');
+        b.addEventListener('click', function () { setModeModel(name, kind); });
+        return b;
+    }
+
+    function buildModelMenu() {
+        if (!modelMenu) return;
+        modelMenu.textContent = '';
+        modelMenu.appendChild(menuItem('', 'auto'));
+        var entry = currentEngineEntry();
+        var loaded = (entry && entry.models) || [];
+        var available = (entry && entry.available) || [];
+        if (loaded.length) {
+            modelMenu.appendChild(menuHead(
+                'Loaded on ' + (entry ? entry.name : 'engine')));
+            loaded.forEach(function (name) {
+                modelMenu.appendChild(menuItem(name, 'loaded'));
+            });
+        }
+        if (available.length) {
+            modelMenu.appendChild(menuHead('Installed', 'will load'));
+            available.forEach(function (name) {
+                modelMenu.appendChild(menuItem(name, 'available'));
+            });
+        }
+        var custom = document.createElement('div');
+        custom.className = 'bn-menu-custom';
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'bn-input';
+        input.placeholder = 'custom model id — type and press ⏎';
+        /* Reopening the menu after a free-text pick shows the current
+           custom value instead of an empty field. */
+        if (modeModelKind === 'custom') input.value = modeModelSelect.value;
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (input.value.trim()) setModeModel(input.value.trim(), 'custom');
+            }
+        });
+        custom.appendChild(input);
+        modelMenu.appendChild(custom);
+    }
+
+    function rebuildModeModelOptions() {
+        /* Engine changed: reset the hidden select to auto + its models. */
+        var entry = currentEngineEntry();
         modeModelSelect.textContent = '';
         var autoOpt = document.createElement('option');
         autoOpt.value = '';
         autoOpt.textContent = '(auto — first loaded model)';
         modeModelSelect.appendChild(autoOpt);
         if (entry) {
-            (entry.models || []).forEach(function (name) {
+            (entry.models || []).concat(entry.available || []).forEach(function (name) {
                 var opt = document.createElement('option');
                 opt.value = name;
                 opt.textContent = name;
                 modeModelSelect.appendChild(opt);
             });
-            (entry.available || []).forEach(function (name) {
-                var opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name + ' — will load';
-                modeModelSelect.appendChild(opt);
-            });
         }
-        var customOpt = document.createElement('option');
-        customOpt.value = MODE_CUSTOM;
-        customOpt.textContent = 'Custom…';
-        modeModelSelect.appendChild(customOpt);
-        modeModelSelect.value = '';
-        if (modeModelCustom) {
-            modeModelCustom.style.display = 'none';
-            modeModelCustom.value = '';
-        }
-        renderConditions();
+        setModeModel('', 'auto');
     }
-    if (modeModelSelect) {
-        modeModelSelect.addEventListener('change', function () {
-            if (modeModelCustom) {
-                var isCustom = this.value === MODE_CUSTOM;
-                modeModelCustom.style.display = isCustom ? '' : 'none';
-                if (!isCustom) modeModelCustom.value = '';
+
+    if (modeModelSelect && modelBtn && modelMenu) {
+        modelBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (modelMenu.hidden) {
+                buildModelMenu();
+                modelMenu.hidden = false;
+                modelBtn.setAttribute('aria-expanded', 'true');
+            } else {
+                closeModelMenu();
             }
-            renderConditions();
+        });
+        modelMenu.addEventListener('click', function (e) { e.stopPropagation(); });
+        /* Not `closeModelMenu` directly: the MouseEvent would land in the
+           `discard` parameter and silently drop a typed custom value. */
+        document.addEventListener('click', function () { closeModelMenu(false); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modelMenu.hidden) {
+                closeModelMenu(true); /* Escape = discard the typed value */
+                modelBtn.focus();
+            }
         });
         if (modeEngineSelect) {
             modeEngineSelect.addEventListener('change', rebuildModeModelOptions);
@@ -333,6 +460,16 @@
             renderConditions();
         });
     }
+    /* ═══ Advanced: "edit JSON detail" reveal ═══ */
+    var jsonToggle = document.getElementById('mode-json-toggle');
+    var jsonWrap = document.getElementById('mode-json-wrap');
+    if (jsonToggle && jsonWrap) {
+        jsonToggle.addEventListener('click', function () {
+            jsonWrap.hidden = !jsonWrap.hidden;
+            jsonToggle.classList.toggle('is-open', !jsonWrap.hidden);
+        });
+    }
+
     if (modeForm) {
         var judgeInput = modeForm.querySelector('input[name="judge_url"]');
         if (judgeInput) {
@@ -401,12 +538,7 @@
             };
         }
         var mEngine = modeEngineSelect ? modeEngineSelect.value : '';
-        var mModel = '';
-        if (modeModelSelect) {
-            mModel = modeModelSelect.value === MODE_CUSTOM
-                ? (modeModelCustom ? modeModelCustom.value.trim() : '')
-                : modeModelSelect.value;
-        }
+        var mModel = modeModelSelect ? modeModelSelect.value : '';
         return {
             engine: mEngine || 'none',
             model: mModel || 'auto',
@@ -466,6 +598,11 @@
             stdCard.style.display = '';
             modeCard.style.display = 'none';
         }
+        /* The error panel's Retry replays a snapshot of the failed run;
+           once the form is reopened for edits, that snapshot is stale. */
+        statusDiv.querySelectorAll('.bn-action-danger').forEach(function (b) {
+            b.disabled = true;
+        });
     }
 
     editRerunBtn.addEventListener('click', expandForms);
@@ -475,10 +612,15 @@
     var progressPct = null;
     var progressLog = null;
     var progressMeta = null;
+    var progressFootLeft = null;
+    var lastPct = 0;      /* last known % — frozen on the error bar */
+    var runEstSec = 0;    /* rough estimate for the eta countdown */
+    var lastRun = null;   /* {formData, summary, estSec} for Retry */
 
     function showBenchProgress(metaText) {
         isRunning = true;
         logLines = [];
+        lastPct = 0;
         statusCard.classList.remove('is-done', 'is-error');
         statusCard.classList.add('is-running');
         setCondBadge('measuring');
@@ -522,9 +664,9 @@
 
         var foot = document.createElement('div');
         foot.className = 'bn-status-foot';
-        var footLeft = document.createElement('span');
-        footLeft.textContent = 'live progress via SSE';
-        foot.appendChild(footLeft);
+        progressFootLeft = document.createElement('span');
+        progressFootLeft.textContent = 'live progress via SSE';
+        foot.appendChild(progressFootLeft);
         var footRight = document.createElement('span');
         footRight.style.marginLeft = 'auto';
         footRight.textContent = 'card renders on completion';
@@ -557,8 +699,15 @@
             var tot = parseInt(m[2], 10);
             if (tot > 0 && cur <= tot) {
                 var pct = Math.round((cur / tot) * 100);
+                lastPct = pct;
                 progressFill.style.width = pct + '%';
                 progressPct.textContent = pct + '%';
+                /* eta from the same rough estimate as the form hint —
+                   a hint, not a promise. */
+                if (progressFootLeft && runEstSec > 0 && pct > 0 && pct < 100) {
+                    var eta = Math.max(1, Math.round(runEstSec * (100 - pct) / 100));
+                    progressFootLeft.textContent = 'eta ' + fmtSec(eta);
+                }
             }
         }
     }
@@ -619,19 +768,77 @@
         setCondBadge('auto');
         statusDiv.textContent = '';
 
-        var banner = document.createElement('div');
-        banner.className = 'bn-error-banner';
-        var label = document.createElement('span');
-        label.className = 'bn-error-label';
-        label.textContent = 'Failed';
-        banner.appendChild(label);
-        var text = document.createElement('span');
-        text.textContent = String(msg || 'unknown error');
-        banner.appendChild(text);
-        statusDiv.appendChild(banner);
+        var stack = document.createElement('div');
+        stack.className = 'bn-status-stack';
+
+        var row = document.createElement('div');
+        row.className = 'bn-status-row is-error';
+        var dot = document.createElement('span');
+        dot.className = 'bn-dot-error';
+        row.appendChild(dot);
+        var title = document.createElement('span');
+        title.className = 'bn-status-title';
+        title.textContent = 'Failed';
+        row.appendChild(title);
+        var meta = document.createElement('span');
+        meta.className = 'bn-status-meta';
+        meta.textContent = String(msg || 'unknown error');
+        row.appendChild(meta);
+        var pct = document.createElement('span');
+        pct.className = 'bn-status-pct';
+        pct.textContent = lastPct + '%';
+        row.appendChild(pct);
+        stack.appendChild(row);
+
+        /* Bar frozen where the run died, tipped red. */
+        var bar = document.createElement('div');
+        bar.className = 'bn-progress';
+        var fill = document.createElement('div');
+        fill.className = 'bn-progress-fill is-error';
+        fill.style.width = Math.max(lastPct, 4) + '%';
+        bar.appendChild(fill);
+        stack.appendChild(bar);
+
+        /* Keep the live log so the failure has its context, and end it
+           with the error line itself. */
+        var log = document.createElement('div');
+        log.className = 'bn-log';
+        logLines.slice(-3).forEach(function (line) {
+            var d = document.createElement('div');
+            d.textContent = line;
+            log.appendChild(d);
+        });
+        var errLine = document.createElement('div');
+        errLine.className = 'is-err';
+        errLine.textContent = '✕ ' + String(msg || 'unknown error');
+        log.appendChild(errLine);
+        stack.appendChild(log);
+
+        var actions = document.createElement('div');
+        actions.className = 'bn-result-actions';
+        if (lastRun) {
+            var retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.className = 'bn-action-danger';
+            retryBtn.textContent = '↻ Retry';
+            retryBtn.addEventListener('click', function () {
+                launchRun(lastRun.formData, lastRun.summary, lastRun.estSec);
+            });
+            actions.appendChild(retryBtn);
+        }
+        var doctorLink = document.createElement('a');
+        doctorLink.className = 'bn-action';
+        doctorLink.textContent = 'Check engine in Doctor →';
+        doctorLink.href = '/doctor';
+        actions.appendChild(doctorLink);
+        stack.appendChild(actions);
+
+        statusDiv.appendChild(stack);
 
         enableAllBenchButtons();
-        expandForms();
+        /* The form stays collapsed behind the summary bar (same reading
+           as a completed run) — Edit & re-run reopens it. */
+        editRerunBtn.hidden = false;
     }
 
     /* ═══ Button state ═══ */
@@ -659,7 +866,20 @@
         return { pill: meta.name, text: bits.join(' · ') };
     }
 
-    function launchRun(formData, summary) {
+    function estSecFor(kind) {
+        if (kind === 'quick') return TYPES[''].per;
+        if (kind === 'std') {
+            var n = parseInt(document.getElementById('runs-range').value, 10) || 1;
+            var prompts = stdForm.querySelectorAll('input[name="prompts"]:checked').length || 1;
+            return TYPES[''].per * n * prompts;
+        }
+        var m = parseInt(document.getElementById('mode-runs-range').value, 10) || 1;
+        return (TYPES[webBenchType] || TYPES['']).per * m;
+    }
+
+    function launchRun(formData, summary, estSec) {
+        lastRun = { formData: formData, summary: summary, estSec: estSec || 0 };
+        runEstSec = estSec || 0;
         disableAllBenchButtons();
         collapseForms(summary.pill, summary.text, true);
         showBenchProgress(summary.pill + ' · ' + summary.text);
@@ -687,12 +907,12 @@
     quickBtn.addEventListener('click', function () {
         var formData = new FormData();
         formData.append('quick', 'on');
-        launchRun(formData, summaryFor('quick'));
+        launchRun(formData, summaryFor('quick'), estSecFor('quick'));
     });
 
     stdForm.addEventListener('submit', function (e) {
         e.preventDefault();
-        launchRun(new FormData(stdForm), summaryFor('std'));
+        launchRun(new FormData(stdForm), summaryFor('std'), estSecFor('std'));
     });
 
     modeForm.addEventListener('submit', function (e) {
@@ -700,12 +920,7 @@
         if (!webBenchType) return;
         var formData = new FormData(modeForm);
         formData.append('bench_type', webBenchType);
-        if (modeModelSelect && modeModelSelect.value === MODE_CUSTOM) {
-            /* The custom input has no name= — its value replaces the select's.
-               Empty custom = auto, same server behavior as an empty field. */
-            formData.set('mode_model', modeModelCustom ? modeModelCustom.value.trim() : '');
-        }
-        launchRun(formData, summaryFor('mode'));
+        launchRun(formData, summaryFor('mode'), estSecFor('mode'));
     });
 
     /* ═══ Reset buttons ═══ */
@@ -744,6 +959,10 @@
                 presetsBox.querySelectorAll('.bn-preset').forEach(function (x) {
                     x.classList.toggle('active', (x.dataset.preset || '') === '');
                 });
+            }
+            if (jsonWrap && jsonToggle) {
+                jsonWrap.hidden = true;
+                jsonToggle.classList.remove('is-open');
             }
             if (paintModeSeg) paintModeSeg();
             updateModeAdvNote();

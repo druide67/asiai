@@ -468,6 +468,131 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
 
 .bn-input::placeholder { color: var(--fl-text-faint); }
 
+/* ── Model picker dropdown (hidden select keeps the contract) ── */
+
+.bn-model-picker { position: relative; }
+
+.bn-model-btn {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bn-input);
+    border: 1px solid var(--fl-border);
+    border-radius: 9px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    transition: border-color var(--duration) var(--ease);
+}
+
+.bn-model-btn:hover { border-color: var(--accent-glow); }
+.bn-model-btn[aria-expanded="true"] { border-color: var(--accent-text); }
+
+.bn-model-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.bn-model-value {
+    font-size: 12.5px;
+    color: var(--fl-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bn-model-tag,
+.bn-menu-tag {
+    flex: none;
+    font-family: var(--font-sans);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    /* --fl-warn-text carries the light-theme override (#d97706) — a
+       hardcoded #f59e0b would sit at ~2.2:1 on white. */
+    color: var(--fl-warn-text);
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    padding: 2px 7px;
+    border-radius: 999px;
+}
+
+.bn-menu-tag { border: none; padding: 1px 6px; }
+
+.bn-model-chev {
+    margin-left: auto;
+    flex: none;
+    color: var(--fl-text-faint);
+    font-size: 10px;
+}
+
+.bn-model-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 40;
+    background: var(--bn-panel);
+    border: 1px solid var(--fl-border);
+    border-radius: 11px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    overflow: hidden auto;
+    /* An engine with dozens of installed models must scroll inside the
+       menu, not stretch it past the viewport. */
+    max-height: 320px;
+}
+
+[data-theme="light"] .bn-model-menu { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15); }
+
+.bn-model-menu[hidden] { display: none; }
+
+.bn-menu-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px 5px;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fl-text-faint);
+    font-weight: 600;
+    border-top: 1px solid var(--bn-hairline);
+    margin-top: 4px;
+}
+
+.bn-menu-item {
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+    padding: 9px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fl-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background var(--duration) var(--ease);
+}
+
+.bn-menu-item:hover { background: var(--accent-dim); }
+.bn-menu-item.is-selected { background: var(--accent-dim); color: var(--accent-text); }
+.bn-menu-item.is-available { color: var(--text-secondary); }
+
+.bn-menu-custom {
+    padding: 10px 14px;
+    border-top: 1px solid var(--bn-hairline);
+    margin-top: 4px;
+}
+
+.bn-menu-custom .bn-input { font-size: 11.5px; padding: 8px 11px; }
+
 /* ── Runs segmented control ───────────────────────────────── */
 
 .bn-seg {
@@ -760,6 +885,33 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     color: var(--accent-text);
 }
 
+/* "edit JSON detail" reveal */
+.bn-json-toggle {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--fl-text-dim);
+    transition: color var(--duration) var(--ease);
+}
+
+.bn-json-toggle:hover { color: var(--text-secondary); }
+
+.bn-json-chev {
+    font-size: 9px;
+    transition: transform var(--duration) var(--ease);
+}
+
+.bn-json-toggle.is-open .bn-json-chev { transform: rotate(90deg); }
+
+#mode-json-wrap[hidden] { display: none; }
+
 /* ── Form footer ──────────────────────────────────────────── */
 
 .bn-footer {
@@ -866,6 +1018,12 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     animation: none;
 }
 
+/* Frozen where the run died, tipped red. */
+.bn-progress-fill.is-error {
+    background: linear-gradient(90deg, var(--accent-text) 70%, var(--red));
+    animation: none;
+}
+
 .bn-log {
     background: var(--bn-log-bg);
     border: 1px solid var(--bn-hairline);
@@ -878,6 +1036,7 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
 
 .bn-log > div { color: var(--fl-text-faint); }
 .bn-log > div:last-child { color: var(--text-secondary); }
+.bn-log > .is-err, .bn-log > .is-err:last-child { color: var(--fl-danger-text); }
 
 .bn-status-foot {
     display: flex;
@@ -887,28 +1046,6 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
     font-size: 10.5px;
     color: var(--fl-text-faint);
     flex-wrap: wrap;
-}
-
-.bn-error-banner {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 9px;
-    background: var(--red-dim);
-    padding: 11px 14px;
-    font-size: 12px;
-    color: var(--fl-danger-text);
-    line-height: 1.5;
-}
-
-.bn-error-banner .bn-error-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    flex: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -985,6 +1122,25 @@ button.bn-engine-face.active .bn-engine-name { color: var(--accent-text); }
 
 .bn-action-primary:hover { border-color: var(--accent-text); }
 .bn-action-primary.is-copied { color: var(--green); }
+
+.bn-action-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--red-dim);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: var(--fl-danger-text);
+    border-radius: 9px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 9px 15px;
+    cursor: pointer;
+    transition: all var(--duration) var(--ease);
+}
+
+.bn-action-danger:hover:not(:disabled) { border-color: var(--red); }
+.bn-action-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .bn-action {
     background: none;
