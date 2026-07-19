@@ -88,6 +88,7 @@ hooks:
   - hooks/inject_version.py
   - hooks/copy_well_known.py
   - hooks/copy_markdown_sources.py
+  - hooks/gen_locale_sitemaps.py
 
 plugins:
   - search
