@@ -1883,7 +1883,7 @@
       navigator.clipboard.writeText('pip install asiai').then(function() {
         copyBtn.classList.add('copied');
         setTimeout(function() { copyBtn.classList.remove('copied'); }, 1200);
-      });
+      }).catch(function() { /* permissions policy / lost user gesture */ });
     });
   }
 
