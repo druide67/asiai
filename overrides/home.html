@@ -6,10 +6,6 @@
 <a href="#asiai-content" class="md-skip" tabindex="0">Skip to content</a>
 
 <style>
-  /* ── Accent color (changes with mode) ── */
-  :root { --accent: #06b6d4; --accent-rgb: 6, 182, 212; }
-  body.agent-mode { --accent: #60a5fa; --accent-rgb: 96, 165, 250; }
-
   /* Hide article/content padding for homepage */
   .md-main__inner { margin: 0; }
   .md-content { display: none; }
@@ -34,17 +30,21 @@
   /* ══════════ Design tokens (light default / slate dark) ══════════ */
   .asiai-home {
     --bg: #fafafa;
-    --bg2: #ffffff;
-    --bg3: #f4f4f5;
-    --line: #e4e4e7;
-    --line2: #d4d4d8;
+    --sf: #ffffff;
+    --sf2: #f4f4f5;
+    --line: #e7e7ea;
+    --line2: #d6d6dc;
     --ink: #18181b;
     --mut: #52525b;
-    --fnt: #8b8b94;
+    --fnt: #8f8f98;
+    --acc: #0891b2;
     --acc-text: #0e7490;
-    --acc-soft: rgba(var(--accent-rgb), .07);
-    --acc-line: rgba(var(--accent-rgb), .4);
-    --shadow: 0 1px 3px rgba(24,24,27,.07), 0 1px 2px rgba(24,24,27,.05);
+    --acc-soft: rgba(8,145,178,.07);
+    --acc-line: rgba(8,145,178,.38);
+    --cta-bg: #0891b2;
+    --cta-ink: #ffffff;
+    --dot: #d9d9df;
+    --shadow: 0 1px 2px rgba(24,24,27,.04), 0 8px 24px -12px rgba(24,24,27,.12);
     font-family: var(--md-text-font-family, system-ui, sans-serif);
     background: var(--bg);
     color: var(--ink);
@@ -52,165 +52,225 @@
     -webkit-font-smoothing: antialiased;
   }
   [data-md-color-scheme="slate"] .asiai-home {
-    --bg: #0a0a0c;
-    --bg2: #121215;
-    --bg3: #18181b;
-    --line: #232329;
-    --line2: #2f2f37;
+    --bg: #09090b;
+    --sf: #111113;
+    --sf2: #18181b;
+    --line: #1f1f24;
+    --line2: #2e2e35;
     --ink: #fafafa;
     --mut: #a1a1aa;
     --fnt: #6f6f7a;
+    --acc: #22d3ee;
     --acc-text: #22d3ee;
-    --acc-soft: rgba(var(--accent-rgb), .08);
-    --acc-line: rgba(var(--accent-rgb), .28);
+    --acc-soft: rgba(6,182,212,.09);
+    --acc-line: rgba(6,182,212,.32);
+    --cta-bg: #06b6d4;
+    --cta-ink: #04262c;
+    --dot: #232329;
     --shadow: none;
   }
-  /* Agent mode: cyan → blue accent text */
-  body.agent-mode .asiai-home { --acc-text: #1d4ed8; }
-  [data-md-color-scheme="slate"] body.agent-mode .asiai-home,
-  body.agent-mode[data-md-color-scheme="slate"] .asiai-home { --acc-text: #60a5fa; }
 
   .asiai-home .ah-mono { font-family: var(--md-code-font-family, ui-monospace, monospace); }
   .asiai-home a { color: inherit; }
 
   /* ── Section scaffolding ── */
-  .ah-section { border-top: 1px solid var(--line); }
-  .ah-wrap {
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: 80px 40px 88px;
-    display: flex;
-    flex-direction: column;
-    gap: 36px;
-  }
-  .ah-head { display: flex; flex-direction: column; gap: 10px; }
+  .ah-wrap { max-width: 1184px; margin: 0 auto; padding: 0 48px 80px; }
+  .ah-s01 .ah-wrap { padding: 64px 48px 76px; }
+  .ah-s04 .ah-wrap, .ah-s07 .ah-wrap { padding-bottom: 84px; }
+  .ah-s06 .ah-wrap { padding-top: 64px; }
+  .ah-s09 .ah-wrap { padding: 64px 48px 40px; }
+
   .asiai-home h2 {
-    margin: 0;
-    font-size: 32px;
+    margin: 20px 0 0;
+    font-size: 30px;
     line-height: 1.2;
     letter-spacing: -0.02em;
     font-weight: 600;
     color: var(--ink);
   }
-  .ah-sub { margin: 0; font-size: 15.5px; color: var(--mut); }
+  .ah-sub { margin: 8px 0 0; font-size: 15.5px; color: var(--mut); }
+  .asiai-home h3 { margin: 0; font-weight: 600; color: var(--ink); }
   .ah-eyebrow {
     font-family: var(--md-code-font-family, monospace);
     font-size: 11px;
-    letter-spacing: .14em;
+    letter-spacing: .16em;
     color: var(--fnt);
     text-transform: uppercase;
   }
 
-  /* ══════════ 1 · Hero ══════════ */
-  .ah-hero {
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: 84px 40px 92px;
+  /* ── Section rail: "0X / 09" + hairline + tick marks ── */
+  .ah-rail { display: flex; align-items: center; gap: 16px; }
+  .ah-rail-num {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 11px;
+    letter-spacing: .16em;
+    color: var(--acc-text);
+  }
+  .ah-rail-line { flex: 1; height: 1px; background: var(--line); }
+  .ah-rail-ticks { display: flex; align-items: flex-end; gap: 5px; }
+  .ah-rail-ticks span { width: 1px; height: 6px; background: var(--line2); }
+  .ah-rail-ticks span.hi { height: 11px; background: var(--acc-line); }
+
+  /* ══════════ Hero ══════════ */
+  .ah-hero { position: relative; border-bottom: 1px solid var(--line); }
+  .ah-hero-halo {
+    position: absolute;
+    right: 0;
+    top: 6%;
+    width: 46%;
+    height: 86%;
+    background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+    background-size: 23px 23px;
+    opacity: .55;
+    -webkit-mask-image: radial-gradient(ellipse at 62% 45%, black 25%, transparent 74%);
+    mask-image: radial-gradient(ellipse at 62% 45%, black 25%, transparent 74%);
+    pointer-events: none;
+  }
+  [data-md-color-scheme="slate"] .ah-hero-halo { opacity: .8; }
+  .ah-hero-inner { position: relative; max-width: 1184px; margin: 0 auto; padding: 66px 48px 52px; }
+  .ah-hero-grid {
     display: grid;
-    grid-template-columns: 1.02fr 1fr;
-    gap: 72px;
+    grid-template-columns: 1.04fr .96fr;
+    gap: 64px;
     align-items: center;
   }
   .ah-hero-left { display: flex; flex-direction: column; gap: 22px; }
-  .ah-hero-brand { display: flex; align-items: center; gap: 12px; }
-  .ah-hero-brand img { width: 40px; height: 40px; display: block; }
+  .ah-hero-brand { display: flex; align-items: center; gap: 13px; }
+  .ah-hero-brand img { width: 38px; height: 38px; display: block; }
   .asiai-home h1 {
     margin: 0;
     font-size: 54px;
-    line-height: 1.06;
-    letter-spacing: -0.03em;
+    line-height: 1.05;
+    letter-spacing: -0.032em;
     font-weight: 600;
     color: var(--ink);
   }
-  .asiai-home h1 .acc { color: var(--acc-text); }
+  body.agent-mode .asiai-home h1 { font-size: 50px; line-height: 1.08; letter-spacing: -0.03em; }
+  .asiai-home h1 .acc { color: var(--acc); }
   .ah-hero-tagline {
     margin: 0;
-    font-size: 16.5px;
+    font-size: 17px;
     line-height: 1.6;
     color: var(--mut);
-    max-width: 46ch;
+    max-width: 47ch;
   }
   .ah-hero-install {
-    background: var(--bg2);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 16px 20px;
+    background: var(--sf);
+    border: 1px solid var(--line2);
+    border-radius: 11px;
+    padding: 15px 18px;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .ah-hero-install .rows {
     font-family: var(--md-code-font-family, monospace);
     font-size: 13.5px;
-    line-height: 2;
-    box-shadow: var(--shadow);
+    line-height: 2.1;
   }
   .ah-hero-install .row { display: flex; gap: 10px; }
+  .ah-hero-install .row span:nth-child(2) { font-weight: 500; }
   .ah-hero-install .p { color: var(--fnt); user-select: none; }
-  .ah-hero-install .c { color: var(--fnt); }
+  .ah-hero-install .c { color: var(--fnt); font-weight: 400 !important; }
+  .ah-copy-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    margin-top: 4px;
+    flex: none;
+    color: var(--fnt);
+    display: flex;
+    transition: color .15s;
+  }
+  .ah-copy-btn:hover, .ah-copy-btn.copied { color: var(--acc-text); }
   .ah-cta-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .ah-btn {
     text-decoration: none;
-    font-size: 14.5px;
-    border-radius: 8px;
+    font-size: 15px;
+    border-radius: 9px;
     transition: background .15s, border-color .15s, color .15s;
     white-space: nowrap;
   }
   .ah-btn-primary {
-    background: var(--accent);
-    color: #04262c;
+    background: var(--cta-bg);
+    color: var(--cta-ink);
     font-weight: 600;
-    padding: 11px 22px;
+    padding: 12px 24px;
   }
-  .ah-btn-primary:hover { background: #22d3ee; color: #04262c; }
-  body.agent-mode .ah-btn-primary { color: #0c1a33; }
-  body.agent-mode .ah-btn-primary:hover { background: #93c5fd; color: #0c1a33; }
+  .ah-btn-primary:hover { background: #0e7490; color: #ffffff; }
+  [data-md-color-scheme="slate"] .ah-btn-primary:hover { background: #22d3ee; color: #04262c; }
   .ah-btn-secondary {
     color: var(--ink);
     font-weight: 500;
-    padding: 10px 20px;
+    padding: 11px 22px;
     border: 1px solid var(--line2);
+    background: var(--sf);
   }
+  [data-md-color-scheme="slate"] .ah-btn-secondary { background: transparent; }
   .ah-btn-secondary:hover { border-color: var(--acc-line); color: var(--ink); }
   .ah-hero-foot {
     font-family: var(--md-code-font-family, monospace);
     font-size: 11px;
+    letter-spacing: .02em;
     color: var(--fnt);
   }
 
-  /* ── Mode toggle (Human / AI Agent) ── */
-  .mode-toggle { display: flex; align-items: center; gap: 12px; }
-  .mode-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--fnt);
-    transition: color .2s;
-    cursor: pointer;
+  /* ── Mode bar: segmented pill + agent count link ── */
+  .ah-modebar {
+    margin-top: 46px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 13px 2px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
   }
-  .mode-label.mode-active { color: var(--acc-text); }
-  .toggle-switch {
-    position: relative;
-    width: 44px;
-    height: 24px;
-    background: var(--line2);
+  .ah-mode-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--sf);
+    border: 1px solid var(--line2);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .ah-mode-btn {
     border: none;
-    border-radius: 12px;
     cursor: pointer;
-    padding: 0;
-    transition: background .2s;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--mut);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background .15s, color .15s;
   }
-  .toggle-switch[aria-checked="true"] { background: var(--accent); }
-  .toggle-slider {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 18px;
-    height: 18px;
-    background: #fff;
+  .ah-mode-btn:hover { color: var(--ink); }
+  .ah-mode-btn.active { background: var(--ink); color: var(--bg); }
+  .ah-mode-dot {
+    display: none;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    transition: transform .2s;
+    background: #22d3ee;
+    animation: ah-pulse 1.6s ease infinite;
   }
-  .toggle-switch[aria-checked="true"] .toggle-slider { transform: translateX(20px); }
+  body.agent-mode .ah-mode-dot { display: inline-block; }
+  @keyframes ah-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
   .agent-count-banner {
     display: none;
     font-size: 13.5px;
+    font-weight: 500;
     color: var(--acc-text);
-    font-weight: 600;
   }
   .agent-count-banner.has-data { display: block; }
 
@@ -231,10 +291,10 @@
   /* ── Hero visual A: animated terminal ── */
   .ah-term {
     background: #0c0d10;
-    border: 1px solid rgba(255,255,255,.09);
+    border: 1px solid rgba(255,255,255,.1);
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: var(--shadow);
+    box-shadow: 0 28px 56px -26px rgba(9,9,11,.45);
     font-family: var(--md-code-font-family, monospace);
     font-size: 12.5px;
     color: #d4d4d8;
@@ -254,6 +314,7 @@
     overflow: hidden;
     white-space: nowrap;
     width: 47ch;
+    max-width: 100%;
     animation: ah-type 1.4s steps(47, end) .4s both;
   }
   .ah-term .dim { color: #6f6f7a; }
@@ -290,73 +351,84 @@
   @keyframes ah-line-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes ah-bar { from { width: 0; } }
   @media (prefers-reduced-motion: reduce) {
-    .ah-term .cmd, .ah-term .li, .ah-term-fill, .ah-term-caret { animation: none; }
+    .ah-term .cmd, .ah-term .li, .ah-term-fill, .ah-term-caret,
+    .ah-mode-dot, .ah-lb-dot, .ah-api-dot { animation: none; }
   }
 
   /* ── Hero visual B: API previews (agent mode) ── */
   .ah-api-stack { flex-direction: column; gap: 18px; }
   .ah-api {
     background: #0c0d10;
-    border: 1px solid rgba(255,255,255,.09);
+    border: 1px solid rgba(255,255,255,.1);
     border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 24px 48px -24px rgba(9,9,11,.4);
     text-align: left;
   }
   .ah-api-header {
-    padding: 10px 16px;
+    padding: 11px 16px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     border-bottom: 1px solid rgba(255,255,255,.07);
   }
   .ah-api-method {
-    background: var(--accent);
-    color: #04262c;
-    font-size: 10px;
+    background: #3b82f6;
+    color: #ffffff;
+    font-size: 10.5px;
     font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 3px;
+    letter-spacing: .06em;
+    padding: 3px 8px;
+    border-radius: 5px;
     font-family: var(--md-code-font-family, monospace);
   }
-  .ah-api-url { color: #d4d4d8; font-size: 12.5px; font-family: var(--md-code-font-family, monospace); }
-  .ah-api-badge { margin-left: auto; font-size: 10.5px; color: #6f6f7a; font-family: var(--md-code-font-family, monospace); }
+  .ah-api-url { color: #e4e4e7; font-size: 13px; font-family: var(--md-code-font-family, monospace); }
+  .ah-api-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: #6f6f7a;
+    font-family: var(--md-code-font-family, monospace);
+  }
+  .ah-api-dot { width: 6px; height: 6px; border-radius: 50%; background: #22d3ee; animation: ah-pulse 1.6s ease infinite; }
   .ah-api-body {
-    padding: 14px 16px;
+    padding: 15px 18px;
     margin: 0;
-    font-size: 11.5px;
-    line-height: 1.6;
-    color: #c5c5d5;
+    font-size: 12.3px;
+    line-height: 1.8;
+    color: #5d5d68;
     font-family: var(--md-code-font-family, monospace);
     overflow-x: auto;
     background: transparent;
   }
+  .ah-api-body .k { color: #9ba1ad; }
+  .ah-api-body .s { color: #e4e4e7; }
+  .ah-api-body .n { color: #67e8f9; }
 
-  /* ══════════ 2 · Problem cards ══════════ */
-  .ah-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; }
-  .ah-card {
-    background: var(--bg2);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 26px 26px 28px;
-    box-shadow: var(--shadow);
+  /* ══════════ 01 · The Local LLM Problem ══════════ */
+  .ah-pains { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; margin-top: 36px; }
+  .ah-pain {
+    border-top: 1px solid var(--line2);
+    padding-top: 18px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
-  .ah-card-num {
+  .ah-pain-num {
     font-family: var(--md-code-font-family, monospace);
     font-size: 11px;
     letter-spacing: .14em;
     color: var(--fnt);
   }
-  .asiai-home h3 { margin: 0; font-weight: 600; color: var(--ink); }
-  .ah-card h3 { font-size: 18px; }
-  .ah-card p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--mut); }
+  .ah-pain h3 { font-size: 18px; }
+  .ah-pain p { margin: 0; font-size: 14px; line-height: 1.62; color: var(--mut); }
 
-  /* ══════════ 3 · Four surfaces ══════════ */
-  .ah-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  /* ══════════ 02 · Four surfaces ══════════ */
+  .ah-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 34px; }
   .ah-tile {
-    background: var(--bg2);
+    background: var(--sf);
     border: 1px solid var(--line);
     border-radius: 14px;
     overflow: hidden;
@@ -364,35 +436,41 @@
     display: flex;
     flex-direction: column;
   }
-  .ah-tile-shot {
-    height: 216px;
-    background: #0c0d10;
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
-  }
+  .ah-tile-shot { background: #0c0d10; padding: 12px 12px 0; overflow: hidden; }
   .ah-tile-shot img {
     width: 100%;
-    height: 100%;
+    height: 206px;
     object-fit: cover;
     object-position: center top;
     display: block;
+    border: 1px solid rgba(255,255,255,.12);
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
   }
   .ah-tile-shot.term-mini {
+    height: 206px;
+    padding: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: var(--md-code-font-family, monospace);
     font-size: 11.5px;
-    line-height: 2.1;
+    line-height: 2.15;
     color: #a1a1aa;
   }
   .ah-tile-shot.term-mini .rows { display: flex; flex-direction: column; }
   .ah-tile-shot.term-mini .lb-mini {
     display: grid;
-    grid-template-columns: 20px 150px 66px 62px 46px;
+    grid-template-columns: 18px 158px 62px 60px 46px;
     gap: 8px;
   }
-  .ah-tile-text { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 8px; }
+  .ah-tile-text {
+    padding: 18px 20px 20px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
   .ah-tile-text h3 { font-size: 16.5px; }
   .ah-tile-text p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--mut); }
   .ah-tile-cmd {
@@ -400,22 +478,23 @@
     font-size: 11.5px;
     color: var(--acc-text);
   }
+  .ah-tile-cmd .p { color: var(--fnt); }
 
-  /* ══════════ 4 · Discover FAQ ══════════ */
-  .ah-faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
-  .ah-faq {
-    background: var(--bg2);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: var(--shadow);
-    margin: 0;
+  /* ══════════ 03 · Discover FAQ ══════════ */
+  .ah-faq-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 48px;
+    margin-top: 30px;
+    border-top: 1px solid var(--line);
   }
+  .ah-faq { border-bottom: 1px solid var(--line); margin: 0; }
   .ah-faq summary {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    padding: 16px 20px;
+    padding: 15px 2px;
     cursor: pointer;
     font-size: 14.5px;
     font-weight: 600;
@@ -425,7 +504,7 @@
   .ah-faq .faq-marker { font-family: var(--md-code-font-family, monospace); color: var(--acc-text); font-size: 15px; }
   .ah-faq .faq-marker::before { content: '+'; }
   .ah-faq[open] .faq-marker::before { content: '\2212'; }
-  .ah-faq p { margin: 0; padding: 0 20px 18px; font-size: 13.5px; line-height: 1.6; color: var(--mut); }
+  .ah-faq p { margin: 0; padding: 0 2px 16px; font-size: 13.5px; line-height: 1.6; color: var(--mut); }
   .ah-faq code {
     font-family: var(--md-code-font-family, monospace);
     font-size: 12.5px;
@@ -434,35 +513,46 @@
     padding: 0;
   }
 
-  /* ══════════ 5 · Quickstart ══════════ */
-  .ah-steps { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; align-items: start; }
+  /* ══════════ 04 · Quickstart ══════════ */
+  .ah-steps-wrap { position: relative; margin-top: 36px; }
+  .ah-steps-thread { position: absolute; top: 15px; left: 10px; right: 10px; height: 1px; background: var(--line2); }
+  .ah-steps { position: relative; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; align-items: start; }
   .ah-step { display: flex; flex-direction: column; gap: 14px; }
-  .ah-step-head { display: flex; align-items: center; gap: 12px; }
+  .ah-step-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg);
+    width: fit-content;
+    padding-right: 14px;
+  }
   .ah-step-num {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
     border: 1px solid var(--acc-line);
     color: var(--acc-text);
-    background: var(--acc-soft);
+    background: #e9f4f8;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: var(--md-code-font-family, monospace);
     font-size: 13px;
+    font-weight: 500;
     flex-shrink: 0;
   }
+  [data-md-color-scheme="slate"] .ah-step-num { background: rgba(6,182,212,.12); }
   .ah-step-head h3 { font-size: 17px; }
   .ah-step-code {
     background: #0c0d10;
-    border: 1px solid rgba(255,255,255,.09);
+    border: 1px solid rgba(255,255,255,.1);
     border-radius: 10px;
-    padding: 16px 18px;
+    padding: 15px 17px;
     font-family: var(--md-code-font-family, monospace);
-    font-size: 12.5px;
+    font-size: 12.3px;
     line-height: 2;
     color: #d4d4d8;
-    box-shadow: var(--shadow);
+    box-shadow: 0 16px 32px -20px rgba(9,9,11,.4);
     display: flex;
     flex-direction: column;
     overflow-x: auto;
@@ -474,53 +564,92 @@
   .ah-step-code .tbl { display: grid; grid-template-columns: 1fr 52px 48px; gap: 8px; }
   .ah-step-code .tbl .r { text-align: right; }
 
-  /* ══════════ 6 · Real discoveries ══════════ */
+  /* ══════════ Proof bands (05 Real Discoveries · 08 Leaderboard) ══════════ */
+  .ah-proof { background: #0b0b0f; }
+  .ah-graticule { position: relative; height: 12px; }
+  .ah-graticule span:first-child {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 7px;
+    background: repeating-linear-gradient(90deg, rgba(250,250,250,.13) 0 1px, transparent 1px 12px);
+  }
+  .ah-graticule span:last-child {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 12px;
+    background: repeating-linear-gradient(90deg, rgba(34,211,238,.35) 0 1px, transparent 1px 72px);
+  }
+  .ah-proof .ah-wrap { padding: 60px 48px 78px; }
+  .ah-proof .ah-rail-num { color: #22d3ee; }
+  .ah-proof .ah-rail-line { background: rgba(255,255,255,.09); }
+  .ah-proof .ah-rail-ticks span { background: rgba(255,255,255,.2); }
+  .ah-proof .ah-rail-ticks span.hi { background: rgba(34,211,238,.5); }
+  .ah-proof h2 { color: #fafafa; }
+  .ah-proof .ah-sub { color: #a1a1aa; }
+  .ah-proof h3 { color: #fafafa; }
+
+  /* 05 · discoveries columns */
+  .ah-discs { display: grid; grid-template-columns: 1fr 1fr 1fr; margin-top: 44px; }
+  .ah-disc { display: flex; flex-direction: column; gap: 4px; padding: 0 36px; }
+  .ah-disc:first-child { padding-left: 0; }
+  .ah-disc:last-child { padding-right: 0; }
+  .ah-disc + .ah-disc { border-left: 1px solid rgba(255,255,255,.08); }
   .ah-stat {
     font-family: var(--md-code-font-family, monospace);
-    font-size: 42px;
+    font-size: 58px;
     font-weight: 500;
-    color: var(--acc-text);
+    color: #22d3ee;
     letter-spacing: -0.02em;
-    line-height: 1.1;
+    line-height: 1;
   }
-  .ah-disc { padding: 28px 26px 30px; }
-  .ah-disc h3 { font-size: 16.5px; }
+  [data-md-color-scheme="slate"] .ah-stat { text-shadow: 0 0 28px rgba(34,211,238,.35); }
+  .ah-disc-rule {
+    width: 86px;
+    height: 8px;
+    margin: 16px 0 8px;
+    background: repeating-linear-gradient(90deg, rgba(34,211,238,.55) 0 1px, transparent 1px 11px);
+  }
+  .ah-disc h3 { font-size: 17px; }
+  .ah-disc p { margin: 6px 0 0; font-size: 14px; line-height: 1.62; color: #a1a1aa; }
 
-  /* ══════════ 7 · Supported engines ══════════ */
-  .ah-eng-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  /* ══════════ 06 · Supported engines ══════════ */
+  .ah-eng-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-top: 34px;
+  }
   a.ah-eng {
     text-decoration: none;
     color: var(--ink);
-    background: var(--bg2);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 20px;
-    box-shadow: var(--shadow);
+    background: var(--sf);
+    padding: 17px 20px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    transition: border-color .15s;
+    transition: background .15s;
   }
-  a.ah-eng:hover { border-color: var(--acc-line); color: var(--ink); }
+  a.ah-eng:hover { background: var(--acc-soft); color: var(--ink); }
   .ah-eng-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   .ah-eng-name { font-size: 15.5px; font-weight: 600; }
   .ah-eng-port { font-family: var(--md-code-font-family, monospace); font-size: 11.5px; color: var(--fnt); }
   .ah-eng-tags { display: flex; gap: 6px; flex-wrap: wrap; font-family: var(--md-code-font-family, monospace); font-size: 10.5px; }
   .ah-eng-tags span { color: var(--mut); border: 1px solid var(--line2); border-radius: 999px; padding: 3px 9px; }
   .ah-eng-tags span.vram { color: var(--acc-text); border-color: var(--acc-line); }
-  .ah-eng-note { margin: 0; font-family: var(--md-code-font-family, monospace); font-size: 11.5px; color: var(--fnt); }
+  .ah-eng-note { margin: 16px 0 0; font-family: var(--md-code-font-family, monospace); font-size: 11.5px; color: var(--fnt); }
 
-  /* ══════════ 8 · What we measure ══════════ */
-  .ah-met-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  /* ══════════ 07 · What we measure ══════════ */
+  .ah-met-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px 0; margin-top: 34px; }
   .ah-met {
-    border: 1px solid var(--line);
-    background: var(--bg2);
-    border-radius: 12px;
-    padding: 18px 20px;
-    box-shadow: var(--shadow);
+    border-left: 1px solid var(--line2);
+    padding: 2px 18px 2px 20px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
   .ah-met h3 {
     font-family: var(--md-code-font-family, monospace);
@@ -530,44 +659,52 @@
   }
   .ah-met p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mut); }
 
-  /* ══════════ 9 · Leaderboard teaser ══════════ */
+  /* ══════════ 08 · Leaderboard teaser (proof band) ══════════ */
+  .ah-s08 .ah-wrap { padding: 58px 48px 72px; }
   .ah-lb-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
-  .ah-lb-link { color: var(--acc-text); text-decoration: none; font-size: 14.5px; font-weight: 500; white-space: nowrap; }
-  .ah-lb-link:hover { text-decoration: underline; color: var(--acc-text); }
-  .ah-lb-rows { display: flex; flex-direction: column; gap: 12px; }
+  .ah-lb-headl { flex: 1; min-width: min(420px, 100%); }
+  .ah-lb-link { color: #22d3ee; text-decoration: none; font-size: 14.5px; font-weight: 500; white-space: nowrap; }
+  .ah-lb-link:hover { text-decoration: underline; color: #22d3ee; }
+  .ah-s08 .ah-sub { display: flex; align-items: center; gap: 9px; }
+  .ah-lb-dot { width: 7px; height: 7px; border-radius: 50%; background: #22d3ee; animation: ah-pulse 1.6s ease infinite; flex: none; }
+  .ah-lb-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 32px; }
   .ah-lb-cols {
     display: grid;
-    grid-template-columns: 56px 1.5fr 1fr 1fr 150px 110px;
+    grid-template-columns: 54px 1.5fr .75fr 1.05fr 170px 84px;
     gap: 16px;
-    padding: 0 24px;
+    padding: 0 22px;
     font-family: var(--md-code-font-family, monospace);
     font-size: 10.5px;
-    letter-spacing: .12em;
-    color: var(--fnt);
+    letter-spacing: .14em;
+    color: #6f6f7a;
   }
+  .ah-lb-cols span { font: inherit; color: inherit; letter-spacing: inherit; }
   .ah-lb-row {
     display: grid;
-    grid-template-columns: 56px 1.5fr 1fr 1fr 150px 110px;
+    grid-template-columns: 54px 1.5fr .75fr 1.05fr 170px 84px;
     gap: 16px;
     align-items: center;
-    padding: 18px 24px;
-    background: var(--bg2);
-    border: 1px solid var(--line);
+    padding: 17px 22px;
+    background: #14141a;
+    border: 1px solid rgba(255,255,255,.07);
     border-radius: 12px;
-    box-shadow: var(--shadow);
   }
-  .ah-lb-row.top { background: var(--acc-soft); border-color: var(--acc-line); }
-  .ah-lb-rank { font-family: var(--md-code-font-family, monospace); font-size: 15px; color: var(--fnt); }
-  .ah-lb-row.top .ah-lb-rank { color: var(--acc-text); }
-  .ah-lb-model { font-family: var(--md-code-font-family, monospace); font-size: 13.5px; }
-  .ah-lb-dim { font-size: 13.5px; color: var(--mut); }
-  .ah-lb-toks { font-family: var(--md-code-font-family, monospace); font-size: 22px; font-weight: 500; text-align: right; }
-  .ah-lb-row.top .ah-lb-toks { color: var(--acc-text); }
-  .ah-lb-ttft { font-family: var(--md-code-font-family, monospace); font-size: 13px; color: var(--mut); text-align: right; }
-  .ah-lb-share { font-family: var(--md-code-font-family, monospace); font-size: 12px; color: var(--fnt); }
-  .ah-lb-share .cmd { color: var(--acc-text); }
+  .ah-lb-row.top { background: rgba(6,182,212,.09); border-color: rgba(6,182,212,.4); }
+  .ah-lb-rank { font-family: var(--md-code-font-family, monospace); font-size: 15px; color: #6f6f7a; }
+  .ah-lb-row.top .ah-lb-rank { color: #22d3ee; }
+  .ah-lb-model { font-family: var(--md-code-font-family, monospace); font-size: 14px; color: #fafafa; }
+  .ah-lb-engine { font-family: var(--md-code-font-family, monospace); font-size: 12.5px; color: #a1a1aa; }
+  .ah-lb-chip { font-size: 13.5px; color: #a1a1aa; }
+  .ah-lb-perf { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+  .ah-lb-toks { font-family: var(--md-code-font-family, monospace); font-size: 21px; font-weight: 500; color: #fafafa; line-height: 1; }
+  .ah-lb-row.top .ah-lb-toks { font-size: 28px; color: #22d3ee; }
+  .ah-lb-bar { height: 3px; border-radius: 2px; background: #3d4353; }
+  .ah-lb-row.top .ah-lb-bar { background: rgba(34,211,238,.85); }
+  .ah-lb-ttft { font-family: var(--md-code-font-family, monospace); font-size: 13px; color: #a1a1aa; text-align: right; }
+  .ah-lb-share { margin-top: 26px; font-family: var(--md-code-font-family, monospace); font-size: 12px; color: #6f6f7a; }
+  .ah-lb-share .cmd { color: #22d3ee; }
 
-  /* ══════════ 10 · Shareable cards ══════════ */
+  /* ══════════ 09 · Shareable card ══════════ */
   .ah-card-chip {
     font-family: var(--md-code-font-family, monospace);
     font-size: 13px;
@@ -578,20 +715,87 @@
     padding: 9px 16px;
     white-space: nowrap;
   }
-  .ah-cards-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 22px; align-items: start; }
-  .ah-cards-side { display: flex; flex-direction: column; gap: 22px; }
-  .ah-cards-grid img {
+  .ah-showcase {
+    position: relative;
+    margin-top: 32px;
+    background: var(--sf2);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 40px 56px 44px 44px;
+    overflow: hidden;
+  }
+  .ah-showcase-dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+    background-size: 22px 22px;
+    opacity: .75;
+    -webkit-mask-image: radial-gradient(ellipse at 45% 40%, black 30%, transparent 85%);
+    mask-image: radial-gradient(ellipse at 45% 40%, black 30%, transparent 85%);
+    pointer-events: none;
+  }
+  .ah-showcase-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.52fr 1fr;
+    gap: 26px;
+    align-items: start;
+  }
+  .ah-show-main { position: relative; }
+  .ah-cote-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .ah-cote-h .tick { width: 1px; height: 9px; background: var(--fnt); }
+  .ah-cote-h .rule { flex: 1; height: 1px; background: var(--line2); }
+  .ah-cote-label {
+    font-family: var(--md-code-font-family, monospace);
+    font-size: 10.5px;
+    color: var(--fnt);
+    letter-spacing: .08em;
+  }
+  .ah-cote-v {
+    position: absolute;
+    top: 33px;
+    bottom: 0;
+    right: -22px;
+    width: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .ah-cote-v .tick { width: 9px; height: 1px; background: var(--fnt); }
+  .ah-cote-v .rule { flex: 1; width: 1px; background: var(--line2); }
+  .ah-cote-v .ah-cote-label { writing-mode: vertical-rl; }
+  .ah-show-main > img {
     width: 100%;
     height: auto;
     display: block;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    box-shadow: var(--shadow);
+    border-radius: 13px;
+    border: 1px solid rgba(9,9,11,.18);
+    box-shadow: 0 36px 72px -30px rgba(9,9,11,.5);
   }
+  .ah-cards-side { display: flex; flex-direction: column; gap: 20px; padding-top: 22px; }
+  .ah-cards-side img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 11px;
+    border: 1px solid rgba(9,9,11,.16);
+    box-shadow: 0 24px 48px -24px rgba(9,9,11,.42);
+  }
+  [data-md-color-scheme="slate"] .ah-show-main > img,
+  [data-md-color-scheme="slate"] .ah-cards-side img { border-color: rgba(255,255,255,.12); }
 
-  /* ══════════ 11 · Footer ══════════ */
-  .ah-footer-wrap { padding: 44px 40px 56px; gap: 28px; }
-  .ah-footer-top { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+  /* ══════════ Footer ══════════ */
+  .ah-footer .ah-wrap { padding: 44px 48px 48px; }
+  .ah-footer-top {
+    border-top: 1px solid var(--line);
+    padding-top: 38px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
   .ah-footer-brand { display: flex; align-items: center; gap: 14px; }
   .ah-footer-brand img { width: 36px; height: 36px; display: block; }
   .ah-footer-brand-text { display: flex; flex-direction: column; gap: 2px; }
@@ -610,7 +814,8 @@
     font-size: 11.5px;
     color: var(--fnt);
     border-top: 1px solid var(--line);
-    padding-top: 20px;
+    margin-top: 26px;
+    padding-top: 18px;
   }
   .ah-footer-star a { color: var(--fnt); text-decoration: none; }
   .ah-footer-star a:hover { color: var(--acc-text); }
@@ -628,23 +833,40 @@
 
   /* ══════════ Responsive ══════════ */
   @media (max-width: 1040px) {
-    .ah-hero { grid-template-columns: 1fr; gap: 44px; padding: 56px 24px 64px; }
-    .asiai-home h1 { font-size: 42px; }
-    .ah-wrap { padding: 60px 24px 68px; }
+    .ah-hero-inner { padding: 56px 24px 44px; }
+    /* minmax(0,1fr): a grid track never shrinks below its item's
+       min-content — the API panels' JSON would otherwise stretch the
+       whole hero past the viewport on phones. */
+    .ah-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; }
+    .ah-hero-grid > * { min-width: 0; }
+    .ah-api-body > div { white-space: nowrap; }
+    .asiai-home h1, body.agent-mode .asiai-home h1 { font-size: 42px; }
+    .ah-hero-halo { display: none; }
+    .ah-wrap, .ah-s01 .ah-wrap, .ah-s06 .ah-wrap, .ah-s09 .ah-wrap,
+    .ah-proof .ah-wrap, .ah-s08 .ah-wrap, .ah-footer .ah-wrap { padding-left: 24px; padding-right: 24px; }
     .ah-met-grid { grid-template-columns: repeat(2, 1fr); }
-    .ah-lb-cols, .ah-lb-row { grid-template-columns: 40px 1.5fr 1fr 130px 90px; }
+    .ah-lb-cols, .ah-lb-row { grid-template-columns: 40px 1.5fr .75fr 130px 84px; }
     .ah-lb-chip { display: none; }
   }
   @media (max-width: 760px) {
-    .asiai-home h1 { font-size: 34px; }
-    .ah-grid-3, .ah-grid-2, .ah-steps, .ah-faq-grid, .ah-eng-grid, .ah-cards-grid { grid-template-columns: 1fr; }
+    .asiai-home h1, body.agent-mode .asiai-home h1 { font-size: 34px; }
+    .ah-pains, .ah-grid-2, .ah-eng-grid, .ah-faq-grid, .ah-showcase-grid { grid-template-columns: 1fr; }
     .ah-met-grid { grid-template-columns: repeat(2, 1fr); }
+    .ah-steps { grid-template-columns: 1fr; }
+    .ah-steps-thread { display: none; }
+    .ah-discs { grid-template-columns: 1fr; }
+    .ah-disc, .ah-disc:first-child, .ah-disc:last-child { padding: 22px 0; }
+    .ah-disc + .ah-disc { border-left: none; border-top: 1px solid rgba(255,255,255,.08); }
     .ah-lb-cols, .ah-lb-row { grid-template-columns: 32px 1.5fr 100px 70px; gap: 10px; padding-left: 14px; padding-right: 14px; }
     .ah-lb-engine { display: none; }
-    .ah-lb-toks { font-size: 17px; }
-    .ah-wrap { padding: 48px 18px 56px; }
-    .ah-hero { padding: 40px 18px 48px; }
-    .ah-footer-wrap { padding: 36px 18px 44px; }
+    .ah-lb-toks, .ah-lb-row.top .ah-lb-toks { font-size: 17px; }
+    .ah-hero-inner { padding: 40px 18px 40px; }
+    .ah-wrap, .ah-s01 .ah-wrap, .ah-s06 .ah-wrap, .ah-s09 .ah-wrap,
+    .ah-proof .ah-wrap, .ah-s08 .ah-wrap, .ah-footer .ah-wrap { padding-left: 18px; padding-right: 18px; }
+    .ah-showcase { padding: 22px 18px 24px; }
+    .ah-cote-v { display: none; }
+    .ah-cards-side { padding-top: 0; }
+    .ah-term { font-size: 11px; }
   }
 </style>
 
@@ -1087,146 +1309,159 @@
 
 <div class="asiai-home" id="asiai-content" role="main">
 
-  <!-- ══════════ 1 · Hero ══════════ -->
+  <!-- ══════════ Hero ══════════ -->
   <section class="ah-hero">
-    <div class="ah-hero-left">
-      <div class="ah-hero-brand">
-        <img src="{{ 'assets/logo.svg' | url }}" alt="asiai speedometer logo" width="40" height="40">
-        <span class="ah-eyebrow">Open source &middot; Apache 2.0 &middot; Zero dependencies</span>
-      </div>
-      <h1><span class="mode-human">{{ tr("hero_title") }}</span><span class="mode-agent">{{ tr("agent_hero_title") }}</span></h1>
-      <p class="ah-hero-tagline"><span class="mode-human">{{ tr("hero_tagline") }}</span><span class="mode-agent">{{ tr("agent_hero_tagline") }}</span></p>
+    <div class="ah-hero-halo" aria-hidden="true"></div>
+    <div class="ah-hero-inner">
+      <div class="ah-hero-grid">
+        <div class="ah-hero-left">
+          <div class="ah-hero-brand">
+            <img src="{{ 'assets/logo.svg' | url }}" alt="asiai speedometer logo" width="38" height="38">
+            <span class="ah-eyebrow">Open source &middot; Apache 2.0 &middot; Zero dependencies</span>
+          </div>
+          <h1><span class="mode-human">{{ tr("hero_title") }}</span><span class="mode-agent">{{ tr("agent_hero_title") }}</span></h1>
+          <p class="ah-hero-tagline"><span class="mode-human">{{ tr("hero_tagline") }}</span><span class="mode-agent">{{ tr("agent_hero_tagline") }}</span></p>
 
-      <div class="ah-hero-install ah-mono">
-        <div class="row"><span class="p">$</span><span>pip install asiai</span></div>
-        <div class="row"><span class="p">$</span><span>asiai bench</span><span class="c"># 15s &rarr; your first comparison</span></div>
-      </div>
+          <div class="ah-hero-install">
+            <div class="rows">
+              <div class="row"><span class="p">$</span><span>pip install asiai</span></div>
+              <div class="row"><span class="p">$</span><span>asiai bench</span><span class="c"># 15s &rarr; your first comparison</span></div>
+            </div>
+            <button class="ah-copy-btn" id="ah-copy-install" type="button" aria-label="Copy install command" title="Copy: pip install asiai">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="2" stroke="currentColor" stroke-width="1.3"></rect><path d="M11.5 4.5v-1a2 2 0 0 0-2-2h-5a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1" stroke="currentColor" stroke-width="1.3"></path></svg>
+            </button>
+          </div>
 
-      <div class="ah-cta-group">
-        <a href="getting-started/" class="ah-btn ah-btn-primary mode-human">{{ tr("cta_start") }}</a>
-        <a href="leaderboard/" class="ah-btn ah-btn-secondary mode-human">{{ tr("cta_leaderboard") }}</a>
-        <a href="https://github.com/druide67/asiai" class="ah-btn ah-btn-secondary mode-human">GitHub</a>
-        <a href="agent/" class="ah-btn ah-btn-primary mode-agent">{{ tr("agent_cta_guide") }}</a>
-        <a href="agent/#api-reference" class="ah-btn ah-btn-secondary mode-agent">{{ tr("agent_cta_api") }}</a>
-        <a href="https://asiai.dev/llms.txt" class="ah-btn ah-btn-secondary mode-agent" id="copy-url-btn" title="llms.txt">{{ tr("agent_cta_copy") }}</a>
-      </div>
-      <div class="ah-hero-foot">Python 3.11+ &middot; stdlib only &middot; 9 engines auto-detected &middot; agent-ready API</div>
-
-      <div class="mode-toggle" id="mode-toggle">
-        <span class="mode-label mode-active" id="mode-human-label">{{ tr("mode_human") }}</span>
-        <button class="toggle-switch" id="toggle-switch" role="switch" aria-checked="false" aria-label="Toggle Human / AI Agent mode">
-          <span class="toggle-slider"></span>
-        </button>
-        <span class="mode-label" id="mode-agent-label">{{ tr("mode_agent") }}</span>
-      </div>
-      <div class="agent-count-banner" id="agent-count-banner"
-           data-tpl-join="{{ tr('agent_count_join') }}"
-           data-tpl-trust="{{ tr('agent_count_trust') }}"></div>
-    </div>
-
-    <!-- Hero visual A · animated terminal (human mode) -->
-    <div class="ah-hero-visual mode-human">
-      <div class="ah-term" aria-hidden="true">
-        <div class="ah-term-bar">
-          <span class="ah-term-dot" style="background:#ff5f57;"></span>
-          <span class="ah-term-dot" style="background:#febc2e;"></span>
-          <span class="ah-term-dot" style="background:#28c840;"></span>
-          <span class="ah-term-title">asiai bench &mdash; zsh</span>
-          <span class="ah-term-tag">THROUGHPUT</span>
+          <div class="ah-cta-group">
+            <a href="getting-started/" class="ah-btn ah-btn-primary mode-human">{{ tr("cta_start") }}</a>
+            <a href="leaderboard/" class="ah-btn ah-btn-secondary mode-human">{{ tr("cta_leaderboard") }}</a>
+            <a href="https://github.com/druide67/asiai" class="ah-btn ah-btn-secondary mode-human">GitHub</a>
+            <a href="agent/" class="ah-btn ah-btn-primary mode-agent">{{ tr("agent_cta_guide") }}</a>
+            <a href="agent/#api-reference" class="ah-btn ah-btn-secondary mode-agent">{{ tr("agent_cta_api") }}</a>
+            <a href="https://asiai.dev/llms.txt" class="ah-btn ah-btn-secondary mode-agent" id="copy-url-btn" title="llms.txt">{{ tr("agent_cta_copy") }}</a>
+          </div>
+          <div class="ah-hero-foot">Python 3.11+ &middot; stdlib only &middot; 9 engines auto-detected &middot; agent-ready API</div>
         </div>
-        <div class="ah-term-body">
-          <div style="display:flex;"><span class="dim">$&nbsp;</span><span class="cmd">asiai bench -m mtplx-qwen36-27b-optimized-speed</span></div>
-          <div class="dim li" style="animation-delay:1.8s;">&#x2714; mlx-lm 0.31.3_2 detected &middot; warmup &middot; n=5 per prompt</div>
-          <div style="height:6px;"></div>
-          <div class="ah-term-row li" style="animation-delay:2.4s;">
-            <span class="cyan">reasoning</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:100%; background:#06b6d4; animation-delay:2.5s;"></span></span>
-            <span style="text-align:right;">52.4</span>
-          </div>
-          <div class="ah-term-row li" style="animation-delay:2.6s;">
-            <span class="grey">code</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:95%; background:#3b4254; animation-delay:2.7s;"></span></span>
-            <span class="grey" style="text-align:right;">49.7</span>
-          </div>
-          <div class="ah-term-row li" style="animation-delay:2.8s;">
-            <span class="grey">tool_call</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:91%; background:#3b4254; animation-delay:2.9s;"></span></span>
-            <span class="grey" style="text-align:right;">47.7</span>
-          </div>
-          <div class="ah-term-row li" style="animation-delay:3.0s;">
-            <span class="grey">long_gen</span>
-            <span class="ah-term-track"><span class="ah-term-fill" style="width:85%; background:#3b4254; animation-delay:3.1s;"></span></span>
-            <span class="grey" style="text-align:right;">44.5</span>
-          </div>
-          <div style="height:6px;"></div>
-          <div class="cyan li" style="animation-delay:4.1s;">&rarr; median 48.2 tok/s &plusmn;1 CI95 &middot; Apple M5 Max</div>
-          <div class="dim li" style="animation-delay:4.6s;">&#x2713; card saved &rarr; ~/.local/share/asiai/cards/</div>
-          <div class="li" style="display:flex; animation-delay:5.1s;"><span class="dim">$&nbsp;</span><span class="ah-term-caret"></span></div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Hero visual B · API previews (agent mode) -->
-    <div class="ah-hero-visual ah-api-stack mode-agent">
-      <div class="ah-api">
-        <div class="ah-api-header">
-          <span class="ah-api-method">GET</span>
-          <span class="ah-api-url">/api/status</span>
-          <span class="ah-api-badge">&#x2264; 500ms</span>
+        <!-- Hero visual A · animated terminal (human mode) -->
+        <div class="ah-hero-visual mode-human">
+          <div class="ah-term" aria-hidden="true">
+            <div class="ah-term-bar">
+              <span class="ah-term-dot" style="background:#ff5f57;"></span>
+              <span class="ah-term-dot" style="background:#febc2e;"></span>
+              <span class="ah-term-dot" style="background:#28c840;"></span>
+              <span class="ah-term-title">asiai bench &mdash; zsh</span>
+              <span class="ah-term-tag">THROUGHPUT</span>
+            </div>
+            <div class="ah-term-body">
+              <div style="display:flex;"><span class="dim">$&nbsp;</span><span class="cmd">asiai bench -m mtplx-qwen36-27b-optimized-speed</span></div>
+              <div class="dim li" style="animation-delay:1.8s;">&#x2714; mlx-lm 0.31.3_2 detected &middot; warmup &middot; n=5 per prompt</div>
+              <div style="height:6px;"></div>
+              <div class="ah-term-row li" style="animation-delay:2.4s;">
+                <span class="cyan">reasoning</span>
+                <span class="ah-term-track"><span class="ah-term-fill" style="width:100%; background:#06b6d4; animation-delay:2.5s;"></span></span>
+                <span style="text-align:right;">52.4</span>
+              </div>
+              <div class="ah-term-row li" style="animation-delay:2.6s;">
+                <span class="grey">code</span>
+                <span class="ah-term-track"><span class="ah-term-fill" style="width:95%; background:#3b4254; animation-delay:2.7s;"></span></span>
+                <span class="grey" style="text-align:right;">49.7</span>
+              </div>
+              <div class="ah-term-row li" style="animation-delay:2.8s;">
+                <span class="grey">tool_call</span>
+                <span class="ah-term-track"><span class="ah-term-fill" style="width:91%; background:#3b4254; animation-delay:2.9s;"></span></span>
+                <span class="grey" style="text-align:right;">47.7</span>
+              </div>
+              <div class="ah-term-row li" style="animation-delay:3.0s;">
+                <span class="grey">long_gen</span>
+                <span class="ah-term-track"><span class="ah-term-fill" style="width:85%; background:#3b4254; animation-delay:3.1s;"></span></span>
+                <span class="grey" style="text-align:right;">44.5</span>
+              </div>
+              <div style="height:6px;"></div>
+              <div class="cyan li" style="animation-delay:4.1s;">&rarr; median 48.2 tok/s &plusmn;1 CI95 &middot; Apple M5 Max</div>
+              <div class="dim li" style="animation-delay:4.6s;">&#x2713; card saved &rarr; ~/.local/share/asiai/cards/</div>
+              <div class="li" style="display:flex; animation-delay:5.1s;"><span class="dim">$&nbsp;</span><span class="ah-term-caret"></span></div>
+            </div>
+          </div>
         </div>
-        <pre class="ah-api-body">{
-  "chip": "Apple M4 Pro",
-  "ram_gb": 64.0,
-  "memory_pressure": "normal",
-  "gpu_utilization_percent": 45.2,
-  "engines": {
-    "ollama": { "running": true, "models_loaded": 2 },
-    "lmstudio": { "running": true, "models_loaded": 1 }
+
+        <!-- Hero visual B · API previews (agent mode) -->
+        <div class="ah-hero-visual ah-api-stack mode-agent">
+          <div class="ah-api">
+            <div class="ah-api-header">
+              <span class="ah-api-method">GET</span>
+              <span class="ah-api-url">/api/status</span>
+              <span class="ah-api-badge"><span class="ah-api-dot" aria-hidden="true"></span>&#x2264; 500ms</span>
+            </div>
+            <pre class="ah-api-body">{
+  <span class="k">"chip"</span>: <span class="s">"Apple M4 Pro"</span>,
+  <span class="k">"ram_gb"</span>: <span class="n">64.0</span>,
+  <span class="k">"memory_pressure"</span>: <span class="s">"normal"</span>,
+  <span class="k">"gpu_utilization_percent"</span>: <span class="n">45.2</span>,
+  <span class="k">"engines"</span>: {
+    <span class="k">"ollama"</span>: { <span class="k">"running"</span>: <span class="n">true</span>, <span class="k">"models_loaded"</span>: <span class="n">2</span> },
+    <span class="k">"lmstudio"</span>: { <span class="k">"running"</span>: <span class="n">true</span>, <span class="k">"models_loaded"</span>: <span class="n">1</span> }
   }
 }</pre>
-      </div>
-      <div class="ah-api">
-        <div class="ah-api-header">
-          <span class="ah-api-method">GET</span>
-          <span class="ah-api-url">/api/snapshot</span>
-          <span class="ah-api-badge">Full state</span>
-        </div>
-        <pre class="ah-api-body">{
-  "system": {
-    "chip": "Apple M4 Pro",
-    "gpu_cores": 20,
-    "gpu_utilization_percent": 45.2,
-    "thermal_state": "nominal"
+          </div>
+          <div class="ah-api">
+            <div class="ah-api-header">
+              <span class="ah-api-method">GET</span>
+              <span class="ah-api-url">/api/snapshot</span>
+              <span class="ah-api-badge">Full state</span>
+            </div>
+            <pre class="ah-api-body">{
+  <span class="k">"system"</span>: {
+    <span class="k">"chip"</span>: <span class="s">"Apple M4 Pro"</span>,
+    <span class="k">"gpu_cores"</span>: <span class="n">20</span>,
+    <span class="k">"gpu_utilization_percent"</span>: <span class="n">45.2</span>,
+    <span class="k">"thermal_state"</span>: <span class="s">"nominal"</span>
   },
-  "engines": [{
-    "name": "ollama",
-    "models": [{ "name": "qwen3.5:latest", "size_params": "35B" }]
+  <span class="k">"engines"</span>: [{
+    <span class="k">"name"</span>: <span class="s">"ollama"</span>,
+    <span class="k">"models"</span>: [{ <span class="k">"name"</span>: <span class="s">"qwen3.5:latest"</span>, <span class="k">"size_params"</span>: <span class="s">"35B"</span> }]
   }]
 }</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mode bar: Human / AI Agent pill + agent count -->
+      <div class="ah-modebar">
+        <span class="ah-mode-pill" id="mode-toggle" role="group" aria-label="Human / AI Agent mode">
+          <button class="ah-mode-btn active" id="mode-human-btn" type="button" aria-pressed="true">{{ tr("mode_human") }}</button>
+          <button class="ah-mode-btn" id="mode-agent-btn" type="button" aria-pressed="false"><span class="ah-mode-dot" aria-hidden="true"></span>{{ tr("mode_agent") }}</button>
+        </span>
+        <div class="agent-count-banner" id="agent-count-banner"
+             data-tpl-join="{{ tr('agent_count_join') }}"
+             data-tpl-trust="{{ tr('agent_count_trust') }}"></div>
       </div>
     </div>
   </section>
 
-  <!-- ══════════ 2 · The Local LLM Problem ══════════ -->
-  <section class="ah-section">
+  <!-- ══════════ 01 · The Local LLM Problem ══════════ -->
+  <section class="ah-s01">
     <div class="ah-wrap">
-      <div class="ah-head">
-        <h2>{{ tr("pain_title") }}</h2>
-        <p class="ah-sub">{{ tr("pain_subtitle") }}</p>
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">01&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
-      <div class="ah-grid-3">
-        <div class="ah-card">
-          <span class="ah-card-num">01</span>
+      <h2>{{ tr("pain_title") }}</h2>
+      <p class="ah-sub">{{ tr("pain_subtitle") }}</p>
+      <div class="ah-pains">
+        <div class="ah-pain">
+          <span class="ah-pain-num">01</span>
           <h3>{{ tr("pain1_title") }}</h3>
           <p>{{ tr("pain1_desc") }}</p>
         </div>
-        <div class="ah-card">
-          <span class="ah-card-num">02</span>
+        <div class="ah-pain">
+          <span class="ah-pain-num">02</span>
           <h3>{{ tr("pain2_title") }}</h3>
           <p>{{ tr("pain2_desc") }}</p>
         </div>
-        <div class="ah-card">
-          <span class="ah-card-num">03</span>
+        <div class="ah-pain">
+          <span class="ah-pain-num">03</span>
           <h3>{{ tr("pain3_title") }}</h3>
           <p>{{ tr("pain3_desc") }}</p>
         </div>
@@ -1234,13 +1469,16 @@
     </div>
   </section>
 
-  <!-- ══════════ 3 · One CLI. Four surfaces. ══════════ -->
-  <section class="ah-section">
-    <div class="ah-wrap" style="gap:40px;">
-      <div class="ah-head">
-        <h2>{{ tr("surf_title") }}</h2>
-        <p class="ah-sub">{{ tr("surf_subtitle") }}</p>
+  <!-- ══════════ 02 · One CLI. Four surfaces. ══════════ -->
+  <section class="ah-s02">
+    <div class="ah-wrap">
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">02&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
+      <h2>{{ tr("surf_title") }}</h2>
+      <p class="ah-sub">{{ tr("surf_subtitle") }}</p>
       <div class="ah-grid-2">
 
         <div class="ah-tile">
@@ -1250,7 +1488,7 @@
           <div class="ah-tile-text">
             <h3>{{ tr("surf1_t") }}</h3>
             <p>{{ tr("surf1_d") }}</p>
-            <span class="ah-tile-cmd">asiai bench</span>
+            <span class="ah-tile-cmd"><span class="p">$ </span>asiai bench</span>
           </div>
         </div>
 
@@ -1261,7 +1499,7 @@
           <div class="ah-tile-text">
             <h3>{{ tr("surf2_t") }}</h3>
             <p>{{ tr("surf2_d") }}</p>
-            <span class="ah-tile-cmd">asiai web</span>
+            <span class="ah-tile-cmd"><span class="p">$ </span>asiai web</span>
           </div>
         </div>
 
@@ -1272,7 +1510,7 @@
           <div class="ah-tile-text">
             <h3>{{ tr("surf3_t") }}</h3>
             <p>{{ tr("surf3_d") }}</p>
-            <span class="ah-tile-cmd">asiai fleet</span>
+            <span class="ah-tile-cmd"><span class="p">$ </span>asiai fleet</span>
           </div>
         </div>
 
@@ -1280,15 +1518,15 @@
           <div class="ah-tile-shot term-mini" aria-hidden="true">
             <div class="rows">
               <div style="display:flex;"><span style="color:#6f6f7a;">$&nbsp;</span><span style="color:#e4e4e7;">asiai leaderboard</span></div>
-              <div class="lb-mini"><span style="color:#22d3ee; text-align:right;">1</span><span>llama-3.2-3b</span><span>mlx-lm</span><span>M4 Max</span><span style="color:#e4e4e7; text-align:right;">228.0</span></div>
-              <div class="lb-mini"><span style="color:#6f6f7a; text-align:right;">2</span><span>qwen3.6-35b-a3b</span><span>ollama</span><span>M5 Max</span><span style="text-align:right;">124.9</span></div>
-              <div class="lb-mini"><span style="color:#6f6f7a; text-align:right;">3</span><span>gemma-4-31b-it</span><span>ollama</span><span>M5 Max</span><span style="text-align:right;">115.8</span></div>
+              <div class="lb-mini"><span style="color:#22d3ee; text-align:right;">1</span><span>llama-3.2-3b</span><span>mlxlm</span><span>M4 Max</span><span style="color:#e4e4e7; text-align:right;">228.0</span></div>
+              <div class="lb-mini"><span style="color:#6f6f7a; text-align:right;">2</span><span>qwen3.6:35b-a3b</span><span>ollama</span><span>M5 Max</span><span style="text-align:right;">124.9</span></div>
+              <div class="lb-mini"><span style="color:#6f6f7a; text-align:right;">3</span><span>gemma-4-31b</span><span>ollama</span><span>M5 Max</span><span style="text-align:right;">115.8</span></div>
             </div>
           </div>
           <div class="ah-tile-text">
             <h3>{{ tr("surf4_t") }}</h3>
             <p>{{ tr("surf4_d") }}</p>
-            <span class="ah-tile-cmd">asiai leaderboard</span>
+            <span class="ah-tile-cmd"><span class="p">$ </span>asiai leaderboard</span>
           </div>
         </div>
 
@@ -1296,13 +1534,16 @@
     </div>
   </section>
 
-  <!-- ══════════ 4 · What Will You Discover? ══════════ -->
-  <section class="ah-section">
+  <!-- ══════════ 03 · What Will You Discover? ══════════ -->
+  <section class="ah-s03">
     <div class="ah-wrap">
-      <div class="ah-head">
-        <h2>{{ tr("uc_title") }}</h2>
-        <p class="ah-sub">{{ tr("uc_subtitle") }}</p>
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">03&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
+      <h2>{{ tr("uc_title") }}</h2>
+      <p class="ah-sub">{{ tr("uc_subtitle") }}</p>
       <div class="ah-faq-grid">
         {% for i in range(1, 13) %}
         <details class="ah-faq"{% if loop.first %} open{% endif %}>
@@ -1314,78 +1555,91 @@
     </div>
   </section>
 
-  <!-- ══════════ 5 · Quickstart ══════════ -->
-  <section class="ah-section">
-    <div class="ah-wrap" style="gap:40px;">
-      <div class="ah-head">
-        <h2>{{ tr("how_title") }}</h2>
-        <p class="ah-sub">{{ tr("how_subtitle") }}</p>
+  <!-- ══════════ 04 · Quickstart ══════════ -->
+  <section class="ah-s04">
+    <div class="ah-wrap">
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">04&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
-      <div class="ah-steps">
+      <h2>{{ tr("how_title") }}</h2>
+      <p class="ah-sub">{{ tr("how_subtitle") }}</p>
+      <div class="ah-steps-wrap">
+        <span class="ah-steps-thread" aria-hidden="true"></span>
+        <div class="ah-steps">
 
-        <div class="ah-step">
-          <div class="ah-step-head">
-            <span class="ah-step-num">1</span>
-            <h3>{{ tr("step1") }}</h3>
+          <div class="ah-step">
+            <div class="ah-step-head">
+              <span class="ah-step-num">1</span>
+              <h3>{{ tr("step1") }}</h3>
+            </div>
+            <div class="ah-step-code">
+              <div><span class="dim">$ </span>brew install druide67/tap/asiai</div>
+              <div class="dim"># or: pip install asiai</div>
+            </div>
           </div>
-          <div class="ah-step-code">
-            <div><span class="dim">$ </span>brew install druide67/tap/asiai</div>
-            <div class="dim"># or: pip install asiai</div>
+
+          <div class="ah-step">
+            <div class="ah-step-head">
+              <span class="ah-step-num">2</span>
+              <h3>{{ tr("step2") }}</h3>
+            </div>
+            <div class="ah-step-code">
+              <div><span class="dim">$ </span>asiai detect</div>
+              <div><span class="ok">&#x2714;</span> ollama <span class="dim">(11434)</span></div>
+              <div><span class="ok">&#x2714;</span> lmstudio <span class="dim">(1234)</span></div>
+              <div><span class="ok">&#x2714;</span> mlx-lm <span class="dim">(8080)</span></div>
+              <div class="cyan">&rarr; {{ tr("step2_out") }}</div>
+            </div>
           </div>
+
+          <div class="ah-step">
+            <div class="ah-step-head">
+              <span class="ah-step-num">3</span>
+              <h3>{{ tr("step3") }}</h3>
+            </div>
+            <div class="ah-step-code">
+              <div><span class="dim">$ </span>asiai bench -m qwen3.5</div>
+              <div class="tbl dim"><span>ENGINE</span><span class="r">TOK/S</span><span class="r">TTFT</span></div>
+              <div class="tbl"><span class="cyan">lmstudio</span><span class="r">71.2</span><span class="r grey">42ms</span></div>
+              <div class="tbl"><span>ollama</span><span class="r grey">54.8</span><span class="r grey">61ms</span></div>
+              <div class="tbl"><span>mlx-lm</span><span class="r grey">30.1</span><span class="r grey">38ms</span></div>
+            </div>
+          </div>
+
         </div>
-
-        <div class="ah-step">
-          <div class="ah-step-head">
-            <span class="ah-step-num">2</span>
-            <h3>{{ tr("step2") }}</h3>
-          </div>
-          <div class="ah-step-code">
-            <div><span class="dim">$ </span>asiai detect</div>
-            <div><span class="ok">&#x2714;</span> ollama <span class="dim">(11434)</span></div>
-            <div><span class="ok">&#x2714;</span> lmstudio <span class="dim">(1234)</span></div>
-            <div><span class="ok">&#x2714;</span> mlx-lm <span class="dim">(8080)</span></div>
-            <div class="cyan">&rarr; {{ tr("step2_out") }}</div>
-          </div>
-        </div>
-
-        <div class="ah-step">
-          <div class="ah-step-head">
-            <span class="ah-step-num">3</span>
-            <h3>{{ tr("step3") }}</h3>
-          </div>
-          <div class="ah-step-code">
-            <div><span class="dim">$ </span>asiai bench -m qwen3.5</div>
-            <div class="tbl dim"><span>ENGINE</span><span class="r">TOK/S</span><span class="r">TTFT</span></div>
-            <div class="tbl"><span class="cyan">lmstudio</span><span class="r">71.2</span><span class="r grey">42ms</span></div>
-            <div class="tbl"><span>ollama</span><span class="r grey">54.8</span><span class="r grey">61ms</span></div>
-            <div class="tbl"><span>mlx-lm</span><span class="r grey">30.1</span><span class="r grey">38ms</span></div>
-          </div>
-        </div>
-
       </div>
     </div>
   </section>
 
-  <!-- ══════════ 6 · Real Discoveries ══════════ -->
-  <section class="ah-section">
+  <!-- ══════════ 05 · Real Discoveries — proof band ══════════ -->
+  <section class="ah-proof ah-s05">
+    <div class="ah-graticule" aria-hidden="true"><span></span><span></span></div>
     <div class="ah-wrap">
-      <div class="ah-head">
-        <h2>{{ tr("disc_title") }}</h2>
-        <p class="ah-sub">{{ tr("disc_subtitle") }}</p>
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">05&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
-      <div class="ah-grid-3">
-        <div class="ah-card ah-disc">
+      <h2>{{ tr("disc_title") }}</h2>
+      <p class="ah-sub">{{ tr("disc_subtitle") }}</p>
+      <div class="ah-discs">
+        <div class="ah-disc">
           <span class="ah-stat">2.3&times;</span>
+          <span class="ah-disc-rule" aria-hidden="true"></span>
           <h3>MLX vs llama.cpp</h3>
           <p>{{ tr("disc1_d") }}</p>
         </div>
-        <div class="ah-card ah-disc">
+        <div class="ah-disc">
           <span class="ah-stat">Flat</span>
+          <span class="ah-disc-rule" aria-hidden="true"></span>
           <h3>{{ tr("disc2_t") }}</h3>
           <p>{{ tr("disc2_d") }}</p>
         </div>
-        <div class="ah-card ah-disc">
+        <div class="ah-disc">
           <span class="ah-stat">30 vs 71</span>
+          <span class="ah-disc-rule" aria-hidden="true"></span>
           <h3>{{ tr("disc3_t") }}</h3>
           <p>{{ tr("disc3_d") }}</p>
         </div>
@@ -1393,13 +1647,16 @@
     </div>
   </section>
 
-  <!-- ══════════ 7 · Supported Engines ══════════ -->
-  <section class="ah-section">
+  <!-- ══════════ 06 · Supported Engines ══════════ -->
+  <section class="ah-s06">
     <div class="ah-wrap">
-      <div class="ah-head">
-        <h2>{{ tr("eng_title") }}</h2>
-        <p class="ah-sub">{{ tr("eng_subtitle") }}</p>
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">06&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
+      <h2>{{ tr("eng_title") }}</h2>
+      <p class="ah-sub">{{ tr("eng_subtitle") }}</p>
       {% set engines = [
         ("Ollama", "engines/ollama/", ":11434", "native", ["GGUF"], true),
         ("LM Studio", "engines/lmstudio/", ":1234", "compat", ["GGUF + MLX"], true),
@@ -1427,13 +1684,16 @@
     </div>
   </section>
 
-  <!-- ══════════ 8 · What We Measure ══════════ -->
-  <section class="ah-section">
+  <!-- ══════════ 07 · What We Measure ══════════ -->
+  <section class="ah-s07">
     <div class="ah-wrap">
-      <div class="ah-head">
-        <h2>{{ tr("met_title") }}</h2>
-        <p class="ah-sub">{{ tr("met_subtitle") }}</p>
+      <div class="ah-rail" aria-hidden="true">
+        <span class="ah-rail-num">07&nbsp;/&nbsp;09</span>
+        <span class="ah-rail-line"></span>
+        <span class="ah-rail-ticks"><span></span><span></span><span></span><span class="hi"></span></span>
       </div>
+      <h2>{{ tr("met_title") }}</h2>
+      <p class="ah-sub">{{ tr("met_subtitle") }}</p>
       {% set metrics = [
         ("tok/s", "m_toks"), ("TTFT", "m_ttft"), ("Power (W)", "m_power"), ("tok/s/W", "m_eff"),
         ("Stability", "m_stab"), ("VRAM", "m_vram"), ("Thermal", "m_therm"), ("Context", "m_ctx"),
@@ -1449,13 +1709,18 @@
     </div>
   </section>
 
-  <!-- ══════════ 9 · Leaderboard teaser ══════════ -->
-  <section class="ah-section">
-    <div class="ah-wrap" style="gap:32px;">
+  <!-- ══════════ 08 · Leaderboard teaser — proof band ══════════ -->
+  <section class="ah-proof ah-s08">
+    <div class="ah-graticule" aria-hidden="true"><span></span><span></span></div>
+    <div class="ah-wrap">
       <div class="ah-lb-head">
-        <div class="ah-head">
+        <div class="ah-lb-headl">
+          <div class="ah-rail" aria-hidden="true">
+            <span class="ah-rail-num">08&nbsp;/&nbsp;09</span>
+            <span class="ah-rail-line"></span>
+          </div>
           <h2>{{ tr("lb_title") }}</h2>
-          <p class="ah-sub">{{ tr("lb_subtitle") }}</p>
+          <p class="ah-sub"><span class="ah-lb-dot" aria-hidden="true"></span>{{ tr("lb_subtitle") }}</p>
         </div>
         <a href="leaderboard/" class="ah-lb-link">{{ tr("lb_full") }} &rarr;</a>
       </div>
@@ -1467,25 +1732,25 @@
         <div class="ah-lb-row top">
           <span class="ah-lb-rank">01</span>
           <span class="ah-lb-model">llama-3.2-3b-instruct-4bit</span>
-          <span class="ah-lb-dim ah-lb-engine">mlx-lm</span>
-          <span class="ah-lb-dim ah-lb-chip">Apple M4 Max &middot; 64 GB</span>
-          <span class="ah-lb-toks">228.0</span>
+          <span class="ah-lb-engine">mlxlm</span>
+          <span class="ah-lb-chip">Apple M4 Max &middot; 64 GB</span>
+          <span class="ah-lb-perf"><span class="ah-lb-toks">228.0</span><span class="ah-lb-bar" style="width:100%;" aria-hidden="true"></span></span>
           <span class="ah-lb-ttft">88 ms</span>
         </div>
         <div class="ah-lb-row">
           <span class="ah-lb-rank">02</span>
-          <span class="ah-lb-model">qwen3.6-35b-a3b &middot; nvfp4</span>
-          <span class="ah-lb-dim ah-lb-engine">ollama</span>
-          <span class="ah-lb-dim ah-lb-chip">Apple M5 Max &middot; 128 GB</span>
-          <span class="ah-lb-toks">124.9</span>
+          <span class="ah-lb-model">qwen3.6:35b-a3b-nvfp4</span>
+          <span class="ah-lb-engine">ollama</span>
+          <span class="ah-lb-chip">Apple M5 Max &middot; 128 GB</span>
+          <span class="ah-lb-perf"><span class="ah-lb-toks">124.9</span><span class="ah-lb-bar" style="width:55%;" aria-hidden="true"></span></span>
           <span class="ah-lb-ttft">39 ms</span>
         </div>
         <div class="ah-lb-row">
           <span class="ah-lb-rank">03</span>
           <span class="ah-lb-model">gemma-4-31b-it</span>
-          <span class="ah-lb-dim ah-lb-engine">ollama</span>
-          <span class="ah-lb-dim ah-lb-chip">Apple M5 Max &middot; 128 GB</span>
-          <span class="ah-lb-toks">115.8</span>
+          <span class="ah-lb-engine">ollama</span>
+          <span class="ah-lb-chip">Apple M5 Max &middot; 128 GB</span>
+          <span class="ah-lb-perf"><span class="ah-lb-toks">115.8</span><span class="ah-lb-bar" style="width:51%;" aria-hidden="true"></span></span>
           <span class="ah-lb-ttft">64 ms</span>
         </div>
       </div>
@@ -1494,29 +1759,52 @@
     </div>
   </section>
 
-  <!-- ══════════ 10 · Shareable card ══════════ -->
-  <section class="ah-section">
-    <div class="ah-wrap" style="padding-bottom:92px;">
+  <!-- ══════════ 09 · Shareable card ══════════ -->
+  <section class="ah-s09">
+    <div class="ah-wrap">
       <div class="ah-lb-head">
-        <div class="ah-head">
+        <div class="ah-lb-headl">
+          <div class="ah-rail" aria-hidden="true">
+            <span class="ah-rail-num">09&nbsp;/&nbsp;09</span>
+            <span class="ah-rail-line"></span>
+          </div>
           <h2>{{ tr("card_title") }}</h2>
           <p class="ah-sub" style="max-width:62ch;">{{ tr("card_subtitle") }}</p>
         </div>
         <span class="ah-card-chip">asiai bench --card</span>
       </div>
-      <div class="ah-cards-grid">
-        <img src="{{ 'assets/home/card-throughput.png' | url }}" alt="asiai throughput card — mtplx-qwen36-27b-optimized-speed on mlx-lm at 48.2 tok/s median (±1 CI95, n=5), Apple M5 Max" loading="lazy" width="1200" height="630">
-        <div class="ah-cards-side">
-          <img src="{{ 'assets/home/card-agentic.png' | url }}" alt="asiai agentic card — prefix-cache reuse fraction 0.80 across cold, warm and prefix phases, Qwen3.6-27B on llama.cpp" loading="lazy" width="1200" height="630">
-          <img src="{{ 'assets/home/card-quality.png' | url }}" alt="asiai code-quality card — tool_call, recovery and thinking suites at 100%, deterministic grading, Qwen3.6-27B on llama.cpp" loading="lazy" width="1200" height="630">
+      <div class="ah-showcase">
+        <span class="ah-showcase-dots" aria-hidden="true"></span>
+        <div class="ah-showcase-grid">
+          <div class="ah-show-main">
+            <div class="ah-cote-h" aria-hidden="true">
+              <span class="tick"></span>
+              <span class="rule"></span>
+              <span class="ah-cote-label">1200</span>
+              <span class="rule"></span>
+              <span class="tick"></span>
+            </div>
+            <img src="{{ 'assets/home/card-throughput.png' | url }}" alt="asiai throughput card — mtplx-qwen36-27b-optimized-speed on mlx-lm at 48.2 tok/s median (±1 CI95, n=5), Apple M5 Max" loading="lazy" width="1200" height="630">
+            <div class="ah-cote-v" aria-hidden="true">
+              <span class="tick"></span>
+              <span class="rule"></span>
+              <span class="ah-cote-label">630</span>
+              <span class="rule"></span>
+              <span class="tick"></span>
+            </div>
+          </div>
+          <div class="ah-cards-side">
+            <img src="{{ 'assets/home/card-agentic.png' | url }}" alt="asiai agentic card — prefix-cache reuse fraction 0.80 across cold, warm and prefix phases, Qwen3.6-27B on llama.cpp" loading="lazy" width="1200" height="630">
+            <img src="{{ 'assets/home/card-quality.png' | url }}" alt="asiai code-quality card — tool_call, recovery and thinking suites at 100%, deterministic grading, Qwen3.6-27B on llama.cpp" loading="lazy" width="1200" height="630">
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ══════════ 11 · Footer ══════════ -->
-  <footer class="ah-section">
-    <div class="ah-wrap ah-footer-wrap">
+  <!-- ══════════ Footer ══════════ -->
+  <footer class="ah-footer">
+    <div class="ah-wrap">
       <div class="ah-footer-top">
         <div class="ah-footer-brand">
           <img src="{{ 'assets/logo.svg' | url }}" alt="asiai logo" width="36" height="36">
@@ -1554,30 +1842,25 @@
 
 <script>
 (function() {
-  var toggle = document.getElementById('toggle-switch');
-  var humanLabel = document.getElementById('mode-human-label');
-  var agentLabel = document.getElementById('mode-agent-label');
+  var humanBtn = document.getElementById('mode-human-btn');
+  var agentBtn = document.getElementById('mode-agent-btn');
   var isAgent = window.location.hash === '#agent';
 
   function applyMode() {
-    toggle.setAttribute('aria-checked', String(isAgent));
-    if (isAgent) {
-      document.body.classList.add('agent-mode');
-      humanLabel.classList.remove('mode-active');
-      agentLabel.classList.add('mode-active');
-    } else {
-      document.body.classList.remove('agent-mode');
-      humanLabel.classList.add('mode-active');
-      agentLabel.classList.remove('mode-active');
-    }
+    document.body.classList.toggle('agent-mode', isAgent);
+    humanBtn.classList.toggle('active', !isAgent);
+    agentBtn.classList.toggle('active', isAgent);
+    humanBtn.setAttribute('aria-pressed', String(!isAgent));
+    agentBtn.setAttribute('aria-pressed', String(isAgent));
   }
 
-  toggle.addEventListener('click', function() {
+  function setMode(agent) {
+    if (agent === isAgent) return;
     var hero = document.querySelector('.ah-hero');
     hero.style.transition = 'opacity 0.15s ease';
     hero.style.opacity = '0.3';
     setTimeout(function() {
-      isAgent = !isAgent;
+      isAgent = agent;
       applyMode();
       if (isAgent) {
         history.replaceState(null, '', '#agent');
@@ -1586,16 +1869,23 @@
       }
       hero.style.opacity = '1';
     }, 150);
-  });
+  }
 
-  humanLabel.addEventListener('click', function() {
-    if (isAgent) { isAgent = false; applyMode(); history.replaceState(null, '', location.pathname); }
-  });
-  agentLabel.addEventListener('click', function() {
-    if (!isAgent) { isAgent = true; applyMode(); history.replaceState(null, '', '#agent'); }
-  });
+  humanBtn.addEventListener('click', function() { setMode(false); });
+  agentBtn.addEventListener('click', function() { setMode(true); });
 
   applyMode();
+
+  /* Copy "pip install asiai" from the hero install box */
+  var copyBtn = document.getElementById('ah-copy-install');
+  if (copyBtn && navigator.clipboard) {
+    copyBtn.addEventListener('click', function() {
+      navigator.clipboard.writeText('pip install asiai').then(function() {
+        copyBtn.classList.add('copied');
+        setTimeout(function() { copyBtn.classList.remove('copied'); }, 1200);
+      }).catch(function() { /* permissions policy / lost user gesture */ });
+    });
+  }
 
   /* Agent count from community API */
   var AGENT_COUNT_MIN = 0; /* TODO: bump to 10 when enough agents registered */
@@ -1640,6 +1930,7 @@
         }).sort(function(a, b) { return b.median_tok_s - a.median_tok_s; });
         var slots = teaser.querySelectorAll('.ah-lb-row');
         if (rows.length < slots.length) return;
+        var top = rows[0].median_tok_s;
         slots.forEach(function(slot, i) {
           var r = rows[i];
           function set(sel, text) {
@@ -1652,6 +1943,8 @@
           set('.ah-lb-toks', r.median_tok_s.toFixed(1));
           set('.ah-lb-ttft', (typeof r.median_ttft_ms === 'number' && r.median_ttft_ms > 0)
             ? Math.round(r.median_ttft_ms) + ' ms' : '—');
+          var bar = slot.querySelector('.ah-lb-bar');
+          if (bar && top > 0) bar.style.width = Math.max(4, Math.round(r.median_tok_s / top * 100)) + '%';
         });
       } catch (e) {}
     };
