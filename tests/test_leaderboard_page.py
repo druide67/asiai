@@ -270,6 +270,20 @@ class TestLeaderboardPage:
         leaderboard_block = resp.text.split("Community Leaderboard", 1)[1]
         assert "onclick" not in leaderboard_block
 
+    def test_compare_growth_loop_wiring_present(self, client):
+        """Compare panel ships the growth-loop band: share snippet + copy
+        button (static markup, JS-toggled) and per-row 'be the first' loop."""
+        resp = client.get("/leaderboard")
+        assert resp.status_code == 200
+        assert 'id="lbc-share"' in resp.text
+        assert 'id="lbc-copy"' in resp.text
+        assert "asiai bench --share" in resp.text  # clipboard payload
+        assert "--share</span>" in resp.text  # rendered snippet
+        assert "No prompts, no paths, no hostname." in resp.text
+        assert "be the first ↗" in resp.text
+        # Populated-state badge format ("N of M groups matched") ships too.
+        assert "' matched'" in resp.text
+
     def test_nav_link_present_on_other_pages(self, client):
         resp = client.get("/versions")
         assert resp.status_code == 200

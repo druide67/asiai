@@ -8,21 +8,21 @@
 #lb-compare { padding: 0; overflow: hidden; }
 .lbc-head {
     display: flex; align-items: center; gap: 10px;
-    padding: 15px 20px; border-bottom: 1px solid var(--border);
+    padding: 13px 20px; border-bottom: 1px solid var(--border);
 }
 .lbc-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
 .lbc-sub {
     font-family: var(--font-mono); font-size: 10.5px;
     color: var(--fl-text-dim); margin-top: 3px;
 }
-.lbc-chip-badge {
+.lbc-badge {
     margin-left: auto; flex: none;
     font-family: var(--font-mono); font-size: 10px;
     color: var(--text-secondary); background: var(--bg-elevated);
     border: 1px solid var(--border); padding: 3px 9px; border-radius: 999px;
 }
 .lbc-cols, .lbc-row {
-    display: grid; grid-template-columns: 1fr 92px 92px 96px;
+    display: grid; grid-template-columns: 1fr 130px 130px 110px;
     gap: 10px; padding: 9px 20px; align-items: baseline;
 }
 .lbc-cols {
@@ -33,21 +33,64 @@
 .lbc-cols > span:not(:first-child), .lbc-row > span:not(:first-child) { text-align: right; }
 .lbc-row { padding: 12px 20px; border-bottom: 1px solid var(--border); }
 .lbc-row:last-of-type { border-bottom: none; }
+.lbc-row:hover { background: rgba(255, 255, 255, 0.015); }
+[data-theme="light"] .lbc-row:hover { background: rgba(0, 0, 0, 0.015); }
 .lbc-engine {
     display: inline-flex; align-items: center; gap: 9px;
     font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
     color: var(--fl-text-strong);
 }
+.lbc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
 .lbc-num { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); }
 .lbc-num.is-dim { color: var(--text-secondary); font-weight: 400; }
 .lbc-n { display: block; font-family: var(--font-mono); font-size: 9.5px; color: var(--fl-text-faint); }
 .lbc-delta { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; }
 .lbc-delta.is-up { color: var(--green); }
-.lbc-delta.is-down { color: var(--red); }
-.lbc-delta.is-none { color: var(--fl-text-faint); font-weight: 400; }
+/* Design red is one shade lighter than the theme's --red on dark surfaces. */
+.lbc-delta.is-down { color: #f87171; }
+[data-theme="light"] .lbc-delta.is-down { color: var(--red); }
+.lbc-delta.is-approx { color: var(--text-secondary); }
+.lbc-first {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+    color: var(--accent-text);
+}
 .lbc-foot {
     padding: 11px 20px; font-size: 10px; color: var(--fl-text-faint);
     line-height: 1.5; border-top: 1px solid var(--border);
+}
+/* Growth-loop band (compact, ~172px): body of the panel when local groups
+   exist but none has a community counterpart yet. */
+.lbc-share {
+    display: grid; grid-template-columns: 1fr 400px; gap: 28px;
+    padding: 16px 20px 18px; align-items: center;
+}
+.lbc-share-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.lbc-share-text {
+    margin: 6px 0 0; font-size: 11.5px; line-height: 1.65;
+    color: var(--fl-text-dim); max-width: 56ch; text-wrap: pretty;
+}
+.lbc-share-cmd {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-primary); border: 1px solid var(--border);
+    border-radius: 9px; padding: 10px 14px;
+    font-family: var(--font-mono); font-size: 12.5px;
+}
+.lbc-share-prompt { color: var(--fl-text-faint); user-select: none; }
+.lbc-share-cmdtext { color: var(--fl-text-strong); font-weight: 500; }
+.lbc-share-flag { color: #22d3ee; }
+[data-theme="light"] .lbc-share-flag { color: var(--accent-text); }
+.lbc-copy {
+    margin-left: auto; width: 26px; height: 26px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid var(--border-hover); border-radius: 6px;
+    padding: 0; cursor: pointer; color: var(--fl-text-dim);
+}
+.lbc-copy:hover { border-color: var(--border-active); background: var(--bg-surface); }
+.lbc-copy:active { transform: scale(0.94); }
+.lbc-copy.copied { color: var(--accent-text); border-color: var(--accent-text); }
+.lbc-share-note {
+    margin-top: 8px; font-size: 10px; line-height: 1.55;
+    color: var(--fl-text-faint);
 }
 .lbc-empty {
     padding: 26px 24px; display: flex; flex-direction: column;
@@ -62,7 +105,8 @@
 .lbc-empty-title { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
 .lbc-empty-text { font-size: 11px; color: var(--fl-text-dim); line-height: 1.6; max-width: 380px; }
 @media (max-width: 700px) {
-    .lbc-cols, .lbc-row { grid-template-columns: 1fr 72px 72px 76px; padding-left: 14px; padding-right: 14px; }
+    .lbc-cols, .lbc-row { grid-template-columns: 1fr 84px 84px 90px; padding-left: 14px; padding-right: 14px; }
+    .lbc-share { grid-template-columns: 1fr; gap: 14px; }
 }
 </style>
 {% endblock %}
@@ -106,12 +150,32 @@
             <div class="lbc-title">This machine vs community</div>
             <div class="lbc-sub" id="lbc-sub">&nbsp;</div>
         </div>
-        <span class="lbc-chip-badge">{{ local_chip }}</span>
+        <span class="lbc-badge" id="lbc-badge" style="display: none;"></span>
+    </div>
+    {# Growth-loop band: static markup (no API data), toggled + filled via
+       textContent by renderCompare when no group has a community match. #}
+    <div class="lbc-share" id="lbc-share" style="display: none;">
+        <div>
+            <div class="lbc-share-title">No community counterpart &mdash; you'd be the first.</div>
+            <p class="lbc-share-text" id="lbc-share-text"></p>
+        </div>
+        <div>
+            <div class="lbc-share-cmd">
+                <span class="lbc-share-prompt">$</span>
+                <span class="lbc-share-cmdtext">asiai bench <span class="lbc-share-flag">--share</span></span>
+                <button class="lbc-copy" id="lbc-copy" type="button" aria-label="Copy command"
+                        title="Copy: asiai bench --share">
+                    <svg width="12" height="12" viewBox="0 0 15 15" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="2" stroke="currentColor" stroke-width="1.3"></rect><path d="M11.5 4.5v-1a2 2 0 0 0-2-2h-5a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1" stroke="currentColor" stroke-width="1.3"></path></svg>
+                </button>
+            </div>
+            <div class="lbc-share-note">Anonymous &mdash; submits chip, RAM, engine version and medians only.
+                No prompts, no paths, no hostname.</div>
+        </div>
     </div>
     <div id="lbc-body"></div>
-    <div class="lbc-foot">Community medians: anonymized asiai submissions, same chip + model + engine
-        &mdash; all submitted conditions pooled. tok/s = generation only. Local medians come from this
-        machine's benchmark history over the same window.</div>
+    <div class="lbc-foot" id="lbc-foot" style="display: none;">Community medians: anonymized submissions,
+        same model + quant + engine on this chip &mdash; all submitted conditions pooled.
+        tok/s = generation only.</div>
 </div>
 
 <div class="mt-6 fade-in-delay-1">
@@ -219,6 +283,33 @@
     var localChip = localChipBtn ? (localChipBtn.getAttribute('data-chip') || '') : '';
     var compareSeq = 0;
 
+    var lbcCopy = document.getElementById('lbc-copy');
+    if (lbcCopy) {
+        lbcCopy.addEventListener('click', function () {
+            function copied() {
+                lbcCopy.classList.add('copied');
+                setTimeout(function () { lbcCopy.classList.remove('copied'); }, 1200);
+            }
+            /* Clipboard API requires a secure context; the dashboard is
+               served over plain HTTP on the mesh/LAN — same fallback as
+               bench.js. */
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText('asiai bench --share').then(copied)
+                    .catch(function () { /* permissions policy / lost user gesture */ });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = 'asiai bench --share';
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { if (document.execCommand('copy')) copied(); } catch (e) { /* no-op */ }
+                document.body.removeChild(ta);
+            }
+        });
+    }
+
     function compareCell(text, cls) {
         var s = document.createElement('span');
         if (cls) s.className = cls;
@@ -229,14 +320,25 @@
     function renderCompare(data) {
         var body = document.getElementById('lbc-body');
         var sub = document.getElementById('lbc-sub');
+        var badge = document.getElementById('lbc-badge');
+        var share = document.getElementById('lbc-share');
+        var foot = document.getElementById('lbc-foot');
         body.textContent = '';
+        badge.style.display = 'none';
+        share.style.display = 'none';
+        foot.style.display = 'none';
         var meta = (data && data.meta) || {};
         var rows = (data && Array.isArray(data.rows)) ? data.rows : [];
+        var chip = meta.chip || localChip;
+        var windowDays = meta.window_days || daysFilter;
+        /* The compared model is server-picked when the filter is empty —
+           without naming it here the panel is unreadable. */
+        sub.textContent = (meta.model ? meta.model + ' · ' : '') + chip +
+            ' · median tok/s · ' + windowDays + 'd window';
 
         if (!data) {
             /* Fetch failed (network, rate limit) — not the same thing as
                "no local benchmarks": say so instead of lying. */
-            sub.textContent = 'median tok/s · last ' + daysFilter + ' days';
             var fail = document.createElement('div');
             fail.className = 'lbc-empty';
             fail.appendChild(compareCell('!', 'lbc-empty-mark'));
@@ -249,7 +351,6 @@
         }
 
         if (!rows.length) {
-            sub.textContent = 'median tok/s · last ' + (meta.window_days || daysFilter) + ' days';
             var filtered = meta.reason === 'no_local_match';
             var empty = document.createElement('div');
             empty.className = 'lbc-empty';
@@ -266,20 +367,27 @@
             return;
         }
 
-        sub.textContent = (meta.model || '?') + ' · median tok/s · last ' +
-            (meta.window_days || daysFilter) + ' days';
-
+        var n = rows.length;
         if (!meta.community_matched) {
-            var noMatch = document.createElement('div');
-            noMatch.className = 'lbc-empty';
-            noMatch.appendChild(compareCell('∅', 'lbc-empty-mark'));
-            noMatch.appendChild(compareCell('No matching community group', 'lbc-empty-title'));
-            noMatch.appendChild(compareCell(
-                'No submissions share this model + engine on this chip in the window. ' +
-                'Your local medians stand alone for now — fine-tuned or renamed models rarely match.',
-                'lbc-empty-text'));
-            body.appendChild(noMatch);
+            /* Growth loop: local groups exist, zero community counterpart.
+               Static band (template markup), only the numbers are injected. */
+            badge.textContent = n + (n === 1 ? ' local group' : ' local groups');
+            badge.style.display = '';
+            document.getElementById('lbc-share-text').textContent =
+                "None of this machine's " + n + ' local run group' + (n === 1 ? '' : 's') +
+                ' matches a shared submission — chip, model, quant and engine are compared strictly, over the ' +
+                windowDays + '-day window. Sharing seeds ' + n + ' new group' + (n === 1 ? '' : 's') +
+                ' other ' + chip + ' owners can compare against.';
+            share.style.display = '';
+            return;
         }
+
+        var matched = rows.filter(function (r) {
+            return typeof r.community_median_tok_s === 'number';
+        }).length;
+        badge.textContent = matched + ' of ' + n + (n === 1 ? ' group' : ' groups') + ' matched';
+        badge.style.display = '';
+        foot.style.display = '';
 
         var cols = document.createElement('div');
         cols.className = 'lbc-cols';
@@ -293,7 +401,13 @@
             var row = document.createElement('div');
             row.className = 'lbc-row';
 
-            row.appendChild(compareCell(String(r.engine || '?'), 'lbc-engine'));
+            var eng = document.createElement('span');
+            eng.className = 'lbc-engine';
+            var dot = document.createElement('span');
+            dot.className = 'lbc-dot';
+            eng.appendChild(dot);
+            eng.appendChild(compareCell(String(r.engine || '?')));
+            row.appendChild(eng);
 
             var local = document.createElement('span');
             local.appendChild(compareCell(
@@ -303,23 +417,37 @@
             row.appendChild(local);
 
             var comm = document.createElement('span');
-            if (typeof r.community_median_tok_s === 'number') {
+            var hasCommunity = typeof r.community_median_tok_s === 'number';
+            if (hasCommunity) {
                 comm.appendChild(compareCell(r.community_median_tok_s.toFixed(1), 'lbc-num is-dim'));
                 comm.appendChild(compareCell('n=' + (r.community_n || 0), 'lbc-n'));
             } else {
                 comm.appendChild(compareCell('—', 'lbc-num is-dim'));
+                comm.appendChild(compareCell('n=0', 'lbc-n'));
             }
             row.appendChild(comm);
 
-            if (typeof r.delta_pct === 'number' && r.delta_pct !== 0) {
-                var up = r.delta_pct > 0;
-                row.appendChild(compareCell(
-                    (up ? '▲ +' : '▼ −') + Math.abs(r.delta_pct).toFixed(1) + '%',
-                    'lbc-delta ' + (up ? 'is-up' : 'is-down')));
-            } else if (r.delta_pct === 0) {
-                row.appendChild(compareCell('±0.0%', 'lbc-delta is-none'));
+            if (hasCommunity && typeof r.delta_pct === 'number') {
+                var d = r.delta_pct;
+                var mag = Math.abs(d).toFixed(1) + '%';
+                if (Math.abs(d) < 2) {
+                    /* |Δ| < 2% is measurement noise — neutral "≈", never a
+                       win/loss (±0.0 exactly included). */
+                    row.appendChild(compareCell(
+                        '≈ ' + (d > 0 ? '+' : d < 0 ? '−' : '±') + mag,
+                        'lbc-delta is-approx'));
+                } else if (d > 0) {
+                    row.appendChild(compareCell('↑ +' + mag, 'lbc-delta is-up'));
+                } else {
+                    row.appendChild(compareCell('↓ −' + mag, 'lbc-delta is-down'));
+                }
             } else {
-                row.appendChild(compareCell('—', 'lbc-delta is-none'));
+                /* No community group for this engine yet: keep the loop
+                   visible in place of the delta. Not a link — no page to
+                   navigate to; the tooltip carries the command. */
+                var first = compareCell('be the first ↗', 'lbc-first');
+                first.title = 'asiai bench --share';
+                row.appendChild(first);
             }
             body.appendChild(row);
         });

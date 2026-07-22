@@ -83,6 +83,21 @@ class TestBuildCompare:
         assert row["delta_pct"] is None
         assert data["meta"]["community_matched"] is False
 
+    def test_disjoint_engines_do_not_count_as_matched(self, db_path):
+        """Community data for this chip+model on an engine this machine never
+        ran is NOT a match: community_matched must stay False so the client
+        renders the share band, not a 0-matched grid."""
+        store_benchmark(db_path, [_local_run("mlxlm", 120.0)])
+        with patch(
+            "asiai.web.routes.leaderboard._cached_leaderboard",
+            return_value=[_group("llamacpp", 100.0)],
+        ):
+            data = _build_compare(db_path, CHIP, "", 30)
+        (row,) = data["rows"]
+        assert row["engine"] == "mlxlm"
+        assert row["community_median_tok_s"] is None
+        assert data["meta"]["community_matched"] is False
+
     def test_different_quant_is_not_a_match(self, db_path):
         """Quantization is part of the model name, hence of the identity."""
         store_benchmark(db_path, [_local_run("llamacpp", 120.0)])

@@ -218,7 +218,10 @@ def _build_compare(db_path: str, chip: str, model_filter: str, days: int) -> dic
                 "delta_pct": delta,
             }
         )
-    meta["community_matched"] = bool(community)
+    # Matched means a LOCAL row has a counterpart — not merely that the
+    # community has data for this chip+model on engines this machine never
+    # ran (that case must render the share band, not a 0-matched grid).
+    meta["community_matched"] = any(r["community_median_tok_s"] is not None for r in out)
     return {"rows": out, "meta": meta}
 
 
