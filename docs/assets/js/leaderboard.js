@@ -36,7 +36,7 @@
 
     function columnCount() {
       var ths = app.querySelectorAll("#lb-table thead th");
-      return ths.length || 11;
+      return ths.length || 10;
     }
 
     function setMessage(msg) {
@@ -140,6 +140,11 @@
         return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
       });
 
+      /* Row 1 only shows the accent tok/s while it truly is the best tok/s
+       * (sorted by tok/s, descending) — see .lb-sorted-tok in the CSS. */
+      document.getElementById("lb-table").classList.toggle(
+        "lb-sorted-tok", sortCol === "median_tok_s" && !sortAsc);
+
       var tbody = document.getElementById("lb-body");
       clearChildren(tbody);
 
@@ -176,11 +181,22 @@
         tr.appendChild(tokTd);
 
         tr.appendChild(createCell(fmtNum(r.median_ttft_ms, 0, " ms")));
-        tr.appendChild(createCell(r.hw_chip || "?", "lb-chip"));
-        tr.appendChild(createCell(r.hw_ram_gb ? r.hw_ram_gb + " GB" : "?"));
+
+        /* Chip + RAM stacked in a single cell (design craft pass). */
+        var hwTd = document.createElement("td");
+        hwTd.className = "lb-hw";
+        var chipSpan = document.createElement("span");
+        chipSpan.className = "lb-hw-chip";
+        chipSpan.textContent = r.hw_chip || "?";
+        hwTd.appendChild(chipSpan);
+        var ramSpan = document.createElement("span");
+        ramSpan.className = "lb-hw-ram";
+        ramSpan.textContent = r.hw_ram_gb ? r.hw_ram_gb + " GB" : "?";
+        hwTd.appendChild(ramSpan);
+        tr.appendChild(hwTd);
 
         /* v2 aggregate fields — additive, may be absent on any group. */
-        tr.appendChild(createCell(fmtList(r.quantizations), "lb-chip"));
+        tr.appendChild(createCell(fmtList(r.quantizations), "lb-quant"));
         tr.appendChild(createCell(fmtNum(r.median_power_watts, 1), "lb-num"));
         tr.appendChild(createCell(fmtNum(r.median_tok_s_per_watt, 2), "lb-num"));
         tr.appendChild(createLastSeenCell(r.last_submitted_at));

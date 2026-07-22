@@ -1,78 +1,372 @@
-/* Community leaderboard page (docs/leaderboard*.md) — shared across all locales. */
+/* Community leaderboard page (docs/leaderboard*.md) — shared across all locales.
+ *
+ * Craft pass from the design handoff (session 3):
+ * - rank = CSS counter rendered as ::before of the first cell (no DOM column)
+ * - top-3 rows get accent rank pills, #1 gets a filled pill + accent tok/s
+ * - chip + RAM stacked in a single cell (two block spans, built by the JS)
+ * - tok/s bar = the span the JS already emits, with a CSS-drawn track behind
+ * - sticky thead below the Material header (wide viewports only — the
+ *   overflow-x scroll wrapper needed on narrow viewports disables sticky)
+ * - reinforced separator every 5 rows (nth-child(5n))
+ *
+ * Light values are the default; dark overrides are scoped to
+ * [data-md-color-scheme="slate"]. Sizes are px on purpose: the design is
+ * specified in px and must not scale with Material's 125% root font size.
+ */
+
+#leaderboard-app {
+  --lb-sf: #ffffff;
+  --lb-sf2: #f4f4f5;
+  --lb-line: #e7e7ea;
+  --lb-line2: #d6d6dc;
+  --lb-sep: #efeff2;
+  --lb-sep5: #dcdce2;
+  --lb-ink: #18181b;
+  --lb-mut: #52525b;
+  --lb-fnt: #8f8f98;
+  --lb-acc: #0891b2;
+  --lb-acc-text: #0e7490;
+  --lb-acc-soft: rgba(8, 145, 178, 0.09);
+  --lb-acc-line: rgba(8, 145, 178, 0.3);
+  --lb-on-acc: #ffffff;
+  --lb-track: #ececef;
+  --lb-hov: #f7f7f8;
+  --lb-shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 10px 28px -14px rgba(24, 24, 27, 0.14);
+}
+
+[data-md-color-scheme="slate"] #leaderboard-app {
+  --lb-sf: #111113;
+  --lb-sf2: #18181b;
+  --lb-line: #232329;
+  --lb-line2: #2f2f37;
+  --lb-sep: #1c1c21;
+  --lb-sep5: #2c2c34;
+  --lb-ink: #fafafa;
+  --lb-mut: #a1a1aa;
+  --lb-fnt: #6f6f7a;
+  --lb-acc: #06b6d4;
+  --lb-acc-text: #22d3ee;
+  --lb-acc-soft: rgba(6, 182, 212, 0.1);
+  --lb-acc-line: rgba(6, 182, 212, 0.32);
+  --lb-on-acc: #062a30;
+  --lb-track: #1d1d22;
+  --lb-hov: rgba(255, 255, 255, 0.02);
+  --lb-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -14px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Filters --- */
 
 .lb-filter-row {
   display: flex;
-  gap: 0.5rem;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 0.5rem;
+  margin-bottom: 14px;
 }
 .lb-input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 4px;
-  background: var(--md-default-bg-color);
-  color: var(--md-default-fg-color);
-  font-size: 0.85rem;
-  min-width: 200px;
+  width: 224px;
+  padding: 9px 13px;
+  border: 1px solid var(--lb-line2);
+  border-radius: 8px;
+  background: var(--lb-sf);
+  color: var(--lb-ink);
+  font-family: var(--md-code-font), monospace;
+  font-size: 12px;
+}
+.lb-input::placeholder {
+  color: var(--lb-fnt);
+  opacity: 1;
 }
 .lb-input:focus {
   outline: none;
-  border-color: var(--md-primary-fg-color);
+  border-color: var(--lb-acc);
+  box-shadow: 0 0 0 3px var(--lb-acc-soft);
 }
 .lb-btn {
-  padding: 0.5rem 1.2rem;
+  padding: 9px 20px;
   border: none;
-  border-radius: 4px;
-  background: var(--md-primary-fg-color);
-  color: var(--md-primary-bg-color);
+  border-radius: 8px;
+  background: var(--lb-acc);
+  color: var(--lb-on-acc);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 13px;
   font-weight: 600;
 }
-.lb-btn:hover { opacity: 0.9; }
+.lb-btn:hover {
+  filter: brightness(1.08);
+}
+.lb-btn:active {
+  transform: scale(0.98);
+}
 .lb-btn-secondary {
-  background: var(--md-default-fg-color--lightest);
-  color: var(--md-default-fg-color);
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--lb-line2);
+  color: var(--lb-mut);
+  font-weight: 500;
+}
+.lb-btn-secondary:hover {
+  filter: none;
+  border-color: var(--lb-fnt);
+  color: var(--lb-ink);
 }
 .lb-status {
   display: flex;
   justify-content: space-between;
-  font-size: 0.8rem;
-  color: var(--md-default-fg-color--light);
-  margin-bottom: 1rem;
+  gap: 12px;
+  font-family: var(--md-code-font), monospace;
+  font-size: 11px;
+  color: var(--lb-fnt);
+  margin-bottom: 14px;
 }
+
+/* --- Table shell --- */
+
+/* Material's 61rem grid gives a ~37rem content column — too narrow for the
+ * 10 columns. Widen the CONTENT grid on leaderboard pages only (the app div
+ * exists nowhere else); sidebars keep their fixed width, the content column
+ * flexes. Scoped to .md-main__inner — .md-grid alone also sits on the header
+ * and footer inners, which must keep the site-wide 61rem. */
+body:has(#leaderboard-app) .md-main__inner.md-grid {
+  max-width: 76rem;
+}
+
 .lb-table-wrap {
   overflow-x: auto;
+  border: 1px solid var(--lb-line);
+  border-radius: 12px;
+  background: var(--lb-sf);
+  box-shadow: var(--lb-shadow);
 }
+/* Wide viewports: the widened content column fits all 10 columns, so drop
+ * the scroll container — a scrolling ancestor disables position:sticky on
+ * the thead. `visible` (not clip/hidden) keeps sticky alive and degrades a
+ * rare overflow (long localized header) to a visible spill, never data loss;
+ * the rounded corners move onto the edge cells. */
+@media (min-width: 86em) {
+  .lb-table-wrap {
+    overflow: visible;
+  }
+  .lb-table th:first-child {
+    border-top-left-radius: 11px;
+  }
+  .lb-table th:last-child {
+    border-top-right-radius: 11px;
+  }
+  .lb-table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 11px;
+  }
+  .lb-table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 11px;
+  }
+}
+
 .lb-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
+  border-collapse: separate;
+  border-spacing: 0;
 }
+
+/* --- Header row (sticky below the Material header on wide viewports) --- */
+
 .lb-table th {
+  position: sticky;
+  top: var(--md-header-height, 2.4rem);
+  z-index: 2;
   text-align: left;
-  padding: 0.6rem 0.8rem;
-  border-bottom: 2px solid var(--md-primary-fg-color);
-  font-weight: 600;
+  padding: 11px 10px;
+  background: var(--lb-sf2);
+  border-bottom: 1px solid var(--lb-line2);
+  box-shadow: 0 6px 16px -10px rgba(24, 24, 27, 0.28);
+  font-family: var(--md-code-font), monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lb-fnt);
   white-space: nowrap;
 }
+.lb-table th:last-child {
+  text-align: right;
+}
+.lb-table th:first-child,
+.lb-table td:first-child {
+  padding-left: 14px;
+}
+.lb-table th:last-child,
+.lb-table td:last-child {
+  padding-right: 14px;
+}
+.lb-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.lb-sortable:hover {
+  color: var(--lb-acc-text);
+}
+.lb-sortable::after {
+  content: " \2195";
+  opacity: 0.45;
+}
+.lb-active-sort {
+  color: var(--lb-acc-text);
+  font-weight: 700;
+}
+.lb-active-sort::after {
+  content: " \2193";
+  opacity: 1;
+}
+.lb-active-sort.lb-sort-asc::after {
+  content: " \2191";
+  opacity: 1;
+}
+
+/* --- Body rows --- */
+
 .lb-table td {
-  padding: 0.5rem 0.8rem;
-  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--lb-sep);
+  font-family: var(--md-code-font), monospace;
+  font-size: 12px;
+  color: var(--lb-fnt);
+  vertical-align: middle;
 }
-.lb-table tbody tr:hover {
-  background: var(--md-default-fg-color--lightest);
+.lb-table tbody tr:last-child td {
+  border-bottom: none;
 }
-.lb-sortable { cursor: pointer; user-select: none; }
-.lb-sortable:hover { color: var(--md-primary-fg-color); }
-.lb-sortable::after { content: " \2195"; opacity: 0.3; font-size: 0.75rem; }
-.lb-active-sort::after { content: " \2193"; opacity: 1; }
-.lb-active-sort.lb-sort-asc::after { content: " \2191"; opacity: 1; }
-.lb-loading { text-align: center; padding: 2rem; color: var(--md-default-fg-color--light); }
-.lb-tok { font-weight: 600; font-variant-numeric: tabular-nums; }
-.lb-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.lb-chip { font-size: 0.8rem; color: var(--md-default-fg-color--light); }
-.lb-seen { font-size: 0.8rem; color: var(--md-default-fg-color--light); white-space: nowrap; }
+/* Reinforced separator every 5 rows — visual grouping without fatigue. */
+.lb-table tbody tr:nth-child(5n) td {
+  border-bottom-color: var(--lb-sep5);
+}
+.lb-table tbody tr:not(:has(.lb-loading)):hover {
+  background: var(--lb-hov);
+}
+
+/* Rank pill: CSS counter in ::before of the first cell — no DOM column.
+ * Message rows (loading / error / empty = a single td.lb-loading) never
+ * increment the counter nor receive a pill. */
+.lb-table tbody {
+  counter-reset: lb-rank;
+}
+.lb-table tbody tr:not(:has(.lb-loading)) {
+  counter-increment: lb-rank;
+}
+.lb-table tbody tr:not(:has(.lb-loading)) td:first-child::before {
+  content: counter(lb-rank, decimal-leading-zero);
+  display: inline-block;
+  min-width: 26px;
+  margin-right: 12px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--lb-fnt);
+}
+/* Top 3: accent pills. */
+.lb-table tbody tr:nth-child(-n+3):not(:has(.lb-loading)) td:first-child::before {
+  padding: 3px 5px;
+  border: 1px solid var(--lb-acc-line);
+  background: var(--lb-acc-soft);
+  color: var(--lb-acc-text);
+  font-weight: 700;
+}
+.lb-table tbody tr:first-child:not(:has(.lb-loading)) td:first-child::before {
+  padding: 4px 6px;
+  border: none;
+  background: var(--lb-acc);
+  color: var(--lb-on-acc);
+}
+
+/* Column styles — cell order after the chip+RAM merge:
+ * 1 Engine · 2 Model · 3 tok/s · 4 TTFT · 5 Chip·RAM · 6 Quant · 7 W
+ * · 8 tok/s/W · 9 Last seen · 10 Samples. */
+
+/* Engine (hosts the rank pill) — :not(.lb-loading) keeps message rows out
+ * (their single cell is also td:first-child and would lose on specificity). */
+.lb-table tbody td:first-child:not(.lb-loading) {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lb-mut);
+  white-space: nowrap;
+}
+
+/* Model */
+.lb-table tbody td:nth-child(2) {
+  font-size: 12.5px;
+  color: var(--lb-ink);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.lb-table tbody td:nth-child(2) strong {
+  font-weight: 500;
+}
+
+/* tok/s — hero column: big value + proportional bar over a fixed track */
+.lb-tok {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--lb-ink);
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+}
+/* #1 row gets the accent value (design 1a) — only while the table is
+ * actually sorted by tok/s; under any other sort an accent tok/s on row 1
+ * would read as "best tok/s" and lie. The JS toggles .lb-sorted-tok. */
+.lb-table.lb-sorted-tok tbody tr:first-child:not(:has(.lb-loading)) .lb-tok {
+  color: var(--lb-acc-text);
+}
+.lb-bar {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--lb-acc);
+}
+/* Track behind the bar (the JS caps the bar width at 80px). The bar is
+ * positioned (z-index:1) so it paints above this later pseudo-element. */
+.lb-tok::after {
+  content: "";
+  display: block;
+  height: 4px;
+  width: 80px;
+  margin-top: -4px;
+  border-radius: 2px;
+  background: var(--lb-track);
+}
+
+/* TTFT */
+.lb-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lb-table tbody td:nth-child(4) {
+  color: var(--lb-mut);
+  white-space: nowrap;
+}
+
+/* Chip · RAM — stacked in one cell */
+.lb-hw-chip {
+  display: block;
+  font-family: var(--md-text-font), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lb-ink);
+  white-space: nowrap;
+}
+.lb-hw-ram {
+  display: block;
+  font-size: 10.5px;
+  color: var(--lb-fnt);
+  margin-top: 2px;
+}
+
+/* Last seen */
+.lb-seen {
+  white-space: nowrap;
+}
 .lb-badge {
   display: inline-block;
   width: 8px;
@@ -83,18 +377,45 @@
 }
 .lb-badge-fresh { background: #4caf50; }
 .lb-badge-recent { background: #ff9800; }
-.lb-footer { margin-top: 1.5rem; font-size: 0.85rem; color: var(--md-default-fg-color--light); }
-.lb-footer code { font-size: 0.8rem; }
-.lb-bar {
-  display: inline-block;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--md-primary-fg-color);
-  margin-left: 0.5rem;
-  vertical-align: middle;
+
+/* Samples */
+.lb-table tbody td:last-child {
+  text-align: right;
 }
+
+/* Message rows (loading / error / empty) — single cell, no rank, no pill. */
+.lb-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--lb-fnt);
+  font-family: var(--md-text-font), sans-serif;
+  font-size: 13px;
+}
+
+/* --- Footer --- */
+
+.lb-footer {
+  margin-top: 1.5rem;
+  font-size: 0.7rem;
+  color: var(--lb-mut);
+}
+.lb-footer code {
+  font-size: 0.65rem;
+}
+
+/* --- Narrow viewports --- */
+
 @media (max-width: 768px) {
-  .lb-input { min-width: 140px; }
-  .lb-table { font-size: 0.8rem; }
-  .lb-table th, .lb-table td { padding: 0.4rem; }
+  .lb-input {
+    width: auto;
+    min-width: 140px;
+    flex: 1;
+  }
+  .lb-table th,
+  .lb-table td {
+    padding: 8px 10px;
+  }
+  .lb-table tbody tr:not(:has(.lb-loading)) td:first-child::before {
+    margin-right: 8px;
+  }
 }
