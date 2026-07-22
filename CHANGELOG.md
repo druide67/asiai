@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--code` tool-call suite: `empty_object_bug` no longer counts
+  wrong-tool calls.** The per-turn scorer judged every call's arguments
+  against the EXPECTED tool's schema, so a well-formed call to a
+  different tool (e.g. `search_code` where `edit_file` was expected)
+  raised the headline empty-object-bug count spuriously. The flag is now
+  specific to the expected tool's argument collapse; tool-choice misses
+  remain visible through `correct_tool` / `pct_correct_tool`.
+  Empty-object-bug counts from earlier reports may mix the two
+  categories when `pct_correct_tool` was below 100%.
+
 ## [1.31.0](https://github.com/druide67/asiai/compare/v1.30.0...v1.31.0) — 2026-07-18
 
 ### Added

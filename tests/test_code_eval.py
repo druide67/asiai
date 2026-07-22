@@ -125,6 +125,24 @@ class TestScoreToolcallTurn:
         assert s["emitted_tool_call"] is False
         assert s["correct_tool"] is False
 
+    def test_wrong_tool_well_formed_is_not_empty_object_bug(self):
+        # The model calls search_code (valid args) where edit_file was expected:
+        # a tool-choice miss, not an argument collapse. Judging search_code args
+        # against edit_file's schema used to flag this as empty_object_bug.
+        args = {"pattern": "Config", "globs": ["config.py"]}
+        res = ChatResult(tool_calls=[_tc("search_code", args)], finish_reason="stop")
+        s = score_toolcall_turn(res, "edit_file", EDIT_SCHEMA)
+        assert s["correct_tool"] is False
+        assert s["empty_object_bug"] is False
+
+    def test_wrong_tool_with_empty_args_still_not_counted(self):
+        # Even {} args on the WRONG tool stay out of the headline bug count —
+        # the count is specific to the expected tool's argument collapse.
+        res = ChatResult(tool_calls=[_tc("search_code", {})], finish_reason="stop")
+        s = score_toolcall_turn(res, "edit_file", EDIT_SCHEMA)
+        assert s["correct_tool"] is False
+        assert s["empty_object_bug"] is False
+
 
 class TestThinkAndRecoveryScorers:
     def test_think_leak(self):

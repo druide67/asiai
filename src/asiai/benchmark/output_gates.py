@@ -169,7 +169,10 @@ def is_empty_object_bug(tc: dict[str, Any] | None, schema: dict[str, Any]) -> bo
 
     A parse FAILURE is a different category (caught by ``json_valid`` /
     ``non_truncated``), so it is excluded here to keep this count specific to the
-    template collapse.
+    template collapse. Likewise, ``score_toolcall_turn`` only applies this flag
+    when the call names the EXPECTED tool: a well-formed call to a different
+    tool is a tool-choice miss (``correct_tool``), and judging its args against
+    the expected tool's schema would count it here spuriously.
     """
     if tc is None or tc.get("parse_error") is not None:
         return False
@@ -201,7 +204,9 @@ def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any])
         "non_truncated": getattr(result, "finish_reason", None) != "length",
         "correct_tool": tc is not None and tc.get("name") == expected_tool,
         "schema_conform": schema_conform(tc, schema),
-        "empty_object_bug": is_empty_object_bug(tc, schema),
+        "empty_object_bug": tc is not None
+        and tc.get("name") == expected_tool
+        and is_empty_object_bug(tc, schema),
         "args_char_len": len(tc.get("arguments_raw", "")) if tc else 0,
     }
 
