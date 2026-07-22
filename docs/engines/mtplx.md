@@ -4,7 +4,7 @@ description: "MTPLX benchmark on Apple Silicon: MLX server with native MTP specu
 
 # MTPLX
 
-MTPLX is an MLX-based inference server for Apple Silicon (youssofal upstream) built around native MTP (multi-token prediction) speculative decoding. It exposes an OpenAI-compatible API and reports rich runtime state (generation mode, draft depth, session cache) on its `/health` endpoint.
+MTPLX is an MLX-based inference server for Apple Silicon ([youssofal/MTPLX](https://github.com/youssofal/MTPLX)) built around native MTP (multi-token prediction) speculative decoding. It exposes an OpenAI-compatible API and reports rich runtime state (generation mode, draft depth, session cache) on its `/health` endpoint.
 
 ## Setup
 
