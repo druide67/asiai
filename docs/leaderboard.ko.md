@@ -27,8 +27,7 @@ description: Apple Silicon Mac 전체의 커뮤니티 벤치마크 결과. 엔�
   <th class="lb-sortable" data-col="model">모델</th>
   <th class="lb-sortable lb-active-sort" data-col="median_tok_s">tok/s</th>
   <th class="lb-sortable" data-col="median_ttft_ms">TTFT</th>
-  <th>칩</th>
-  <th>RAM</th>
+  <th>칩 · RAM</th>
   <th>Quant</th>
   <th class="lb-sortable" data-col="median_power_watts">W</th>
   <th class="lb-sortable" data-col="median_tok_s_per_watt">tok/s/W</th>
@@ -37,7 +36,7 @@ description: Apple Silicon Mac 전체의 커뮤니티 벤치마크 결과. 엔�
 </tr>
 </thead>
 <tbody id="lb-body">
-<tr><td colspan="11" class="lb-loading">커뮤니티 데이터 로딩 중...</td></tr>
+<tr><td colspan="10" class="lb-loading">커뮤니티 데이터 로딩 중...</td></tr>
 </tbody>
 </table>
 </div>

@@ -27,8 +27,7 @@ description: Apple Silicon Mac 社区基准测试结果。按引擎、模型和�
   <th class="lb-sortable" data-col="model">模型</th>
   <th class="lb-sortable lb-active-sort" data-col="median_tok_s">tok/s</th>
   <th class="lb-sortable" data-col="median_ttft_ms">TTFT</th>
-  <th>芯片</th>
-  <th>RAM</th>
+  <th>芯片 · RAM</th>
   <th>Quant</th>
   <th class="lb-sortable" data-col="median_power_watts">W</th>
   <th class="lb-sortable" data-col="median_tok_s_per_watt">tok/s/W</th>
@@ -37,7 +36,7 @@ description: Apple Silicon Mac 社区基准测试结果。按引擎、模型和�
 </tr>
 </thead>
 <tbody id="lb-body">
-<tr><td colspan="11" class="lb-loading">正在加载社区数据...</td></tr>
+<tr><td colspan="10" class="lb-loading">正在加载社区数据...</td></tr>
 </tbody>
 </table>
 </div>

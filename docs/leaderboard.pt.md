@@ -27,8 +27,7 @@ description: Resultados de benchmark da comunidade em Macs com Apple Silicon. Co
   <th class="lb-sortable" data-col="model">Modelo</th>
   <th class="lb-sortable lb-active-sort" data-col="median_tok_s">tok/s</th>
   <th class="lb-sortable" data-col="median_ttft_ms">TTFT</th>
-  <th>Chip</th>
-  <th>RAM</th>
+  <th>Chip · RAM</th>
   <th>Quant</th>
   <th class="lb-sortable" data-col="median_power_watts">W</th>
   <th class="lb-sortable" data-col="median_tok_s_per_watt">tok/s/W</th>
@@ -37,7 +36,7 @@ description: Resultados de benchmark da comunidade em Macs com Apple Silicon. Co
 </tr>
 </thead>
 <tbody id="lb-body">
-<tr><td colspan="11" class="lb-loading">Carregando dados da comunidade...</td></tr>
+<tr><td colspan="10" class="lb-loading">Carregando dados da comunidade...</td></tr>
 </tbody>
 </table>
 </div>
