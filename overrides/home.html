@@ -885,15 +885,15 @@
     "ko": "Apple Silicon 로컬 LLM의 <span class=\"acc\">스피드테스트</span>."
   },
   "hero_tagline": {
-    "en": "Benchmark Ollama, LM Studio, mlx-lm, llama.cpp and five more engines head-to-head &mdash; tok/s, TTFT, power and thermal, from one command.",
-    "fr": "Benchmarkez Ollama, LM Studio, mlx-lm, llama.cpp et cinq autres moteurs face-à-face &mdash; tok/s, TTFT, puissance et thermique, en une commande.",
-    "de": "Benchmarken Sie Ollama, LM Studio, mlx-lm, llama.cpp und fünf weitere Engines im Direktvergleich &mdash; tok/s, TTFT, Leistung und Thermik, mit einem Befehl.",
-    "es": "Compara Ollama, LM Studio, mlx-lm, llama.cpp y cinco motores más cara a cara &mdash; tok/s, TTFT, consumo y térmica, con un comando.",
-    "it": "Confronta Ollama, LM Studio, mlx-lm, llama.cpp e altri cinque motori testa a testa &mdash; tok/s, TTFT, potenza e termica, con un comando.",
-    "pt": "Compare Ollama, LM Studio, mlx-lm, llama.cpp e mais cinco motores frente a frente &mdash; tok/s, TTFT, energia e térmica, com um comando.",
-    "zh": "让 Ollama、LM Studio、mlx-lm、llama.cpp 及另外五个引擎一对一对决 &mdash; tok/s、TTFT、功耗与温度，一条命令搞定。",
-    "ja": "Ollama、LM Studio、mlx-lm、llama.cppほか5つのエンジンを直接対決 &mdash; tok/s、TTFT、電力、温度をコマンド一発で。",
-    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp 및 5개 엔진을 1:1로 비교 &mdash; tok/s, TTFT, 전력, 온도를 명령어 하나로."
+    "en": "Benchmark Ollama, LM Studio, mlx-lm, llama.cpp and six more engines head-to-head &mdash; tok/s, TTFT, power and thermal, from one command.",
+    "fr": "Benchmarkez Ollama, LM Studio, mlx-lm, llama.cpp et six autres moteurs face-à-face &mdash; tok/s, TTFT, puissance et thermique, en une commande.",
+    "de": "Benchmarken Sie Ollama, LM Studio, mlx-lm, llama.cpp und sechs weitere Engines im Direktvergleich &mdash; tok/s, TTFT, Leistung und Thermik, mit einem Befehl.",
+    "es": "Compara Ollama, LM Studio, mlx-lm, llama.cpp y seis motores más cara a cara &mdash; tok/s, TTFT, consumo y térmica, con un comando.",
+    "it": "Confronta Ollama, LM Studio, mlx-lm, llama.cpp e altri sei motori testa a testa &mdash; tok/s, TTFT, potenza e termica, con un comando.",
+    "pt": "Compare Ollama, LM Studio, mlx-lm, llama.cpp e mais seis motores frente a frente &mdash; tok/s, TTFT, energia e térmica, com um comando.",
+    "zh": "让 Ollama、LM Studio、mlx-lm、llama.cpp 及另外六个引擎一对一对决 &mdash; tok/s、TTFT、功耗与温度，一条命令搞定。",
+    "ja": "Ollama、LM Studio、mlx-lm、llama.cppほか6つのエンジンを直接対決 &mdash; tok/s、TTFT、電力、温度をコマンド一発で。",
+    "ko": "Ollama, LM Studio, mlx-lm, llama.cpp 및 6개 엔진을 1:1로 비교 &mdash; tok/s, TTFT, 전력, 온도를 명령어 하나로."
   },
   "cta_start": {
     "en": "Get started", "fr": "Démarrer", "de": "Loslegen",
@@ -1340,7 +1340,7 @@
             <a href="agent/#api-reference" class="ah-btn ah-btn-secondary mode-agent">{{ tr("agent_cta_api") }}</a>
             <a href="https://asiai.dev/llms.txt" class="ah-btn ah-btn-secondary mode-agent" id="copy-url-btn" title="llms.txt">{{ tr("agent_cta_copy") }}</a>
           </div>
-          <div class="ah-hero-foot">Python 3.11+ &middot; stdlib only &middot; 9 engines auto-detected &middot; agent-ready API</div>
+          <div class="ah-hero-foot">Python 3.11+ &middot; stdlib only &middot; 10 engines auto-detected &middot; agent-ready API</div>
         </div>
 
         <!-- Hero visual A · animated terminal (human mode) -->
@@ -1666,6 +1666,7 @@
         ("vllm-mlx", "engines/vllm-mlx/", ":8000", "compat", ["MLX"], false),
         ("vMLX", "engines/vmlx/", ":8000", "compat", ["MLX", "Mamba/SSM"], false),
         ("Rapid-MLX", "engines/rapidmlx/", ":8000", "compat", ["MLX", "Homebrew"], false),
+        ("MTPLX", "engines/mtplx/", "any", "compat", ["MLX", "MTP"], false),
         ("Exo", "engines/exo/", ":52415", "compat", ["MLX", "Distributed"], false),
       ] %}
       <div class="ah-eng-grid">
