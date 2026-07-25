@@ -7,8 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.32.0](https://github.com/druide67/asiai/compare/v1.31.0...v1.32.0) — 2026-07-25
+
+### Changed
+
+- **Compare panel: growth-loop empty state** (#88): when this machine has
+  local run groups but none has a community counterpart, the "This
+  machine vs community" panel now says so and invites the user to be the
+  first — with a copyable `asiai bench --share` snippet and a note on
+  what a submission contains (chip, RAM, engine version, medians only).
+  The populated state gains per-engine sample counts under each median
+  and a neutral band for deltas under 2% (measurement noise, never a
+  win); a local engine with no counterpart keeps the loop in place of
+  its delta. The three pre-existing empty states (no local runs, no
+  local match, fetch failed) keep their distinct messages, and the
+  ADR 0002 matching rule is unchanged.
+- **Leaderboard table on the docs site** (#87): rank pills as a CSS
+  counter, top-3 podium, chip and RAM stacked in one cell (nine
+  locales), tok/s as the hero column over full-width bars, and a sticky
+  header — CSS only on the markdown-rendered table, light and dark. The
+  #1 accent on tok/s only applies while the table is actually sorted by
+  tok/s descending.
+
 ### Fixed
 
+- **Compare panel: `community_matched` semantics.** The flag was true as
+  soon as the community had data for this chip and model, even on
+  engines this machine never ran — which rendered a "0 of N matched"
+  grid instead of the share band. It is now derived from the built rows.
+- **Compare panel: copy button on plain HTTP.** The Clipboard API needs
+  a secure context and the dashboard is served over HTTP on the mesh and
+  LAN, so the button did nothing there; it now falls back the same way
+  the Bench page does.
 - **`--code` tool-call suite: `empty_object_bug` no longer counts
   wrong-tool calls.** The per-turn scorer judged every call's arguments
   against the EXPECTED tool's schema, so a well-formed call to a
