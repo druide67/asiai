@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`--code` stress suite: large-payload cell** — two turns that demand volume
+  (a complete 60+ line HTML page with style and script blocks in one
+  `write_file`, then four multi-line `edit_file` replacements), plus a per-turn
+  `max_tokens` override so a turn that asks for a large file gets a budget to
+  match. asiai already streams tool calls, so volume was the one dimension the
+  suite never exercised — and reported tool-call corruptions on Qwen3.6 servers
+  are specific to large or heavily-escaped arguments.
+- **`content_head` on turns that emit no tool call** — the first 200 characters
+  of the text channel are recorded, which distinguishes a model that narrated
+  instead of calling ("I need to use the edit_file tool…") from one that
+  returned nothing. The counters alone cannot tell the two apart.
+
 ### Fixed
 
 - **MCP extra pinned below the 2.x SDK.** `mcp` 2.0.0 removed
@@ -15,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `asiai.mcp` failed, and CI went red on `main` without a single line of our
   code changing. The extra now requires `mcp>=1.12,<2` so installs are working
   again; migrating to the 2.x API is a separate change.
+- **Large-payload turns no longer score as parser failures for lack of budget.**
+  The suite sent a flat 1024 `max_tokens` for every turn; a turn asking for a
+  large file ran out mid-argument, and the truncated call surfaced as invalid
+  JSON or as content leaking into the text channel — an artefact of the harness
+  that looks exactly like an engine defect. Measured on MTPLX 2.3.0: 81.8% JSON
+  validity at 1024 tokens versus 100% at 4096 on the same cell, with 5-7 KB
+  argument payloads intact.
 
 ## [1.32.0](https://github.com/druide67/asiai/compare/v1.31.0...v1.32.0) — 2026-07-25
 

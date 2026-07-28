@@ -193,11 +193,20 @@ def is_empty_object_bug(tc: dict[str, Any] | None, schema: dict[str, Any]) -> bo
     return False
 
 
+CONTENT_HEAD_CHARS = 200
+
+
 def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any]) -> dict[str, Any]:
-    """Deterministic per-turn score for a turn that should emit a tool call."""
+    """Deterministic per-turn score for a turn that should emit a tool call.
+
+    When NO tool call is emitted, the head of the text channel is recorded:
+    a turn that should have called a tool and instead narrated ("I need to use
+    the edit_file tool…") is a different defect from one that returned nothing,
+    and the two are indistinguishable from the counters alone.
+    """
     tcs = getattr(result, "tool_calls", None) or []
     tc = tcs[0] if tcs else None
-    return {
+    scored = {
         "emitted_tool_call": tc is not None,
         "json_valid": tc is not None and tc.get("parse_error") is None,
         # length ⇒ args cut off mid-stream (the truncation signature).
@@ -209,6 +218,10 @@ def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any])
         and is_empty_object_bug(tc, schema),
         "args_char_len": len(tc.get("arguments_raw", "")) if tc else 0,
     }
+    if tc is None:
+        text = getattr(result, "text", "") or ""
+        scored["content_head"] = text[:CONTENT_HEAD_CHARS]
+    return scored
 
 
 def has_think_tag_leak(text: str | None) -> bool:

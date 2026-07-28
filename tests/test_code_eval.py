@@ -125,6 +125,22 @@ class TestScoreToolcallTurn:
         assert s["emitted_tool_call"] is False
         assert s["correct_tool"] is False
 
+    def test_no_tool_call_records_content_head(self):
+        """A turn that narrates instead of calling ("I need to use edit_file…")
+        is a different defect from one that returns nothing — the text channel
+        is captured so the two are distinguishable in the results JSON."""
+        narration = "The user wants three edits. I need to use the edit_file tool " * 8
+        res = ChatResult(text=narration, tool_calls=[], finish_reason="length")
+        s = score_toolcall_turn(res, "edit_file", EDIT_SCHEMA)
+        assert s["content_head"].startswith("The user wants three edits.")
+        assert len(s["content_head"]) == 200
+        assert s["non_truncated"] is False
+
+    def test_content_head_absent_when_call_emitted(self):
+        res = ChatResult(tool_calls=[_tc("edit_file", _VALID_EDIT)], finish_reason="stop")
+        s = score_toolcall_turn(res, "edit_file", EDIT_SCHEMA)
+        assert "content_head" not in s
+
     def test_wrong_tool_well_formed_is_not_empty_object_bug(self):
         # The model calls search_code (valid args) where edit_file was expected:
         # a tool-choice miss, not an argument collapse. Judging search_code args

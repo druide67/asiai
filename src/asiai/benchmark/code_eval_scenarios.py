@@ -298,6 +298,43 @@ STRESS_TOOLCALL_TURNS: list[dict] = [
         "expected_tool": "search_code",
         "tool_result": "Found 14 matches.",
     },
+    # --- Large-payload cell -------------------------------------------------
+    # The two turns below force VOLUME, not just escaping density. Reported
+    # tool-call corruptions on Qwen3.6 servers (upstream MTPLX #196/#197) hit
+    # "large or heavily-escaped" arguments and are clean when the same payload
+    # is sent non-streaming — which points at the streaming accumulation of a
+    # long argument string, not at escaping alone. asiai streams tool calls by
+    # default, so the only missing ingredient was a payload big enough to span
+    # many chunks. The demanded size is explicit in the prompt so the cell keeps
+    # its meaning across models; the scorers already catch every failure shape
+    # (unterminated JSON → json_valid, truncation → non_truncated, dropped or
+    # renamed keys → schema_conform, no call at all → emitted_tool_call, with
+    # content_head recording what leaked into the text channel instead).
+    {
+        "user": (
+            "Write `report.html` in ONE write_file call: a complete standalone HTML "
+            "page, AT LEAST 60 lines, with a <style> block (selectors, nested braces, "
+            'quoted font stacks like "Geist Mono", monospace) and a <script> block '
+            "containing an object literal with quoted keys and escaped quotes. "
+            "No placeholder — emit the whole file content."
+        ),
+        "expected_tool": "write_file",
+        "tool_result": "Wrote report.html (4.2 KB).",
+        # 4x the default budget: a 60-line page does not fit in 1024 tokens, and
+        # a turn cut off mid-argument would score as truncation and mask the
+        # defect this cell exists to observe.
+        "max_tokens": 4096,
+    },
+    {
+        "user": (
+            "Now use edit_file on `report.html` with 4 edits whose replace strings are "
+            "each a MULTI-LINE block of at least 8 lines (CSS rules and a JS function), "
+            "keeping the braces, quotes and newlines intact in every replacement."
+        ),
+        "expected_tool": "edit_file",
+        "tool_result": "Applied 4 edits to report.html.",
+        "max_tokens": 4096,
+    },
     {
         "user": "Run the full test suite, verbose.",
         "expected_tool": "run_tests",
