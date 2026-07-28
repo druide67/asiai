@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **MCP extra pinned below the 2.x SDK.** `mcp` 2.0.0 removed
+  `mcp.server.fastmcp` (`FastMCP` became `mcp.server.MCPServer`), so a fresh
+  `pip install asiai[mcp]` broke the MCP server outright — every import in
+  `asiai.mcp` failed, and CI went red on `main` without a single line of our
+  code changing. The extra now requires `mcp>=1.12,<2` so installs are working
+  again; migrating to the 2.x API is a separate change.
+
 ## [1.32.0](https://github.com/druide67/asiai/compare/v1.31.0...v1.32.0) — 2026-07-25
 
 ### Changed
