@@ -11,7 +11,15 @@ boolean some templates stringify.
 
 from __future__ import annotations
 
-DATASET_VERSION = "code-v1"
+# Bumped to code-v2 when the tool-call stress suite gained its large-payload
+# cell (9 -> 11 turns). The payload SHAPE is unchanged, so ``SCHEMA_VERSION``
+# stays code-v1; what changed is the workload, and that is exactly the
+# distinction this constant exists for. It matters because several published
+# figures are RAW COUNTS, not ratios — ``count_empty_object_bug`` and
+# ``edit_turns_empty_object_bug`` grow with the number of opportunities, so a
+# code-v1 count and a code-v2 count are not the same measurement even when the
+# engine behaves identically. Compare counts only within one dataset version.
+DATASET_VERSION = "code-v2"
 
 TOOLS: list[dict] = [
     {
@@ -344,6 +352,22 @@ STRESS_TOOLCALL_TURNS: list[dict] = [
 STRESS_EDIT_TURNS = [
     i for i, t in enumerate(STRESS_TOOLCALL_TURNS) if t["expected_tool"] == "edit_file"
 ]
+
+# Workload for --thinking-ablation, deliberately NOT the full stress suite.
+#
+# The ablation isolates ONE variable: whether reasoning is enabled. A turn that
+# needs a raised completion budget breaks that isolation, because with
+# ``enable_thinking=True`` the reasoning tokens are drawn from the SAME budget as
+# the answer: the thinking-on arm would hit the ceiling earlier than thinking-off
+# on a turn that must emit a 60-line document, and the comparison would measure
+# budget pressure instead of reasoning. Raising the ablation's budget instead
+# would shift its own latency and token baselines, breaking comparability with
+# every ablation run recorded so far.
+#
+# So the ablation keeps the turns that carry no per-turn budget override. Any
+# future turn that declares ``max_tokens`` is excluded from here by construction,
+# which is the point: the exclusion cannot be forgotten when a turn is added.
+ABLATION_TOOLCALL_TURNS = [t for t in STRESS_TOOLCALL_TURNS if "max_tokens" not in t]
 
 # Single-model rubric: the judge scores ONE transcript on four criteria (1-5)
 # plus an overall 1-5. asiai benches one target at a time, so cross-model

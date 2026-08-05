@@ -73,7 +73,7 @@ Los tres modos son solo-JSON y comparan entre modelos haciendo diff de la salida
 Un finetune (`Qwopus3.6`, un finetune destilado de Opus del MoE `Qwen3.6-35B-A3B`) frente a su
 base, frente a un modelo denso de la mitad de su tamaño. El mismo llama.cpp, **la misma
 plantilla de chat mantenida constante** (solo se intercambió el archivo del modelo), thinking
-desactivado, 3 repeticiones. Apple Silicon M5 Max, High Power Mode.
+desactivado, 3 repeticiones. Apple Silicon M5 Max, High Power Mode. Medido con el conjunto `code-v1` (suite de estrés de 9 turnos). La suite incorporó una celda de carga grande en `code-v2` (11 turnos): las cifras de objeto vacío son RECUENTOS BRUTOS, comparables solo con otras ejecuciones `code-v1`.
 
 ### Fiabilidad de llamadas a herramientas
 

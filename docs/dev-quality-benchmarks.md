@@ -89,7 +89,7 @@ All four modes are JSON-only and compare across models by diffing the output.
 A finetune (`Qwopus3.6`, an Opus-distilled finetune of the `Qwen3.6-35B-A3B` MoE)
 vs. its base, vs. a dense model half its size. Same llama.cpp, **same chat
 template held constant** (only the model file swapped), thinking disabled, 3
-repeats. Apple Silicon M5 Max, High Power Mode.
+repeats. Apple Silicon M5 Max, High Power Mode. Measured on dataset `code-v1` (9-turn stress suite). The suite gained a large-payload cell in `code-v2` (11 turns): the empty-object figures below are RAW COUNTS, so compare them only against other `code-v1` runs.
 
 ### Tool-call reliability
 

@@ -491,7 +491,7 @@ def test_run_code_eval_schema_and_metadata():
             engine_version="b9430",
         )
     assert out["schema_version"] == "code-v1"
-    assert out["dataset_version"] == "code-v1"
+    assert out["dataset_version"] == "code-v2"
     assert out["suites"] == ["tool-call"]
     assert out["hw_chip"] == "Apple M5 Max"
     assert "tool_call" in out["code_results"]

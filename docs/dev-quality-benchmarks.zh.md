@@ -64,7 +64,7 @@ description: Apple Silicon 上的开发质量与多语言保持基准测试结�
 一个微调版（`Qwopus3.6`，对 `Qwen3.6-35B-A3B` MoE 进行 Opus 蒸馏的微调）
 vs 它的基座模型，vs 一个只有其一半大小的稠密模型。相同的 llama.cpp、
 **chat 模板保持恒定不变**（只替换模型文件）、关闭 thinking、3 次重复。
-Apple Silicon M5 Max，High Power Mode。
+Apple Silicon M5 Max，High Power Mode。 基于数据集 `code-v1`（9 轮压力套件）测量。该套件在 `code-v2` 中新增了大负载单元（11 轮）：下方的空对象数值为原始计数，仅可与其他 `code-v1` 运行结果比较。
 
 ### 工具调用可靠性
 

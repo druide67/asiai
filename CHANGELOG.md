@@ -21,6 +21,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of calling ("I need to use the edit_file tool…") from one that
   returned nothing. The counters alone cannot tell the two apart.
 
+### Changed
+
+- **Dataset version bumped to `code-v2`.** The stress suite grew from 9 to 11
+  turns, and two of its published figures — `count_empty_object_bug` and
+  `edit_turns_empty_object_bug` — are RAW COUNTS, not ratios: they scale with
+  the number of opportunities, so the same engine scores differently under
+  `code-v1` and `code-v2` without having changed. The payload *shape* is
+  untouched, so `schema_version` stays `code-v1`; the workload is what moved,
+  which is precisely the distinction `dataset_version` exists for. The
+  dev-quality tables in the docs (9 locales) now state the dataset they were
+  measured on.
+- **`--thinking-ablation` keeps the 9-turn workload** via a dedicated
+  `ABLATION_TOOLCALL_TURNS`, which excludes any turn carrying a per-turn budget
+  override. The ablation isolates one variable — whether reasoning is enabled —
+  and a raised-budget turn breaks that isolation: with `enable_thinking=True`
+  the reasoning tokens are drawn from the *same* completion budget, so the
+  thinking-on arm would hit the ceiling earlier on a turn that must emit a
+  60-line document, and the run would measure budget pressure instead of
+  reasoning. Raising the ablation's own budget was the other option and was
+  rejected: it shifts its latency and token baselines, breaking comparability
+  with every ablation run recorded so far. Three tests guard both directions so
+  the exclusion cannot be forgotten when a turn is added.
+
 ### Fixed
 
 - **MCP extra pinned below the 2.x SDK.** `mcp` 2.0.0 removed

@@ -33,7 +33,7 @@ description: Apple Silicon 上での dev 品質および多言語保持ベンチ
 
 ## 実例 — Qwen3.6-35B-A3B vs Qwopus3.6-35B-A3B vs Qwen3.6-27B dense
 
-ファインチューン（`Qwopus3.6`、`Qwen3.6-35B-A3B` MoE の Opus 蒸留ファインチューン）対そのベース、対その半分のサイズの dense モデル。同じ llama.cpp、**同じチャットテンプレートを固定**（モデルファイルのみ差し替え）、thinking 無効化、3 回反復。Apple Silicon M5 Max、High Power Mode。
+ファインチューン（`Qwopus3.6`、`Qwen3.6-35B-A3B` MoE の Opus 蒸留ファインチューン）対そのベース、対その半分のサイズの dense モデル。同じ llama.cpp、**同じチャットテンプレートを固定**（モデルファイルのみ差し替え）、thinking 無効化、3 回反復。Apple Silicon M5 Max、High Power Mode。 データセット `code-v1`（9ターンのストレススイート）で測定。`code-v2` では大きなペイロードのセルが追加され11ターンになりました。以下の空オブジェクトの数値は生のカウントであり、他の `code-v1` の実行とのみ比較できます。
 
 ### ツールコールの信頼性
 

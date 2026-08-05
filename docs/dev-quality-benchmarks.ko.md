@@ -65,7 +65,7 @@ throughput은 품질이 아니다. 모델은 빠르게 decode하면서도 에이
 
 파인튜닝(`Qwopus3.6`, `Qwen3.6-35B-A3B` MoE의 Opus-distilled 파인튜닝) 대 그 베이스,
 대 절반 크기의 밀집형 모델. 동일한 llama.cpp, **동일한 chat 템플릿 고정**(모델
-파일만 교체), thinking 비활성화, 3회 반복. Apple Silicon M5 Max, High Power Mode.
+파일만 교체), thinking 비활성화, 3회 반복. Apple Silicon M5 Max, High Power Mode. 데이터셋 `code-v1`(9턴 스트레스 스위트)에서 측정. `code-v2`에서 대용량 페이로드 셀이 추가되어 11턴이 되었습니다. 아래 빈 객체 수치는 원시 카운트이므로 다른 `code-v1` 실행과만 비교하십시오.
 
 ### tool-call 신뢰성
 
