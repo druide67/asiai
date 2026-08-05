@@ -81,7 +81,7 @@ sortie.
 Un finetune (`Qwopus3.6`, un finetune d'`Qwen3.6-35B-A3B` MoE distillé d'Opus) vs.
 sa base, vs. un modèle dense deux fois plus petit. Même llama.cpp, **même chat
 template maintenu constant** (seul le fichier de modèle change), thinking
-désactivé, 3 répétitions. Apple Silicon M5 Max, High Power Mode.
+désactivé, 3 répétitions. Apple Silicon M5 Max, High Power Mode. Mesuré sur le jeu `code-v1` (suite stress à 9 tours). La suite a gagné une cellule gros payload en `code-v2` (11 tours) : les chiffres d'objet vide ci-dessous sont des COMPTEURS BRUTS, à ne comparer qu'à d'autres relevés `code-v1`.
 
 ### Fiabilité des appels d'outils
 

@@ -5,7 +5,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from asiai.benchmark.code_eval import ChatResult
-from asiai.benchmark.code_eval_scenarios import STRESS_TOOLCALL_TURNS
+from asiai.benchmark.code_eval_scenarios import (
+    ABLATION_TOOLCALL_TURNS,
+    STRESS_TOOLCALL_TURNS,
+)
 from asiai.benchmark.thinking_ablation import (
     _ablation_extra,
     _continue_with_reasoning,
@@ -69,7 +72,7 @@ class TestRun:
         cells = {c["config"]: c for c in out["cells"]}
         assert set(cells) == {"enable-off", "enable-on-preserve-on", "enable-on-preserve-off"}
         for c in cells.values():
-            assert c["turns"] == len(STRESS_TOOLCALL_TURNS)
+            assert c["turns"] == len(ABLATION_TOOLCALL_TURNS)
             for k in (
                 "pct_clean",
                 "latency_ms_mean",
@@ -96,3 +99,32 @@ class TestRun:
         saved = json.loads((tmp_path / "a.json").read_text())
         assert saved["schema_version"] == "thinking-ablation-v1"
         assert len(saved["cells"]) == 3
+
+
+class TestAblationWorkloadIsolation:
+    """The ablation must vary reasoning and nothing else.
+
+    A turn carrying a per-turn ``max_tokens`` override would break that: under
+    ``enable_thinking=True`` the reasoning tokens come out of the same
+    completion budget, so the thinking-on arm would hit the ceiling earlier and
+    the run would measure budget pressure rather than reasoning. These asserts
+    fail if such a turn ever reaches the ablation workload.
+    """
+
+    def test_ablation_workload_carries_no_budget_override(self):
+        offenders = [i for i, t in enumerate(ABLATION_TOOLCALL_TURNS) if "max_tokens" in t]
+        assert offenders == [], (
+            f"turns {offenders} carry a max_tokens override and must be excluded "
+            "from the ablation workload"
+        )
+
+    def test_ablation_workload_is_a_strict_subset_of_the_stress_suite(self):
+        assert len(ABLATION_TOOLCALL_TURNS) <= len(STRESS_TOOLCALL_TURNS)
+        assert all(t in STRESS_TOOLCALL_TURNS for t in ABLATION_TOOLCALL_TURNS)
+
+    def test_stress_suite_still_carries_the_large_payload_cell(self):
+        # Guards the other direction: the exclusion must not silently drop the
+        # large-payload turns from the stress suite they were added for.
+        budgeted = [t for t in STRESS_TOOLCALL_TURNS if "max_tokens" in t]
+        assert len(budgeted) >= 2
+        assert all(t["max_tokens"] > 1024 for t in budgeted)

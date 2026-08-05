@@ -467,7 +467,10 @@ def _run_toolcall_suite(
                 model,
                 messages,
                 tools=TOOLS,
-                max_tokens=1024,
+                # A turn that demands a large file needs a budget to match: with
+                # the flat 1024 the model runs out mid-argument and the turn
+                # scores as truncation, hiding whatever the real defect was.
+                max_tokens=turn.get("max_tokens", 1024),
                 extra_body=extra_body,
                 api_key=api_key,
                 timeout=timeout,

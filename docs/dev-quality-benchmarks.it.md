@@ -84,7 +84,7 @@ Un finetune (`Qwopus3.6`, un finetune distillato da Opus del MoE
 `Qwen3.6-35B-A3B`) contro la sua base, contro un modello dense grande la metà.
 Stesso llama.cpp, **stesso chat template tenuto costante** (solo il file del
 modello scambiato), thinking disabilitato, 3 ripetizioni. Apple Silicon M5 Max,
-High Power Mode.
+High Power Mode. Misurato sul dataset `code-v1` (suite di stress a 9 turni). La suite ha acquisito una cella large-payload in `code-v2` (11 turni): i valori di oggetto vuoto sono CONTEGGI GREZZI, confrontabili solo con altre esecuzioni `code-v1`.
 
 ### Affidabilità delle tool call
 

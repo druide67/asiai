@@ -27,8 +27,8 @@ from typing import Any
 
 from asiai.benchmark.code_eval import chat
 from asiai.benchmark.code_eval_scenarios import (
+    ABLATION_TOOLCALL_TURNS,
     STRESS_TOOLCALL_SYSTEM,
-    STRESS_TOOLCALL_TURNS,
     TOOLS,
     TOOLS_BY_NAME,
 )
@@ -122,7 +122,7 @@ def _run_one_config(
     eb = _ablation_extra(extra_body, cfg["enable_thinking"], cfg["preserve_thinking"])
     messages: list[dict[str, Any]] = [{"role": "system", "content": STRESS_TOOLCALL_SYSTEM}]
     per_turn: list[dict[str, Any]] = []
-    for idx, turn in enumerate(STRESS_TOOLCALL_TURNS):
+    for idx, turn in enumerate(ABLATION_TOOLCALL_TURNS):
         messages.append({"role": "user", "content": turn["user"]})
         res = chat(
             base_url,
@@ -151,7 +151,7 @@ def _run_one_config(
         messages.extend(_continue_with_reasoning(res, turn["tool_result"]))
         if on_progress:
             on_progress(
-                f"  [{cfg['id']} t{idx + 1}/{len(STRESS_TOOLCALL_TURNS)}] "
+                f"  [{cfg['id']} t{idx + 1}/{len(ABLATION_TOOLCALL_TURNS)}] "
                 f"clean={per_turn[-1]['clean']} lat={res.latency_ms}ms "
                 f"ctx={res.prompt_tokens}"
             )

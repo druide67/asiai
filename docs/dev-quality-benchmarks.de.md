@@ -78,7 +78,7 @@ Alle drei Modi sind JSON-only und vergleichen Modelle, indem der Output gediffed
 Ein Finetune (`Qwopus3.6`, ein Opus-distilliertes Finetune des `Qwen3.6-35B-A3B` MoE)
 vs. seine Basis, vs. ein Dense-Modell halber Größe. Dasselbe llama.cpp, **dasselbe
 Chat-Template konstant gehalten** (nur die Modelldatei getauscht), Thinking deaktiviert,
-3 Wiederholungen. Apple Silicon M5 Max, High Power Mode.
+3 Wiederholungen. Apple Silicon M5 Max, High Power Mode. Gemessen mit Datensatz `code-v1` (Stress-Suite mit 9 Runden). Die Suite erhielt in `code-v2` eine Large-Payload-Zelle (11 Runden): die Empty-Object-Werte unten sind ROHE ZÄHLER und nur mit anderen `code-v1`-Läufen vergleichbar.
 
 ### Tool-Call-Zuverlässigkeit
 

@@ -11,7 +11,15 @@ boolean some templates stringify.
 
 from __future__ import annotations
 
-DATASET_VERSION = "code-v1"
+# Bumped to code-v2 when the tool-call stress suite gained its large-payload
+# cell (9 -> 11 turns). The payload SHAPE is unchanged, so ``SCHEMA_VERSION``
+# stays code-v1; what changed is the workload, and that is exactly the
+# distinction this constant exists for. It matters because several published
+# figures are RAW COUNTS, not ratios — ``count_empty_object_bug`` and
+# ``edit_turns_empty_object_bug`` grow with the number of opportunities, so a
+# code-v1 count and a code-v2 count are not the same measurement even when the
+# engine behaves identically. Compare counts only within one dataset version.
+DATASET_VERSION = "code-v2"
 
 TOOLS: list[dict] = [
     {
@@ -298,6 +306,43 @@ STRESS_TOOLCALL_TURNS: list[dict] = [
         "expected_tool": "search_code",
         "tool_result": "Found 14 matches.",
     },
+    # --- Large-payload cell -------------------------------------------------
+    # The two turns below force VOLUME, not just escaping density. Reported
+    # tool-call corruptions on Qwen3.6 servers (upstream MTPLX #196/#197) hit
+    # "large or heavily-escaped" arguments and are clean when the same payload
+    # is sent non-streaming — which points at the streaming accumulation of a
+    # long argument string, not at escaping alone. asiai streams tool calls by
+    # default, so the only missing ingredient was a payload big enough to span
+    # many chunks. The demanded size is explicit in the prompt so the cell keeps
+    # its meaning across models; the scorers already catch every failure shape
+    # (unterminated JSON → json_valid, truncation → non_truncated, dropped or
+    # renamed keys → schema_conform, no call at all → emitted_tool_call, with
+    # content_head recording what leaked into the text channel instead).
+    {
+        "user": (
+            "Write `report.html` in ONE write_file call: a complete standalone HTML "
+            "page, AT LEAST 60 lines, with a <style> block (selectors, nested braces, "
+            'quoted font stacks like "Geist Mono", monospace) and a <script> block '
+            "containing an object literal with quoted keys and escaped quotes. "
+            "No placeholder — emit the whole file content."
+        ),
+        "expected_tool": "write_file",
+        "tool_result": "Wrote report.html (4.2 KB).",
+        # 4x the default budget: a 60-line page does not fit in 1024 tokens, and
+        # a turn cut off mid-argument would score as truncation and mask the
+        # defect this cell exists to observe.
+        "max_tokens": 4096,
+    },
+    {
+        "user": (
+            "Now use edit_file on `report.html` with 4 edits whose replace strings are "
+            "each a MULTI-LINE block of at least 8 lines (CSS rules and a JS function), "
+            "keeping the braces, quotes and newlines intact in every replacement."
+        ),
+        "expected_tool": "edit_file",
+        "tool_result": "Applied 4 edits to report.html.",
+        "max_tokens": 4096,
+    },
     {
         "user": "Run the full test suite, verbose.",
         "expected_tool": "run_tests",
@@ -307,6 +352,22 @@ STRESS_TOOLCALL_TURNS: list[dict] = [
 STRESS_EDIT_TURNS = [
     i for i, t in enumerate(STRESS_TOOLCALL_TURNS) if t["expected_tool"] == "edit_file"
 ]
+
+# Workload for --thinking-ablation, deliberately NOT the full stress suite.
+#
+# The ablation isolates ONE variable: whether reasoning is enabled. A turn that
+# needs a raised completion budget breaks that isolation, because with
+# ``enable_thinking=True`` the reasoning tokens are drawn from the SAME budget as
+# the answer: the thinking-on arm would hit the ceiling earlier than thinking-off
+# on a turn that must emit a 60-line document, and the comparison would measure
+# budget pressure instead of reasoning. Raising the ablation's budget instead
+# would shift its own latency and token baselines, breaking comparability with
+# every ablation run recorded so far.
+#
+# So the ablation keeps the turns that carry no per-turn budget override. Any
+# future turn that declares ``max_tokens`` is excluded from here by construction,
+# which is the point: the exclusion cannot be forgotten when a turn is added.
+ABLATION_TOOLCALL_TURNS = [t for t in STRESS_TOOLCALL_TURNS if "max_tokens" not in t]
 
 # Single-model rubric: the judge scores ONE transcript on four criteria (1-5)
 # plus an overall 1-5. asiai benches one target at a time, so cross-model

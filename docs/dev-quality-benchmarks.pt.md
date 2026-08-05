@@ -72,7 +72,7 @@ Todos os três modos são somente JSON e comparam entre modelos fazendo o diff d
 Um finetune (`Qwopus3.6`, um finetune destilado de Opus do MoE `Qwen3.6-35B-A3B`)
 vs. sua base, vs. um modelo denso com metade do tamanho. Mesmo llama.cpp, **mesmo chat
 template mantido constante** (só o arquivo do modelo trocado), thinking desativado, 3
-repetições. Apple Silicon M5 Max, High Power Mode.
+repetições. Apple Silicon M5 Max, High Power Mode. Medido no conjunto `code-v1` (suíte de estresse de 9 turnos). A suíte ganhou uma célula de payload grande em `code-v2` (11 turnos): os números de objeto vazio são CONTAGENS BRUTAS, comparáveis apenas com outras execuções `code-v1`.
 
 ### Confiabilidade de tool call
 
