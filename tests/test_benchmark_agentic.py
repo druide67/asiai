@@ -455,3 +455,55 @@ def test_thinking_guard_ok_when_no_reasoning_streamed():
     extra = {"chat_template_kwargs": {"enable_thinking": False}}
     t = ag._summarize_thinking(runs, extra)
     assert t["honoured"] is True
+
+
+def test_thinking_status_separates_the_four_regimes():
+    """``honoured`` is vacuously true when nothing was requested, so a caller
+    who never passed extra_body got a green light computed from no measurement.
+    ``status``/``comparable`` are what a consumer should read."""
+    import asiai.benchmark.agentic as ag
+
+    off = {"chat_template_kwargs": {"enable_thinking": False}}
+    thought = [ag.AgenticRun(phase="cold", reasoning_chars=1667)]
+    silent = [ag.AgenticRun(phase="cold", reasoning_chars=0)]
+
+    assert ag._summarize_thinking(silent, off)["status"] == "off_honoured"
+    assert ag._summarize_thinking(thought, off)["status"] == "off_ignored"
+    assert ag._summarize_thinking(thought, None)["status"] == "unrequested"
+    assert ag._summarize_thinking(silent, None)["status"] == "absent"
+
+
+def test_unrequested_reasoning_is_not_comparable_though_honoured_says_it_is():
+    """The exact case that shipped: no extra_body, engine reasoned through its
+    whole budget. ``honoured`` reports True; the run is still not comparable to
+    one that answered."""
+    import asiai.benchmark.agentic as ag
+
+    t = ag._summarize_thinking([ag.AgenticRun(phase="cold", reasoning_chars=1667)], None)
+    assert t["honoured"] is True
+    assert t["comparable"] is False
+
+
+def test_context_depth_summary():
+    import asiai.benchmark.agentic as ag
+
+    runs = [
+        ag.AgenticRun(phase="cold", prompt_tokens=7528),
+        ag.AgenticRun(phase="warm", prompt_tokens=7530),
+        ag.AgenticRun(phase="prefix-test-1", prompt_tokens=7594),
+    ]
+    d = ag._summarize_context_depth(runs)
+    assert d["median"] == 7530
+    assert (d["min"], d["max"], d["n"]) == (7528, 7594, 3)
+    assert d["spread_pct"] == 0.88
+
+
+def test_context_depth_ignores_errored_runs_and_survives_empty():
+    import asiai.benchmark.agentic as ag
+
+    assert ag._summarize_context_depth([])["median"] is None
+    runs = [
+        ag.AgenticRun(phase="cold", prompt_tokens=999999, error="boom"),
+        ag.AgenticRun(phase="warm", prompt_tokens=7530),
+    ]
+    assert ag._summarize_context_depth(runs)["median"] == 7530

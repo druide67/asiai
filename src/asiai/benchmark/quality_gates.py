@@ -134,6 +134,33 @@ _ENGINE_PROCESS_PATTERNS = {
 }
 
 
+# Shells run a script whose own arguments name the engine binary, so the raw
+# command line matches the pattern while no engine is running in that process.
+# A bench harness that launches engines from a wrapper (`zsh run-cell.sh …
+# llama-server --model …`) was reported as a duplicate of the engine it had
+# just started — on 4 of 12 cells of the 2026-08 campaign. The engine itself
+# always appears as its own `ps` entry, so skipping shell wrappers loses
+# nothing and removes the whole false-positive class.
+_SHELL_ARGV0 = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
+
+
+def _engine_process_entry(line: str, pattern: str) -> dict[str, str] | None:
+    """Parse one ``ps axo pid,command`` line into an engine entry, or None.
+
+    Matches on the command line (an engine may be an interpreter invocation,
+    e.g. MTPLX runs as ``python -m mtplx.server.openai``) but rejects shell
+    wrappers, whose ``argv[0]`` is the shell rather than anything inferential.
+    """
+    parts = line.split(None, 1)
+    if len(parts) != 2 or pattern not in parts[1]:
+        return None
+    argv0 = parts[1].split(None, 1)[0]
+    if argv0.rsplit("/", 1)[-1] in _SHELL_ARGV0:
+        return None
+    # Truncate command to 200 chars to keep JSON compact.
+    return {"pid": parts[0], "command": parts[1][:200]}
+
+
 def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
     """Return matching process entries when ≥2 share the engine pattern.
 
@@ -154,11 +181,9 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
         return []
     matches: list[dict[str, str]] = []
     for line in ps_out.splitlines()[1:]:
-        if pattern in line:
-            parts = line.split(None, 1)
-            if len(parts) == 2:
-                # Truncate command to 200 chars to keep JSON compact.
-                matches.append({"pid": parts[0], "command": parts[1][:200]})
+        entry = _engine_process_entry(line, pattern)
+        if entry is not None:
+            matches.append(entry)
     return matches if len(matches) > 1 else []
 
 
@@ -192,11 +217,10 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
         if _engine_match_key(name) == target_key:
             continue
         for line in lines:
-            if pattern in line:
-                parts = line.split(None, 1)
-                if len(parts) == 2 and parts[0] not in seen_pids:
-                    seen_pids.add(parts[0])
-                    found.append({"engine": name, "pid": parts[0], "command": parts[1][:200]})
+            entry = _engine_process_entry(line, pattern)
+            if entry is not None and entry["pid"] not in seen_pids:
+                seen_pids.add(entry["pid"])
+                found.append({"engine": name, **entry})
     return found
 
 

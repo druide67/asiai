@@ -549,6 +549,33 @@ def _summarize_footprint(runs: list[AgenticRun]) -> dict[str, Any]:
     }
 
 
+def _summarize_context_depth(runs: list[AgenticRun]) -> dict[str, Any]:
+    """Prompt depth the protocol actually reached, in tokens.
+
+    Decode throughput is a function of context depth, so a tok/s figure without
+    the depth it was measured at cannot be compared with anything. The numbers
+    are already in every run; summarizing them here means a reader never has to
+    reconstruct the depth from raw runs to know what the headline refers to.
+
+    ``spread_pct`` matters when comparing engines: the same prompt tokenizes
+    differently per chat template, and a few percent is normal. A large spread
+    means the engines were not asked the same question.
+    """
+    import statistics
+
+    depths = [r.prompt_tokens for r in runs if r.error is None and (r.prompt_tokens or 0) > 0]
+    if not depths:
+        return {"median": None, "min": None, "max": None, "spread_pct": None, "n": 0}
+    lo, hi = min(depths), max(depths)
+    return {
+        "median": int(statistics.median(depths)),
+        "min": lo,
+        "max": hi,
+        "spread_pct": round((hi - lo) / lo * 100, 2) if lo else None,
+        "n": len(depths),
+    }
+
+
 def _thinking_requested_off(extra_body: dict[str, Any] | None) -> bool:
     """True if extra_body asked the model to disable thinking.
 
@@ -565,20 +592,48 @@ def _thinking_requested_off(extra_body: dict[str, Any] | None) -> bool:
 def _summarize_thinking(
     runs: list[AgenticRun], extra_body: dict[str, Any] | None
 ) -> dict[str, Any]:
-    """Guard: did ``enable_thinking=off`` actually take?
+    """Guard: is this run's reasoning regime known, and is it comparable?
 
     If thinking was requested off but the engine still streamed reasoning tokens,
     it silently ignored the key (e.g. Ollama's OpenAI endpoint wants
     ``{"think": false}`` but got the chat_template_kwargs form). Such a run's
     tok/s and TTFT are reasoning-polluted and NOT comparable to engines that
-    honoured the request — ``honoured=False`` flags it.
+    honoured the request.
+
+    ``honoured`` alone cannot express that, because it is vacuously true when
+    nothing was requested: ``(not requested_off) or ...`` short-circuits before
+    looking at a single run. A caller who never passed ``extra_body`` therefore
+    got a green light computed from no measurement at all. ``status`` splits the
+    four real cases apart, and ``comparable`` is the one a consumer should read:
+
+    ==============  =========================================================
+    ``status``      meaning
+    ==============  =========================================================
+    off_honoured    asked off, none streamed — comparable
+    off_ignored     asked off, streamed anyway — the engine ignored the key
+    unrequested     nothing asked, reasoning streamed — regime not controlled
+    absent          nothing asked, none streamed — comparable
+    ==============  =========================================================
+
+    ``unrequested`` is not comparable even though nothing malfunctioned: a run
+    that spends its token budget reasoning is not measuring the same thing as a
+    run that answers. Ranking one against the other compares an engine that
+    replies with an engine that thinks.
     """
     requested_off = _thinking_requested_off(extra_body)
     reasoning_detected = any((r.reasoning_chars or 0) > 0 for r in runs if r.error is None)
+    if requested_off:
+        status = "off_ignored" if reasoning_detected else "off_honoured"
+    else:
+        status = "unrequested" if reasoning_detected else "absent"
     return {
         "requested_off": requested_off,
         "reasoning_detected": reasoning_detected,
+        # Kept for schema compatibility; prefer ``comparable``, which is never
+        # vacuous. See the table above for why the two differ on `unrequested`.
         "honoured": (not requested_off) or (not reasoning_detected),
+        "status": status,
+        "comparable": not reasoning_detected,
     }
 
 
@@ -737,6 +792,7 @@ def run_agentic_bench(
         "cold_warm_repeats": cold_warm_repeats,
         "phase_stats": _phase_stats(runs),
         "footprint": _summarize_footprint(runs),
+        "context_depth": _summarize_context_depth(runs),
         "runs": [asdict(r) for r in runs],
     }
     # Self-describing metadata (machine/chip/os/ram/cores/powermode/version/mode);

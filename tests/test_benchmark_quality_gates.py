@@ -776,3 +776,55 @@ def test_check_other_engines_resident_dedups_shared_pattern():
         found = check_other_engines_resident("mlx-lm")
     pids = [f["pid"] for f in found]
     assert pids == ["300"]
+
+
+# --- shell wrappers are not engines ---------------------------------------
+# A bench harness launches engines from a script whose own argv names the
+# engine binary, so the raw command line matched while no engine ran in that
+# process. Four of twelve cells of the 2026-08 campaign reported a duplicate
+# of the engine they had just started.
+
+
+def test_shell_wrapper_carrying_engine_argv_is_not_a_duplicate():
+    fake = _fake_ps_out(
+        [
+            "12345 /opt/homebrew/bin/llama-server --port 8080",
+            "12346 /bin/zsh /Users/x/ops/run-cell.sh L1 8017 "
+            "/opt/homebrew/bin/llama-server --model m",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        result = check_duplicate_processes("llamacpp")
+    assert result == [], "a zsh wrapper is not a second engine"
+
+
+def test_wrapper_exclusion_does_not_hide_a_real_duplicate():
+    """Negative witness: the exclusion must not swallow genuine duplicates."""
+    fake = _fake_ps_out(
+        [
+            "12345 /opt/homebrew/bin/llama-server --port 8080",
+            "12346 /bin/zsh /Users/x/ops/run-cell.sh L1 8017 "
+            "/opt/homebrew/bin/llama-server --model m",
+            "12347 /opt/homebrew/bin/llama-server --port 8081",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        result = check_duplicate_processes("llamacpp")
+    assert [r["pid"] for r in result] == ["12345", "12347"]
+
+
+def test_interpreter_launched_engine_still_matches():
+    """MTPLX runs as ``python -m mtplx.server.openai`` — argv[0] is the
+    interpreter, which must stay eligible; only shells are excluded."""
+    fake = _fake_ps_out(
+        [
+            "200 /opt/homebrew/bin/python3 -m mtplx.server.openai --port 8080",
+            "201 /opt/homebrew/bin/python3 -m mtplx.server.openai --port 8081",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        result = check_duplicate_processes("mtplx")
+    assert len(result) == 2

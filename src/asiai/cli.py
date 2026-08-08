@@ -682,25 +682,25 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         f"ttft_corroborated={reuse.get('reuse_corroborated_by_ttft', False)}"
     )
     print(f"  {dim('(verdict is engine-family-specific — compare the raw signal, not it)')}")
-    qg = result.get("quality_gates") or {}
-    es = qg.get("early_stop") or {}
-    if es.get("detected"):
-        truncated = ", ".join(t["phase"] for t in es.get("truncated_runs", []))
-        print(red(f"  ⚠ Early-stop detected on: {truncated}"))
-    mp = qg.get("memory_pressure") or {}
-    if mp.get("alerted"):
-        print(red(f"  ⚠ Memory pressure during bench: {mp.get('alert_reason')}"))
-    dups = qg.get("duplicate_processes") or []
-    if dups:
-        pids = ", ".join(d["pid"] for d in dups)
+    # Depth belongs next to the throughput it qualifies: the same engine reads
+    # 82 tok/s at 0.5K and 26 at 128K, so a decode figure without its depth
+    # cannot be compared with anyone else's.
+    depth = result.get("context_depth") or {}
+    if depth.get("median") is not None:
         print(
-            red(f"  ⚠ Duplicate {engine.name} processes (PIDs: {pids}) — bench may be unreliable")
+            f"  {dim('context depth')}: {depth['median']} prompt tokens "
+            f"(median of {depth.get('n', 0)}, spread {depth.get('spread_pct')}%)"
         )
+    # Failed gates are printed by _gate_exit_code below — all of them, not the
+    # three that used to be hand-rolled here. output_validity, thermal and
+    # thinking were computed and stored but never shown, which is how a campaign
+    # published four cells whose responses were empty.
     if args.agentic_output:
         print(f"Saved {args.agentic_output}")
     _persist_mode_run(args, "agentic", result)
     _card_mode_result(args, "agentic", result)
-    return _export_mode_result(args, "agentic", result)
+    export_rc = _export_mode_result(args, "agentic", result)
+    return export_rc or _gate_exit_code(args, "agentic", result)
 
 
 def _run_backfill_runs(db_path: str, apply: bool = False) -> int:
@@ -779,6 +779,77 @@ def _card_mode_result(args: argparse.Namespace, bench_type: str, payload: dict) 
         from asiai.display.formatters import yellow
 
         print(yellow(f"  ⚠ card generation failed: {e}"), file=sys.stderr)
+
+
+def _gate_exit_code(args: argparse.Namespace, bench_type: str, payload: dict) -> int:
+    """Surface every failed quality gate; exit non-zero under --fail-on-gate.
+
+    asiai has always computed these gates and always exited 0, so a scripted
+    caller could publish a number the tool itself knew was invalid. That is not
+    hypothetical: a 2026-08 six-engine campaign shipped four cells whose
+    responses were empty (``output_validity`` 0%) and twelve that thermally
+    throttled, because the pipeline read the headline and never opened the JSON.
+    Computing a gate and enforcing it are different jobs — this does the second.
+
+    Enforcement is opt-in. Failing by default is the right end state, but
+    flipping it in a point release would break existing CI in the one direction
+    a user cannot see coming. The failures print either way, so the silent case
+    is already gone; ``--fail-on-gate`` only decides whether they stop the run.
+
+    It also takes a subset, because "enforce everything" is not reachable on
+    every machine: sustained generation on a laptop throttles whatever the
+    operator does, so a blanket rule would push people straight back to
+    ignoring the gates. ``--fail-on-gate output_validity,thinking`` enforces
+    what the operator controls while thermal stays a printed condition.
+
+    Returns 2 (distinct from 1, a failed export) so a caller can tell "the
+    artifact is missing" from "the artifact is not trustworthy".
+    """
+    from asiai.benchmark.result_model import build_result
+    from asiai.display.formatters import red, yellow
+
+    # argparse yields None (absent), "all" (bare flag) or a comma-separated
+    # list; a plain bool can come from a programmatic caller, and False there
+    # has to mean "do not enforce" rather than "enforce nothing named False".
+    selected = getattr(args, "fail_on_gate", None)
+    enforce = selected is not None and selected is not False
+    # ``True`` covers programmatic callers built before the subset form existed.
+    only = (
+        None
+        if selected in (None, "all", True)
+        else {g.strip() for g in str(selected).split(",") if g.strip()}
+    )
+    try:
+        failed = [g for g in build_result(bench_type, payload).gates if not g.passed]
+    except Exception as e:  # never traceback out of a finished bench
+        if enforce:
+            print(red(f"✗ could not evaluate quality gates: {e}"), file=sys.stderr)
+            print(
+                red("  --fail-on-gate is set and validity is unproven — refusing."),
+                file=sys.stderr,
+            )
+            return 2
+        return 0
+    if not failed:
+        return 0
+    blocking = {g.name for g in failed if only is None or g.name in only} if enforce else set()
+    for g in failed:
+        detail = f" — {g.detail}" if g.detail else ""
+        tint = red if g.name in blocking else yellow
+        print(tint(f"  ✗ gate {g.name}{detail}"), file=sys.stderr)
+    if not blocking:
+        print(
+            yellow("  ⚠ a run with a failed gate is not publishable as-is (--fail-on-gate)"),
+            file=sys.stderr,
+        )
+        return 0
+    print(
+        red(f"✗ quality gate(s) failed ({', '.join(sorted(blocking))}) — "),
+        red("refusing to report this run as valid."),
+        file=sys.stderr,
+        sep="",
+    )
+    return 2
 
 
 def _export_mode_result(args: argparse.Namespace, bench_type: str, payload: dict) -> int:
@@ -959,7 +1030,8 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
         print(f"\nSaved {args.burst_output}")
     _persist_mode_run(args, "burst", result)
     _card_mode_result(args, "burst", result)
-    return _export_mode_result(args, "burst", result)
+    export_rc = _export_mode_result(args, "burst", result)
+    return export_rc or _gate_exit_code(args, "burst", result)
 
 
 def _run_code_bench(args: argparse.Namespace) -> int:
@@ -1115,7 +1187,8 @@ def _run_code_bench(args: argparse.Namespace) -> int:
         print(f"\nSaved {args.code_output}")
     _persist_mode_run(args, "code", result)
     _card_mode_result(args, "code", result)
-    return _export_mode_result(args, "code", result)
+    export_rc = _export_mode_result(args, "code", result)
+    return export_rc or _gate_exit_code(args, "code", result)
 
 
 def _run_language_bench(args: argparse.Namespace) -> int:
@@ -1245,7 +1318,8 @@ def _run_language_bench(args: argparse.Namespace) -> int:
         print(f"\nSaved {args.language_output}")
     _persist_mode_run(args, "language", result)
     _card_mode_result(args, "language", result)
-    return _export_mode_result(args, "language", result)
+    export_rc = _export_mode_result(args, "language", result)
+    return export_rc or _gate_exit_code(args, "language", result)
 
 
 def _run_instruct_bench(args: argparse.Namespace) -> int:
@@ -1366,7 +1440,8 @@ def _run_instruct_bench(args: argparse.Namespace) -> int:
         print(f"\nSaved {args.instruct_output}")
     _persist_mode_run(args, "instruct", result)
     _card_mode_result(args, "instruct", result)
-    return _export_mode_result(args, "instruct", result)
+    export_rc = _export_mode_result(args, "instruct", result)
+    return export_rc or _gate_exit_code(args, "instruct", result)
 
 
 def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
@@ -1441,7 +1516,8 @@ def _run_thinking_ablation_bench(args: argparse.Namespace) -> int:
         print(f"\nSaved {args.thinking_ablation_output}")
     _persist_mode_run(args, "thinking-ablation", result)
     _card_mode_result(args, "thinking-ablation", result)
-    return _export_mode_result(args, "thinking-ablation", result)
+    export_rc = _export_mode_result(args, "thinking-ablation", result)
+    return export_rc or _gate_exit_code(args, "thinking-ablation", result)
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -1771,6 +1847,14 @@ def cmd_bench(args: argparse.Namespace) -> int:
         except OSError:
             pass
 
+    if bench_run.results:
+        from asiai.benchmark.reporter import build_export_payload as _gate_payload
+
+        export_rc = export_rc or _gate_exit_code(
+            args,
+            "standard",
+            _gate_payload(bench_run.results, report, errors=bench_run.errors),
+        )
     return export_rc
 
 
@@ -2336,6 +2420,18 @@ def main(argv: list[str] | None = None) -> int:
         metavar="FILE",
         help="Export results — format by extension: .json (payload) or .md "
         "(full report with conditions/CI/gates). Works with every bench mode.",
+    )
+    bench_parser.add_argument(
+        "--fail-on-gate",
+        nargs="?",
+        const="all",
+        default=None,
+        metavar="GATES",
+        help="Exit 2 when a quality gate fails. Bare form enforces every gate; "
+        "pass a comma-separated subset to enforce only those "
+        "(e.g. --fail-on-gate output_validity,thinking — useful on a laptop, "
+        "where sustained generation throttles no matter what you do). Failed "
+        "gates are always printed; this makes them stop the run.",
     )
     bench_parser.add_argument(
         "--history",

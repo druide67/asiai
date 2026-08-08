@@ -704,3 +704,106 @@ class TestCompareArgs:
                 engines_filter=None,
                 detected_engines=[],
             )
+
+
+# --- quality gates decide the exit code -----------------------------------
+# asiai always computed these gates and always exited 0, so a scripted caller
+# could publish a number the tool itself knew was invalid. These tests pin the
+# refusal, not just the reporting.
+
+
+def _gate_args(fail_on_gate: bool):
+    import argparse
+
+    return argparse.Namespace(export=None, fail_on_gate=fail_on_gate)
+
+
+def _payload_with_empty_output() -> dict:
+    """The shipped failure: every response empty, gate red, exit code 0."""
+    return {
+        "engine": "llamacpp",
+        "model": "qwen3.6-27b",
+        "prefix_cache_reuse_verdict": "no",
+        "prefix_cache_reuse": {"reuse_fraction": 0.0, "cache_source": "usage"},
+        "quality_gates": {
+            "early_stop": {"detected": False, "truncated_runs": []},
+            "duplicate_processes": [],
+            "other_engines_resident": [],
+            "thermal": {"observed": True, "min_speed_limit": 100, "throttled": False},
+            "output_validity": {"output_valid_pct": 0.0, "min_valid_pct": 80.0},
+        },
+        "phase_stats": {},
+        "footprint": {},
+    }
+
+
+def _clean_payload() -> dict:
+    p = _payload_with_empty_output()
+    p["quality_gates"]["output_validity"] = {"output_valid_pct": 100.0, "min_valid_pct": 80.0}
+    return p
+
+
+def test_gate_exit_code_zero_when_all_gates_pass():
+    from asiai.cli import _gate_exit_code
+
+    assert _gate_exit_code(_gate_args(True), "agentic", _clean_payload()) == 0
+
+
+def test_failed_gate_is_printed_but_does_not_fail_without_the_flag(capsys):
+    from asiai.cli import _gate_exit_code
+
+    rc = _gate_exit_code(_gate_args(False), "agentic", _payload_with_empty_output())
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "output_validity" in err, "a failed gate must be visible even when not enforced"
+
+
+def test_failed_gate_exits_two_with_the_flag(capsys):
+    """Negative witness: the gate must actually refuse, not merely warn."""
+    from asiai.cli import _gate_exit_code
+
+    rc = _gate_exit_code(_gate_args(True), "agentic", _payload_with_empty_output())
+    assert rc == 2
+    assert "output_validity" in capsys.readouterr().err
+
+
+def test_unevaluable_gates_refuse_rather_than_pass(capsys):
+    """A check that cannot measure must not report green — the failure mode
+    that let a thermal gate read a field it never returned for weeks."""
+    from asiai.cli import _gate_exit_code
+
+    with patch("asiai.benchmark.result_model.build_result", side_effect=ValueError("boom")):
+        assert _gate_exit_code(_gate_args(True), "agentic", {}) == 2
+        assert _gate_exit_code(_gate_args(False), "agentic", {}) == 0
+    assert "could not evaluate" in capsys.readouterr().err
+
+
+def test_fail_on_gate_accepts_a_subset(capsys):
+    """Enforcing everything is unreachable on a laptop (sustained generation
+    throttles regardless), so a blanket rule pushes operators back to ignoring
+    gates. A subset enforces what the operator actually controls."""
+    from asiai.cli import _gate_exit_code
+
+    payload = _clean_payload()
+    payload["quality_gates"]["thermal"] = {
+        "observed": True,
+        "min_speed_limit": 50,
+        "throttled": True,
+    }
+    import argparse
+
+    only_validity = argparse.Namespace(export=None, fail_on_gate="output_validity")
+    assert _gate_exit_code(only_validity, "agentic", payload) == 0
+    assert "thermal" in capsys.readouterr().err, "unselected gates stay visible"
+
+    everything = argparse.Namespace(export=None, fail_on_gate="all")
+    assert _gate_exit_code(everything, "agentic", payload) == 2
+
+
+def test_fail_on_gate_subset_still_refuses_its_own_gate():
+    import argparse
+
+    from asiai.cli import _gate_exit_code
+
+    args = argparse.Namespace(export=None, fail_on_gate="output_validity,thinking")
+    assert _gate_exit_code(args, "agentic", _payload_with_empty_output()) == 2
