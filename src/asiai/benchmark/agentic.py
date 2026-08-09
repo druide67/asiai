@@ -560,20 +560,35 @@ def _summarize_context_depth(runs: list[AgenticRun]) -> dict[str, Any]:
     ``spread_pct`` matters when comparing engines: the same prompt tokenizes
     differently per chat template, and a few percent is normal. A large spread
     means the engines were not asked the same question.
+
+    It is therefore computed **per phase group**, never across all phases. The
+    protocol runs short phases (~7.5K) and long ones (~56K); mixing them yields
+    a spread of several hundred percent that is arithmetically correct and
+    tells the reader nothing — it measures the protocol's own design rather
+    than any disagreement between engines. Observed at 641% before the split.
     """
     import statistics
 
-    depths = [r.prompt_tokens for r in runs if r.error is None and (r.prompt_tokens or 0) > 0]
-    if not depths:
-        return {"median": None, "min": None, "max": None, "spread_pct": None, "n": 0}
-    lo, hi = min(depths), max(depths)
-    return {
-        "median": int(statistics.median(depths)),
-        "min": lo,
-        "max": hi,
-        "spread_pct": round((hi - lo) / lo * 100, 2) if lo else None,
-        "n": len(depths),
-    }
+    def summarize(values: list[int]) -> dict[str, Any]:
+        if not values:
+            return {"median": None, "min": None, "max": None, "spread_pct": None, "n": 0}
+        lo, hi = min(values), max(values)
+        return {
+            "median": int(statistics.median(values)),
+            "min": lo,
+            "max": hi,
+            "spread_pct": round((hi - lo) / lo * 100, 2) if lo else None,
+            "n": len(values),
+        }
+
+    ok = [r for r in runs if r.error is None and (r.prompt_tokens or 0) > 0]
+    long_names = {p.name for p in PHASES if "long" in p.name}
+    out = summarize([r.prompt_tokens for r in ok])
+    out["short"] = summarize([r.prompt_tokens for r in ok if r.phase not in long_names])
+    out["long"] = summarize([r.prompt_tokens for r in ok if r.phase in long_names])
+    # The top-level spread spans both groups and is kept only for schema
+    # continuity; `short`/`long` are the ones to read.
+    return out
 
 
 def _thinking_requested_off(extra_body: dict[str, Any] | None) -> bool:

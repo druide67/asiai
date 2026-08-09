@@ -527,7 +527,15 @@ def _gates_payload(**gates) -> dict:
         "quality_gates": qg,
         "phase_stats": {},
         "footprint": {},
-        "context_depth": {"median": 7530, "min": 7528, "max": 7594, "spread_pct": 0.88, "n": 18},
+        "context_depth": {
+            "median": 7530,
+            "min": 7528,
+            "max": 7594,
+            "spread_pct": 0.88,
+            "n": 18,
+            "short": {"median": 7530, "min": 7528, "max": 7594, "spread_pct": 0.88, "n": 18},
+            "long": {"median": 55839, "min": 55839, "max": 55841, "spread_pct": 0.0, "n": 6},
+        },
     }
 
 
@@ -574,6 +582,15 @@ def test_other_engines_gate_fails_when_a_foreign_engine_is_resident():
     assert "llamacpp" in g.detail
 
 
-def test_context_depth_is_reported_as_a_condition():
-    result = build_result("agentic", _gates_payload())
-    assert "7530 prompt tokens" in result.conditions["context_depth"]
+def test_context_depth_is_reported_per_phase_group():
+    cond = build_result("agentic", _gates_payload()).conditions["context_depth"]
+    assert "short phases 7530 tokens" in cond
+    assert "long phases 55839 tokens" in cond
+
+
+def test_context_depth_falls_back_for_exports_without_groups():
+    """Older JSON has no short/long split; the condition must still render."""
+    payload = _gates_payload()
+    payload["context_depth"] = {"median": 7530, "spread_pct": 0.88, "n": 18}
+    cond = build_result("agentic", payload).conditions["context_depth"]
+    assert "7530 prompt tokens" in cond

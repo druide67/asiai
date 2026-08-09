@@ -507,3 +507,31 @@ def test_context_depth_ignores_errored_runs_and_survives_empty():
         ag.AgenticRun(phase="warm", prompt_tokens=7530),
     ]
     assert ag._summarize_context_depth(runs)["median"] == 7530
+
+
+def test_context_depth_splits_short_and_long_phases():
+    """Mixing 7.5K and 56K phases yields a spread of several hundred percent
+    that measures the protocol's design, not disagreement between engines."""
+    import asiai.benchmark.agentic as ag
+
+    runs = [
+        ag.AgenticRun(phase="cold", prompt_tokens=7528),
+        ag.AgenticRun(phase="warm", prompt_tokens=7530),
+        ag.AgenticRun(phase="long-context", prompt_tokens=55839),
+        ag.AgenticRun(phase="long-prefix", prompt_tokens=55841),
+    ]
+    d = ag._summarize_context_depth(runs)
+    assert d["short"]["median"] == 7529
+    assert d["short"]["spread_pct"] < 1
+    assert d["long"]["median"] == 55840
+    assert d["long"]["spread_pct"] < 1
+    # The all-phases spread is the misleading one the split exists to replace.
+    assert d["spread_pct"] > 600
+
+
+def test_context_depth_groups_survive_a_short_only_run():
+    import asiai.benchmark.agentic as ag
+
+    d = ag._summarize_context_depth([ag.AgenticRun(phase="cold", prompt_tokens=7528)])
+    assert d["short"]["n"] == 1
+    assert d["long"]["median"] is None

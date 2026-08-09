@@ -436,12 +436,27 @@ def from_agentic(payload: dict) -> BenchResult:
     # needs before comparing two numbers.
     depth = payload.get("context_depth") or {}
     if depth.get("median") is not None:
-        spread = depth.get("spread_pct")
-        conditions["context_depth"] = (
-            f"{depth['median']} prompt tokens (median, n={depth.get('n', 0)}"
-            + (f", spread {spread}%" if spread is not None else "")
-            + ")"
-        )
+        # Report per phase group. The all-phases spread mixes ~7.5K and ~56K
+        # prompts and reads as several hundred percent, which says nothing
+        # about whether two engines were asked the same question.
+        parts = []
+        for key, label in (("short", "short phases"), ("long", "long phases")):
+            grp = depth.get(key) or {}
+            if grp.get("median") is not None:
+                spread = grp.get("spread_pct")
+                parts.append(
+                    f"{label} {grp['median']} tokens (n={grp.get('n', 0)}"
+                    + (f", spread {spread}%" if spread is not None else "")
+                    + ")"
+                )
+        if not parts:  # exports predating the split
+            spread = depth.get("spread_pct")
+            parts.append(
+                f"{depth['median']} prompt tokens (median, n={depth.get('n', 0)}"
+                + (f", spread {spread}%" if spread is not None else "")
+                + ")"
+            )
+        conditions["context_depth"] = " · ".join(parts)
 
     return BenchResult(
         bench_type="agentic",
