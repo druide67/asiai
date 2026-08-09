@@ -402,6 +402,23 @@ def from_agentic(payload: dict) -> BenchResult:
                 f"min speed limit {thermal.get('min_speed_limit')}%",
             )
         )
+    # Both of these were computed and stored but never surfaced as gates, so a
+    # run whose engine spent its whole token budget reasoning — or one measured
+    # next to a second resident engine — reported clean everywhere a reader
+    # actually looks.
+    thinking = gates_block.get("thinking") or {}
+    if thinking:
+        status = thinking.get("status")
+        # ``comparable`` is absent from pre-existing exports; fall back to the
+        # signal it was derived from rather than defaulting the gate to green.
+        comparable = thinking.get("comparable")
+        if comparable is None:
+            comparable = not thinking.get("reasoning_detected")
+        gates.append(Gate("thinking", bool(comparable), _fmt(status)))
+    others = gates_block.get("other_engines_resident")
+    if others is not None:
+        names = ", ".join(sorted({o.get("engine", "?") for o in others}))
+        gates.append(Gate("other_engines_resident", not others, names))
 
     rf = _num(reuse.get("reuse_fraction"))
     hero = MetricValue(
@@ -414,6 +431,32 @@ def from_agentic(payload: dict) -> BenchResult:
     conditions = _base_conditions(payload)
     if payload.get("cold_warm_repeats"):
         conditions["cold_warm_repeats"] = "true (verdict rests on repeat 0's cold run)"
+    # Decode throughput falls off with depth, so a tok/s figure is meaningless
+    # without it. Reported as a condition, next to the other things a reader
+    # needs before comparing two numbers.
+    depth = payload.get("context_depth") or {}
+    if depth.get("median") is not None:
+        # Report per phase group. The all-phases spread mixes ~7.5K and ~56K
+        # prompts and reads as several hundred percent, which says nothing
+        # about whether two engines were asked the same question.
+        parts = []
+        for key, label in (("short", "short phases"), ("long", "long phases")):
+            grp = depth.get(key) or {}
+            if grp.get("median") is not None:
+                spread = grp.get("spread_pct")
+                parts.append(
+                    f"{label} {grp['median']} tokens (n={grp.get('n', 0)}"
+                    + (f", spread {spread}%" if spread is not None else "")
+                    + ")"
+                )
+        if not parts:  # exports predating the split
+            spread = depth.get("spread_pct")
+            parts.append(
+                f"{depth['median']} prompt tokens (median, n={depth.get('n', 0)}"
+                + (f", spread {spread}%" if spread is not None else "")
+                + ")"
+            )
+        conditions["context_depth"] = " · ".join(parts)
 
     return BenchResult(
         bench_type="agentic",

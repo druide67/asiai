@@ -776,3 +776,217 @@ def test_check_other_engines_resident_dedups_shared_pattern():
         found = check_other_engines_resident("mlx-lm")
     pids = [f["pid"] for f in found]
     assert pids == ["300"]
+
+
+# --- shell wrappers are not engines ---------------------------------------
+# A bench harness launches engines from a script whose own argv names the
+# engine binary, so the raw command line matched while no engine ran in that
+# process. Four of twelve cells of the 2026-08 campaign reported a duplicate
+# of the engine they had just started.
+
+
+def test_shell_wrapper_carrying_engine_argv_is_not_a_duplicate():
+    fake = _fake_ps_out(
+        [
+            "12345 /opt/homebrew/bin/llama-server --port 8080",
+            "12346 /bin/zsh /Users/x/ops/run-cell.sh L1 8017 "
+            "/opt/homebrew/bin/llama-server --model m",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        result = check_duplicate_processes("llamacpp")
+    assert result == [], "a zsh wrapper is not a second engine"
+
+
+def test_wrapper_exclusion_does_not_hide_a_real_duplicate():
+    """Negative witness: the exclusion must not swallow genuine duplicates."""
+    fake = _fake_ps_out(
+        [
+            "12345 /opt/homebrew/bin/llama-server --port 8080",
+            "12346 /bin/zsh /Users/x/ops/run-cell.sh L1 8017 "
+            "/opt/homebrew/bin/llama-server --model m",
+            "12347 /opt/homebrew/bin/llama-server --port 8081",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        result = check_duplicate_processes("llamacpp")
+    assert [r["pid"] for r in result] == ["12345", "12347"]
+
+
+def test_interpreter_launched_engine_still_matches():
+    """MTPLX runs as ``python -m mtplx.server.openai`` — argv[0] is the
+    interpreter, which must stay eligible; only shells are excluded."""
+    fake = _fake_ps_out(
+        [
+            "200 /opt/homebrew/bin/python3 -m mtplx.server.openai --port 8080",
+            "201 /opt/homebrew/bin/python3 -m mtplx.server.openai --port 8081",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = fake
+        result = check_duplicate_processes("mtplx")
+    assert len(result) == 2
+
+
+# --- delegated runtimes are not rival engines -----------------------------
+# Ollama and LM Studio both hand generation to a `llama-server` child. Calling
+# that child a rival accuses the measured engine of competing with itself, and
+# under --fail-on-gate it throws away a valid run.
+
+
+def _ps_with_ppid(rows: list[tuple[str, str, str]]) -> str:
+    """Fake `ps axo pid,ppid,command` stdout."""
+    return "  PID  PPID COMMAND\n" + "\n".join(f"{p} {pp} {c}" for p, pp, c in rows) + "\n"
+
+
+def test_runtime_delegated_by_the_target_engine_is_tolerated():
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/opt/homebrew/bin/ollama serve"),
+            (
+                "200",
+                "100",
+                "/opt/homebrew/Cellar/ollama/0.32.5/libexec/lib/ollama/llama-server --model x",
+            ),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("ollama") == []
+
+
+def test_independent_llamacpp_is_still_reported():
+    """Negative witness: the tolerance must not blind the gate to a real one."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/opt/homebrew/bin/ollama serve"),
+            (
+                "200",
+                "100",
+                "/opt/homebrew/Cellar/ollama/0.32.5/libexec/lib/ollama/llama-server --model x",
+            ),
+            ("300", "1", "/opt/homebrew/bin/llama-server --model rival.gguf --port 8017"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("ollama")
+    assert [f["pid"] for f in found] == ["300"]
+
+
+def test_grandchild_runtime_is_tolerated():
+    """LM Studio: lms daemon -> llmster -> llama-server (two hops)."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/Applications/LM Studio.app/Contents/MacOS/LM Studio"),
+            ("150", "100", "llmster"),
+            (
+                "200",
+                "150",
+                "/Users/x/.lmstudio/extensions/backends/llama.cpp/llama-server --model y",
+            ),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("lmstudio") == []
+
+
+def test_parent_walk_survives_a_cycle():
+    """A malformed ppid chain must not hang the gate."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "200", "/opt/homebrew/bin/llama-server --model a"),
+            ("200", "100", "/opt/homebrew/bin/mlx_lm.server --model b"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("mtplx")
+    assert {f["pid"] for f in found} == {"100", "200"}
+
+
+def test_headless_lmstudio_identifies_its_own_runtime():
+    """LM Studio headless runs as `llmster`, with no .app process. Matching only
+    the app name left the engine unidentifiable, so its own llama-server was
+    reported as a rival and the cell was discarded."""
+    ps = _ps_with_ppid(
+        [
+            ("150", "1", "llmster"),
+            (
+                "200",
+                "150",
+                "/Users/x/.lmstudio/extensions/backends/llama.cpp/llama-server --model y",
+            ),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("lmstudio") == []
+
+
+def test_headless_lmstudio_still_flags_a_true_rival():
+    """Negative witness: the alias must not blind the gate."""
+    ps = _ps_with_ppid(
+        [
+            ("150", "1", "llmster"),
+            (
+                "200",
+                "150",
+                "/Users/x/.lmstudio/extensions/backends/llama.cpp/llama-server --model y",
+            ),
+            ("300", "1", "/opt/homebrew/bin/mlx_lm.server --model z"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("lmstudio")
+    assert [(f["engine"], f["pid"]) for f in found] == [("mlxlm", "300")]
+
+
+def test_multi_pattern_engine_dedups_duplicates():
+    """The app and the headless daemon are the same engine, counted once each."""
+    ps = _fake_ps_out(
+        [
+            "150 llmster",
+            "160 /Applications/LM Studio.app/Contents/MacOS/LM Studio",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = ps
+        assert len(check_duplicate_processes("lmstudio")) == 2
+
+
+def test_helper_process_of_the_same_server_is_not_a_duplicate():
+    """LM Studio's daemon spawns a node helper whose INLINE SCRIPT TEXT contains
+    "llmster", so the pattern matched twice on a single running engine."""
+    ps = _ps_with_ppid(
+        [
+            ("83811", "1", "llmster"),
+            ("83812", "83811", "/Users/x/.lmstudio/.internal/utils/node -e function llmster(){}"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_duplicate_processes("lmstudio") == []
+
+
+def test_two_independent_servers_are_still_duplicates():
+    """Negative witness: what makes a duplicate harmful is two servers competing
+    for the GPU — that case must survive the parent-chain tolerance."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/opt/homebrew/bin/llama-server --port 8080"),
+            ("200", "1", "/opt/homebrew/bin/llama-server --port 8081"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_duplicate_processes("llamacpp")
+    assert {f["pid"] for f in found} == {"100", "200"}
+
+
+def test_duplicate_check_survives_ps_without_ppid():
+    """Degraded `ps` output loses the parent link; the gate must still report."""
+    ps = _fake_ps_out(
+        [
+            "100 /opt/homebrew/bin/llama-server --port 8080",
+            "200 /opt/homebrew/bin/llama-server --port 8081",
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert len(check_duplicate_processes("llamacpp")) == 2

@@ -9,6 +9,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`--fail-on-gate`: a failed quality gate can now stop the run.** asiai has
+  always computed its gates and always exited 0, so a scripted caller could
+  publish a number the tool itself knew was invalid — a run whose responses
+  were all empty reported a decode figure and a clean exit. The bare flag
+  enforces every gate; a comma-separated subset enforces only those
+  (`--fail-on-gate output_validity,thinking`), which matters on a laptop, where
+  sustained generation throttles whatever the operator does and a blanket rule
+  would push people back to ignoring gates entirely. Exits 2, distinct from 1
+  (failed export), so a caller can tell a missing artifact from an untrustworthy
+  one. Enforcement is opt-in; failed gates now print either way.
+- **Every gate is now reported.** `output_validity`, `thermal`, `thinking` and
+  `other_engines_resident` were computed and stored but never surfaced where a
+  reader looks: the agentic terminal output hand-rolled three of them, and the
+  last two never became gates at all. All seven now flow through one path.
+- **`context_depth` in the agentic payload and report** — median, min, max and
+  spread of prompt tokens. Decode throughput is a function of depth, so a tok/s
+  figure without the depth it was measured at cannot be compared with anything;
+  the spread tells a reader whether two engines were asked the same question or
+  merely tokenized it differently.
+- **`thinking.status` / `thinking.comparable`** — four explicit regimes
+  (`off_honoured`, `off_ignored`, `unrequested`, `absent`) replacing a single
+  `honoured` flag that was vacuously true whenever nothing had been requested:
+  a caller who never asked for thinking-off got a green light computed from no
+  measurement. A run that spends its token budget reasoning is not measuring the
+  same thing as a run that answers, so `unrequested` is not comparable even
+  though nothing malfunctioned. `honoured` is kept for schema compatibility.
+
+### Fixed
+
+- **Shell wrappers are no longer counted as duplicate engines.** The process
+  gates matched the whole command line, so a harness that launches engines from
+  a script whose own argv names the engine binary (`zsh run.sh … llama-server
+  --model …`) was reported as a duplicate of the engine it had just started.
+  `argv[0]` is now checked, and shells are excluded; interpreter launches
+  (MTPLX runs as `python -m mtplx.server.openai`) stay eligible.
+
+- **A delegated runtime is no longer a rival engine.** Ollama and LM Studio
+  both hand generation to a `llama-server` child, which the solo-residency gate
+  reported as a foreign engine — accusing the measured engine of competing with
+  itself, and under `--fail-on-gate` discarding an otherwise valid run. A match
+  whose parent chain reaches the engine under test is now tolerated; a
+  `llama-server` started independently still descends from launchd, so it is
+  still reported.
+
+- **An engine is identified by every name it runs under.** LM Studio runs
+  headless as `llmster`, with no `.app` process, so matching the app name alone
+  left it unidentifiable in that mode — and a parent-chain tolerance is only as
+  good as the identity it starts from. Pattern values may now be a tuple of
+  alternatives.
+
+- **A helper of the same server is no longer a duplicate.** LM Studio's daemon
+  spawns a node helper whose *inline script text* contains `llmster`, so the
+  pattern matched twice on a single running server. What makes a duplicate
+  harmful is two servers competing for the GPU; two processes of one server tree
+  do not, so a match descending from another match is no longer counted.
+
+- **Context depth is reported per phase group.** The agentic protocol mixes
+  ~7.5K and ~56K prompts, so a single spread across all phases read as several
+  hundred percent — arithmetically right, and useless: it measured the
+  protocol's own design instead of whether two engines got the same question.
+
 - **`--code` stress suite: large-payload cell** — two turns that demand volume
   (a complete 60+ line HTML page with style and script blocks in one
   `write_file`, then four multi-line `edit_file` replacements), plus a per-turn

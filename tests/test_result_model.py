@@ -497,3 +497,100 @@ class TestFromStandardCompare:
         md = render_markdown(build_result("standard", _compare_session_payload()))
         for engine, model, _tok in COMPARE_SLOTS:
             assert f"{model} / {engine}" in md
+
+
+# --- gates that were computed but never surfaced --------------------------
+
+
+def _gates_payload(**gates) -> dict:
+    """Minimal agentic payload; `gates` overrides entries of quality_gates."""
+    qg = {
+        "early_stop": {"detected": False, "truncated_runs": []},
+        "duplicate_processes": [],
+        "other_engines_resident": [],
+        "thermal": {"observed": True, "min_speed_limit": 100, "throttled": False},
+        "output_validity": {"output_valid_pct": 100.0, "min_valid_pct": 80.0},
+        "thinking": {
+            "requested_off": True,
+            "reasoning_detected": False,
+            "honoured": True,
+            "status": "off_honoured",
+            "comparable": True,
+        },
+    }
+    qg.update(gates)
+    return {
+        "engine": "mtplx",
+        "model": "qwen3.6-27b",
+        "prefix_cache_reuse_verdict": "yes",
+        "prefix_cache_reuse": {"reuse_fraction": 0.84, "cache_source": "usage"},
+        "quality_gates": qg,
+        "phase_stats": {},
+        "footprint": {},
+        "context_depth": {
+            "median": 7530,
+            "min": 7528,
+            "max": 7594,
+            "spread_pct": 0.88,
+            "n": 18,
+            "short": {"median": 7530, "min": 7528, "max": 7594, "spread_pct": 0.88, "n": 18},
+            "long": {"median": 55839, "min": 55839, "max": 55841, "spread_pct": 0.0, "n": 6},
+        },
+    }
+
+
+def _find_gate(result, name):
+    return next(g for g in result.gates if g.name == name)
+
+
+def test_agentic_exposes_thinking_and_other_engines_as_gates():
+    result = build_result("agentic", _gates_payload())
+    assert _find_gate(result, "thinking").passed is True
+    assert _find_gate(result, "other_engines_resident").passed is True
+
+
+def test_thinking_gate_fails_on_uncontrolled_reasoning():
+    """The shipped case: nothing requested, engine reasoned. ``honoured`` is
+    True (vacuously) — the gate must key off ``comparable`` instead."""
+    payload = _gates_payload(
+        thinking={
+            "requested_off": False,
+            "reasoning_detected": True,
+            "honoured": True,
+            "status": "unrequested",
+            "comparable": False,
+        }
+    )
+    assert _find_gate(build_result("agentic", payload), "thinking").passed is False
+
+
+def test_thinking_gate_falls_back_for_exports_predating_comparable():
+    """Older JSON has no ``comparable`` key; the gate must derive it rather
+    than default to green."""
+    payload = _gates_payload(
+        thinking={"requested_off": False, "reasoning_detected": True, "honoured": True}
+    )
+    assert _find_gate(build_result("agentic", payload), "thinking").passed is False
+
+
+def test_other_engines_gate_fails_when_a_foreign_engine_is_resident():
+    payload = _gates_payload(
+        other_engines_resident=[{"engine": "llamacpp", "pid": "1", "command": "llama-server"}]
+    )
+    g = _find_gate(build_result("agentic", payload), "other_engines_resident")
+    assert g.passed is False
+    assert "llamacpp" in g.detail
+
+
+def test_context_depth_is_reported_per_phase_group():
+    cond = build_result("agentic", _gates_payload()).conditions["context_depth"]
+    assert "short phases 7530 tokens" in cond
+    assert "long phases 55839 tokens" in cond
+
+
+def test_context_depth_falls_back_for_exports_without_groups():
+    """Older JSON has no short/long split; the condition must still render."""
+    payload = _gates_payload()
+    payload["context_depth"] = {"median": 7530, "spread_pct": 0.88, "n": 18}
+    cond = build_result("agentic", payload).conditions["context_depth"]
+    assert "7530 prompt tokens" in cond
