@@ -45,6 +45,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `argv[0]` is now checked, and shells are excluded; interpreter launches
   (MTPLX runs as `python -m mtplx.server.openai`) stay eligible.
 
+- **A delegated runtime is no longer a rival engine.** Ollama and LM Studio
+  both hand generation to a `llama-server` child, which the solo-residency gate
+  reported as a foreign engine — accusing the measured engine of competing with
+  itself, and under `--fail-on-gate` discarding an otherwise valid run. A match
+  whose parent chain reaches the engine under test is now tolerated; a
+  `llama-server` started independently still descends from launchd, so it is
+  still reported.
+
+- **An engine is identified by every name it runs under.** LM Studio runs
+  headless as `llmster`, with no `.app` process, so matching the app name alone
+  left it unidentifiable in that mode — and a parent-chain tolerance is only as
+  good as the identity it starts from. Pattern values may now be a tuple of
+  alternatives.
+
+- **A helper of the same server is no longer a duplicate.** LM Studio's daemon
+  spawns a node helper whose *inline script text* contains `llmster`, so the
+  pattern matched twice on a single running server. What makes a duplicate
+  harmful is two servers competing for the GPU; two processes of one server tree
+  do not, so a match descending from another match is no longer counted.
+
+- **Context depth is reported per phase group.** The agentic protocol mixes
+  ~7.5K and ~56K prompts, so a single spread across all phases read as several
+  hundred percent — arithmetically right, and useless: it measured the
+  protocol's own design instead of whether two engines got the same question.
+
 - **`--code` stress suite: large-payload cell** — two turns that demand volume
   (a complete 60+ line HTML page with style and script blocks in one
   `write_file`, then four multi-line `edit_file` replacements), plus a per-turn
