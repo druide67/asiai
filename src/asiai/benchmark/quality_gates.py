@@ -118,10 +118,18 @@ def detect_early_stop(
 # enough that the matcher won't false-positive on a different engine
 # (e.g. "ollama" alone would match "ollama serve" but also a directory
 # named "ollama").
-_ENGINE_PROCESS_PATTERNS = {
+# A value may be a single substring or a tuple of alternatives, because one
+# engine can present under several process names depending on how it was
+# started.
+_ENGINE_PROCESS_PATTERNS: dict[str, str | tuple[str, ...]] = {
     "ollama": "ollama serve",
     "llamacpp": "llama-server",
-    "lmstudio": "LM Studio",
+    # LM Studio runs headless as `llmster`, with the .app absent. Matching only
+    # the app name left the engine unidentifiable in that mode: its delegated
+    # llama-server could not be traced back to any target process, so the
+    # solo-residency gate reported it as a rival and discarded the cell.
+    # A parent-chain tolerance is only as good as the identity it starts from.
+    "lmstudio": ("LM Studio", "llmster"),
     "mlxlm": "mlx_lm.server",
     # jundot/omlx — NOT mlx-omni-server (different project).
     "omlx": "omlx serve",
@@ -132,6 +140,12 @@ _ENGINE_PROCESS_PATTERNS = {
     # MTPLX runs as "python -m mtplx.server.openai …" — match the module path.
     "mtplx": "mtplx.server",
 }
+
+
+def _patterns_for(key: str, fallback: str) -> tuple[str, ...]:
+    """Every process substring that identifies one engine."""
+    value = _ENGINE_PROCESS_PATTERNS.get(key, fallback)
+    return (value,) if isinstance(value, str) else tuple(value)
 
 
 # Shells run a script whose own arguments name the engine binary, so the raw
@@ -168,7 +182,7 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
     consumers can treat a non-empty return as "abnormal."
     """
     key = _system._engine_match_key(engine_name)
-    pattern = _ENGINE_PROCESS_PATTERNS.get(key, engine_name)
+    patterns = _patterns_for(key, engine_name)
     try:
         ps_out = subprocess.run(
             ["ps", "axo", "pid,command"],
@@ -180,10 +194,14 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
         logger.debug("ps failed: %s", e)
         return []
     matches: list[dict[str, str]] = []
+    seen: set[str] = set()
     for line in ps_out.splitlines()[1:]:
-        entry = _engine_process_entry(line, pattern)
-        if entry is not None:
-            matches.append(entry)
+        for pattern in patterns:
+            entry = _engine_process_entry(line, pattern)
+            if entry is not None and entry["pid"] not in seen:
+                seen.add(entry["pid"])
+                matches.append(entry)
+                break
     return matches if len(matches) > 1 else []
 
 
@@ -231,9 +249,11 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
 
     # PIDs belonging to the engine under test — the roots a delegated runtime
     # is allowed to descend from.
-    target_pattern = _ENGINE_PROCESS_PATTERNS.get(target_key, target_engine)
     target_pids = {
-        e["pid"] for e in (_engine_process_entry(ln, target_pattern) for ln in lines) if e
+        e["pid"]
+        for pattern in _patterns_for(target_key, target_engine)
+        for e in (_engine_process_entry(ln, pattern) for ln in lines)
+        if e
     }
 
     def descends_from_target(pid: str, max_hops: int = 8) -> bool:
@@ -258,11 +278,14 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
 
     found: list[dict[str, str]] = []
     seen_pids: set[str] = set()
-    for name, pattern in _ENGINE_PROCESS_PATTERNS.items():
+    for name in _ENGINE_PROCESS_PATTERNS:
         if _engine_match_key(name) == target_key:
             continue
         for line in lines:
-            entry = _engine_process_entry(line, pattern)
+            entry = next(
+                (e for p in _patterns_for(name, name) if (e := _engine_process_entry(line, p))),
+                None,
+            )
             if entry is None or entry["pid"] in seen_pids:
                 continue
             seen_pids.add(entry["pid"])

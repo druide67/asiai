@@ -902,3 +902,52 @@ def test_parent_walk_survives_a_cycle():
     with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
         found = check_other_engines_resident("mtplx")
     assert {f["pid"] for f in found} == {"100", "200"}
+
+
+def test_headless_lmstudio_identifies_its_own_runtime():
+    """LM Studio headless runs as `llmster`, with no .app process. Matching only
+    the app name left the engine unidentifiable, so its own llama-server was
+    reported as a rival and the cell was discarded."""
+    ps = _ps_with_ppid(
+        [
+            ("150", "1", "llmster"),
+            (
+                "200",
+                "150",
+                "/Users/x/.lmstudio/extensions/backends/llama.cpp/llama-server --model y",
+            ),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("lmstudio") == []
+
+
+def test_headless_lmstudio_still_flags_a_true_rival():
+    """Negative witness: the alias must not blind the gate."""
+    ps = _ps_with_ppid(
+        [
+            ("150", "1", "llmster"),
+            (
+                "200",
+                "150",
+                "/Users/x/.lmstudio/extensions/backends/llama.cpp/llama-server --model y",
+            ),
+            ("300", "1", "/opt/homebrew/bin/mlx_lm.server --model z"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("lmstudio")
+    assert [(f["engine"], f["pid"]) for f in found] == [("mlxlm", "300")]
+
+
+def test_multi_pattern_engine_dedups_duplicates():
+    """The app and the headless daemon are the same engine, counted once each."""
+    ps = _fake_ps_out(
+        [
+            "150 llmster",
+            "160 /Applications/LM Studio.app/Contents/MacOS/LM Studio",
+        ]
+    )
+    with patch("subprocess.run") as m:
+        m.return_value.stdout = ps
+        assert len(check_duplicate_processes("lmstudio")) == 2
