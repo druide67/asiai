@@ -201,7 +201,7 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
     target_key = _engine_match_key(target_engine)
     try:
         ps_out = subprocess.run(
-            ["ps", "axo", "pid,command"],
+            ["ps", "axo", "pid,ppid,command"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -210,7 +210,52 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
         logger.debug("ps failed: %s", e)
         return []
 
-    lines = ps_out.splitlines()[1:]
+    # `ps` now carries ppid, dropped before pattern matching but kept in
+    # `parent` so a process can be traced back to whoever started it.
+    #
+    # The second field is accepted as a ppid only when it is numeric. Anything
+    # else means we are not reading the format we asked for, and the line is
+    # then parsed as plain `pid command` rather than skipped: a gate that MISSES
+    # a resident engine is far worse than one that reports an extra. Losing the
+    # parent link only costs the tolerance below, which fails toward reporting.
+    lines: list[str] = []
+    parent: dict[str, str] = {}
+    for raw in ps_out.splitlines()[1:]:
+        parts = raw.split(None, 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            pid, ppid, command = parts
+            parent[pid] = ppid
+            lines.append(f"{pid} {command}")
+        elif len(parts) >= 2:
+            lines.append(raw.strip())
+
+    # PIDs belonging to the engine under test — the roots a delegated runtime
+    # is allowed to descend from.
+    target_pattern = _ENGINE_PROCESS_PATTERNS.get(target_key, target_engine)
+    target_pids = {
+        e["pid"] for e in (_engine_process_entry(ln, target_pattern) for ln in lines) if e
+    }
+
+    def descends_from_target(pid: str, max_hops: int = 8) -> bool:
+        """True when an ancestor of `pid` is a process of the engine under test.
+
+        Ollama and LM Studio both delegate generation to a `llama-server` child.
+        Reporting that child as a rival engine accuses the measured engine of
+        competing with itself — and under --fail-on-gate it discards a perfectly
+        valid run. It happened to both engines during the 2026-08 campaign.
+        Walking the parent chain distinguishes a delegated runtime (legitimate)
+        from a `llama-server` someone else started (a genuine violation).
+        """
+        seen: set[str] = set()
+        for _ in range(max_hops):
+            if pid in target_pids:
+                return True
+            if pid in seen or pid in ("0", "1", ""):
+                return False
+            seen.add(pid)
+            pid = parent.get(pid, "")
+        return False
+
     found: list[dict[str, str]] = []
     seen_pids: set[str] = set()
     for name, pattern in _ENGINE_PROCESS_PATTERNS.items():
@@ -218,9 +263,18 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
             continue
         for line in lines:
             entry = _engine_process_entry(line, pattern)
-            if entry is not None and entry["pid"] not in seen_pids:
-                seen_pids.add(entry["pid"])
-                found.append({"engine": name, **entry})
+            if entry is None or entry["pid"] in seen_pids:
+                continue
+            seen_pids.add(entry["pid"])
+            if descends_from_target(entry["pid"]):
+                logger.debug(
+                    "tolerated %s pid=%s: runtime delegated by %s",
+                    name,
+                    entry["pid"],
+                    target_engine,
+                )
+                continue
+            found.append({"engine": name, **entry})
     return found
 
 

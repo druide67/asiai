@@ -828,3 +828,77 @@ def test_interpreter_launched_engine_still_matches():
         m.return_value.stdout = fake
         result = check_duplicate_processes("mtplx")
     assert len(result) == 2
+
+
+# --- delegated runtimes are not rival engines -----------------------------
+# Ollama and LM Studio both hand generation to a `llama-server` child. Calling
+# that child a rival accuses the measured engine of competing with itself, and
+# under --fail-on-gate it throws away a valid run.
+
+
+def _ps_with_ppid(rows: list[tuple[str, str, str]]) -> str:
+    """Fake `ps axo pid,ppid,command` stdout."""
+    return "  PID  PPID COMMAND\n" + "\n".join(f"{p} {pp} {c}" for p, pp, c in rows) + "\n"
+
+
+def test_runtime_delegated_by_the_target_engine_is_tolerated():
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/opt/homebrew/bin/ollama serve"),
+            (
+                "200",
+                "100",
+                "/opt/homebrew/Cellar/ollama/0.32.5/libexec/lib/ollama/llama-server --model x",
+            ),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("ollama") == []
+
+
+def test_independent_llamacpp_is_still_reported():
+    """Negative witness: the tolerance must not blind the gate to a real one."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/opt/homebrew/bin/ollama serve"),
+            (
+                "200",
+                "100",
+                "/opt/homebrew/Cellar/ollama/0.32.5/libexec/lib/ollama/llama-server --model x",
+            ),
+            ("300", "1", "/opt/homebrew/bin/llama-server --model rival.gguf --port 8017"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("ollama")
+    assert [f["pid"] for f in found] == ["300"]
+
+
+def test_grandchild_runtime_is_tolerated():
+    """LM Studio: lms daemon -> llmster -> llama-server (two hops)."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/Applications/LM Studio.app/Contents/MacOS/LM Studio"),
+            ("150", "100", "llmster"),
+            (
+                "200",
+                "150",
+                "/Users/x/.lmstudio/extensions/backends/llama.cpp/llama-server --model y",
+            ),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_other_engines_resident("lmstudio") == []
+
+
+def test_parent_walk_survives_a_cycle():
+    """A malformed ppid chain must not hang the gate."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "200", "/opt/homebrew/bin/llama-server --model a"),
+            ("200", "100", "/opt/homebrew/bin/mlx_lm.server --model b"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_other_engines_resident("mtplx")
+    assert {f["pid"] for f in found} == {"100", "200"}
