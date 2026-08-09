@@ -248,9 +248,7 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
 
     matched_pids = {m["pid"] for m in matches}
     independent = [
-        m
-        for m in matches
-        if not _descends_from(m["pid"], matched_pids - {m["pid"]}, parent)
+        m for m in matches if not _descends_from(m["pid"], matched_pids - {m["pid"]}, parent)
     ]
     return independent if len(independent) > 1 else []
 
