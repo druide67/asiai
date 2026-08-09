@@ -175,17 +175,58 @@ def _engine_process_entry(line: str, pattern: str) -> dict[str, str] | None:
     return {"pid": parts[0], "command": parts[1][:200]}
 
 
+def _parse_ps(ps_out: str) -> tuple[list[str], dict[str, str]]:
+    """Split `ps axo pid,ppid,command` into match lines and a pid -> ppid map.
+
+    The second field is accepted as a ppid only when numeric. Anything else
+    means we are not reading the format we asked for, and the line is then kept
+    as plain `pid command` rather than skipped: a gate that MISSES a resident
+    engine is far worse than one reporting an extra, so the degraded path loses
+    only the parent link — which fails toward reporting.
+    """
+    lines: list[str] = []
+    parent: dict[str, str] = {}
+    for raw in ps_out.splitlines()[1:]:
+        parts = raw.split(None, 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            pid, ppid, command = parts
+            parent[pid] = ppid
+            lines.append(f"{pid} {command}")
+        elif len(parts) >= 2:
+            lines.append(raw.strip())
+    return lines, parent
+
+
+def _descends_from(pid: str, roots: set[str], parent: dict[str, str], max_hops: int = 8) -> bool:
+    """True when walking `pid`'s ancestry reaches one of `roots`."""
+    seen: set[str] = set()
+    for _ in range(max_hops):
+        if pid in ("0", "1", "") or pid in seen:
+            return False
+        seen.add(pid)
+        pid = parent.get(pid, "")
+        if pid in roots:
+            return True
+    return False
+
+
 def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
-    """Return matching process entries when ≥2 share the engine pattern.
+    """Return matching process entries when ≥2 INDEPENDENT ones share the pattern.
 
     The single-process case (the expected one) returns an empty list so
     consumers can treat a non-empty return as "abnormal."
+
+    A match that descends from another match is a helper of the same server,
+    not a second server. LM Studio's daemon spawns a node helper whose inline
+    script text contains "llmster", so the pattern matched twice and the gate
+    reported a duplicate of a single engine. What makes a duplicate harmful is
+    two servers competing for the GPU — two processes of one server tree do not.
     """
     key = _system._engine_match_key(engine_name)
     patterns = _patterns_for(key, engine_name)
     try:
         ps_out = subprocess.run(
-            ["ps", "axo", "pid,command"],
+            ["ps", "axo", "pid,ppid,command"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -193,16 +234,25 @@ def check_duplicate_processes(engine_name: str) -> list[dict[str, str]]:
     except (OSError, subprocess.SubprocessError) as e:
         logger.debug("ps failed: %s", e)
         return []
+
+    lines, parent = _parse_ps(ps_out)
     matches: list[dict[str, str]] = []
     seen: set[str] = set()
-    for line in ps_out.splitlines()[1:]:
+    for line in lines:
         for pattern in patterns:
             entry = _engine_process_entry(line, pattern)
             if entry is not None and entry["pid"] not in seen:
                 seen.add(entry["pid"])
                 matches.append(entry)
                 break
-    return matches if len(matches) > 1 else []
+
+    matched_pids = {m["pid"] for m in matches}
+    independent = [
+        m
+        for m in matches
+        if not _descends_from(m["pid"], matched_pids - {m["pid"]}, parent)
+    ]
+    return independent if len(independent) > 1 else []
 
 
 def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
@@ -228,24 +278,7 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
         logger.debug("ps failed: %s", e)
         return []
 
-    # `ps` now carries ppid, dropped before pattern matching but kept in
-    # `parent` so a process can be traced back to whoever started it.
-    #
-    # The second field is accepted as a ppid only when it is numeric. Anything
-    # else means we are not reading the format we asked for, and the line is
-    # then parsed as plain `pid command` rather than skipped: a gate that MISSES
-    # a resident engine is far worse than one that reports an extra. Losing the
-    # parent link only costs the tolerance below, which fails toward reporting.
-    lines: list[str] = []
-    parent: dict[str, str] = {}
-    for raw in ps_out.splitlines()[1:]:
-        parts = raw.split(None, 2)
-        if len(parts) == 3 and parts[1].isdigit():
-            pid, ppid, command = parts
-            parent[pid] = ppid
-            lines.append(f"{pid} {command}")
-        elif len(parts) >= 2:
-            lines.append(raw.strip())
+    lines, parent = _parse_ps(ps_out)
 
     # PIDs belonging to the engine under test — the roots a delegated runtime
     # is allowed to descend from.
@@ -255,26 +288,6 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
         for e in (_engine_process_entry(ln, pattern) for ln in lines)
         if e
     }
-
-    def descends_from_target(pid: str, max_hops: int = 8) -> bool:
-        """True when an ancestor of `pid` is a process of the engine under test.
-
-        Ollama and LM Studio both delegate generation to a `llama-server` child.
-        Reporting that child as a rival engine accuses the measured engine of
-        competing with itself — and under --fail-on-gate it discards a perfectly
-        valid run. It happened to both engines during the 2026-08 campaign.
-        Walking the parent chain distinguishes a delegated runtime (legitimate)
-        from a `llama-server` someone else started (a genuine violation).
-        """
-        seen: set[str] = set()
-        for _ in range(max_hops):
-            if pid in target_pids:
-                return True
-            if pid in seen or pid in ("0", "1", ""):
-                return False
-            seen.add(pid)
-            pid = parent.get(pid, "")
-        return False
 
     found: list[dict[str, str]] = []
     seen_pids: set[str] = set()
@@ -289,7 +302,7 @@ def check_other_engines_resident(target_engine: str) -> list[dict[str, str]]:
             if entry is None or entry["pid"] in seen_pids:
                 continue
             seen_pids.add(entry["pid"])
-            if descends_from_target(entry["pid"]):
+            if _descends_from(entry["pid"], target_pids, parent):
                 logger.debug(
                     "tolerated %s pid=%s: runtime delegated by %s",
                     name,

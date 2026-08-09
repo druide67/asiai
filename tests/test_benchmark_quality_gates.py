@@ -951,3 +951,42 @@ def test_multi_pattern_engine_dedups_duplicates():
     with patch("subprocess.run") as m:
         m.return_value.stdout = ps
         assert len(check_duplicate_processes("lmstudio")) == 2
+
+
+def test_helper_process_of_the_same_server_is_not_a_duplicate():
+    """LM Studio's daemon spawns a node helper whose INLINE SCRIPT TEXT contains
+    "llmster", so the pattern matched twice on a single running engine."""
+    ps = _ps_with_ppid(
+        [
+            ("83811", "1", "llmster"),
+            ("83812", "83811", "/Users/x/.lmstudio/.internal/utils/node -e function llmster(){}"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert check_duplicate_processes("lmstudio") == []
+
+
+def test_two_independent_servers_are_still_duplicates():
+    """Negative witness: what makes a duplicate harmful is two servers competing
+    for the GPU — that case must survive the parent-chain tolerance."""
+    ps = _ps_with_ppid(
+        [
+            ("100", "1", "/opt/homebrew/bin/llama-server --port 8080"),
+            ("200", "1", "/opt/homebrew/bin/llama-server --port 8081"),
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        found = check_duplicate_processes("llamacpp")
+    assert {f["pid"] for f in found} == {"100", "200"}
+
+
+def test_duplicate_check_survives_ps_without_ppid():
+    """Degraded `ps` output loses the parent link; the gate must still report."""
+    ps = _fake_ps_out(
+        [
+            "100 /opt/homebrew/bin/llama-server --port 8080",
+            "200 /opt/homebrew/bin/llama-server --port 8081",
+        ]
+    )
+    with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
+        assert len(check_duplicate_processes("llamacpp")) == 2
