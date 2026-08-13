@@ -440,3 +440,28 @@ class TestRequestTimeoutIsHonoured:
                 max_tokens=8,
             )
         assert op.call_args.kwargs["timeout"] == 900
+
+
+class TestDeepestPromptIsRecorded:
+    """A ceiling is only readable against the depth it had to cover.
+
+    900 s is generous for a 6k prompt and far too tight for an 80k one, so the
+    timeout alone tells a later reader nothing. Reported by claude-merlin on
+    2026-08-13: recording the ceiling without the depth closes half the defect.
+    """
+
+    def test_returns_the_largest_prompt_served(self):
+        from asiai.benchmark.agentic import AgenticRun, _deepest_prompt
+
+        runs = [AgenticRun(phase="a"), AgenticRun(phase="b"), AgenticRun(phase="c")]
+        runs[0].prompt_tokens = 6_800
+        runs[1].prompt_tokens = 83_842
+        runs[2].prompt_tokens = 24_655
+        assert _deepest_prompt(runs) == 83_842
+
+    def test_no_usage_reported_is_none_not_zero(self):
+        """Zero would make any timeout look generous — 'not measured' must stay visible."""
+        from asiai.benchmark.agentic import AgenticRun, _deepest_prompt
+
+        assert _deepest_prompt([AgenticRun(phase="a")]) is None
+        assert _deepest_prompt([]) is None

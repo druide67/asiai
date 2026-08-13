@@ -480,6 +480,16 @@ def _compute_reuse(runs: list[AgenticRun]) -> dict[str, Any]:
     }
 
 
+def _deepest_prompt(runs: list[AgenticRun]) -> int | None:
+    """Largest prompt actually served, or None when no run reported usage.
+
+    None means "not measured" and must not be read as zero: a harness that
+    reports 0 here would make any timeout look generous.
+    """
+    seen = [r.prompt_tokens for r in runs if getattr(r, "prompt_tokens", None)]
+    return max(seen) if seen else None
+
+
 def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
     """Per-phase median + CV across repeats for the headline metrics.
 
@@ -826,6 +836,11 @@ def run_agentic_bench(
         # 80k: too low a value does not report a slow engine, it manufactures an
         # infrastructure failure the model never caused.
         "request_timeout_s": int(timeout),
+        # A ceiling cannot be judged in the absolute, only against the depth it
+        # had to cover: 900 s is generous for a 6k prompt and far too tight for
+        # an 80k one. Recording the deepest prompt actually served is what makes
+        # the timeout above readable by someone who was not there.
+        "deepest_prompt_tokens": _deepest_prompt(runs),
         "repeats": max(1, repeats),
         # True when repeats>1 ran without an inter-repeat restart: the cold
         # phase of repeats 2..N was warmed by the previous repetition, so the
