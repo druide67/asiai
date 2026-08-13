@@ -399,3 +399,44 @@ class TestLoadAndRender:
     def test_render_empty(self, capsys):
         render_agentic_leaderboard([], view="tiered")
         assert "No agentic-bench results" in capsys.readouterr().out
+
+
+class TestRequestTimeoutIsHonoured:
+    """A ceiling that never reaches the socket, or never reaches the artifact.
+
+    A timeout that is too short does not report a slow model, it MANUFACTURES an
+    infrastructure failure the model never caused: at a measured 45 tok/s of
+    prefill, 900 s caps the prompt near 40k tokens while real agentic payloads
+    carrying tool schemas reach 80k. So the value has to travel two ways — down
+    to the socket, and out into the results — and a refactor that drops either
+    half puts the ceiling back out of reach without any visible symptom.
+    """
+
+    def test_timeout_reaches_the_socket(self):
+        from asiai.benchmark import agentic
+
+        with patch.object(agentic.urllib.request, "urlopen", side_effect=OSError("boom")) as op:
+            agentic._do_single_run(
+                base_url="http://127.0.0.1:9",
+                model="m",
+                phase_name="p",
+                sys_msg="s",
+                user_msg="u",
+                max_tokens=8,
+                timeout=2400,
+            )
+        assert op.call_args.kwargs["timeout"] == 2400
+
+    def test_default_is_unchanged(self):
+        from asiai.benchmark import agentic
+
+        with patch.object(agentic.urllib.request, "urlopen", side_effect=OSError("boom")) as op:
+            agentic._do_single_run(
+                base_url="http://127.0.0.1:9",
+                model="m",
+                phase_name="p",
+                sys_msg="s",
+                user_msg="u",
+                max_tokens=8,
+            )
+        assert op.call_args.kwargs["timeout"] == 900

@@ -43,6 +43,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.llamacpp import LlamaCppEngine
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
+    from asiai.engines.mlxvlm import MlxVlmEngine
     from asiai.engines.mtplx import MtplxEngine
     from asiai.engines.ollama import OllamaEngine
     from asiai.engines.omlx import OmlxEngine
@@ -54,6 +55,7 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "ollama": OllamaEngine,
         "lmstudio": LMStudioEngine,
         "mlxlm": MlxLmEngine,
+        "mlxvlm": MlxVlmEngine,
         "llamacpp": LlamaCppEngine,
         "omlx": OmlxEngine,
         "rapidmlx": RapidMlxEngine,
@@ -671,6 +673,8 @@ def _run_agentic_bench(args: argparse.Namespace) -> int:
         engine_version=engine_version,
         on_repeat=on_repeat,
         api_key=engine.api_key or None,
+        token_multiplier=getattr(args, "agentic_token_multiplier", 1.0) or 1.0,
+        timeout=getattr(args, "request_timeout", 900) or 900,
     )
 
     reuse = result.get("prefix_cache_reuse", {})
@@ -1119,6 +1123,7 @@ def _run_code_bench(args: argparse.Namespace) -> int:
         judge_model=judge_model,
         judge_api_key=judge_api_key,
         api_key=engine.api_key or None,
+        timeout=getattr(args, "request_timeout", 900) or 900,
         out_path=args.code_output,
         engine_version=engine_version,
         on_progress=print,
@@ -1536,6 +1541,15 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     db_path = args.db or DEFAULT_DB_PATH
     init_db(db_path)
+
+    # Applies to the code, instruct and language suites, which all issue their
+    # requests through benchmark.code_eval.chat. The agentic protocol scales its
+    # own phase budgets separately, from the same flag.
+    multiplier = getattr(args, "agentic_token_multiplier", 1.0) or 1.0
+    if multiplier != 1.0:
+        from asiai.benchmark.code_eval import set_token_multiplier
+
+        set_token_multiplier(multiplier)
 
     # Agentic mode: 8-run prefix cache reuse protocol
     if getattr(args, "agentic_mode", False):
@@ -2511,6 +2525,38 @@ def main(argv: list[str] | None = None) -> int:
         default=2.0,
         metavar="SEC",
         help="Seconds between agentic runs (default: 2.0)",
+    )
+    bench_parser.add_argument(
+        "--agentic-token-multiplier",
+        "--token-multiplier",
+        dest="agentic_token_multiplier",
+        type=float,
+        default=1.0,
+        metavar="FACTOR",
+        help=(
+            "Scale every completion budget, in the agentic protocol and in the code, "
+            "instruct and language suites (default: 1.0). Needed for models whose "
+            "reasoning cannot be switched off: they spend 200-300 tokens before their "
+            "first word, so on the tighter probes content comes back EMPTY and the "
+            "suite scores a failure that never happened. The factor is recorded in the "
+            "results, since a scaled run is a different protocol."
+        ),
+    )
+    bench_parser.add_argument(
+        "--request-timeout",
+        dest="request_timeout",
+        type=int,
+        default=900,
+        metavar="SECONDS",
+        help=(
+            "Per-request HTTP timeout for the agentic protocol and the code, instruct "
+            "and language suites (default: 900). Raise it for deep prompts: at a "
+            "measured 45 tok/s of prefill, 900 s caps the prompt at roughly 40k tokens, "
+            "and real agentic payloads carrying tool schemas reach 80k. A timeout that "
+            "is too short does not report a slow model, it MANUFACTURES an "
+            "infrastructure failure the model never caused. Too long only costs waiting "
+            "in a case that is already abnormal."
+        ),
     )
     bench_parser.add_argument(
         "--agentic-skip-long",

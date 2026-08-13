@@ -87,6 +87,22 @@ class AgenticPhase:
     max_tokens: int
 
 
+def _scaled_max_tokens(base: int, multiplier: float) -> int:
+    """Scale a phase's completion budget, keeping the protocol's relative shape.
+
+    The 400/200 budgets were set for engines whose reasoning can be switched off.
+    A model that always reasons spends that budget before it starts answering, so
+    ``content`` comes back empty and the run measures reasoning rather than work.
+    Scaling all phases by one factor keeps the long phases proportionally shorter,
+    which is what makes the prefill comparison meaningful, and the factor is
+    recorded with the results so a scaled run is never silently compared to an
+    unscaled one.
+    """
+    if multiplier <= 0:
+        raise ValueError("token_multiplier must be > 0")
+    return max(1, int(round(base * multiplier)))
+
+
 PHASES: tuple[AgenticPhase, ...] = (
     AgenticPhase("cold", SYS_A, USER_X, 400),
     AgenticPhase("warm", SYS_A, USER_X, 400),
@@ -669,6 +685,7 @@ def run_agentic_bench(
     engine_version: str = "",
     on_repeat: Any = None,
     api_key: str | None = None,
+    token_multiplier: float = 1.0,
 ) -> dict[str, Any]:
     """Execute the 8-run agentic protocol against ``base_url``.
 
@@ -746,7 +763,7 @@ def run_agentic_bench(
                     phase_name=phase.name,
                     sys_msg=phase.sys_msg,
                     user_msg=phase.user_msg,
-                    max_tokens=phase.max_tokens,
+                    max_tokens=_scaled_max_tokens(phase.max_tokens, token_multiplier),
                     timeout=timeout,
                     extra_body=extra_body,
                     probe=probe,
@@ -800,6 +817,15 @@ def run_agentic_bench(
         "prefix_cache_reuse": reuse,
         "quality_gates": quality_gates,
         "extra_body": extra_body or {},
+        # A scaled run measures a different protocol than an unscaled one: the
+        # value travels with the results so the two are never merged by mistake.
+        "token_multiplier": float(token_multiplier),
+        # A run that timed out cannot be told apart from a slow model unless the
+        # ceiling is readable in the artifact. At a measured 45 tok/s of prefill,
+        # 900 s caps the prompt near 40k tokens while real agentic payloads reach
+        # 80k: too low a value does not report a slow engine, it manufactures an
+        # infrastructure failure the model never caused.
+        "request_timeout_s": int(timeout),
         "repeats": max(1, repeats),
         # True when repeats>1 ran without an inter-repeat restart: the cold
         # phase of repeats 2..N was warmed by the previous repetition, so the
