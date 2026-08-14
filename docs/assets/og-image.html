@@ -70,6 +70,18 @@
     padding: 0 30px 10px 50px;
   }
 
+  .model-name {
+    font-size: 70px;
+    font-weight: 800;
+    /* Or plutôt que blanc : le nom du modèle est le sujet de la carte, pas une
+       étiquette. Même teinte que la ligne de conditions du terminal, pour que
+       l'or reste un signal unique et non une deuxième couleur d'accent. */
+    color: #fbbf24;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    margin-bottom: 10px;
+  }
+
   .headline-context {
     font-size: 26px;
     font-weight: 600;
@@ -87,11 +99,13 @@
   }
 
   .headline-label {
-    font-size: 32px;
+    font-size: 30px;
     font-weight: 700;
     color: #06b6d4;
-    line-height: 1.2;
-    margin-bottom: 10px;
+    /* Le parent porte letter-spacing:-4px pour serrer « +45% ». Sans remise à
+       zéro, le mot hérite du crénage négatif et vient toucher le signe %. */
+    letter-spacing: normal;
+    margin-left: 18px;
   }
 
   .headline-cta {
@@ -151,7 +165,7 @@
   .value-green { color: #06b6d4; font-weight: 700; }
   .value-blue { color: #60a5fa; }
   .winner { color: #fbbf24; font-weight: 600; }
-  .engine-name { color: #8888aa; display: inline-block; width: 86px; }
+  .engine-name { color: #8888aa; display: inline-block; width: 122px; }
   .toks { display: inline-block; width: 96px; font-weight: 600; }
 
   .bar-row {
@@ -229,10 +243,10 @@
   <!-- Zone 2: Content -->
   <div class="content">
     <div class="content-left">
-      <div class="headline-context">Same model. Same Mac.</div>
-      <div class="headline-number">2.4×</div>
-      <div class="headline-label">speed difference.</div>
-      <div class="headline-cta">Bench your model!</div>
+      <div class="model-name">Qwen3.8-27B</div>
+      <div class="headline-context">Same Mac. One flag changed.</div>
+      <div class="headline-number">+45%<span class="headline-label">faster.</span></div>
+      <div class="headline-cta">Measure yours!</div>
     </div>
 
     <div class="content-right">
@@ -244,23 +258,23 @@
           <span class="terminal-title">asiai bench</span>
         </div>
         <div class="terminal-body">
-          <div><span class="prompt">$</span> <span class="cmd">asiai bench -m qwen3.5</span></div>
+          <div><span class="prompt">$</span> <span class="cmd">asiai bench -m qwen3.8-27b</span></div>
 
           <div style="margin-top:14px">
             <div class="bar-row">
-              <span class="engine-name">lmstudio</span>
-              <span class="toks value-green">72.6 tok/s</span>
+              <span class="engine-name">draft-n-max 4</span>
+              <span class="toks value-green">31.8 tok/s</span>
               <span class="bar bar-green"></span>
             </div>
             <div class="bar-row">
-              <span class="engine-name">ollama</span>
-              <span class="toks value-blue">30.4 tok/s</span>
-              <span class="bar bar-blue"></span>
+              <span class="engine-name">draft-n-max 2</span>
+              <span class="toks value-blue">21.9 tok/s</span>
+              <span class="bar bar-blue" style="width:131px"></span>
             </div>
           </div>
 
           <div style="margin-top:14px">
-            <span class="winner">Winner: lmstudio (2.4× faster)</span>
+            <span class="winner">M5 Max · llama.cpp b10270 · Q5_K_XL · n=3</span>
           </div>
         </div>
       </div>
