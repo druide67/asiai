@@ -192,6 +192,33 @@ def _parse_nonstream_choice(choice: dict[str, Any]) -> tuple[str, str, list[dict
     return text, reasoning, _finalize_tool_calls(acc)
 
 
+_TOKEN_MULTIPLIER = 1.0
+
+
+def set_token_multiplier(factor: float) -> None:
+    """Scale every completion budget going through :func:`chat`.
+
+    The suites carry budgets of 256 to 4096 tokens, sized for models whose
+    reasoning can be switched off. A model that always reasons spends 200 to 300
+    tokens before its first word of answer, so on the tighter probes it returns
+    an EMPTY string and the suite scores a language failure, a missing tool call
+    or a stripped accent that never happened. The defect is in the harness, not
+    in the model, and it is silent: an empty answer looks like a wrong answer.
+
+    One multiplier at the single call site rather than thirty literals, and the
+    value travels into the results so a scaled run is never compared to an
+    unscaled one.
+    """
+    global _TOKEN_MULTIPLIER
+    if factor <= 0:
+        raise ValueError("token multiplier must be > 0")
+    _TOKEN_MULTIPLIER = float(factor)
+
+
+def get_token_multiplier() -> float:
+    return _TOKEN_MULTIPLIER
+
+
 def chat(
     base_url: str,
     model: str,
@@ -218,7 +245,7 @@ def chat(
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "max_tokens": max_tokens,
+        "max_tokens": max(1, int(round(max_tokens * _TOKEN_MULTIPLIER))),
         "temperature": temperature,
         "stream": stream,
     }
@@ -955,6 +982,9 @@ def run_code_eval(
         "finished_at": int(time.time()),
         "suites": requested,
         "repeats": max(1, repeats),
+        # See run_agentic_bench: a ceiling that is invisible in the artifact makes
+        # a timeout indistinguishable from a slow model.
+        "request_timeout_s": int(timeout),
         "extra_body": extra_body or {},
         "code_results": code_results,
     }

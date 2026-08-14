@@ -146,6 +146,55 @@ def test_brew_outdated_parses_formulae_and_casks():
     assert out == {"llama.cpp": "8200", "ollama": "0.31.0", "lm-studio": "0.4.14"}
 
 
+def test_brew_outdated_indexes_tapped_formula_by_short_name():
+    """A third-party tap is reported as "owner/tap/formula", the registry uses "formula".
+
+    Real payload observed the day MTPLX 2.6.0 shipped: the table still read
+    "2.5.4 / up-to-date" for a tapped engine a full release behind, because the
+    qualified name never matched the registry key.
+    """
+    payload = {
+        "formulae": [
+            {
+                "name": "youssofal/mtplx/mtplx",
+                "installed_versions": ["2.5.4"],
+                "current_version": "2.6.0",
+            },
+        ],
+        "casks": [],
+    }
+    with (
+        mock.patch.object(collectors, "_brew_bin", return_value="/opt/homebrew/bin/brew"),
+        mock.patch.object(
+            collectors.subprocess, "run", return_value=_completed(json.dumps(payload))
+        ),
+    ):
+        out = collectors.brew_outdated()
+    assert out["mtplx"] == "2.6.0"
+    assert out["youssofal/mtplx/mtplx"] == "2.6.0"
+
+
+def test_brew_outdated_short_name_collision_keeps_first():
+    """Two taps can expose the same short name; the qualified names stay distinct."""
+    payload = {
+        "formulae": [
+            {"name": "one/tap/foo", "installed_versions": ["1"], "current_version": "2"},
+            {"name": "two/tap/foo", "installed_versions": ["3"], "current_version": "4"},
+        ],
+        "casks": [],
+    }
+    with (
+        mock.patch.object(collectors, "_brew_bin", return_value="/opt/homebrew/bin/brew"),
+        mock.patch.object(
+            collectors.subprocess, "run", return_value=_completed(json.dumps(payload))
+        ),
+    ):
+        out = collectors.brew_outdated()
+    assert out["foo"] == "2"
+    assert out["one/tap/foo"] == "2"
+    assert out["two/tap/foo"] == "4"
+
+
 def test_brew_outdated_empty_means_all_up_to_date():
     with (
         mock.patch.object(collectors, "_brew_bin", return_value="/opt/homebrew/bin/brew"),

@@ -284,4 +284,12 @@ def brew_outdated() -> dict[str, str]:
             current = item.get("current_version")
             if isinstance(name, str) and isinstance(current, str) and current:
                 out[name] = current
+                # Formulas from a third-party tap are reported fully qualified
+                # ("youssofal/mtplx/mtplx") while the registry declares the short
+                # name ("mtplx"), so the lookup never matched and a tapped engine
+                # always read as up-to-date. That is the worst possible failure
+                # for this table: it does not say "unknown", it says "current"
+                # about an engine two releases behind. Index the short name too.
+                short = name.rsplit("/", 1)[-1]
+                out.setdefault(short, current)
     return out
