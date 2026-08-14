@@ -244,7 +244,7 @@
   <div class="content">
     <div class="content-left">
       <div class="model-name">Qwen3.8-27B</div>
-      <div class="headline-context">Same Mac. One flag changed.</div>
+      <div class="headline-context">Same Mac. Speculative decoding tuned.</div>
       <div class="headline-number">+45%<span class="headline-label">faster.</span></div>
       <div class="headline-cta">Measure yours!</div>
     </div>
@@ -262,12 +262,12 @@
 
           <div style="margin-top:14px">
             <div class="bar-row">
-              <span class="engine-name">draft-n-max 4</span>
+              <span class="engine-name">draft-mtp 4</span>
               <span class="toks value-green">31.8 tok/s</span>
               <span class="bar bar-green"></span>
             </div>
             <div class="bar-row">
-              <span class="engine-name">draft-n-max 2</span>
+              <span class="engine-name">no speculation</span>
               <span class="toks value-blue">21.9 tok/s</span>
               <span class="bar bar-blue" style="width:131px"></span>
             </div>
@@ -284,7 +284,7 @@
   <!-- Zone 3: Bottom bar -->
   <div class="bottom-bar">
     <div class="chips">
-      <span class="chip chip-accent">7 engines</span>
+      <span class="chip chip-accent">10 engines</span>
       <span class="chip">GPU observability</span>
       <span class="chip">Open Source</span>
       <span class="chip">Zero dependencies</span>
