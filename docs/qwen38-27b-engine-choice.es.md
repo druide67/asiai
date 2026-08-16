@@ -148,31 +148,21 @@ eligieron escribir. Publica la definición junto con la cifra.
 profundidad 3.** Rápido, 99 ms hasta el primer token, reutilización de prefijo a nivel de
 token, 27 GB.
 
-Bare-Speed no, aunque lidere sobre el papel. Suites de tool-calling, mismo protocolo en
-las tres:
+No Bare-Speed, aunque lidere sobre el papel. Los tres builds difieren en su divergencia
+respecto a bf16, publicada por el autor de las cuantizaciones: **0,00105** para
+Optimized-Quality, **0,0220** para Optimized-Speed, **0,0376** para Bare-Speed. Su
+medición, no la nuestra, no reproducida — pero es la única cifra de fidelidad que alguien
+tiene, y Bare-Speed queda a un orden de magnitud de Quality.
 
-| Build | tool-call (24 turnos) | stress (33 turnos) | turnos de edición (9) |
-|---|---|---|---|
-| Optimized-Quality | **83,3%** | 81,8% | **55,6%** |
-| Optimized-Speed | 79,2% | **81,8%** | 44,4% |
-| Bare-Speed | 62,5% | 72,7% | 22,2% |
+Tampoco Optimized-Quality: cuesta **8,3 GB más** por una ventaja que nadie ha demostrado en
+una tarea.
 
-⚠️ **Léelas con honestidad.** En la suite de stress, más grande, Optimized-Speed y
-Optimized-Quality **empatan exactamente**. Y el test exacto de Fisher sobre la suite de
-24 turnos da **p = 0,34** para Bare-Speed frente a Optimized-Speed y **p = 1,00** para
-Quality frente a Speed: ninguna de las dos diferencias es estadísticamente significativa
-con este tamaño de muestra. Los 24 turnos son 3 repeticiones de 8 tareas, así que la n
-efectiva es aún menor.
-
-Lo que sí tenemos es una **dirección consistente a lo largo de tres suites y dos métodos
-independientes**: nuestros resultados de tool-calling ordenan las tres builds igual que
-las cifras de divergencia respecto a bf16 publicadas por el autor de la cuantización
-(0,00105 / 0,0220 / 0,0376 — su medición, no la nuestra, no reproducida). La coincidencia
-entre métodos sin relación entre sí vale más que cualquiera de los dos p-valores. Por eso
-desaconsejamos Bare-Speed, y es una evidencia más débil de lo que aparenta una tabla de
-porcentajes.
-
-Optimized-Quality tampoco: cuesta **8,3 GB más** por una ventaja que no podemos demostrar.
+**Ejecútalo con el razonamiento activado.** Qwen recomienda el nivel de esfuerzo `xhigh`
+para el trabajo agéntico, e indica que en tareas agénticas multiturno un esfuerzo menor
+*«puede llevar a un análisis insuficiente, más fallos y reintentos repetidos, lo que puede
+aumentar la latencia total»*. MTPLX 2.7.1 señala además el razonamiento desactivado como
+problema conocido en Qwen3.8. Ojo: `high` no existe en este modelo — Qwen solo expone
+`low`, `medium` y `xhigh`, y `xhigh` es el valor por defecto.
 
 ## Lo que no pudimos medir
 
@@ -181,13 +171,10 @@ activado por defecto —, así que su ausencia es un hueco real en esta comparac
 error de redondeo. vllm-mlx murió al arrancar por un error de comillas en la línea de
 comandos; vmlx seguía ejecutándose cuando esto se publicó.
 
-**El razonamiento estaba desactivado, y no es así como deberías ejecutar este modelo.**
-Qwen afirma que, en tareas agénticas multiturno, un menor esfuerzo de razonamiento *"can
-lead to insufficient analysis, more failures, and repeated retries, which may increase
-total latency"* (puede llevar a un análisis insuficiente, más fallos y reintentos
-repetidos, lo que puede aumentar la latencia total). MTPLX 2.7.1 recoge el razonamiento
-desactivado como problema conocido para Qwen3.8. Lo desactivamos para hacer comparables
-los motores: una decisión de medición, no de despliegue.
+**El razonamiento estuvo desactivado en todo momento, para hacer comparables los
+motores.** Es una decisión de medición y no de despliegue — véase la recomendación de
+arriba. No tenemos ninguna cifra que ofrecer sobre lo que el razonamiento hace a estos
+motores, y no vamos a extrapolarla.
 
 **Salvedades de versión.** Las filas de MTPLX se ejecutaron en **2.6.0**, antes de que el
 motor incorporara una familia de modelos `qwen3_8`: servía Qwen3.8 con los valores por

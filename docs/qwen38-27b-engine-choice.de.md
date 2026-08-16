@@ -154,32 +154,21 @@ mit der Zahl.
 MTP-Tiefe 3.** Schnell, 99 ms bis zum ersten Token, Prefix-Wiederverwendung auf
 Token-Ebene, 27 GB.
 
-Nicht Bare-Speed, auch wenn es auf dem Papier führt. Tool-Calling-Suiten, dasselbe
-Protokoll bei allen dreien:
+Nicht Bare-Speed, obwohl es auf dem Papier führt. Die drei Builds unterscheiden sich in
+ihrer Divergenz gegenüber bf16, veröffentlicht vom Autor der Quantisierungen: **0,00105**
+für Optimized-Quality, **0,0220** für Optimized-Speed, **0,0376** für Bare-Speed. Seine
+Messung, nicht unsere, nicht reproduziert — aber es ist die einzige Genauigkeitszahl, die
+überhaupt jemand hat, und Bare-Speed liegt eine Größenordnung von Quality entfernt.
 
-| Build | Tool-Call (24 Turns) | Stress (33 Turns) | Edit-Turns (9) |
-|---|---|---|---|
-| Optimized-Quality | **83,3%** | 81,8% | **55,6%** |
-| Optimized-Speed | 79,2% | **81,8%** | 44,4% |
-| Bare-Speed | 62,5% | 72,7% | 22,2% |
+Auch nicht Optimized-Quality: es kostet **8,3 GB mehr** für einen Vorsprung, den niemand an
+einer Aufgabe nachgewiesen hat.
 
-⚠️ **Lesen Sie das ehrlich.** In der größeren Stress-Suite liegen Optimized-Speed und
-Optimized-Quality **exakt gleichauf**. Und Fishers exakter Test auf der 24-Turn-Suite
-ergibt **p = 0,34** für Bare-Speed gegen Optimized-Speed und **p = 1,00** für Quality
-gegen Speed — keiner der beiden Abstände ist bei dieser Stichprobengröße statistisch
-signifikant. Die 24 Turns sind 3 Wiederholungen von 8 Aufgaben, das effektive n ist also
-noch kleiner.
-
-Was wir tatsächlich haben, ist eine **konsistente Richtung über drei Suiten und zwei
-unabhängige Methoden hinweg**: Unsere Tool-Calling-Ergebnisse ordnen die drei Builds in
-derselben Reihenfolge wie die vom Autor der Quantisierung veröffentlichten Werte der
-Divergenz gegenüber bf16 (0,00105 / 0,0220 / 0,0376 — seine Messung, nicht unsere, nicht
-reproduziert). Übereinstimmung zwischen unverwandten Methoden wiegt mehr als jeder der
-beiden p-Werte. Deshalb raten wir von Bare-Speed ab, und das ist ein schwächerer Beleg,
-als eine Prozenttabelle aussehen lässt.
-
-Optimized-Quality aber auch nicht: Es kostet **8,3 GB mehr** für einen Vorteil, den wir
-nicht nachweisen können.
+**Betreiben Sie es mit aktiviertem Reasoning.** Qwen empfiehlt die Effort-Stufe `xhigh` für
+agentische Arbeit und stellt fest, dass ein geringerer Aufwand bei mehrstufigen agentischen
+Aufgaben *„zu unzureichender Analyse, mehr Fehlschlägen und wiederholten Neuversuchen
+führen kann, was die Gesamtlatenz erhöhen kann"*. MTPLX 2.7.1 führt deaktiviertes Reasoning
+separat als bekanntes Problem bei Qwen3.8 auf. Beachten Sie: `high` existiert bei diesem
+Modell nicht — Qwen bietet nur `low`, `medium` und `xhigh`, und `xhigh` ist der Standard.
 
 ## Was wir nicht messen konnten
 
@@ -188,13 +177,10 @@ vmlx ist es standardmäßig an —, ihr Fehlen ist also eine echte Lücke in die
 kein Rundungsfehler. vllm-mlx starb beim Start an einem Quoting-Fehler in der
 Kommandozeile; vmlx lief noch, als dies hier herausging.
 
-**Reasoning war deaktiviert, und so sollte man dieses Modell nicht betreiben.** Qwen führt
-aus, dass bei mehrstufigen agentischen Aufgaben ein geringerer Reasoning-Aufwand *"can
-lead to insufficient analysis, more failures, and repeated retries, which may increase
-total latency"* (zu unzureichender Analyse, mehr Fehlschlägen und wiederholten Versuchen
-führen kann, was die Gesamtlatenz erhöhen kann). MTPLX 2.7.1 führt deaktiviertes Reasoning
-als bekanntes Problem für Qwen3.8. Wir haben es deaktiviert, um die Engines vergleichbar
-zu machen — eine Entscheidung der Messung, keine des Betriebs.
+**Reasoning war durchgehend deaktiviert, um die Engines vergleichbar zu machen.** Das ist
+eine Mess- und keine Deployment-Entscheidung — siehe die Empfehlung oben. Wir haben keine
+Zahl dazu anzubieten, was Reasoning mit diesen Engines macht, und wir werden auch keine
+extrapolieren.
 
 **Vorbehalte zu den Versionen.** Die MTPLX-Zeilen liefen auf **2.6.0**, bevor die Engine
 eine Modellfamilie `qwen3_8` auslieferte — sie bediente Qwen3.8 unter den Defaults von

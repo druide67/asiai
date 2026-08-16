@@ -146,31 +146,21 @@ escrever. Publique a definição junto com o número.
 profundidade 3.** Rápido, 99 ms até o primeiro token, reaproveitamento de prefixo em
 nível de token, 27 GB.
 
-Não o Bare-Speed, embora lidere no papel. Suítes de tool-calling, mesmo protocolo nas
-três:
+Não Bare-Speed, embora lidere no papel. Os três builds diferem na divergência em relação
+ao bf16, publicada pelo autor das quantizações: **0,00105** para Optimized-Quality,
+**0,0220** para Optimized-Speed, **0,0376** para Bare-Speed. Medição dele, não nossa, não
+reproduzida — mas é o único número de fidelidade que alguém tem, e Bare-Speed fica a uma
+ordem de grandeza de Quality.
 
-| Build | tool-call (24 turnos) | stress (33 turnos) | turnos de edição (9) |
-|---|---|---|---|
-| Optimized-Quality | **83,3%** | 81,8% | **55,6%** |
-| Optimized-Speed | 79,2% | **81,8%** | 44,4% |
-| Bare-Speed | 62,5% | 72,7% | 22,2% |
+Optimized-Quality também não: custa **8,3 GB a mais** por uma vantagem que ninguém
+demonstrou numa tarefa.
 
-⚠️ **Leia isto com honestidade.** Na suíte de stress, maior, Optimized-Speed e
-Optimized-Quality **empatam exatamente**. E o teste exato de Fisher sobre a suíte de 24
-turnos dá **p = 0,34** para Bare-Speed vs Optimized-Speed e **p = 1,00** para Quality vs
-Speed — nenhuma das duas diferenças é estatisticamente significativa com esse tamanho de
-amostra. Os 24 turnos são 3 repetições de 8 tarefas, então o n efetivo é ainda menor.
-
-O que temos de fato é uma **direção consistente em três suítes e dois métodos
-independentes**: nossos resultados de tool-calling ordenam as três builds na mesma ordem
-que os números de divergência em relação ao bf16 publicados pelo autor da quantização
-(0,00105 / 0,0220 / 0,0376 — medição dele, não nossa, não reproduzida). A concordância
-entre métodos não relacionados vale mais do que qualquer um dos p-valores. É por isso que
-desaconselhamos o Bare-Speed, e é uma evidência mais fraca do que uma tabela de
-percentuais aparenta.
-
-Tampouco o Optimized-Quality: custa **8,3 GB a mais** por uma vantagem que não
-conseguimos demonstrar.
+**Rode-o com o raciocínio ativo.** A Qwen recomenda o nível de esforço `xhigh` para trabalho
+agêntico e afirma que, em tarefas agênticas multiturno, um esforço menor *«pode levar a
+análise insuficiente, mais falhas e novas tentativas repetidas, o que pode aumentar a
+latência total»*. A MTPLX 2.7.1 lista à parte o raciocínio desativado como problema
+conhecido no Qwen3.8. Note: `high` não existe neste modelo — a Qwen expõe apenas `low`,
+`medium` e `xhigh`, e `xhigh` é o padrão.
 
 ## O que não conseguimos medir
 
@@ -179,13 +169,9 @@ o traz ligado por padrão — de modo que a ausência deles é uma lacuna real n
 comparação, não um erro de arredondamento. O vllm-mlx morreu na inicialização por um erro
 de aspas na linha de comando; o vmlx ainda estava rodando quando isto foi publicado.
 
-**O raciocínio foi desativado, e não é assim que você deveria rodar este modelo.** A Qwen
-afirma que, em tarefas agênticas multi-turno, um esforço de raciocínio menor *"can lead
-to insufficient analysis, more failures, and repeated retries, which may increase total
-latency"* (pode levar a análise insuficiente, mais falhas e novas tentativas repetidas, o
-que pode aumentar a latência total). O MTPLX 2.7.1 lista o raciocínio desativado como
-problema conhecido para o Qwen3.8. Nós o desativamos para tornar os motores comparáveis
-— uma decisão de medição, não de implantação.
+**O raciocínio ficou desativado em todos os casos, para tornar os motores comparáveis.** É
+uma decisão de medição e não de implantação — veja a recomendação acima. Não temos nenhum
+número a oferecer sobre o que o raciocínio faz a estes motores, e não vamos extrapolar um.
 
 **Ressalvas de versão.** As linhas do MTPLX rodaram na **2.6.0**, antes de o motor passar
 a trazer uma família de modelos `qwen3_8` — ele serviu o Qwen3.8 sob os padrões do

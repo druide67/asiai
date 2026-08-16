@@ -147,31 +147,21 @@ scelto di scrivere. Pubblicate la definizione insieme al numero.
 **Per un agente autonomo locale: MTPLX con `Qwen3.8-27B-MTPLX-Optimized-Speed`, MTP depth
 3.** Veloce, 99 ms al primo token, riutilizzo del prefisso a livello di token, 27 GB.
 
-Non Bare-Speed, per quanto sia in testa sulla carta. Suite di tool-calling, stesso
-protocollo su tutte e tre:
+Non Bare-Speed, benché sia in testa sulla carta. I tre build differiscono per divergenza
+rispetto a bf16, pubblicata dall'autore delle quantizzazioni: **0,00105** per
+Optimized-Quality, **0,0220** per Optimized-Speed, **0,0376** per Bare-Speed. Misura sua,
+non nostra, non riprodotta — ma è l'unico dato di fedeltà di cui chiunque disponga, e
+Bare-Speed sta un ordine di grandezza sopra Quality.
 
-| Build | tool-call (24 turni) | stress (33 turni) | turni di edit (9) |
-|---|---|---|---|
-| Optimized-Quality | **83,3%** | 81,8% | **55,6%** |
-| Optimized-Speed | 79,2% | **81,8%** | 44,4% |
-| Bare-Speed | 62,5% | 72,7% | 22,2% |
+Nemmeno Optimized-Quality: costa **8,3 GB in più** per un vantaggio che nessuno ha
+dimostrato su un compito reale.
 
-⚠️ **Vanno letti onestamente.** Sulla suite di stress, più ampia, Optimized-Speed e
-Optimized-Quality **pareggiano esattamente**. E il test esatto di Fisher sulla suite da
-24 turni dà **p = 0,34** per Bare-Speed contro Optimized-Speed e **p = 1,00** per Quality
-contro Speed: nessuno dei due scarti è statisticamente significativo con questa dimensione
-campionaria. I 24 turni sono 3 ripetizioni di 8 task, quindi l'n effettivo è ancora più
-piccolo.
-
-Quello che abbiamo davvero è una **direzione coerente su tre suite e due metodi
-indipendenti**: i nostri risultati di tool-calling ordinano le tre build nello stesso
-ordine dei valori di divergenza da bf16 pubblicati dall'autore delle quantizzazioni
-(0,00105 / 0,0220 / 0,0376 — misura sua, non nostra, non riprodotta). L'accordo tra metodi
-non correlati vale più di entrambi i p-value. È per questo che sconsigliamo Bare-Speed, ed
-è una prova più debole di quanto sembri guardando una tabella di percentuali.
-
-Nemmeno Optimized-Quality: costa **8,3 GB in più** per un vantaggio che non riusciamo a
-dimostrare.
+**Eseguitelo con il ragionamento attivo.** Qwen raccomanda il livello di sforzo `xhigh` per
+il lavoro agentico e afferma che nei compiti agentici multi-turno uno sforzo inferiore *«può
+portare ad analisi insufficiente, più fallimenti e ripetuti tentativi, il che può aumentare
+la latenza totale»*. MTPLX 2.7.1 elenca inoltre il ragionamento disattivato come problema
+noto su Qwen3.8. Da notare: `high` non esiste su questo modello — Qwen espone solo `low`,
+`medium` e `xhigh`, e `xhigh` è il valore predefinito.
 
 ## Cosa non siamo riusciti a misurare
 
@@ -181,13 +171,10 @@ questo confronto, non un errore di arrotondamento. vllm-mlx è morto all'avvio p
 errore di quoting nella riga di comando; vmlx era ancora in esecuzione al momento della
 pubblicazione.
 
-**Il reasoning era disattivato, e non è così che questo modello andrebbe fatto girare.**
-Qwen afferma che nei task agentici multi-turno un reasoning effort più basso *"can lead to
-insufficient analysis, more failures, and repeated retries, which may increase total
-latency"* (può portare ad analisi insufficienti, più fallimenti e tentativi ripetuti, che
-possono aumentare la latenza totale). MTPLX 2.7.1 elenca il reasoning disattivato tra i
-problemi noti per Qwen3.8. L'abbiamo disattivato per rendere i motori confrontabili: una
-decisione di misura, non di messa in produzione.
+**Il ragionamento è rimasto disattivato ovunque, per rendere i motori confrontabili.** È
+una decisione di misura e non di deployment — si veda la raccomandazione sopra. Non abbiamo
+alcun dato da offrire su cosa faccia il ragionamento a questi motori, e non intendiamo
+estrapolarne uno.
 
 **Riserve sulle versioni.** Le righe MTPLX hanno girato su **2.6.0**, prima che il motore
 introducesse una famiglia di modelli `qwen3_8`: ha servito Qwen3.8 con i default di

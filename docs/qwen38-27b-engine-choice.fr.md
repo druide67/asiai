@@ -152,32 +152,22 @@ quantifications ont choisi d'écrire. Publiez la définition avec le chiffre.
 profondeur 3.** Rapide, 99 ms jusqu'au premier token, réutilisation de préfixe au token
 près, 27 GB.
 
-Pas Bare-Speed, bien qu'il mène sur le papier. Suites de tool-calling, même protocole sur
-les trois :
+Pas Bare-Speed, bien qu'il mène sur le papier. Les trois builds diffèrent par leur
+divergence par rapport à bf16, publiée par l'auteur des quantifications : **0,00105** pour
+Optimized-Quality, **0,0220** pour Optimized-Speed, **0,0376** pour Bare-Speed. Sa mesure,
+pas la nôtre, non reproduite — mais c'est le seul chiffre de fidélité dont quiconque
+dispose, et Bare-Speed se situe un ordre de grandeur au-dessus de Quality.
 
-| Build | tool-call (24 tours) | stress (33 tours) | tours d'édition (9) |
-|---|---|---|---|
-| Optimized-Quality | **83,3 %** | 81,8 % | **55,6 %** |
-| Optimized-Speed | 79,2 % | **81,8 %** | 44,4 % |
-| Bare-Speed | 62,5 % | 72,7 % | 22,2 % |
+Pas Optimized-Quality non plus : il coûte **8,3 GB de plus** pour un avantage que personne
+n'a démontré sur une tâche.
 
-⚠️ **Lisez ces chiffres honnêtement.** Sur la suite stress, plus grande, Optimized-Speed
-et Optimized-Quality sont **exactement à égalité**. Et le test exact de Fisher sur la
-suite de 24 tours donne **p = 0,34** pour Bare-Speed contre Optimized-Speed et
-**p = 1,00** pour Quality contre Speed — aucun des deux écarts n'est statistiquement
-significatif à cette taille d'échantillon. Les 24 tours sont 3 répétitions de 8 tâches,
-donc le n effectif est plus petit encore.
-
-Ce que nous avons réellement, c'est une **direction cohérente à travers trois suites et
-deux méthodes indépendantes** : nos résultats de tool-calling classent les trois builds
-dans le même ordre que les chiffres de divergence par rapport à bf16 publiés par l'auteur
-des quantifications (0,00105 / 0,0220 / 0,0376 — sa mesure, pas la nôtre, non reproduite).
-L'accord entre deux méthodes sans lien entre elles vaut plus que l'une ou l'autre des
-p-values. C'est pour cela que nous déconseillons Bare-Speed, et c'est une preuve plus
-faible qu'un tableau de pourcentages n'en a l'air.
-
-Pas Optimized-Quality non plus : il coûte **8,3 GB de plus** pour un avantage que nous ne
-savons pas démontrer.
+**Faites-le tourner avec le raisonnement actif.** Qwen recommande le niveau d'effort
+`xhigh` pour le travail agentique, et indique que dans les tâches agentiques multi-tours un
+effort plus faible *« peut conduire à une analyse insuffisante, à davantage d'échecs et à
+des reprises répétées, ce qui peut augmenter la latence totale »*. MTPLX 2.7.1 signale par
+ailleurs le raisonnement désactivé comme un problème connu sur Qwen3.8. À noter : `high`
+n'existe pas sur ce modèle — Qwen n'expose que `low`, `medium` et `xhigh`, et `xhigh` est
+la valeur par défaut.
 
 ## Ce que nous n'avons pas pu mesurer
 
@@ -186,14 +176,10 @@ natif — vmlx l'a activé par défaut — donc leur absence est un vrai trou da
 comparaison, pas une erreur d'arrondi. vllm-mlx est mort au démarrage sur une erreur de
 quoting en ligne de commande ; vmlx tournait encore au moment de la publication.
 
-**Le raisonnement était désactivé, et ce n'est pas ainsi qu'il faut faire tourner ce
-modèle.** Qwen indique que, dans les tâches agentiques multi-tours, un effort de
-raisonnement plus faible *"can lead to insufficient analysis, more failures, and repeated
-retries, which may increase total latency"* (peut conduire à une analyse insuffisante, à
-davantage d'échecs et à des reprises répétées, ce qui peut augmenter la latence totale).
-MTPLX 2.7.1 liste le raisonnement désactivé comme un problème connu pour Qwen3.8. Nous
-l'avons désactivé pour rendre les moteurs comparables — une décision de mesure, pas une
-décision de déploiement.
+**Le raisonnement était désactivé partout, pour rendre les moteurs comparables.** C'est
+une décision de mesure et non de déploiement — voir la recommandation ci-dessus. Nous
+n'avons aucun chiffre à proposer sur ce que le raisonnement fait à ces moteurs, et nous
+n'allons pas en extrapoler un.
 
 **Réserves de version.** Les lignes MTPLX ont tourné sur **2.6.0**, avant que le moteur ne
 livre une famille de modèles `qwen3_8` — il servait Qwen3.8 sous les valeurs par défaut de

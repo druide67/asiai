@@ -143,28 +143,21 @@ Publish the definition with the number.
 **For a local autonomous agent: MTPLX with `Qwen3.8-27B-MTPLX-Optimized-Speed`, MTP depth
 3.** Fast, 99 ms to first token, token-level prefix reuse, 27 GB.
 
-Not Bare-Speed, though it leads on paper. Tool-calling suites, same protocol on all three:
+Not Bare-Speed, though it leads on paper. The three builds differ in
+divergence-from-bf16, published by the quantization author: **0.00105** for
+Optimized-Quality, **0.0220** for Optimized-Speed, **0.0376** for Bare-Speed. His
+measurement, not ours, not reproduced — but it is the only fidelity figure any of us
+has, and Bare-Speed sits an order of magnitude away from Quality.
 
-| Build | tool-call (24 turns) | stress (33 turns) | edit turns (9) |
-|---|---|---|---|
-| Optimized-Quality | **83.3%** | 81.8% | **55.6%** |
-| Optimized-Speed | 79.2% | **81.8%** | 44.4% |
-| Bare-Speed | 62.5% | 72.7% | 22.2% |
+Not Optimized-Quality either: it costs **8.3 GB more** for an edge nobody has
+demonstrated on a task.
 
-⚠️ **Read these honestly.** On the larger stress suite Optimized-Speed and
-Optimized-Quality **tie exactly**. And Fisher's exact test on the 24-turn suite gives
-**p = 0.34** for Bare-Speed vs Optimized-Speed and **p = 1.00** for Quality vs Speed —
-neither gap is statistically significant at this sample size. The 24 turns are 3 repeats
-of 8 tasks, so the effective n is smaller still.
-
-What we actually have is a **consistent direction across three suites and two independent
-methods**: our tool-calling results rank the three builds in the same order as the
-divergence-from-bf16 numbers published by the quantization author (0.00105 / 0.0220 /
-0.0376 — his measurement, not ours, not reproduced). Agreement between unrelated methods
-is worth more than either p-value. That is why we recommend against Bare-Speed, and it is
-weaker evidence than a table of percentages looks.
-
-Not Optimized-Quality either: it costs **8.3 GB more** for an edge we cannot demonstrate.
+**Run it with reasoning on.** Qwen recommends the `xhigh` effort level for agentic
+work, and states that in multi-turn agentic tasks a lower effort *"can lead to
+insufficient analysis, more failures, and repeated retries, which may increase total
+latency"*. MTPLX 2.7.1 separately lists disabled reasoning as a known issue for
+Qwen3.8. Note that `high` does not exist on this model — Qwen exposes `low`, `medium`
+and `xhigh` only, and `xhigh` is the default.
 
 ## What we could not measure
 
@@ -173,11 +166,10 @@ it on by default — so their absence is a real gap in this comparison, not a ro
 error. vllm-mlx died at startup on a command-line quoting error; vmlx was still running
 when this went out.
 
-**Reasoning was disabled, and that is not how you should run this model.** Qwen states
-that in multi-turn agentic tasks, lower reasoning effort *"can lead to insufficient
-analysis, more failures, and repeated retries, which may increase total latency"*.
-MTPLX 2.7.1 lists disabled reasoning as a known issue for Qwen3.8. We disabled it to make
-engines comparable — a measurement decision, not a deployment one.
+**Reasoning was disabled throughout, to make engines comparable.** That is a measurement
+decision and not a deployment one — see the recommendation above. We have no figure to
+offer on what reasoning does to any of these engines, and we are not going to
+extrapolate one.
 
 **Version caveats.** The MTPLX rows ran on **2.6.0**, before the engine shipped a
 `qwen3_8` model family — it served Qwen3.8 under Qwen3.6 defaults, including a different
