@@ -188,11 +188,15 @@ reuse, 27 GB.
 
 ⚠️ **What we recommend is not what we measured**, and the gap is on three axes at once.
 Measured: reasoning **off**, MTPLX **2.6.0** serving Qwen3.8 under the Qwen3.6 family
-defaults, `--profile turbo`. Recommended: reasoning `xhigh`, **2.7.1**, depth 3. On 2.7.1
-the same cell gives **51.2 tok/s and 158 ms**, not 44.4 and 99. And we could not measure
-the recommended reasoning regime at all: with a 400-token budget, reasoning consumes the
-answer — those cells returned 75% output validity and six empty long phases. The engine
-choice rests on the table; the reasoning setting rests on Qwen's own guidance.
+defaults, `--profile turbo`. Recommended: reasoning `xhigh`, **2.7.1**, depth 3.
+
+We ran 2.7.1 once, with reasoning on, and **that cell failed our own output-validity
+gate**: 75% valid, six empty long-context phases, because a 400-token budget cannot hold
+a reasoning trace and an answer. Its numbers — 51.2 tok/s, 158 ms to first token — are
+therefore *indicative only*, and we are not putting them in the table. What they do
+establish is that the recommended regime cannot be measured under this protocol at all.
+The engine choice rests on the table; the reasoning setting rests on Qwen's guidance and
+on nothing of ours.
 
 Not Bare-Speed, though it leads on paper. The three builds differ in
 divergence-from-bf16, published by the quantization author: **0.00105** for
