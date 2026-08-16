@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Qué motor para Qwen3.8-27B en Apple Silicon
 
 La cuestión del modelo está zanjada: Qwen3.8-27B funciona en un portátil y sostiene

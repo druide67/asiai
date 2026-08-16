@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Apple Silicon で Qwen3.8-27B にどのエンジンを選ぶか
 
 モデルの問題は決着している。Qwen3.8-27B はノートパソコンで動作し、262,144 トークンの

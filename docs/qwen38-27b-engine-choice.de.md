@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Welche Engine für Qwen3.8-27B auf Apple Silicon
 
 Die Modellfrage ist geklärt: Qwen3.8-27B läuft auf einem Laptop und fasst 262.144 Token

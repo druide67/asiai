@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Apple Silicon 上 Qwen3.8-27B 该用哪个引擎
 
 模型的问题已经有答案:Qwen3.8-27B 能在笔记本上运行,并且能容纳 262,144 个 token 的上下文。

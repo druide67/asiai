@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Quale motore per Qwen3.8-27B su Apple Silicon
 
 La questione del modello è chiusa: Qwen3.8-27B gira su un portatile e regge 262.144 token

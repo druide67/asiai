@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Quel moteur pour Qwen3.8-27B sur Apple Silicon
 
 La question du modèle est tranchée : Qwen3.8-27B tourne sur un portable et tient

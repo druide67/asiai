@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Qual motor para Qwen3.8-27B no Apple Silicon
 
 A questão do modelo está resolvida: o Qwen3.8-27B roda em um laptop e sustenta 262.144

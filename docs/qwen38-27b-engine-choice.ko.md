@@ -6,6 +6,8 @@ date: 2026-08-16
 updated: 2026-08-16
 ---
 
+<!-- STALE: rewritten 2026-08-16 after adversarial audit; retranslate from the English before publishing -->
+
 # Apple Silicon에서 Qwen3.8-27B에 어떤 엔진을 쓸 것인가
 
 모델 문제는 정리되었다. Qwen3.8-27B는 노트북에서 돌아가고 262,144 토큰의 컨텍스트를
