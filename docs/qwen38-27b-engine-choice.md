@@ -31,9 +31,11 @@ turns, and **every turn re-reads everything that came before**. So the number yo
 time to first token, paid once per turn, and it depends almost entirely on whether the
 engine kept the previous prompt in cache.
 
-The spread on that metric is **335×** across our table — 99 ms to 33 seconds. The spread
-on throughput is 5%. That is the whole argument: for agent work, pick on latency and
-prefix reuse; throughput is a tiebreaker.
+Across the full table, first token spans **335×** (99 ms to 33 seconds) while throughput
+spans **2.4×** (23.1 to 56.0 tok/s). And once you hold the weights file constant and turn
+speculation off on both sides, throughput collapses to **4.9%** — noise — while first
+token still differs by 77×. Either way the same conclusion: for agent work, pick on
+latency and prefix reuse; throughput is a tiebreaker.
 
 Two engines reuse at token level (MTPLX, llama.cpp). One reuses in 1,024-token blocks and
 re-prefills 1,386 tokens *every single turn, forever* (oMLX, 1,968 ms). Three reuse

@@ -32,9 +32,12 @@ des dizaines de tours courts, et **chaque tour relit tout ce qui précède**. Le
 vous ressentez est donc le temps au premier jeton, payé une fois par tour, et il dépend
 presque entièrement de la capacité du moteur à garder le prompt précédent en cache.
 
-L'écart sur cette mesure est de **335×** dans notre tableau — de 99 ms à 33 secondes.
-L'écart sur le débit est de 5 %. Voilà tout l'argument : pour un agent, choisissez sur la
-latence et la réutilisation de préfixe ; le débit départage les ex æquo.
+Sur le tableau complet, le premier jeton s'étale sur **335×** (de 99 ms à 33 secondes)
+quand le débit ne s'étale que sur **2,4×** (de 23,1 à 56,0 tok/s). Et dès qu'on fixe le
+fichier de poids et qu'on coupe la spéculation des deux côtés, le débit tombe à **4,9 %**
+— du bruit — alors que le premier jeton diffère encore d'un facteur 77. Dans les deux cas
+la même conclusion : pour un agent, choisissez sur la latence et la réutilisation de
+préfixe ; le débit départage les ex æquo.
 
 Deux moteurs réutilisent au token près (MTPLX, llama.cpp). Un réutilise par blocs de
 1 024 tokens et recalcule 1 386 tokens *à chaque tour, indéfiniment* (oMLX, 1 968 ms).
