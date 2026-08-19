@@ -21,8 +21,9 @@ wins on every metric that matters, and the second place is not close:
 | Throughput | **44.4 tok/s** | 31.8 | 32.8 |
 | Memory | **27 GB** | 36.8 GB | 30.3 GB |
 
-That is +40% throughput, 26 ms less latency per turn, and 10 GB less memory than the
-best of the rest. We run it in production.
+Against llama.cpp — the closest on latency — that is +40% throughput, 26 ms less per
+turn and 10 GB less memory. Ollama is the fastest of the rest at 32.8 tok/s, so the
+throughput lead over the field is +35%. We run this in production.
 
 ## Why those metrics and not tokens per second
 

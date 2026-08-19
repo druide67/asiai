@@ -22,8 +22,10 @@ près :
 | Débit | **44,4 tok/s** | 31,8 | 32,8 |
 | Mémoire | **27 Go** | 36,8 Go | 30,3 Go |
 
-Soit +40 % de débit, 26 ms de latence en moins par tour, et 10 Go de mémoire en moins que
-le meilleur des autres. C'est ce que nous faisons tourner en production.
+Face à llama.cpp — le plus proche sur la latence — cela fait +40 % de débit, 26 ms de
+moins par tour et 10 Go de mémoire en moins. Ollama est le plus rapide des autres à
+32,8 tok/s, donc l'avance en débit sur le champ entier est de +35 %. C'est ce que nous
+faisons tourner en production.
 
 ## Pourquoi ces mesures, et pas les tokens par seconde
 
