@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.33.0](https://github.com/druide67/asiai/compare/v1.32.0...v1.33.0) — 2026-08-30
+
 ### Added
 
 - **`--fail-on-gate`: a failed quality gate can now stop the run.** asiai has
