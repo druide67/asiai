@@ -57,11 +57,25 @@ SANS = "Helvetica, Arial, sans-serif"
 MONO_K = 0.602
 SANS_K = 0.52
 
+# Helvetica advances vary by more than 2x across classes, so a single average
+# is only right for average text. Model names are not average text: they are
+# mostly capitals and digits, which a 0.52 factor under-measures by ~15%. That
+# is how a chip laid out right after the title ended up sitting ON its last
+# letter ("…Q5_K_XL.ggu" + llamacpp chip, 2026-08-14). Widths below are the
+# real advances of Helvetica, rounded per class.
+_SANS_NARROW = frozenset("ijlt.,:;'`|!()[]{}/\\ ")
+_SANS_WIDE = frozenset("mwMW@%")
+_SANS_CAP_DIGIT = frozenset("ABCDEFGHIJKLMNOPQRSTUVXYZ0123456789")
+
 # Bar geometry (spec §2)
 BAR_X = 482
 BAR_MAX_W = 522
 VALUE_X = 1016
 LABEL_RIGHT = 470
+# Right edge of the terminal panel (29 + 1142), minus a breathing margin. Any
+# right-hand value text must END here — the panel does not clip, so an
+# overlong string simply runs off the card and the number it carries is lost.
+VALUE_MAX_W = 1171 - VALUE_X - 12
 
 # Panel body band (card coords)
 BODY_Y = 166
@@ -77,7 +91,18 @@ def mono_w(text: str, size: float) -> float:
 
 
 def sans_w(text: str, size: float) -> float:
-    return len(str(text)) * SANS_K * size
+    """Width of ``text`` in Helvetica at ``size`` px, measured per glyph class."""
+    total = 0.0
+    for ch in str(text):
+        if ch in _SANS_NARROW:
+            total += 0.28
+        elif ch in _SANS_WIDE:
+            total += 0.85
+        elif ch in _SANS_CAP_DIGIT:
+            total += 0.66
+        else:
+            total += 0.53
+    return total * size
 
 
 def text(
@@ -199,12 +224,28 @@ def bar_row(
         text(
             VALUE_X,
             y + height / 2 + value_size * 0.36,
-            value_text,
+            _fit_value(value_text, value_size),
             size=value_size,
             fill=value_color,
         )
     )
     return "".join(parts)
+
+
+def _fit_value(value_text: str, size: float) -> str:
+    """Clip a right-hand value to the panel, rather than let it run off the card.
+
+    SVG text does not wrap and the panel does not clip: a value one character
+    too long is not squeezed, it is *lost past the edge* — which is how
+    "21.5 t/s" shipped as "21.5 t/" (2026-08-14). Truncating is the lesser
+    failure of the two, and an ellipsis says a number was cut instead of
+    letting a plausible wrong one stand.
+    """
+    s = str(value_text)
+    if mono_w(s, size) <= VALUE_MAX_W:
+        return s
+    keep = max(1, int(VALUE_MAX_W / (MONO_K * size)) - 1)
+    return s[:keep] + "…"
 
 
 def ci_whisker(y_bar: float, value: float, ci_half: float, vmax: float, *, on_accent: bool) -> str:
@@ -276,9 +317,61 @@ def conditions_string(result: BenchResult) -> str:
     ):
         if c.get(key):
             parts.append(f"{key}: {c[key]}")
-    if c.get("extra_body"):
-        parts.append("custom sampling params")
+    parts.extend(_extra_body_conditions(c.get("extra_body")))
     return " · ".join(parts) if parts else "conditions not recorded"
+
+
+# Sampling knobs, as opposed to everything else an engine accepts in extra_body.
+_SAMPLING_KEYS = frozenset(
+    {
+        "temperature",
+        "top_p",
+        "top_k",
+        "min_p",
+        "typical_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "repeat_penalty",
+        "repetition_penalty",
+        "seed",
+    }
+)
+
+
+def _extra_body_conditions(extra: Any) -> list[str]:
+    """Name what extra_body ACTUALLY set, instead of assuming it was sampling.
+
+    This used to print "custom sampling params" for any non-empty extra_body.
+    On 2026-08-14 every card of the Qwen3.8 campaign therefore claimed a custom
+    sampler we never set, while staying silent about the one condition that
+    decided the whole measurement — reasoning turned off. A conditions line that
+    asserts a condition which did not happen, and omits the one that did, is
+    worse than no conditions line: it is read as a declaration.
+    """
+    if not isinstance(extra, dict) or not extra:
+        return []
+    out: list[str] = []
+    tpl = extra.get("chat_template_kwargs")
+    tpl = tpl if isinstance(tpl, dict) else {}
+    merged = {**extra, **tpl}
+
+    if merged.get("enable_thinking") is False:
+        out.append("reasoning: off")
+    elif "reasoning_effort" in merged:
+        out.append(f"reasoning: {merged['reasoning_effort']}")
+    elif merged.get("enable_thinking") is True:
+        out.append("reasoning: on")
+
+    sampling = sorted(k for k in merged if k in _SAMPLING_KEYS)
+    if sampling:
+        out.append("sampling: " + ", ".join(f"{k}={merged[k]}" for k in sampling))
+
+    # Anything else was still sent to the engine and still shaped the run.
+    named = _SAMPLING_KEYS | {"enable_thinking", "reasoning_effort", "chat_template_kwargs"}
+    rest = sorted(k for k in merged if k not in named)
+    if rest:
+        out.append("also set: " + ", ".join(rest))
+    return out
 
 
 # ── chrome assembly (spec §0 + §2) ───────────────────────────────────

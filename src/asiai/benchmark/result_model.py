@@ -133,6 +133,22 @@ def _pct(key: str, label: str, value: Any, *, n: int = 0, caveat: str = "") -> M
 _MODEL_NAME_SEPARATORS = "-_./@: "
 
 
+def _basename_if_path(name: str) -> str:
+    """An absolute filesystem path becomes its file name.
+
+    A card is made to be published. When the model is given as a path — which is
+    how every llama.cpp bench addresses it — printing it whole puts the operator's
+    home directory on a public image: on 2026-08-15 a batch of seven cards left
+    for social media titled `/Users/<user>/llms/gguf/...`, caught at review. The
+    file name identifies the model exactly as well and leaks nothing.
+
+    Only rooted paths are touched: a Hugging Face id (`org/model`) contains a
+    slash too, and cutting it to `model` would drop the publisher, which is part
+    of the identity a bench must state.
+    """
+    return name.rsplit("/", 1)[-1] if name.startswith(("/", "~")) else name
+
+
 def display_model(models: list[str]) -> str:
     """One display name for a set of model names.
 
@@ -141,7 +157,7 @@ def display_model(models: list[str]) -> str:
     long enough to mean something — else the generic "N-model comparison".
     A fabricated family name would be worse than the generic label.
     """
-    distinct = sorted({m for m in models if m})
+    distinct = sorted({_basename_if_path(m) for m in models if m})
     if not distinct:
         return ""
     if len(distinct) == 1:

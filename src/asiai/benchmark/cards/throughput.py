@@ -241,10 +241,14 @@ def render(result: BenchResult) -> str:
         )
         color = ACCENT if is_leader and not no_winner else BAR_NEUTRAL
         value = f"{fmt_num(v)}"
-        if s.hero and s.hero.ci95:
-            value += f" ±{fmt_num(s.hero.ci95[1] - v)}"
         if invalid:
+            # No confidence interval on a figure we are declaring invalid: the
+            # spread of a degenerate run measures nothing, and printing it here
+            # pushed "invalid ✗" off the right edge of the card — the one word
+            # a reader must not miss.
             value += " · invalid ✗"
+        elif s.hero and s.hero.ci95:
+            value += f" ±{fmt_num(s.hero.ci95[1] - v)}"
         y = y0 + i * pitch
         p.append(
             bar_row(
