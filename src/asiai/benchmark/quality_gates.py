@@ -39,6 +39,87 @@ from asiai.collectors.system import (
     find_engine_process_by_url,
 )
 
+# Phases whose replay is deliberate (see detect_session_replay's docstring note).
+_REPLAY_BY_DESIGN = frozenset({"warm", "prefix-test-2", "long-prefix"})
+
+
+def detect_session_replay(runs: list, slack_tokens: int = 2) -> dict:
+    """Flag runs whose prompt was served as an exact session replay.
+
+    A genuine agent turn appends a NEW user message, so the engine can never
+    cache the full prompt: on the prefix-test protocol the theoretical reuse
+    ceiling is ~0.8 (USER_Y is never cached — see docs/bench-modes.md). A run
+    reporting ``cached_tokens >= prompt_tokens - slack`` therefore measured a
+    session-bank replay of an identical request, a code path no real agent
+    exercises. On 2026-08-29 such runs rendered 74 ms first tokens (vs 222 ms
+    on the block prefix-cache path) and dominated a cell median 2/3 of whose
+    samples were replays — the effective sample size of real turns was 1.
+
+    Warm is exempt: replaying the previous request verbatim is that phase's
+    documented purpose.
+    """
+    # Phases whose replay is the POINT, not a defect: warm replays the previous
+    # request by definition; prefix-test-2 is the protocol's full-reuse probe
+    # (same SYS_A + USER_X as cold, deliberately); long-prefix measures long-
+    # context session restore. Flagging those would make every valid campaign
+    # fail. Everything else — cold, prefix-test-1/3, cold-prefix, long-context —
+    # claims to measure a fresh turn, and a replay THERE is the defect this gate
+    # exists for (agentic-v5; before v5, prefix-test-3 replayed by accident and
+    # three campaigns measured the session bank without knowing it).
+    flagged = []
+    for r in runs:
+        phase = getattr(r, "phase", "") or ""
+        if phase in _REPLAY_BY_DESIGN:
+            continue
+        cached = getattr(r, "cached_tokens", None)
+        prompt = getattr(r, "prompt_tokens", None)
+        if cached is not None and prompt and cached >= prompt - slack_tokens:
+            flagged.append(
+                {
+                    "phase": phase,
+                    "repeat": getattr(r, "repeat", None),
+                    "cached_tokens": cached,
+                    "prompt_tokens": prompt,
+                }
+            )
+    return {"detected": bool(flagged), "replay_runs": flagged}
+
+
+def detect_bank_preload(runs: list) -> dict:
+    """Refuse a campaign whose "cold" was never cold: pre-existing engine state.
+
+    The 2026-09-02 campaign ran three cells against a 32 GB on-disk session bank
+    holding entries from THREE previous campaigns (oldest blob: five weeks old).
+    Every "cold" rep0 reported cached_tokens=7424 — a first request served at
+    98.6% cache on a freshly started server. No run of the night measured a real
+    agent turn, and nothing refused anything: the numbers just came out plausible
+    and wrong. This gate encodes the one invariant a cold phase has: THE FIRST
+    COLD RUN OF A CELL MUST START FROM NOTHING. If it reports reused tokens, the
+    cell inherited state from outside the measurement and the whole cell is
+    suspect — not just that run, because every later phase builds on the same
+    bank. Fail-closed by design: an operator who intends a warm-start protocol
+    can drop the gate from --fail-on-gate, but silence will never again read as
+    cleanliness.
+    """
+    for r in runs:
+        if getattr(r, "phase", "") == "cold" and getattr(r, "repeat", None) == 0:
+            cached = getattr(r, "cached_tokens", None)
+            if cached is not None and cached > 0:
+                return {
+                    "detected": True,
+                    "reason": (
+                        f"cold rep0 reused {cached} cached tokens — the engine "
+                        "started with pre-existing bank/cache state"
+                    ),
+                    "cached_tokens": cached,
+                }
+            return {"detected": False, "reason": "", "cached_tokens": cached or 0}
+    return {"detected": False, "reason": "no cold rep0 run found", "cached_tokens": 0}
+
+
+def _round_or_none(value: float | None, ndigits: int) -> float | None:
+    return round(value, ndigits) if value is not None else None
+
 
 def _bytes_to_mb(b: int) -> float | None:
     """Bytes -> MB (1 decimal), or None when there is no reading (<= 0)."""

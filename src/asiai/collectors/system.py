@@ -12,6 +12,7 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("asiai.collectors.system")
@@ -385,6 +386,49 @@ def collect_power_mode() -> int | None:
     return int(m.group(1)) if m else None
 
 
+def collect_power_supply() -> str | None:
+    """Return ``"ac"`` or ``"battery"`` from ``pmset -g batt``, or ``None``.
+
+    An energy figure taken on battery is not the same measurement as one taken
+    on mains: the SoC throttles its power budget when unplugged, and the only
+    honest "tokens per % of battery" claim needs to KNOW it was on battery. The
+    M5 Max that runs production is a laptop, so this cannot be assumed either
+    way. ``None`` when pmset says nothing recognisable — never a guess.
+    """
+    try:
+        out = subprocess.run(
+            ["pmset", "-g", "batt"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        ).stdout
+    except Exception:
+        return None
+    head = out.splitlines()[0].lower() if out.strip() else ""
+    if "ac power" in head:
+        return "ac"
+    if "battery power" in head:
+        return "battery"
+    return None
+
+
+def _instrument_fingerprint() -> str | None:
+    """SHA-256 (first 16 hex chars) over the bytes of every asiai source file."""
+    import hashlib
+
+    import asiai
+
+    try:
+        root = Path(asiai.__file__).parent
+        h = hashlib.sha256()
+        for f in sorted(root.rglob("*.py")):
+            h.update(f.read_bytes())
+        return h.hexdigest()[:16]
+    except Exception:
+        return None
+
+
 def collect_run_metadata(
     *, engine_version: str = "", bench_mode: str = "", include_host: bool = False
 ) -> dict[str, Any]:
@@ -408,6 +452,14 @@ def collect_run_metadata(
     cores = collect_cpu_cores()
     md: dict[str, Any] = {
         "asiai_version": __version__,
+        # The version string alone cannot prove WHICH asiai measured: the
+        # 2026-09-02 campaign ran a locally-installed working tree whose exports
+        # said "1.32.0" — byte-for-byte the same claim a stock PyPI install makes.
+        # The audit could not tell the instrumented tool from the bare one without
+        # grepping the payload for side effects. This fingerprint hashes the
+        # SOURCE ACTUALLY LOADED (every asiai module file on disk), so two
+        # different instruments can never share an identity again.
+        "instrument_fingerprint": _instrument_fingerprint(),
         "machine_model": machine_model or None,
         "hw_chip": collect_hw_chip() or None,
         "os_version": collect_os_version() or None,

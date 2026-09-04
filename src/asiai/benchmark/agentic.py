@@ -50,6 +50,7 @@ from asiai.benchmark.prompts import (
     USER_L,
     USER_X,
     USER_Y,
+    USER_Z,
 )
 from asiai.benchmark.quality_gates import (
     EngineMemorySampler,
@@ -58,7 +59,9 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
     check_other_engines_resident,
+    detect_bank_preload,
     detect_early_stop,
+    detect_session_replay,
     summarize_thermal,
 )
 from asiai.collectors.system import collect_run_metadata
@@ -69,7 +72,7 @@ logger = logging.getLogger("asiai.benchmark.agentic")
 # os_version, ram_gb, cpu_cores, powermode, engine_version, bench_mode (via
 # collect_run_metadata) + a `footprint` summary (peak/warm engine RSS). v3
 # readers ignore the extra keys; no field was removed or renamed.
-SCHEMA_VERSION = "agentic-v4"
+SCHEMA_VERSION = "agentic-v5"
 
 # Caveat on token counts: other tokenizers compress differently. Llama-3
 # averages ~4.0 chars/token on the same prose; the long-context phase
@@ -92,7 +95,16 @@ PHASES: tuple[AgenticPhase, ...] = (
     AgenticPhase("warm", SYS_A, USER_X, 400),
     AgenticPhase("prefix-test-1", SYS_A, USER_Y, 400),
     AgenticPhase("prefix-test-2", SYS_A, USER_X, 400),
-    AgenticPhase("prefix-test-3", SYS_A, USER_Y, 400),
+    # USER_Z, not USER_Y (agentic-v5): with USER_Y this phase replayed the exact
+    # prompt of prefix-test-1, which on a session-bank engine (MTPLX) is served as
+    # a full session hit (cached = prompt-1) — it measured session restore, not
+    # the "does the prefix survive alternation" question it was written for. On a
+    # single-slot cache (llama.cpp) the old design worked; the bank generation of
+    # engines made it silently measure something else. Three campaigns (08-16,
+    # 08-29, 09-02) were invalidated before the 09-02 gate made it visible. A
+    # fresh user keeps the intent — SYS_A hit, brand-new user — on every cache
+    # architecture at once.
+    AgenticPhase("prefix-test-3", SYS_A, USER_Z, 400),
     AgenticPhase("cold-prefix", SYS_B, USER_X, 400),
     AgenticPhase("long-context", SYS_A, USER_L, 200),
     AgenticPhase("long-prefix", SYS_A, USER_L, 200),
@@ -769,6 +781,8 @@ def run_agentic_bench(
     reuse = _compute_reuse(runs)
     quality_gates: dict[str, Any] = {
         "early_stop": detect_early_stop(runs),
+        "session_replay": detect_session_replay(runs),
+        "bank_preload": detect_bank_preload(runs),
         "duplicate_processes": duplicates,
         "other_engines_resident": other_engines,
         "thermal": summarize_thermal(runs),

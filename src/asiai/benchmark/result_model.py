@@ -393,6 +393,25 @@ def from_agentic(payload: dict) -> BenchResult:
     if pct_valid is not None:
         min_pct = _num(validity.get("min_valid_pct")) or 0
         gates.append(Gate("output_validity", pct_valid >= min_pct, f"{pct_valid}% valid"))
+    sr = gates_block.get("session_replay") or {}
+    if sr:
+        # This detection existed for one full campaign (2026-09-02) without ever
+        # being able to FAIL anything: agentic.py computed it, run-cell.sh listed
+        # it in --fail-on-gate, and this function silently never built the Gate —
+        # the enforcement chain was severed in the middle and no piece errored.
+        # A control cell with 5 replayed runs passed green. The gate a caller
+        # names in --fail-on-gate must exist here, or the flag lies.
+        n = len(sr.get("replay_runs") or [])
+        gates.append(Gate("session_replay", not sr.get("detected"), f"{n} replayed run(s)"))
+    bank = gates_block.get("bank_preload") or {}
+    if bank:
+        gates.append(
+            Gate(
+                "bank_preload",
+                not bank.get("detected"),
+                _fmt(bank.get("reason")),
+            )
+        )
     thermal = gates_block.get("thermal") or {}
     if thermal.get("observed"):
         gates.append(
@@ -938,6 +957,31 @@ _ADAPTERS = {
     "language": from_language,
     "instruct": from_instruct,
     "thinking-ablation": from_thinking_ablation,
+}
+
+
+# Every gate name build_result() can emit, by bench type. This is the list
+# --fail-on-gate is checked against: a name outside it is a typo or a gate that
+# does not exist, and asking to enforce it must fail loudly. On 2026-09-02 a
+# campaign ran with --fail-on-gate session_replay for a gate this module never
+# built — the flag filtered a name that could not match, and a control cell with
+# five replayed runs passed green. A list the code owns cannot drift from the
+# code; a list in a shell script can.
+DOCUMENTED_GATES: dict[str, frozenset[str]] = {
+    "standard": frozenset({"thermal", "memory_pressure", "energy_provenance", "energy_thermal"}),
+    "agentic": frozenset(
+        {
+            "early_stop",
+            "memory_pressure",
+            "duplicate_processes",
+            "output_validity",
+            "session_replay",
+            "bank_preload",
+            "thermal",
+            "thinking",
+            "other_engines_resident",
+        }
+    ),
 }
 
 

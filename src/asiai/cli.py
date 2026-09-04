@@ -820,7 +820,8 @@ def _gate_exit_code(args: argparse.Namespace, bench_type: str, payload: dict) ->
         else {g.strip() for g in str(selected).split(",") if g.strip()}
     )
     try:
-        failed = [g for g in build_result(bench_type, payload).gates if not g.passed]
+        gates = build_result(bench_type, payload).gates
+        failed = [g for g in gates if not g.passed]
     except Exception as e:  # never traceback out of a finished bench
         if enforce:
             print(red(f"✗ could not evaluate quality gates: {e}"), file=sys.stderr)
@@ -830,6 +831,28 @@ def _gate_exit_code(args: argparse.Namespace, bench_type: str, payload: dict) ->
             )
             return 2
         return 0
+    if enforce and only:
+        # A name this bench type can never emit is a typo or a gate that does
+        # not exist. Filtering silently on it is how a campaign ran for weeks
+        # with --fail-on-gate session_replay enforcing nothing (2026-09-02): the
+        # flag matched no gate, so it refused nothing, and looked obeyed.
+        from asiai.benchmark.result_model import DOCUMENTED_GATES
+
+        unknown = only - DOCUMENTED_GATES.get(bench_type, frozenset())
+        if unknown:
+            names = ", ".join(sorted(unknown))
+            print(red(f"✗ --fail-on-gate: no such gate for {bench_type}: {names}"), file=sys.stderr)
+            print(red("  refusing: an enforcement that cannot enforce."), file=sys.stderr)
+            return 2
+        not_evaluated = only - {g.name for g in gates}
+        if not_evaluated:
+            # Known gate, not measured this run (e.g. thermal never observed):
+            # not an error, but say it — silence here reads as "passed".
+            names = ", ".join(sorted(not_evaluated))
+            print(
+                yellow(f"  ⚠ gate(s) requested but not evaluated in this run: {names}"),
+                file=sys.stderr,
+            )
     if not failed:
         return 0
     blocking = {g.name for g in failed if only is None or g.name in only} if enforce else set()
