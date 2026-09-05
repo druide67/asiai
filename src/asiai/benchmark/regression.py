@@ -150,7 +150,7 @@ def _query_baselines(
                               AVG(ttft_ms) as avg_ttft
                        FROM benchmarks
                        WHERE ts >= ? AND ts < ?
-                         AND COALESCE(metrics_version, 1) = 3
+                         AND COALESCE(metrics_version, 1) IN (3, 4)
                        GROUP BY engine, model, prompt_type"""
             rows = conn.execute(query, (since, current_ts or int(time.time()))).fetchall()
 

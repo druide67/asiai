@@ -122,10 +122,35 @@ def format_prometheus(snapshot: dict, benchmarks: list[dict] | None = None) -> s
         sections.append(
             _gauge(
                 "asiai_power_total_watts",
-                "Total package power consumption in watts",
+                "Legacy package power (gpu+cpu+ane+dram, WITHOUT the DRAM controller) in watts",
                 snapshot.get("power_total_watts", 0),
             )
         )
+        # The bench headline is soc_watts (adds the DCS rail); the monitoring
+        # side exposed only the DCS-less legacy total until 2026-09-02, so the two
+        # "totals" a reader could compare differed by ~2 W with no label saying so.
+        if snapshot.get("power_soc_watts") is not None:
+            sections.append(
+                _gauge(
+                    "asiai_power_dram_watts",
+                    "DRAM power consumption in watts",
+                    snapshot.get("power_dram_watts", 0),
+                )
+            )
+            sections.append(
+                _gauge(
+                    "asiai_power_dcs_watts",
+                    "DRAM controller (DCS) power consumption in watts",
+                    snapshot.get("power_dcs_watts", 0),
+                )
+            )
+            sections.append(
+                _gauge(
+                    "asiai_power_soc_watts",
+                    "SoC package power (gpu+cpu+ane+dram+dcs) in watts — the bench headline base",
+                    snapshot.get("power_soc_watts", 0),
+                )
+            )
 
     # Per-engine metrics
     engines_status = snapshot.get("engines_status", [])

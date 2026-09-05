@@ -7,6 +7,8 @@ import statistics
 import tempfile
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from asiai.benchmark.prompts import PROMPTS, generate_context_fill_prompt, get_prompts
 from asiai.benchmark.reporter import (
     _classify_stability,
@@ -34,6 +36,21 @@ from asiai.engines.base import GenerateResult, InferenceEngine, ModelInfo
 from asiai.storage.db import init_db, query_benchmarks, store_benchmark
 
 # --- Prompts ---
+
+
+# ── no real idle window in unit tests ─────────────────────────────────
+# The runner now measures a loaded idle before each engine window: 3 s settle +
+# 5 × 2 s samples. Real sleeps would add ~13 s per engine to every test that
+# reaches the probe (the suite went 64 s → 238 s the day it landed). The idle
+# LOGIC is tested in test_benchmark_quality_gates.py with an injected sleep;
+# here we only need it to not wait.
+
+
+@pytest.fixture(autouse=True)
+def _no_idle_sleep(monkeypatch):
+    import asiai.benchmark.quality_gates as qg
+
+    monkeypatch.setattr(qg.time, "sleep", lambda _s: None)
 
 
 class TestPrompts:
@@ -1732,3 +1749,272 @@ class TestCompareExportPayload:
         assert slot_label(slot, "engine") == "ollama"
         assert slot_label(slot, "model") == "qwen:4b"
         assert slot_label(slot, "matrix") == "qwen:4b / ollama"
+
+
+# ── per-run energy slices, loaded idle, conditions (metrics_version 4) ────────
+#
+# Each test below encodes one way the old engine-window measurement lied:
+# a window straddling a thermal regime change hid it in one mean; a J/token over
+# estimated tokens was a guess; a result without powermode/power_supply could not
+# be trusted against one taken in High Power Mode on mains.
+
+from asiai.collectors.ioreport import IOReportReading as _IORReading  # noqa: E402
+
+_RAILS5 = frozenset({"gpu", "cpu", "ane", "dram", "dcs"})
+
+
+class _SliceSampler:
+    """IOReport stand-in: every sample() is a 2 s slice of 20 J SoC (10 W)."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def sample(self):
+        self.calls += 1
+        return _IORReading(
+            gpu_watts=8.0,
+            cpu_watts=2.0,
+            gpu_joules=16.0,
+            cpu_joules=4.0,
+            interval_s=2.0,
+            rails_present=_RAILS5,
+        )
+
+    def close(self):
+        pass
+
+
+def _energy_patches(power_mode=2, supply="ac"):
+    return (
+        patch("asiai.benchmark.runner.collect_os_version", return_value="15.3"),
+        patch("asiai.benchmark.runner.collect_hw_chip", return_value="Apple M5 Max"),
+        patch("asiai.benchmark.runner.find_engine_process", return_value=None),
+        patch(
+            "asiai.benchmark.runner.collect_thermal",
+            return_value=ThermalInfo(level="nominal", speed_limit=100),
+        ),
+        patch(
+            "asiai.benchmark.runner.collect_memory",
+            return_value=MemoryInfo(total=68719476736, used=34000000000, pressure="normal"),
+        ),
+        patch("asiai.benchmark.runner.collect_power_mode", return_value=power_mode),
+        patch("asiai.benchmark.runner.collect_power_supply", return_value=supply),
+        patch("asiai.collectors.ioreport.ioreport_available", return_value=True),
+    )
+
+
+def _gen(tokens=101, source="usage"):
+    return GenerateResult(
+        tokens_generated=tokens,
+        tok_per_sec=50.0,
+        ttft_ms=100.0,
+        total_duration_ms=2000.0,
+        model="test-model",
+        engine="ollama",
+        tokens_source=source,
+    )
+
+
+class TestRunBenchmarkEnergySlices:
+    def test_per_run_energy_sums_to_engine_window(self):
+        sampler = _SliceSampler()
+        ps = _energy_patches()
+        with (
+            ps[0],
+            ps[1],
+            ps[2],
+            ps[3],
+            ps[4],
+            ps[5],
+            ps[6],
+            ps[7],
+            patch("asiai.collectors.ioreport.IOReportSampler", return_value=sampler),
+        ):
+            run = run_benchmark(
+                [_mock_engine(generate_result=_gen())], "test-model", ["code"], runs=3
+            )
+        assert len(run.results) == 3
+        # every run carries its own slice
+        for r in run.results:
+            assert r["run_energy_joules"] == 20.0
+            assert r["run_soc_watts"] == 10.0
+            assert r["interval_s"] == 2.0
+            assert r["energy_rails"] == sorted(_RAILS5)
+            # J/token over (n-1)=100 decode intervals: 20 J / 100 = 0.2
+            assert r["energy_per_token_j"] == 0.2
+        # engine-window figure = SUM of slices (3 × 20 J), not the tail slice
+        # read_aggregate() saw after the last rebaseline.
+        assert run.results[0]["energy_per_token_j"] == 0.2  # per-run figure, unchanged
+        assert run.results[0]["soc_watts"] == 10.0  # time-weighted mean of slices
+
+    def test_runner_omits_energy_when_tokens_estimated(self):
+        sampler = _SliceSampler()
+        ps = _energy_patches()
+        with (
+            ps[0],
+            ps[1],
+            ps[2],
+            ps[3],
+            ps[4],
+            ps[5],
+            ps[6],
+            ps[7],
+            patch("asiai.collectors.ioreport.IOReportSampler", return_value=sampler),
+        ):
+            run = run_benchmark(
+                [_mock_engine(generate_result=_gen(source="chunks"))],
+                "test-model",
+                ["code"],
+                runs=1,
+            )
+        r = run.results[0]
+        assert "energy_per_token_j" not in r  # never a guess over estimated tokens
+        assert r["run_energy_joules"] == 20.0  # the slice itself is still recorded
+
+    def test_runner_records_powermode_and_power_supply(self):
+        sampler = _SliceSampler()
+        ps = _energy_patches(power_mode=2, supply="battery")
+        with (
+            ps[0],
+            ps[1],
+            ps[2],
+            ps[3],
+            ps[4],
+            ps[5],
+            ps[6],
+            ps[7],
+            patch("asiai.collectors.ioreport.IOReportSampler", return_value=sampler),
+        ):
+            run = run_benchmark(
+                [_mock_engine(generate_result=_gen())], "test-model", ["code"], runs=1
+            )
+        assert run.results[0]["powermode"] == 2
+        assert run.results[0]["power_supply"] == "battery"
+
+    def test_loaded_idle_yields_active_energy_when_valid(self):
+        # Idle sampler: 5 stable readings at 2 W, then run slices at 10 W.
+        class _IdleThenRun(_SliceSampler):
+            def sample(self):
+                self.calls += 1
+                if self.calls <= 7:  # 1 settle + 5 idle + 1 start() baseline reset
+                    return _IORReading(
+                        cpu_watts=2.0, cpu_joules=4.0, interval_s=2.0, rails_present=_RAILS5
+                    )
+                return super().sample()
+
+        sampler = _IdleThenRun()
+        ps = _energy_patches()
+        with (
+            ps[0],
+            ps[1],
+            ps[2],
+            ps[3],
+            ps[4],
+            ps[5],
+            ps[6],
+            ps[7],
+            patch("asiai.collectors.ioreport.IOReportSampler", return_value=sampler),
+            patch(
+                "asiai.benchmark.runner.collect_cpu_load",
+                return_value=type("L", (), {"load_1": 1.0})(),
+            ),
+            patch("asiai.benchmark.runner.collect_cpu_cores", return_value=16),
+        ):
+            run = run_benchmark(
+                [_mock_engine(generate_result=_gen())], "test-model", ["code"], runs=1
+            )
+        r = run.results[0]
+        assert r["idle_soc_watts"] == 2.0
+        # (20 J - 2 W × 2 s) / 100 = 0.16 J/token of marginal decode energy
+        assert r["energy_per_token_active_j"] == 0.16
+
+
+# ── gated energy block in the export (metrics_version 4) ─────────────────────
+
+
+def _energy_run(idx, *, joules=20.0, thermal=100, source="usage", rails=None, ept=0.2, idle=None):
+    r = {
+        "ts": 1000000 + idx,
+        "engine": "mtplx",
+        "model": "m",
+        "prompt_type": "code",
+        "tok_per_sec": 50.0,
+        "ttft_ms": 100.0,
+        "tokens_generated": 101,
+        "tokens_source": source,
+        "total_duration_ms": 2000.0,
+        "run_index": idx,
+        "hw_chip": "M5 Max",
+        "os_version": "macOS 26.6",
+        "vram_bytes": 0,
+        "thermal_level": "",
+        "thermal_speed_limit": thermal,
+        "run_energy_joules": joules,
+        "run_soc_watts": joules / 2.0,
+        "interval_s": 2.0,
+        "energy_rails": rails if rails is not None else ["ane", "cpu", "dcs", "dram", "gpu"],
+        "energy_per_token_j": ept,
+        "power_source": "ioreport",
+        "powermode": 2,
+        "power_supply": "ac",
+    }
+    if idle is not None:
+        r["idle_soc_watts"] = idle
+    return r
+
+
+class TestExportEnergyBlock:
+    def _export(self, runs):
+        from asiai.benchmark.reporter import build_export_payload
+
+        report = aggregate_results(runs)
+        return build_export_payload(runs, report)["benchmark"]["engines"]["mtplx"]
+
+    def test_energy_block_excludes_throttled_runs(self):
+        e = self._export(
+            [_energy_run(0), _energy_run(1, thermal=50, joules=40.0, ept=0.4), _energy_run(2)]
+        )
+        blk = e["energy"]
+        assert blk["runs_included"] == 2 and blk["runs_excluded_thermal"] == 1
+        # 2 clean runs × 20 J over 4 s = 10 W; the throttled 40 J run is out
+        assert blk["soc_watts"] == 10.0
+        assert blk["energy_per_token_j"] == 0.2
+        assert blk["base"] == "soc5" and blk["window"] == "turn"
+        assert blk["conditions"] == {"powermode": 2, "power_supply": "ac", "min_speed_limit": 100}
+        assert "energy_refused" not in e
+
+    def test_energy_refused_when_rails_missing(self):
+        e = self._export([_energy_run(0), _energy_run(1, rails=["cpu", "dcs", "dram"])])
+        assert "energy" not in e
+        assert "rail missing" in e["energy_refused"]
+
+    def test_energy_refused_when_tokens_estimated(self):
+        e = self._export([_energy_run(0, source="chunks")])
+        assert "energy" not in e
+        assert "estimate" in e["energy_refused"]
+
+    def test_energy_all_throttled_is_refused_as_thermal(self):
+        e = self._export([_energy_run(0, thermal=50), _energy_run(1, thermal=70)])
+        assert "energy" not in e
+        assert "thermally throttled" in e["energy_refused"]
+
+    def test_energy_absent_when_nothing_measured(self):
+        runs = [_energy_run(0)]
+        for k in (
+            "run_energy_joules",
+            "run_soc_watts",
+            "interval_s",
+            "energy_rails",
+            "energy_per_token_j",
+        ):
+            runs[0].pop(k)
+        e = self._export(runs)
+        assert "energy" not in e and "energy_refused" not in e
+
+    def test_energy_idle_and_active_travel_with_the_block(self):
+        runs = [_energy_run(0, idle=2.0), _energy_run(1, idle=2.0)]
+        for r in runs:
+            r["energy_per_token_active_j"] = 0.16
+        blk = self._export(runs)["energy"]
+        assert blk["idle"] == {"kind": "loaded", "soc_watts": 2.0}
+        assert blk["energy_per_token_active_j"] == 0.16

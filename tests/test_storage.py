@@ -302,3 +302,49 @@ class TestMigrations:
             assert row["load_time_ms"] == 1234.5
         finally:
             os.unlink(path)
+
+
+def test_metrics_v4_energy_columns_roundtrip():
+    """The six v4 columns persist as written — and absent stays NULL, not 0."""
+    path = _make_db()
+    try:
+        init_db(path)
+        store_benchmark(
+            path,
+            [
+                {
+                    "ts": 1000,
+                    "engine": "mtplx",
+                    "model": "qwen3.8-27b",
+                    "prompt_type": "code",
+                    "tok_per_sec": 44.4,
+                    "ttft_ms": 99.0,
+                    "energy_per_token_active_j": 0.16,
+                    "idle_soc_watts": 2.09,
+                    "energy_rails": ["ane", "cpu", "dcs", "dram", "gpu"],
+                    "interval_s": 2.0,
+                    "powermode": 2,
+                    "power_supply": "ac",
+                },
+                {
+                    "ts": 1001,
+                    "engine": "llamacpp",
+                    "model": "qwen3.8-27b",
+                    "prompt_type": "code",
+                    "tok_per_sec": 31.8,
+                    "ttft_ms": 125.0,
+                },
+            ],
+        )
+        conn = sqlite3.connect(path)
+        rows = conn.execute(
+            """SELECT metrics_version, energy_per_token_active_j, idle_soc_watts,
+                      energy_rails, interval_s, powermode, power_supply
+               FROM benchmarks ORDER BY ts"""
+        ).fetchall()
+        conn.close()
+        assert rows[0] == (4, 0.16, 2.09, "ane,cpu,dcs,dram,gpu", 2.0, 2, "ac")
+        # Nothing measured → NULLs. A 0.0 here would read as "measured: zero".
+        assert rows[1] == (4, None, None, None, None, None, None)
+    finally:
+        os.unlink(path)

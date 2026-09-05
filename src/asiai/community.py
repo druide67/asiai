@@ -144,10 +144,26 @@ def _build_slot_entry(
     }
     if power_vals:
         entry["avg_power_watts"] = round(sum(power_vals) / len(power_vals), 1)
+        # The two legacy fields are the GPU rail alone. Tagging them keeps the
+        # server (and any reader) from ever averaging them with SoC figures:
+        # the article measured SoC, the leaderboard GPU, both under "tok/s/W".
+        entry["power_scope"] = "gpu"
     if eff_vals:
         entry["avg_tok_per_sec_per_watt"] = round(sum(eff_vals) / len(eff_vals), 2)
     if load_vals:
         entry["load_time_ms"] = round(sum(load_vals) / len(load_vals), 1)
+
+    # Gated SoC energy block (metrics_version 4) — the same pure aggregation the
+    # local export uses, so the leaderboard can never carry a figure the export
+    # would have refused. All-or-nothing: a slot whose runs disagree on rails,
+    # token provenance or thermal state ships NO energy rather than a blend.
+    # tok_s_per_soc_watt is deliberately not shipped for the standard runner
+    # (decode-only throughput over a full-window power is not a physical ratio).
+    from asiai.benchmark.reporter import _energy_block
+
+    energy, _refused = _energy_block(slot_results)
+    if energy is not None:
+        entry["energy"] = energy
 
     return entry
 

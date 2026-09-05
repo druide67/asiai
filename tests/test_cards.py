@@ -294,3 +294,66 @@ class TestEscaping:
         svg = _svg("standard", payload)  # ET parse would fail on raw <script>
         assert "<script>" not in svg
         assert "&lt;script&gt;" in svg
+
+
+class TestPowerChipScope:
+    """The power chip always names its rail — "41W" alone was the 2026-09-02 bug.
+
+    Preference order: gated SoC block (metrics_version 4) > ungated avg_soc_watts
+    > GPU rail (legacy). A card never shows a GPU watt figure as if it were SoC.
+    """
+
+    def test_gated_block_wins_and_carries_j_per_token(self):
+        payload = _ALL["standard"]()
+        payload["benchmark"]["engines"]["llamacpp"]["energy"] = {
+            "v": 1,
+            "base": "soc5",
+            "window": "turn",
+            "soc_watts": 62.4,
+            "energy_per_token_j": 1.352,
+        }
+        svg = _svg("standard", payload)
+        assert "62W SoC · 1.35 J/tok" in svg
+        assert "41W" not in svg  # the ungated average is not shown next to the gated one
+
+    def test_ungated_soc_average_is_labelled_soc(self):
+        svg = _svg("standard", _ALL["standard"]())  # fixture: avg_soc_watts 41.2, no block
+        assert "41W SoC" in svg
+        assert "J/tok" not in svg
+
+    def test_gpu_rail_only_is_labelled_gpu(self):
+        payload = _ALL["standard"]()
+        eng = payload["benchmark"]["engines"]["llamacpp"]
+        del eng["avg_soc_watts"]
+        eng["avg_power_watts"] = 20.3
+        svg = _svg("standard", payload)
+        assert "20W GPU" in svg
+        assert "SoC" not in svg
+
+    def test_no_power_no_chip(self):
+        payload = _ALL["standard"]()
+        del payload["benchmark"]["engines"]["llamacpp"]["avg_soc_watts"]
+        svg = _svg("standard", payload)
+        assert "W SoC" not in svg and "W GPU" not in svg
+
+
+class TestAgenticEnergyChip:
+    """Decode-scoped energy from phase_stats.warm, labelled as decode."""
+
+    def test_chip_from_warm_phase_stats(self):
+        payload = _ALL["agentic"]()
+        payload["phase_stats"]["warm"]["soc_watts"] = {"n": 3, "median": 41.0, "cv": 0.03}
+        payload["phase_stats"]["warm"]["energy_per_token_j"] = {"n": 3, "median": 0.66, "cv": 0.05}
+        svg = _svg("agentic", payload)
+        assert "41W SoC · 0.66 J/tok decode" in svg
+
+    def test_watts_without_energy_shows_watts_only(self):
+        payload = _ALL["agentic"]()
+        payload["phase_stats"]["warm"]["soc_watts"] = {"n": 3, "median": 41.0, "cv": 0.03}
+        svg = _svg("agentic", payload)
+        assert "41W SoC" in svg
+        assert "J/tok" not in svg
+
+    def test_absent_stays_silent(self):
+        svg = _svg("agentic", _ALL["agentic"]())
+        assert "W SoC" not in svg and "J/tok" not in svg

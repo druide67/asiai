@@ -649,3 +649,84 @@ class TestFetchComparison:
                 api_url="https://test.example.com",
             )
         assert result == {}
+
+
+# ── energy block in the submission (metrics_version 4) ────────────────────────
+
+
+def _run(idx, **over):
+    r = {
+        "ts": 1000,
+        "engine": "mtplx",
+        "model": "m",
+        "prompt_type": "code",
+        "tok_per_sec": 50.0,
+        "tokens_generated": 101,
+        "tokens_source": "usage",
+        "run_index": idx,
+        "thermal_speed_limit": 100,
+        "run_energy_joules": 20.0,
+        "interval_s": 2.0,
+        "energy_rails": ["ane", "cpu", "dcs", "dram", "gpu"],
+        "energy_per_token_j": 0.2,
+        "power_source": "ioreport",
+        "power_watts": 8.0,
+        "tok_per_sec_per_watt": 6.25,
+    }
+    r.update(over)
+    return r
+
+
+def _slot():
+    return {"engine": "mtplx", "model": "m", "median_tok_s": 50.0, "runs_count": 3}
+
+
+def test_energy_block_all_or_nothing():
+    from asiai.community import _build_slot_entry
+
+    ok = _build_slot_entry(_slot(), [_run(0), _run(1)])
+    assert ok["energy"]["energy_per_token_j"] == 0.2
+    assert ok["energy"]["runs_included"] == 2
+    # one run with an estimated token count poisons the slot: no block at all
+    mixed = _build_slot_entry(_slot(), [_run(0), _run(1, tokens_source="chunks")])
+    assert "energy" not in mixed
+
+
+def test_legacy_power_tagged_gpu():
+    from asiai.community import _build_slot_entry
+
+    e = _build_slot_entry(_slot(), [_run(0)])
+    assert e["avg_power_watts"] == 8.0
+    assert e["power_scope"] == "gpu"
+
+
+def test_no_energy_zero_ever_sent():
+    from asiai.community import _build_slot_entry
+
+    e = _build_slot_entry(_slot(), [_run(0, run_energy_joules=0.0, energy_per_token_j=None)])
+    blk = e.get("energy")
+    # A 0 J slice is not a measurement of zero energy; nothing numeric may be 0.
+    assert blk is None or all(
+        v != 0
+        for k, v in blk.items()
+        if isinstance(v, (int, float)) and k != "runs_excluded_thermal"
+    )
+
+
+def test_energy_absent_when_not_measured():
+    from asiai.community import _build_slot_entry
+
+    r = _run(0)
+    for k in ("run_energy_joules", "interval_s", "energy_rails", "energy_per_token_j"):
+        r.pop(k)
+    e = _build_slot_entry(_slot(), [r])
+    assert "energy" not in e
+    assert "tok_s_per_soc_watt" not in e
+
+
+def test_energy_never_ships_hybrid_tok_s_per_soc_watt():
+    from asiai.community import _build_slot_entry
+
+    e = _build_slot_entry(_slot(), [_run(0, tok_s_per_soc_watt=5.0)])
+    assert "tok_s_per_soc_watt" not in e["energy"]
+    assert "avg_tok_s_per_soc_watt" not in e

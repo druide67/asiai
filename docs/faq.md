@@ -20,7 +20,7 @@ faq:
   - q: "Can AI agents use asiai?"
     a: "Yes. asiai includes an MCP server with 14 tools and 3 resources. Install with pip install asiai[mcp] and configure as asiai mcp in your MCP client (Claude Code, Cursor, etc.)."
   - q: "How accurate are the power measurements?"
-    a: "IOReport power readings have less than 1.5% delta compared to sudo powermetrics, validated across 20 samples on both LM Studio (MLX) and Ollama (llama.cpp)."
+    a: "IOReport GPU-rail readings have less than 1.5% delta compared to sudo powermetrics, validated across 20 samples on both LM Studio (MLX) and Ollama (llama.cpp). That validation covers the GPU rail only; the SoC total (GPU+CPU+ANE+DRAM+DCS) used for J/token has no software counter-measure and is a lower bound on wall power."
   - q: "Can I benchmark multiple models at once?"
     a: "Yes. Use asiai bench --compare to run cross-model benchmarks. Supports model@engine syntax for precise control, with up to 8 comparison slots."
   - q: "How do I share my benchmark results?"
@@ -85,7 +85,7 @@ A quick benchmark (`asiai bench --quick`) takes about 2 minutes. A full cross-en
 
 **How accurate are the power measurements?**
 
-IOReport power readings have less than 1.5% delta compared to `sudo powermetrics`, validated across 20 samples on both LM Studio (MLX) and Ollama (llama.cpp).
+IOReport GPU-rail readings have less than 1.5% delta compared to `sudo powermetrics`, validated across 20 samples on both LM Studio (MLX) and Ollama (llama.cpp). That validation covers the **GPU rail only**; the SoC total (GPU+CPU+ANE+DRAM+DCS) behind the J/token figures has no software counter-measure — only a wall meter corroborates it — and is a lower bound on what the plug pays.
 
 **Can I compare my results with other Mac users?**
 

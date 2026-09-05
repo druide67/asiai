@@ -199,9 +199,12 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     soc_watts, tok_s_per_soc_watt, energy_per_token_j,
                     tokens_source, prompt_tokens, prefill_tok_s,
                     output_degenerate, ttft_source, vram_estimated,
-                    engine_runner, extra_body, asiai_version)
+                    engine_runner, extra_body, asiai_version,
+                    energy_per_token_active_j, idle_soc_watts, energy_rails,
+                    interval_s, powermode, power_supply)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?, ?)""",
                 (
                     r["ts"],
@@ -221,7 +224,7 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("power_watts", 0.0),
                     r.get("tok_per_sec_per_watt", 0.0),
                     r.get("load_time_ms", 0.0),
-                    3,  # metrics_version: 3 = SoC power + decode-scoped energy (1.11.0)
+                    4,  # metrics_version: 4 = v3 + per-run energy slices, loaded idle, conditions
                     r.get("engine_version", ""),
                     r.get("model_format", ""),
                     r.get("model_quantization", ""),
@@ -250,6 +253,12 @@ def store_benchmark(db_path: str, results: list[dict]) -> None:
                     r.get("engine_runner", ""),
                     r.get("extra_body", ""),
                     r.get("asiai_version", ""),
+                    r.get("energy_per_token_active_j"),
+                    r.get("idle_soc_watts"),
+                    ",".join(r["energy_rails"]) if r.get("energy_rails") else None,
+                    r.get("interval_s"),
+                    r.get("powermode"),
+                    r.get("power_supply"),
                 ),
             )
         conn.commit()

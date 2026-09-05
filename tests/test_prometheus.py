@@ -174,3 +174,40 @@ class TestFormatPrometheus:
         assert 'asiai_engine_reachable{engine="ollama"} 1' in output
         assert 'asiai_engine_reachable{engine="lmstudio"} 1' in output
         assert 'asiai_model_loaded{engine="lmstudio",model="qwen3.5-35b-a3b"} 1' in output
+
+
+class TestPowerSocGauges:
+    """SoC/DCS/DRAM gauges ship only when the collector produced a SoC total.
+
+    `power_total_watts` (legacy, no DCS) stays for continuity; the new gauges
+    must never appear with a fabricated 0 when the SoC total is absent.
+    """
+
+    def test_soc_gauges_present_when_soc_total_collected(self):
+        output = format_prometheus(
+            _make_snapshot(
+                power_gpu_watts=12.0,
+                power_cpu_watts=3.0,
+                power_ane_watts=0.1,
+                power_dram_watts=3.1,
+                power_dcs_watts=1.2,
+                power_total_watts=18.2,
+                power_soc_watts=19.4,
+            )
+        )
+        assert "asiai_power_soc_watts 19.4" in output
+        assert "asiai_power_dcs_watts 1.2" in output
+        assert "asiai_power_dram_watts 3.1" in output
+        assert "asiai_power_total_watts 18.2" in output
+
+    def test_soc_gauges_absent_when_soc_total_missing(self):
+        output = format_prometheus(_make_snapshot(power_gpu_watts=12.0, power_total_watts=15.0))
+        assert "asiai_power_total_watts 15.0" in output
+        assert "asiai_power_soc_watts" not in output
+        assert "asiai_power_dcs_watts" not in output
+
+    def test_soc_gauges_absent_when_soc_total_is_none(self):
+        output = format_prometheus(
+            _make_snapshot(power_gpu_watts=12.0, power_total_watts=15.0, power_soc_watts=None)
+        )
+        assert "asiai_power_soc_watts" not in output

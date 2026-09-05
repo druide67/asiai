@@ -807,3 +807,74 @@ def test_fail_on_gate_subset_still_refuses_its_own_gate():
 
     args = argparse.Namespace(export=None, fail_on_gate="output_validity,thinking")
     assert _gate_exit_code(args, "agentic", _payload_with_empty_output()) == 2
+
+
+def test_unknown_gate_name_is_refused_not_ignored(capsys):
+    """--fail-on-gate with a name the bench type cannot emit must refuse (rc 2).
+
+    Negative witness for the session_replay incident: a gate that was listed,
+    never built, and therefore never enforced — the flag looked obeyed.
+    """
+    import argparse
+
+    from asiai.cli import _gate_exit_code
+
+    args = argparse.Namespace(fail_on_gate="sessoin_replay")  # typo on purpose
+    rc = _gate_exit_code(args, "agentic", _clean_payload())
+    assert rc == 2
+    assert "no such gate" in capsys.readouterr().err
+
+
+def test_energy_gate_requested_on_agentic_is_refused(capsys):
+    """energy_* gates exist for the standard runner only; asking for them on an
+    agentic bench must not silently enforce nothing."""
+    import argparse
+
+    from asiai.cli import _gate_exit_code
+
+    args = argparse.Namespace(fail_on_gate="energy_provenance")
+    assert _gate_exit_code(args, "agentic", _clean_payload()) == 2
+    assert "energy_provenance" in capsys.readouterr().err
+
+
+def test_known_gate_not_evaluated_warns_but_passes(capsys):
+    import argparse
+
+    from asiai.cli import _gate_exit_code
+
+    # bank_preload is a documented agentic gate; _clean_payload() predates it
+    # and carries no such block, so it is known but not evaluated here.
+    args = argparse.Namespace(fail_on_gate="bank_preload")
+    rc = _gate_exit_code(args, "agentic", _clean_payload())
+    assert rc == 0
+    assert "not evaluated" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# detection ↔ adapters invariant
+# ---------------------------------------------------------------------------
+
+
+def test_every_detectable_engine_has_an_adapter():
+    """Every engine name `detect` can produce must map to an adapter class.
+
+    2026-09-02: `mlx_vlm` was detected by process name and listed by `asiai
+    detect`, but `_discover_engines` had no class for it, so the engine could
+    never be benchmarked — and nothing failed. This is the test that would have
+    been red.
+    """
+    from asiai.cli import _engine_classes
+    from asiai.engines.detect import _PORT_PROCESS_MAP
+
+    classes = _engine_classes()
+    missing = sorted(set(_PORT_PROCESS_MAP.values()) - set(classes))
+    assert not missing, f"detected but not benchmarkable: {missing}"
+    for name, cls in classes.items():
+        assert cls.__name__.endswith("Engine"), (name, cls)
+
+
+def test_mlxvlm_adapter_is_wired():
+    from asiai.cli import _engine_classes
+    from asiai.engines.mlxvlm import MlxVlmEngine
+
+    assert _engine_classes()["mlxvlm"] is MlxVlmEngine

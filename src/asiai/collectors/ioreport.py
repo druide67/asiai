@@ -199,10 +199,26 @@ _CHANNEL_MAP = {
     "ane": "ane",
     "dram": "dram",
     "dcs": "dcs",
+    # Read since 2026-09-02, NOT yet part of soc_watts: the memory-cache
+    # controller and the fabric. On an M5 Max at idle they add +29 % to the
+    # five rails above; on an M4 Pro +49 %. Both move with memory traffic, i.e.
+    # with exactly the decode we measure. Whether they join the published base
+    # (soc5 → soc7) is decided on measurements under load, not here.
+    "amcc": "amcc",
+    "fab": "fab",
 }
 
-# Unit divisors to convert raw energy to joules
+# Rails without which a package figure is NOT a package figure. ANE is read but
+# optional (it idles at 0 W on every chip measured); AMCC/FAB optional until the
+# base decision. A missing required rail makes soc_watts None — never a smaller
+# number: on 2026-09-02 an M4 Pro exposed rails under other names and the
+# five-rail sum came out as 54 % of the package with no error anywhere.
+_REQUIRED_RAILS = frozenset({"gpu", "cpu", "dram", "dcs"})
+
+# Unit divisors to convert raw energy to joules. Plain "J" was missing: a rail
+# reported in Joules was silently dropped (read as absent).
 _UNIT_DIVISORS = {
+    "J": 1.0,
     "mJ": 1_000.0,
     "uJ": 1_000_000.0,
     "nJ": 1_000_000_000.0,
@@ -225,12 +241,20 @@ class IOReportReading:
     ane_watts: float = 0.0
     dram_watts: float = 0.0
     dcs_watts: float = 0.0
+    amcc_watts: float = 0.0
+    fab_watts: float = 0.0
     gpu_joules: float = 0.0
     cpu_joules: float = 0.0
     ane_joules: float = 0.0
     dram_joules: float = 0.0
     dcs_joules: float = 0.0
+    amcc_joules: float = 0.0
+    fab_joules: float = 0.0
     interval_s: float = 0.0
+    # Rails actually read with a known unit. A rail at 0 J that WAS read (ANE at
+    # idle) is present; a rail that never appeared, or came with an unknown unit,
+    # is absent. The two used to be indistinguishable — both read as 0.0.
+    rails_present: frozenset[str] = frozenset()
 
     @property
     def total_watts(self) -> float:
@@ -241,13 +265,38 @@ class IOReportReading:
         return self.gpu_watts + self.cpu_watts + self.ane_watts + self.dram_watts
 
     @property
-    def soc_watts(self) -> float:
-        """Full package power: compute + DRAM + DRAM controller (DCS)."""
+    def has_required_rails(self) -> bool:
+        gpu_ok = "gpu" in self.rails_present or "gpu_nj" in self.rails_present
+        return gpu_ok and (_REQUIRED_RAILS - {"gpu"}) <= self.rails_present
+
+    @property
+    def soc_watts(self) -> float | None:
+        """Package power over the five named rails (compute + DRAM + DCS).
+
+        None when a required rail was not read: a package figure missing a
+        rail is not a smaller package figure, it is a different quantity.
+        """
+        if not self.has_required_rails:
+            return None
         return self.total_watts + self.dcs_watts
 
     @property
-    def soc_joules(self) -> float:
-        """Energy over the interval summed across all SoC rails."""
+    def soc7_watts(self) -> float | None:
+        """soc_watts plus the memory-cache controller and fabric rails.
+
+        Candidate published base (decision pending measurements under load);
+        None when soc_watts is None or when either extra rail was not read.
+        """
+        base = self.soc_watts
+        if base is None or not {"amcc", "fab"} <= self.rails_present:
+            return None
+        return base + self.amcc_watts + self.fab_watts
+
+    @property
+    def soc_joules(self) -> float | None:
+        """Energy over the interval summed across the five named rails."""
+        if not self.has_required_rails:
+            return None
         return (
             self.gpu_joules + self.cpu_joules + self.ane_joules + self.dram_joules + self.dcs_joules
         )
@@ -352,69 +401,81 @@ class IOReportSampler:
         finally:
             _cfrelease(delta)
 
-    def _read_delta(self, delta, interval: float) -> IOReportReading:
+    @staticmethod
+    def _iter_channels(delta):
+        """Yield ``(name, unit_label, raw_int)`` for every channel in a delta.
+
+        This is the one place that touches CoreFoundation for channel data; it
+        exists as a seam so ``_read_delta`` can be exercised with a plain list
+        of tuples in tests, without hardware. Names come back as read (case
+        preserved); ``unit_label`` may be None when the CFString conversion
+        fails, and callers must treat that as an unknown unit.
+        """
         arr = _unwrap_to_array(delta)
         if not arr:
-            return IOReportReading()
-
+            return
         n = _cf.CFArrayGetCount(arr)
-
-        gpu_watts = cpu_watts = ane_watts = dram_watts = dcs_watts = 0.0
-        gpu_joules = cpu_joules = ane_joules = dram_joules = dcs_joules = 0.0
-
         for i in range(n):
             item = _cf.CFArrayGetValueAtIndex(arr, i)
-            name = _cfstr_to_str(
-                _iorep.IOReportChannelGetChannelName(item),
-            )
+            name = _cfstr_to_str(_iorep.IOReportChannelGetChannelName(item))
             if not name:
                 continue
+            unit = _cfstr_to_str(_iorep.IOReportChannelGetUnitLabel(item))
+            raw = _iorep.IOReportSimpleGetIntegerValue(item, 0)
+            yield name, unit, raw
 
+    def _read_delta(self, delta, interval: float) -> IOReportReading:
+        return self._reading_from_channels(self._iter_channels(delta), interval)
+
+    @staticmethod
+    def _reading_from_channels(channels, interval: float) -> IOReportReading:
+        """Build a reading from ``(name, unit, raw)`` tuples — pure, testable."""
+        w: dict[str, float] = {}
+        j: dict[str, float] = {}
+        present: set[str] = set()
+
+        for name, unit, raw in channels:
             key = _CHANNEL_MAP.get(name.lower())
             if not key:
                 continue
 
-            unit = _cfstr_to_str(
-                _iorep.IOReportChannelGetUnitLabel(item),
-            )
-            raw = _iorep.IOReportSimpleGetIntegerValue(item, 0)
-
             divisor = _UNIT_DIVISORS.get(unit)
             if divisor is None:
                 # Unknown / None unit label (e.g. a failed CFString conversion):
-                # skip rather than assume Joules — divisor 1.0 would inflate this
-                # rail's energy by up to 1e9x (mJ/uJ/nJ raw read as J).
+                # the rail is NOT read — mark it absent rather than assume Joules
+                # (divisor 1.0 would inflate mJ/uJ/nJ by up to 1e9x) and rather
+                # than leave it at 0.0 (which reads as "idle", not "unknown").
                 continue
             joules = raw / divisor
             watts = joules / interval
 
-            if key == "gpu":
-                gpu_watts, gpu_joules = watts, joules
-            elif key == "gpu_nj":
-                # Only use the nJ aggregate if the mJ channel was absent.
-                if gpu_watts == 0.0:
-                    gpu_watts, gpu_joules = watts, joules
-            elif key == "cpu":
-                cpu_watts, cpu_joules = watts, joules
-            elif key == "ane":
-                ane_watts, ane_joules = watts, joules
-            elif key == "dram":
-                dram_watts, dram_joules = watts, joules
-            elif key == "dcs":
-                dcs_watts, dcs_joules = watts, joules
+            if key == "gpu_nj":
+                # nJ aggregate: used only if the mJ channel is absent, but its
+                # presence is recorded so an export can show which one served.
+                present.add("gpu_nj")
+                if "gpu" not in present:
+                    w["gpu"], j["gpu"] = watts, joules
+                continue
+            present.add(key)
+            w[key], j[key] = watts, joules
 
         return IOReportReading(
-            gpu_watts=round(gpu_watts, 2),
-            cpu_watts=round(cpu_watts, 2),
-            ane_watts=round(ane_watts, 3),
-            dram_watts=round(dram_watts, 2),
-            dcs_watts=round(dcs_watts, 2),
-            gpu_joules=round(gpu_joules, 3),
-            cpu_joules=round(cpu_joules, 3),
-            ane_joules=round(ane_joules, 4),
-            dram_joules=round(dram_joules, 3),
-            dcs_joules=round(dcs_joules, 3),
+            gpu_watts=round(w.get("gpu", 0.0), 2),
+            cpu_watts=round(w.get("cpu", 0.0), 2),
+            ane_watts=round(w.get("ane", 0.0), 3),
+            dram_watts=round(w.get("dram", 0.0), 2),
+            dcs_watts=round(w.get("dcs", 0.0), 2),
+            amcc_watts=round(w.get("amcc", 0.0), 2),
+            fab_watts=round(w.get("fab", 0.0), 2),
+            gpu_joules=round(j.get("gpu", 0.0), 3),
+            cpu_joules=round(j.get("cpu", 0.0), 3),
+            ane_joules=round(j.get("ane", 0.0), 4),
+            dram_joules=round(j.get("dram", 0.0), 3),
+            dcs_joules=round(j.get("dcs", 0.0), 3),
+            amcc_joules=round(j.get("amcc", 0.0), 3),
+            fab_joules=round(j.get("fab", 0.0), 3),
             interval_s=round(interval, 3),
+            rails_present=frozenset(present),
         )
 
     def close(self) -> None:

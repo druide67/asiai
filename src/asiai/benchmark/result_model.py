@@ -184,6 +184,8 @@ def from_standard(payload: dict) -> BenchResult:
     engines: dict[str, dict] = bench.get("engines") or {}
     subjects: list[Subject] = []
     quants: set[str] = set()
+    energy_refusals: list[str] = []
+    energy_ok: list[str] = []
     for name in sorted(engines):
         e = engines[name]
         runs_n = int(e.get("runs_count") or 0)
@@ -249,6 +251,29 @@ def from_standard(payload: dict) -> BenchResult:
         ):
             if _num(e.get(key)) is not None:
                 metrics.append(MetricValue(key, label, _num(e.get(key)), unit, direction=direction))
+        # The gated block (metrics_version 4) wins over the ungated avg_* when
+        # present: it excludes throttled runs and refuses estimated tokens.
+        energy = e.get("energy") or {}
+        if _num(energy.get("energy_per_token_j")) is not None:
+            metrics.append(
+                MetricValue(
+                    "energy_per_token_j",
+                    "energy per token",
+                    _num(energy["energy_per_token_j"]),
+                    "J",
+                    direction="lower",
+                )
+            )
+        if _num(energy.get("soc_watts")) is not None:
+            metrics.append(
+                MetricValue(
+                    "soc_watts", "SoC power", _num(energy["soc_watts"]), "W", direction="lower"
+                )
+            )
+        if e.get("energy_refused"):
+            energy_refusals.append(f"{name}: {e['energy_refused']}")
+        elif energy:
+            energy_ok.append(name)
         subjects.append(
             Subject(
                 label=name,
@@ -321,6 +346,28 @@ def from_standard(payload: dict) -> BenchResult:
     mp = qg.get("memory_pressure")
     if mp is not None:
         gates.append(Gate("memory_pressure", not mp.get("alerted"), _fmt(mp.get("alert_reason"))))
+    # Energy gates exist only when something was measured: "not measured" is
+    # not a failure, it is an absence. A refusal splits in two so --fail-on-gate
+    # can name the cause: thermal (the machine) vs provenance (the instrument).
+    if energy_refusals or energy_ok:
+        thermal_refusals = [r for r in energy_refusals if "thermally throttled" in r]
+        provenance_refusals = [r for r in energy_refusals if r not in thermal_refusals]
+        gates.append(
+            Gate(
+                "energy_provenance",
+                not provenance_refusals,
+                "; ".join(provenance_refusals)
+                if provenance_refusals
+                else f"{len(energy_ok)} slot(s)",
+            )
+        )
+        gates.append(
+            Gate(
+                "energy_thermal",
+                not thermal_refusals,
+                "; ".join(thermal_refusals) if thermal_refusals else "no run excluded",
+            )
+        )
 
     model_display = str(bench.get("model") or "") or display_model(
         [s.model for s in subjects],

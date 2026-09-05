@@ -22,6 +22,10 @@ from asiai.benchmark.quality_gates import (
 )
 from asiai.collectors.ioreport import IOReportReading
 
+# A reading that stands for a real five-rail sample (the default frozenset() means
+# "nothing read", which now makes soc_watts None on purpose).
+_ALL_RAILS = frozenset({"gpu", "cpu", "ane", "dram", "dcs"})
+
 # --- early-stop -----------------------------------------------------------
 
 
@@ -339,6 +343,8 @@ def test_power_thermal_probe_unavailable_returns_none():
             "gpu_watts": None,
             "soc_watts": None,
             "energy_joules": None,
+            "interval_s": None,
+            "rails": None,
             "thermal_speed_limit": None,
             "engine_rss_mb": None,
             "engine_phys_footprint_mb": None,
@@ -352,7 +358,9 @@ def test_power_thermal_probe_reads_gpu_watts_and_thermal():
         "FakeSampler",
         (),
         {
-            "sample": lambda self: IOReportReading(gpu_watts=24.5, cpu_watts=5.0, dcs_watts=2.5),
+            "sample": lambda self: IOReportReading(
+                gpu_watts=24.5, cpu_watts=5.0, dcs_watts=2.5, rails_present=_ALL_RAILS
+            ),
             "close": lambda self: None,
         },
     )()
@@ -415,7 +423,7 @@ def test_power_thermal_probe_default_no_cross_validate():
         "FakeSampler",
         (),
         {
-            "sample": lambda self: IOReportReading(gpu_watts=12.0),
+            "sample": lambda self: IOReportReading(gpu_watts=12.0, rails_present=_ALL_RAILS),
             "close": lambda self: None,
         },
     )()
@@ -436,6 +444,8 @@ def test_power_thermal_probe_default_no_cross_validate():
         "gpu_watts",
         "soc_watts",
         "energy_joules",
+        "interval_s",
+        "rails",
         "thermal_speed_limit",
         "engine_rss_mb",
         "engine_phys_footprint_mb",
@@ -457,7 +467,7 @@ class _StubSampler:
         self._watts = watts
 
     def sample(self):
-        return IOReportReading(gpu_watts=self._watts)
+        return IOReportReading(gpu_watts=self._watts, rails_present=_ALL_RAILS)
 
     def close(self) -> None:
         pass
@@ -990,3 +1000,72 @@ def test_duplicate_check_survives_ps_without_ppid():
     )
     with patch("asiai.benchmark.quality_gates.subprocess.run", return_value=_ps_result(ps)):
         assert len(check_duplicate_processes("llamacpp")) == 2
+
+
+# ── measure_loaded_idle ─────────────────────────────────────────────────
+#
+# The idle is what the "active" J/token is subtracted against; an idle that is
+# secretly a run would flatter every engine on that machine. Each refusal path
+# below is a case where publishing a number would have been wrong.
+
+
+class _IdleSampler:
+    def __init__(self, watts_seq, rails=None):
+        self._seq = list(watts_seq)
+        self._rails = rails if rails is not None else _ALL_RAILS
+
+    def sample(self):
+        w = self._seq.pop(0) if self._seq else 0.0
+        # Spread the requested watts over cpu (the rest at 0) with all rails read.
+        return IOReportReading(cpu_watts=w, rails_present=self._rails, interval_s=2.0)
+
+
+def _noop_sleep(_s):
+    return None
+
+
+def test_loaded_idle_nominal_median_and_cv():
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([99.0, 9.8, 10.0, 10.2, 9.9, 10.1])  # first = settle, discarded
+    out = measure_loaded_idle(s, samples=5, sleep=_noop_sleep)
+    assert out["soc_watts"] == 10.0
+    assert out["cv_pct"] is not None and out["cv_pct"] < 2.0
+    assert out["reason"] == ""
+    assert out["window_s"] == 10.0
+
+
+def test_loaded_idle_cv_above_threshold_returns_none():
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([0.0, 5.0, 15.0, 5.0, 15.0, 5.0])  # CV ~ 50 %
+    out = measure_loaded_idle(s, samples=5, sleep=_noop_sleep)
+    assert out["soc_watts"] is None
+    assert "unstable" in out["reason"]
+
+
+def test_loaded_idle_missing_rail_returns_none():
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([0.0, 10, 10, 10, 10, 10], rails=frozenset({"cpu", "dram", "dcs"}))
+    out = measure_loaded_idle(s, samples=5, sleep=_noop_sleep)
+    assert out["soc_watts"] is None
+    assert "rail" in out["reason"]
+
+
+def test_loaded_idle_background_load_returns_none():
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([0.0, 10, 10, 10, 10, 10])
+    out = measure_loaded_idle(s, samples=5, sleep=_noop_sleep, cpu_load_1=12.0, cpu_cores=16)
+    assert out["soc_watts"] is None
+    assert "CPU load" in out["reason"]
+
+
+def test_loaded_idle_thermal_engaged_returns_none():
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([0.0, 10, 10, 10, 10, 10])
+    out = measure_loaded_idle(s, samples=5, sleep=_noop_sleep, thermal_speed_limit=50)
+    assert out["soc_watts"] is None
+    assert "thermal" in out["reason"]

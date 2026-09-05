@@ -218,3 +218,73 @@ def test_recommend_sorted_by_score():
         )
     scores = [r.score for r in recs]
     assert scores == sorted(scores, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# use_case="efficiency" — ranks by measured SoC joules per token
+# ---------------------------------------------------------------------------
+
+_FAST_BUT_HUNGRY = [
+    {
+        "engine": "mtplx",
+        "model": "qwen3.8:27b",
+        "tok_per_sec": 60.0 + i,
+        "metrics_version": 4,
+        "ttft_ms": 100.0,
+        "vram_bytes": 27_000_000_000,
+        "energy_per_token_j": 2.0,
+        "run_index": i,
+        "prompt_type": "short",
+    }
+    for i in range(3)
+]
+_SLOWER_BUT_FRUGAL = [
+    {
+        "engine": "llamacpp",
+        "model": "qwen3.8:27b",
+        "tok_per_sec": 30.0 + i,
+        "metrics_version": 4,
+        "ttft_ms": 140.0,
+        "vram_bytes": 30_000_000_000,
+        "energy_per_token_j": 0.8,
+        "run_index": i,
+        "prompt_type": "short",
+    }
+    for i in range(3)
+]
+_UNMEASURED = [
+    {
+        "engine": "ollama",
+        "model": "qwen3.8:27b",
+        "tok_per_sec": 45.0,
+        "metrics_version": 3,
+        "ttft_ms": 200.0,
+        "vram_bytes": 30_000_000_000,
+        "energy_per_token_j": 0,  # stored 0 = not measured, never "free"
+        "run_index": 0,
+        "prompt_type": "short",
+    }
+]
+
+
+def _ranked(rows, use_case):
+    with patch("asiai.storage.db.query_benchmarks", return_value=rows):
+        recs = recommend(chip="Apple M5 Max", ram_gb=128, db_path="/tmp/fake.db", use_case=use_case)
+    return [r.engine for r in recs]
+
+
+def test_efficiency_ranks_by_energy_per_token_not_speed():
+    rows = _FAST_BUT_HUNGRY + _SLOWER_BUT_FRUGAL
+    assert _ranked(rows, "throughput")[0] == "mtplx"
+    assert _ranked(rows, "efficiency")[0] == "llamacpp"
+
+
+def test_efficiency_unmeasured_group_ranks_below_measured_ones():
+    rows = _FAST_BUT_HUNGRY + _SLOWER_BUT_FRUGAL + _UNMEASURED
+    order = _ranked(rows, "efficiency")
+    assert order[-1] == "ollama"
+
+
+def test_efficiency_without_any_energy_falls_back_to_throughput():
+    rows = _MOCK_ROWS  # no energy_per_token_j anywhere
+    assert _ranked(rows, "efficiency") == _ranked(rows, "throughput")

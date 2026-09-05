@@ -594,6 +594,77 @@ class MemoryWatcher(_IntervalSampler):
 # --- Power + thermal probe (per-run window sampler) ----------------------
 
 
+def measure_loaded_idle(
+    sampler,
+    *,
+    settle_s: float = 3.0,
+    samples: int = 5,
+    step_s: float = 2.0,
+    cpu_load_1: float | None = None,
+    cpu_cores: int | None = None,
+    thermal_speed_limit: int | None = None,
+    sleep=None,
+) -> dict[str, Any]:
+    """Loaded-idle SoC power: model resident, server ready, no request in flight.
+
+    This is the only subtraction base that isolates the marginal cost of a
+    decode for THIS engine: a bare-machine idle would not subtract the resident
+    model's DRAM nor the server's own polling (some engines spin when idle).
+    Measured once per engine, after warmup and before the first timed run, so
+    the clocks have settled and the bank is in the state the runs will see.
+
+    Returns ``{"soc_watts", "cv_pct", "window_s", "samples", "reason"}`` with
+    ``soc_watts`` None — and a reason — whenever the figure would lie:
+    CV above 10 % (something else was running), background CPU load, a thermal
+    limit already engaged, or a required IOReport rail missing. The raw energy
+    figures are never affected by a refused idle; only the "active" derivation
+    is withheld. Refusing beats publishing an idle that is really a run.
+    """
+    from statistics import mean, pstdev
+
+    # Resolved at call time on purpose: a ``sleep=time.sleep`` default is bound
+    # when the module loads, so a test that patches ``time.sleep`` afterwards
+    # still waits the full 13 s per engine (the suite went 64 s → 283 s).
+    sleep = sleep or time.sleep
+    sleep(settle_s)
+    sampler.sample()  # discard the settle window; start the measured one clean
+    readings = []
+    for _ in range(samples):
+        sleep(step_s)
+        readings.append(sampler.sample())
+
+    out: dict[str, Any] = {
+        "soc_watts": None,
+        "cv_pct": None,
+        "window_s": round(samples * step_s, 1),
+        "samples": samples,
+        "reason": "",
+    }
+    if any(r.soc_watts is None for r in readings):
+        out["reason"] = "required IOReport rail missing in idle window"
+        return out
+    watts = [r.soc_watts for r in readings]
+    m = mean(watts)
+    cv = (pstdev(watts) / m * 100.0) if m > 0 else None
+    out["cv_pct"] = round(cv, 1) if cv is not None else None
+    if m <= 0:
+        out["reason"] = "idle power reads as zero"
+        return out
+    if cv is not None and cv > 10.0:
+        out["reason"] = f"idle unstable (CV {cv:.1f} % > 10 %) — background activity"
+        return out
+    if cpu_load_1 is not None and cpu_cores and cpu_load_1 > 2.0 * cpu_cores / 4.0:
+        out["reason"] = f"background CPU load {cpu_load_1:.1f} on {cpu_cores} cores"
+        return out
+    if thermal_speed_limit is not None and 0 < thermal_speed_limit < 100:
+        out["reason"] = f"thermal limit {thermal_speed_limit} % already engaged"
+        return out
+    from statistics import median
+
+    out["soc_watts"] = round(median(watts), 2)
+    return out
+
+
 class PowerThermalProbe:
     """Single power/thermal instrument shared by all three bench modes.
 
@@ -674,6 +745,18 @@ class PowerThermalProbe:
         from asiai.collectors.power import PowerMonitor
 
         return PowerMonitor()
+
+    def measure_loaded_idle(self, **kwargs: Any) -> dict[str, Any] | None:
+        """Loaded-idle SoC power via :func:`measure_loaded_idle`, or None when
+        IOReport is unavailable. Call after warmup and BEFORE ``start()``: it
+        consumes ~13 s and leaves the sampler on a fresh baseline."""
+        if self._sampler is None:
+            return None
+        try:
+            return measure_loaded_idle(self._sampler, **kwargs)
+        except Exception:  # noqa: BLE001 — an idle we cannot read is None, not 0
+            logger.debug("loaded-idle measurement failed", exc_info=True)
+            return None
 
     def start(self) -> None:
         """Reset the energy/time baseline (and start powermetrics if cross-validating)."""
@@ -772,8 +855,10 @@ class PowerThermalProbe:
         phys_mb = _bytes_to_mb(p.phys_footprint_bytes) if p is not None else None
         return {
             "gpu_watts": io.gpu_watts if io is not None else None,
-            "soc_watts": round(io.soc_watts, 2) if io is not None else None,
-            "energy_joules": round(io.soc_joules, 3) if io is not None else None,
+            "soc_watts": _round_or_none(io.soc_watts if io is not None else None, 2),
+            "energy_joules": _round_or_none(io.soc_joules if io is not None else None, 3),
+            "interval_s": io.interval_s if io is not None else None,
+            "rails": sorted(io.rails_present) if io is not None else None,
             "thermal_speed_limit": self._read_thermal(),
             "engine_rss_mb": rss_mb,
             "engine_phys_footprint_mb": phys_mb,
@@ -790,8 +875,10 @@ class PowerThermalProbe:
         io = self._read_ioreport()
         return {
             "gpu_watts": io.gpu_watts if io is not None else None,
-            "soc_watts": round(io.soc_watts, 2) if io is not None else None,
-            "energy_joules": round(io.soc_joules, 3) if io is not None else None,
+            "soc_watts": _round_or_none(io.soc_watts if io is not None else None, 2),
+            "energy_joules": _round_or_none(io.soc_joules if io is not None else None, 3),
+            "interval_s": io.interval_s if io is not None else None,
+            "rails": sorted(io.rails_present) if io is not None else None,
         }
 
     def read_aggregate(self) -> dict[str, Any]:
@@ -812,8 +899,12 @@ class PowerThermalProbe:
         """
         io = self._read_ioreport()
         io_gpu_watts = (io.gpu_watts if io is not None else 0.0) or 0.0
-        io_soc_watts = round(io.soc_watts, 2) if io is not None else 0.0
-        io_soc_joules = round(io.soc_joules, 3) if io is not None else 0.0
+        # Historical runner contract: 0.0 means "nothing to publish" (the runner
+        # emits soc_watts only when > 0). A None package figure (required rail
+        # missing) collapses to 0.0 here for that reason — and ``rails`` travels
+        # alongside so the caller can see WHY nothing was published.
+        io_soc_watts = _round_or_none(io.soc_watts if io is not None else None, 2) or 0.0
+        io_soc_joules = _round_or_none(io.soc_joules if io is not None else None, 3) or 0.0
         pm_gpu_watts = 0.0
         if self._monitor is not None:
             try:
@@ -846,6 +937,8 @@ class PowerThermalProbe:
             "power_watts_ioreport": io_gpu_watts,
             "power_watts_powermetrics": pm_gpu_watts,
             "power_source": power_source,
+            "interval_s": io.interval_s if io is not None else None,
+            "rails": sorted(io.rails_present) if io is not None else None,
             "thermal_speed_limit": self._read_thermal(),
             "engine_rss_mb": rss_mb,
             "engine_phys_footprint_mb": phys_mb,

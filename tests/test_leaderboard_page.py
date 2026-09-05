@@ -246,6 +246,12 @@ class TestLeaderboardPage:
         assert 'data-key="median_power_watts"' in resp.text
         assert 'data-key="median_tok_s_per_watt"' in resp.text
         assert 'data-key="last_submitted_at"' in resp.text
+        # Energy columns (metrics_version 4) sit next to the legacy GPU ones, and
+        # the legacy header says which rail it is — "W" alone was the bug.
+        assert 'data-key="median_soc_watts"' in resp.text
+        assert 'data-key="median_energy_per_token_j"' in resp.text
+        assert ">GPU W<" in resp.text
+        assert ">SoC W<" in resp.text
         # Freshness dot classes: green <30d, neutral 30-90d, degraded beyond.
         assert "lb-seen-dot" in resp.text
         assert "st-degraded" in resp.text

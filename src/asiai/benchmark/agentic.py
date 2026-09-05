@@ -508,6 +508,11 @@ def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
                 [float(r.ttft_ms) if r.ttft_ms is not None else None for r in phase_runs]
             ),
             "soc_watts": _stat([r.soc_watts for r in phase_runs]),
+            # Computed per run since 1.11 but never summarised: a card or an
+            # export reader had the raw runs and no per-phase figure to compare.
+            "prefill_watts": _stat([r.prefill_watts for r in phase_runs]),
+            "energy_per_token_j": _stat([r.energy_per_token_j for r in phase_runs]),
+            "tok_s_per_soc_watt": _stat([r.tok_s_per_soc_watt for r in phase_runs]),
         }
         for phase, phase_runs in by_phase.items()
     }

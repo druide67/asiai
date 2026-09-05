@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Energy per token, on the SoC, with its provenance — from the run to the
+  leaderboard.** Every measured run now carries `soc_watts`, `energy_joules`,
+  `interval_s`, the list of IOReport rails read and `energy_per_token_j`
+  (`soc_joules / (completion_tokens − 1)`, published only when the engine counted
+  the tokens and the run was not throttled). A loaded-idle window is measured
+  before the first timed run (`idle_soc_watts`, refused when unstable) and an
+  idle-subtracted `energy_per_token_active_j` is derived from it. `powermode` and
+  `power_supply` (`ac`/`battery`) are recorded per result. The share payload
+  gains a nested, all-or-nothing `energy` block (`base`, `rails`, `window`,
+  `idle`, `conditions`); legacy GPU-rail fields are unchanged and tagged
+  `power_scope: "gpu"`. Two new gates, `energy_provenance` and `energy_thermal`,
+  refuse a figure rather than publish a smaller one; `--fail-on-gate` now
+  rejects an unknown gate name (exit 2) instead of silently enforcing nothing.
+  `metrics_version` 3 → 4 (SQLite migration adds the six columns; the advisor and
+  regression checks accept both). Cards label the rail (`62W SoC · 1.35 J/tok`,
+  or `20W GPU` when that is all there is); the agentic card gains the decode
+  energy chip it never had. The public leaderboard gets a second view (`Energy`:
+  SoC W, J/tok, J/tok active, idle W, sorted ascending, missing values last, a
+  provenance dot per gated value) in all nine locales, kept identical by a
+  structural test. `advisor --use-case efficiency` finally ranks by measured
+  J/token instead of being a synonym of throughput. Docs: metrics-spec 0.5.0
+  (M6/M7 marked GPU-rail legacy, M9–M13 added), methodology states what the
+  <1.5 % powermetrics validation covers (the GPU rail alone, before DCS), and a
+  drift test keeps the docs pinned to the code.
+- **IOReport: a rail that is not read is now `None`, never `0`.** `soc_watts`
+  and `soc_joules` are `None` whenever a required rail (GPU, CPU, DRAM, DCS) is
+  missing, so a chip that names a rail differently refuses the SoC figure instead
+  of quietly under-counting it. Readings expose `rails_present`; `J`-unit
+  channels are accepted; AMCC and FAB rails are read (not yet in the base).
+- **Monitoring exposes the same SoC total the bench publishes.** `/metrics`
+  gains `asiai_power_soc_watts`, `asiai_power_dcs_watts` and
+  `asiai_power_dram_watts`; the legacy `asiai_power_total_watts` (no DCS) is
+  kept and labelled. The local leaderboard page gains `SoC W` and `J/tok`
+  columns and relabels the legacy ones `GPU W`.
+- **`mlx-vlm` engine.** `mlx_vlm.server` speaks the OpenAI chat API and was
+  already detected by name, but had no adapter, so a detected process could
+  never be benchmarked. Detection now matches `mlx_vlm` before `mlx_lm` (the two
+  names differ by one character, and a substring match on the shorter key used to
+  claim the longer project's process). A structural test asserts that every
+  detectable engine name has an adapter class — the gap this closes.
+- **`bench --code` reports what a wrong tool call was wrong WITH.** The
+  `correct_tool` percentage said how often the first call named the wrong tool;
+  `substitutions` (`"expected→actual": count`) says which tool was chosen
+  instead. A suite where every miss is `edit_file→search_code` is a model
+  exploring before it writes — not the same defect as `edit_file→write_file`,
+  and the two used to be one number. Eval-suite validity rules (task, outcome,
+  criterion) are written down in AGENTS.md; CONTRIBUTING points to them.
+
+### Changed
+
+- **Agentic protocol `agentic-v5`.** The third prefix-test turn now uses a
+  prompt never seen in the session: with v4, `prefix-test-2/3` and
+  `long-prefix` replayed prompts already served, so any engine with a session
+  bank answered them from the bank and three campaigns measured the bank, not
+  the turn. Phases that replay *by design* (`warm`, `prefix-test-2`,
+  `long-prefix`) are exempt from the `session_replay` gate; everything else is
+  not.
+- **MTPLX version is read from the serving process, not the keg.**
+  `/health.mlx_runtime.path` names the venv that answers requests; `brew list`
+  names whatever was installed last. A campaign exported the keg version for a
+  cell served by another venv, and the archive now says so when it cannot
+  verify.
+
+### Fixed
+
+- **Gates that were computed but could never fail a run.** `session_replay`
+  and `bank_preload` were detected, stored and printed, yet never converted into
+  gates — so `--fail-on-gate session_replay` enforced nothing and exited 0.
+  Both are gates now, the documented list of gate names is the single source
+  of truth, `--fail-on-gate` refuses an unknown name (exit 2) and warns when a
+  requested gate was not evaluated. Every export carries an
+  `instrument_fingerprint` (asiai version, source hash, interpreter) so a
+  number can be traced to the code that produced it.
+- **Two cards saved by one process within a second no longer overwrite each
+  other** (filename carried a one-second timestamp and the PID; the second card
+  silently replaced the first). A card is evidence; evidence never vanishes
+  without a message.
+- **Card text width is measured per glyph class.** A single average advance
+  under-measured capitals and digits by ~15 %, and a chip laid out after a
+  model name ended up sitting on its last letter.
+- **oMLX version lookup no longer queries PyPI** (`pypi.org/simple/omlx` is a
+  404; the package is not published there).
+
 ## [1.33.0](https://github.com/druide67/asiai/compare/v1.32.0...v1.33.0) — 2026-08-30
 
 ### Added

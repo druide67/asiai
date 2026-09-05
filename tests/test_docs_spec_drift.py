@@ -1,0 +1,73 @@
+"""Docs that describe measurements must match the code that produces them.
+
+Two places describing one truth drift apart and neither fails (five times in
+one week, 2026-08). These checks confront the public docs with the constants
+and field names the benchmark actually emits, so a rename or a stale sentence
+turns red instead of quietly lying for a year — as "Source: sudo powermetrics"
+did, three minor versions after IOReport replaced it.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from asiai.benchmark.agentic import SCHEMA_VERSION as AGENTIC_SCHEMA
+from asiai.collectors.ioreport import _REQUIRED_RAILS
+
+DOCS = Path(__file__).resolve().parents[1] / "docs"
+
+
+def _section(text: str, heading_prefix: str) -> str:
+    """Return the body of the `### <heading_prefix>...` section (up to the next `###`/`##`)."""
+    m = re.search(rf"^### {re.escape(heading_prefix)}.*?$", text, re.M)
+    assert m, f"section {heading_prefix!r} missing"
+    rest = text[m.end() :]
+    end = re.search(r"^##", rest, re.M)
+    return rest[: end.start()] if end else rest
+
+
+def test_gpu_power_metric_no_longer_claims_powermetrics_as_source():
+    spec = (DOCS / "metrics-spec.md").read_text()
+    m6 = _section(spec, "M6.")
+    assert "IOReport" in m6
+    assert re.search(r"Source: `sudo powermetrics`", m6) is None
+    assert "GPU" in m6  # the legacy figure must say which rail it is
+
+
+def test_soc_metric_lists_every_required_rail():
+    spec = (DOCS / "metrics-spec.md").read_text()
+    m9 = _section(spec, "M9.")
+    names = {"gpu": "GPU", "cpu": "CPU", "dram": "DRAM", "dcs": "DCS", "ane": "ANE"}
+    for rail in _REQUIRED_RAILS:
+        assert names[rail] in m9, f"M9 does not name required rail {rail}"
+
+
+def test_energy_per_token_documents_n_minus_one_and_usage_tokens():
+    spec = (DOCS / "metrics-spec.md").read_text()
+    m10 = _section(spec, "M10.")
+    assert "completion_tokens − 1" in m10 or "completion_tokens - 1" in m10
+    assert 'tokens_source == "usage"' in m10
+
+
+def test_bench_modes_names_the_live_agentic_schema_version():
+    text = (DOCS / "bench-modes.md").read_text()
+    assert f"SCHEMA_VERSION = {AGENTIC_SCHEMA}" in text
+    stale = re.findall(r"agentic-v\d+", text)
+    assert set(stale) <= {AGENTIC_SCHEMA}, f"stale agentic schema versions in bench-modes: {stale}"
+
+
+def test_leaderboard_legend_names_the_same_rails_as_the_code():
+    legend = (DOCS / "leaderboard.md").read_text()
+    for word in ("GPU", "CPU", "Neural Engine", "DRAM", "memory controllers"):
+        assert word in legend
+    assert "lower bound" in legend
+
+
+def test_no_doc_still_says_power_comes_from_sudo_powermetrics():
+    offenders = []
+    for md in DOCS.glob("*.md"):
+        for line in md.read_text().splitlines():
+            if re.search(r"watts? \(`sudo powermetrics`\)", line):
+                offenders.append(f"{md.name}: {line.strip()[:80]}")
+    assert not offenders, offenders

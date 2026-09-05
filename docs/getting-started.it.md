@@ -35,7 +35,7 @@ asiai bench -m qwen3.5 --runs 3 --power
 |---------|-------------|
 | **tok/s** | Velocità di generazione (token/sec), esclusa l'elaborazione del prompt |
 | **TTFT** | Time to first token — latenza di elaborazione del prompt |
-| **Power** | Consumo GPU in watt (`sudo powermetrics`) |
+| **Power** | Watt del rail GPU e watt del package SoC (contatori di energia IOReport, senza sudo); J/token quando i token sono contati dal motore |
 | **tok/s/W** | Efficienza energetica — token al secondo per watt |
 | **Stability** | Varianza tra esecuzioni: stabile (<5%), variabile (<10%), instabile (>10%) |
 | **VRAM** | Footprint memoria — nativo (Ollama, LM Studio) o stimato via `ri_phys_footprint` (tutti i motori) |

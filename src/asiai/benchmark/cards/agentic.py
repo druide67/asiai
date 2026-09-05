@@ -173,11 +173,46 @@ def render(result: BenchResult) -> str:
         chips.append(label)
     if subject and subject.hero and subject.hero.n:
         chips.append(f"n={subject.hero.n} runs")
+    # Energy of the warm decode — computed per run since 1.11 and summarised per
+    # phase since 2026-09-02, but this card never showed it while the throughput
+    # card did: two cards of one campaign disagreed on what they were willing to
+    # say. Decode-scoped (rebaselined at first token), and labelled as such — an
+    # agentic J/tok excludes the prefill a turn card includes.
+    warm = ((result.raw.get("phase_stats") or {}).get("warm")) or {}
+    soc_w = (warm.get("soc_watts") or {}).get("median")
+    if isinstance(soc_w, (int, float)) and soc_w > 0:
+        label = f"{fmt_num(soc_w, 0)}W SoC"
+        ept = (warm.get("energy_per_token_j") or {}).get("median")
+        if isinstance(ept, (int, float)) and ept > 0:
+            label += f" · {fmt_num(ept, 2)} J/tok decode"
+        chips.append(label)
     for label in chips:
         svg, w = chip(cx, cy, label)
         p.append(svg)
         cx += w + 8
 
-    p.append(gates_row(result, 424))
+    # Second chip row — the regime the numbers were taken UNDER. A throughput
+    # figure is only worth what its conditions are worth: a model that spent its
+    # budget deliberating, or that was measured on a throttled machine, produces
+    # a number that is true and useless. These say so on the card itself,
+    # instead of in a caption nobody carries along with the image.
+    gates = result.raw.get("quality_gates") or {}
+    cond: list[str] = []
+    thinking = gates.get("thinking") or {}
+    if thinking.get("requested_off"):
+        cond.append("reasoning off · verified" if thinking.get("honoured") else "REASONING LEAKED")
+    validity = (gates.get("output_validity") or {}).get("output_valid_pct")
+    if isinstance(validity, (int, float)):
+        cond.append(f"{validity:.0f}% valid outputs")
+    thermal = gates.get("thermal") or {}
+    if thermal.get("throttled") and isinstance(thermal.get("min_speed_limit"), (int, float)):
+        cond.append(f"throttled to {thermal['min_speed_limit']:.0f}% · declared")
+    cx = 482.0
+    for label in cond:
+        svg, w = chip(cx, cy + 36, label)
+        p.append(svg)
+        cx += w + 8
+
+    p.append(gates_row(result, 468))
     p.append(chrome_close(result))
     return "".join(p)
