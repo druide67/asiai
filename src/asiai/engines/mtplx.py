@@ -28,7 +28,28 @@ class MtplxEngine(OpenAICompatEngine):
         return "mtplx"
 
     def version(self) -> str:
-        """Return MTPLX version via ``brew list --versions mtplx``."""
+        """Return the version of the MTPLX process actually serving requests.
+
+        Read from the server's ``/health`` payload: ``mlx_runtime.path``
+        points inside the serving venv (``.../var/mtplx/venv-X.Y.Z/...``),
+        which identifies the process. ``brew list`` only reports the keg —
+        on 2026-08-29 a benchmark campaign exported the keg version for a
+        cell that served a different venv, making the archived results
+        misidentify what was measured. Keg fallback is kept but explicitly
+        marked as such so it can never be mistaken for a served version.
+        """
+        import re
+
+        from asiai.engines.detect import http_get_json
+
+        try:
+            data, _ = http_get_json(f"{self.base_url}/health", **self._http_kwargs())
+            path = ((data or {}).get("mlx_runtime") or {}).get("path") or ""
+            m = re.search(r"/venv-(\d+(?:\.\d+)+)/", path)
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
         try:
             out = subprocess.run(
                 ["brew", "list", "--versions", "mtplx"],
@@ -40,7 +61,7 @@ class MtplxEngine(OpenAICompatEngine):
             if out:
                 parts = out.split()
                 if len(parts) >= 2:
-                    return parts[-1]
+                    return parts[-1] + " (keg, unverified against process)"
         except Exception:
             pass
         return ""

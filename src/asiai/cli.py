@@ -36,13 +36,20 @@ def _load_subcommand_plugins(
             )
 
 
-def _discover_engines(urls: list[str] | None = None) -> list:
-    """Detect inference engines and return instantiated adapters."""
-    from asiai.engines.detect import detect_engines
+def _engine_classes() -> dict[str, type]:
+    """Engine identifier → adapter class, for every engine detection can name.
+
+    Kept in one place and importable so a test can assert the invariant that
+    bit us on 2026-09-02: an engine that `detect` recognised by process name
+    (`mlx_vlm`) but that no adapter answered for — detected, listed, and
+    impossible to benchmark, with nothing red anywhere. Imports stay lazy: the
+    CLI must start without every adapter's dependencies.
+    """
     from asiai.engines.exo import ExoEngine
     from asiai.engines.llamacpp import LlamaCppEngine
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
+    from asiai.engines.mlxvlm import MlxVlmEngine
     from asiai.engines.mtplx import MtplxEngine
     from asiai.engines.ollama import OllamaEngine
     from asiai.engines.omlx import OmlxEngine
@@ -50,10 +57,11 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.vllm_mlx import VllmMlxEngine
     from asiai.engines.vmlx import VmlxEngine
 
-    engine_map = {
+    return {
         "ollama": OllamaEngine,
         "lmstudio": LMStudioEngine,
         "mlxlm": MlxLmEngine,
+        "mlxvlm": MlxVlmEngine,
         "llamacpp": LlamaCppEngine,
         "omlx": OmlxEngine,
         "rapidmlx": RapidMlxEngine,
@@ -63,7 +71,13 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "exo": ExoEngine,
     }
 
+
+def _discover_engines(urls: list[str] | None = None) -> list:
+    """Detect inference engines and return instantiated adapters."""
     from asiai.engines.config import resolve_api_key
+    from asiai.engines.detect import detect_engines
+
+    engine_map = _engine_classes()
 
     found = detect_engines(urls)
     engines = []

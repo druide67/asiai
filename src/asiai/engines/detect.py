@@ -25,6 +25,9 @@ _MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 
 # Map process command names to engine identifiers.
 _PORT_PROCESS_MAP: dict[str, str] = {
+    # mlx_vlm before mlx_lm: the names differ by one character and a substring
+    # match on the shorter key must never claim the longer project's process.
+    "mlx_vlm": "mlxvlm",
     "mlx_lm": "mlxlm",
     "llama-server": "llamacpp",
     "llama_server": "llamacpp",

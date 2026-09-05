@@ -858,19 +858,44 @@ class TestMtplxEngine:
         engine = MtplxEngine("http://localhost:8005")
         assert engine.name == "mtplx"
 
-    def test_version_via_brew(self):
+    def test_version_reads_the_serving_process(self):
+        # The keg is 2.10.0 but the process serves from venv-2.8.3: the version
+        # must come from the PROCESS. A 2026-08-29 campaign archived the keg
+        # version for a control cell that served a different venv, making the
+        # exports misidentify what was measured.
+        health = {"mlx_runtime": {"path": "/opt/homebrew/var/mtplx/venv-2.8.3/lib/x.so"}}
+
+        class _Out:
+            stdout = "mtplx 2.10.0\n"
+
+        with (
+            patch("asiai.engines.detect.http_get_json", return_value=(health, {})),
+            patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()),
+        ):
+            engine = MtplxEngine("http://localhost:8005")
+            assert engine.version() == "2.8.3"
+
+    def test_version_via_brew_is_marked_unverified(self):
+        # No serving process: the keg fallback answers, but SAYS it is the keg —
+        # an unmarked keg version reads as a served version in an export.
         class _Out:
             stdout = "mtplx 2.0.2\n"
 
-        with patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()):
+        with (
+            patch("asiai.engines.detect.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()),
+        ):
             engine = MtplxEngine("http://localhost:8005")
-            assert engine.version() == "2.0.2"
+            assert engine.version() == "2.0.2 (keg, unverified against process)"
 
     def test_version_not_installed(self):
         class _Out:
             stdout = ""
 
-        with patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()):
+        with (
+            patch("asiai.engines.detect.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()),
+        ):
             engine = MtplxEngine("http://localhost:8005")
             assert engine.version() == ""
 

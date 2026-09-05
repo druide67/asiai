@@ -212,6 +212,9 @@ _ENGINE_PROCESS_PATTERNS: dict[str, str | tuple[str, ...]] = {
     # A parent-chain tolerance is only as good as the identity it starts from.
     "lmstudio": ("LM Studio", "llmster"),
     "mlxlm": "mlx_lm.server",
+    # mlx-vlm is a separate project from mlx-lm; the module paths differ by one
+    # character, so match the full path and never a shortened prefix.
+    "mlxvlm": "mlx_vlm.server",
     # jundot/omlx — NOT mlx-omni-server (different project).
     "omlx": "omlx serve",
     "vmlx": "vmlx serve",
