@@ -343,10 +343,7 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN energy_per_token_j REAL DEFAULT 0",
         ],
     },
-    # v1.34 (metrics_version 4): per-run energy slices, loaded idle and the
-    # conditions an energy figure is worthless without. Same five-rail base as
-    # v3 — the two generations share soc_watts semantics and MAY be pooled;
-    # what must never be pooled is a different rail base (energy_rails says).
+    # v1.34 (metrics_version 4): per-run energy slices, loaded idle, conditions.
     {
         "table": "benchmarks",
         "columns": [

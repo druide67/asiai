@@ -38,12 +38,8 @@ from asiai.storage.db import init_db, query_benchmarks, store_benchmark
 # --- Prompts ---
 
 
-# ── no real idle window in unit tests ─────────────────────────────────
-# The runner now measures a loaded idle before each engine window: 3 s settle +
-# 5 × 2 s samples. Real sleeps would add ~13 s per engine to every test that
-# reaches the probe (the suite went 64 s → 238 s the day it landed). The idle
-# LOGIC is tested in test_benchmark_quality_gates.py with an injected sleep;
-# here we only need it to not wait.
+# ── no real idle window in unit tests (13 s per engine otherwise) ─────────
+# The idle logic is tested in test_benchmark_quality_gates.py.
 
 
 @pytest.fixture(autouse=True)
@@ -1752,11 +1748,6 @@ class TestCompareExportPayload:
 
 
 # ── per-run energy slices, loaded idle, conditions (metrics_version 4) ────────
-#
-# Each test below encodes one way the old engine-window measurement lied:
-# a window straddling a thermal regime change hid it in one mean; a J/token over
-# estimated tokens was a guess; a result without powermode/power_supply could not
-# be trusted against one taken in High Power Mode on mains.
 
 from asiai.collectors.ioreport import IOReportReading as _IORReading  # noqa: E402
 
@@ -2021,12 +2012,7 @@ class TestExportEnergyBlock:
 
 
 class TestEnergySlicesAfterErrors:
-    """Pairing a slice with its result must survive a run that produced none.
-
-    2026-09-05 review: the pairing was reconstructed from the slice count, so
-    one errored run (slice consumed, no result) shifted it for the rest of the
-    engine and every later run silently lost its J/token.
-    """
+    """Slice ↔ result pairing must survive a run that produced no result."""
 
     def test_errored_run_does_not_desync_later_slices(self):
         from asiai.engines.base import GenerateResult

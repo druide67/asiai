@@ -531,13 +531,8 @@ def _summarize_toolcall(
 def _substitutions(per_turn: list[dict[str, Any]]) -> dict[str, int]:
     """``"expected→actual": count`` over the turns that scored the wrong tool.
 
-    The headline percentage says how often the tool was wrong; this says what it
-    was wrong WITH, which is the whole diagnosis. A suite where every miss is
-    ``edit_file→search_code`` is a model exploring before it writes — arguably
-    the better agent, and certainly not the same defect as ``edit_file→write_file``
-    (rewrites the file instead of patching it) or a scattering of unrelated names.
-    Absent this breakdown the three are one number, and the number gets read as
-    "the model cannot call tools".
+    ``correct_tool`` says how often; this says what it was wrong WITH
+    (exploring with ``search_code`` is not the same defect as ``write_file``).
     """
     subs: dict[str, int] = {}
     for s in per_turn:

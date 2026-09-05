@@ -368,10 +368,8 @@ def run_benchmark(
             # starts powermetrics) AFTER the warmup, so warmup energy is excluded.
             probe = PowerThermalProbe(cross_validate=power and not power_unavailable)
 
-            # Loaded idle — model resident, no request — measured once per engine
-            # BEFORE the timed window. It is the base the "active" J/token is
-            # subtracted against; refused (None + reason) when it would lie.
-            # Only when IOReport is live: the powermetrics-only path has no SoC.
+            # Loaded idle (model resident, no request), once per engine before the
+            # timed window: the base "active" J/token is subtracted against.
             idle: dict[str, Any] | None = None
             if ioreport_ok and probe.available:
                 cpu_load = collect_cpu_load()
@@ -388,11 +386,8 @@ def run_benchmark(
             probe.start()
 
             results_before = len(run.results)
-            # Per-run energy slices (IOReport only). The window used to span the
-            # whole prompt×run loop of an engine: on an M5 the 50 % thermal floor
-            # arrives near 80 s, so a 3×3 window routinely straddled a regime
-            # change and one mean hid it. Each slice is rebaselined by
-            # read_power(); the engine figure is the SUM (energy is additive).
+            # Per-run energy slices (IOReport only): a thermal regime change
+            # inside one engine window is visible per run. Engine figure = sum.
             slices: list[dict[str, Any]] = []
 
             # try/finally guarantees the probe (powermetrics subprocess +
@@ -479,14 +474,8 @@ def run_benchmark(
                         result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
                 if soc_watts > 0:
                     result["soc_watts"] = soc_watts
-                    # The engine-window J/token (SoC joules over ALL tokens of the
-                    # loop) is a fallback for the powermetrics-only path. When
-                    # per-run slices exist they already stamped the exact figure
-                    # — (n-1) intervals, server-exact tokens — and this coarser
-                    # number must not overwrite it. Nor may it ever be stamped
-                    # on a run whose token count is an estimate: 2026-09-02 it
-                    # did, and a "chunks" run left with a J/token it had no
-                    # right to.
+                    # Engine-window J/token: fallback only when no per-run slice
+                    # exists, and never on an estimated token count.
                     if (
                         not slices
                         and energy_per_token_j is not None
@@ -755,25 +744,16 @@ def _annotate_run_energy(
 ) -> None:
     """Close one per-run IOReport slice and stamp it on the run's result.
 
-    Called right after ``_run_single`` — whether or not it appended a result
-    (an errored run still consumes a slice, or the next run would inherit its
-    energy). ``n_before_run`` is the result count captured right before the
-    run: the run's result, if any, is the last one and exists iff the count
-    grew. (The first version reconstructed that pairing from the slice count;
-    one errored run desynchronised it and every later run silently lost its
-    J/token — 2026-09-05 review.) The slice is stamped only on a result that
-    has server-exact tokens: a J/token over an estimated token count is a guess
-    dressed up as a measurement, so it is omitted rather than approximated.
+    Called after every ``_run_single``; ``n_before_run`` is the result count
+    before it. J/token is stamped only on server-exact token counts.
     """
     sl = probe.read_power()
     if not sl:
         return
     appended = len(run.results) > n_before_run
     if sl.get("energy_joules") is None or not sl.get("interval_s"):
-        # Read, but not publishable: a required rail was missing (rails says
-        # which were read). Say so on the result, so the energy block is
-        # REFUSED with a reason instead of quietly absent — "nothing measured"
-        # and "measured, unusable" must not look the same downstream.
+        # Read but unpublishable (required rail missing): mark the result so the
+        # block is refused with a reason, not quietly absent.
         if appended and sl.get("rails") is not None:
             run.results[-1]["energy_rails"] = sl["rails"]
             run.results[-1]["energy_refused_run"] = "required IOReport rail missing"

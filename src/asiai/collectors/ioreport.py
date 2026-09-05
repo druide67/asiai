@@ -199,20 +199,14 @@ _CHANNEL_MAP = {
     "ane": "ane",
     "dram": "dram",
     "dcs": "dcs",
-    # Read since 2026-09-02, NOT yet part of soc_watts: the memory-cache
-    # controller and the fabric. On an M5 Max at idle they add +29 % to the
-    # five rails above; on an M4 Pro +49 %. Both move with memory traffic, i.e.
-    # with exactly the decode we measure. Whether they join the published base
-    # (soc5 → soc7) is decided on measurements under load, not here.
+    # Memory-cache controller and fabric: read, not yet part of soc_watts
+    # (+29 % at idle on M5 Max, +49 % on M4 Pro). Base decision pending.
     "amcc": "amcc",
     "fab": "fab",
 }
 
-# Rails without which a package figure is NOT a package figure. ANE is read but
-# optional (it idles at 0 W on every chip measured); AMCC/FAB optional until the
-# base decision. A missing required rail makes soc_watts None — never a smaller
-# number: on 2026-09-02 an M4 Pro exposed rails under other names and the
-# five-rail sum came out as 54 % of the package with no error anywhere.
+# Rails without which a package figure is not a package figure: missing →
+# soc_watts is None, never a smaller number. ANE, AMCC and FAB are optional.
 _REQUIRED_RAILS = frozenset({"gpu", "cpu", "dram", "dcs"})
 
 # Unit divisors to convert raw energy to joules. Plain "J" was missing: a rail
@@ -271,10 +265,8 @@ class IOReportReading:
 
     @property
     def soc_watts(self) -> float | None:
-        """Package power over the five named rails (compute + DRAM + DCS).
-
-        None when a required rail was not read: a package figure missing a
-        rail is not a smaller package figure, it is a different quantity.
+        """Package power over the five named rails; None when a required rail
+        was not read (a smaller sum would be a different quantity).
         """
         if not self.has_required_rails:
             return None
@@ -282,10 +274,8 @@ class IOReportReading:
 
     @property
     def soc7_watts(self) -> float | None:
-        """soc_watts plus the memory-cache controller and fabric rails.
-
-        Candidate published base (decision pending measurements under load);
-        None when soc_watts is None or when either extra rail was not read.
+        """soc_watts plus the AMCC and FAB rails (candidate base); None when
+        soc_watts is None or either extra rail was not read.
         """
         base = self.soc_watts
         if base is None or not {"amcc", "fab"} <= self.rails_present:
@@ -403,13 +393,8 @@ class IOReportSampler:
 
     @staticmethod
     def _iter_channels(delta):
-        """Yield ``(name, unit_label, raw_int)`` for every channel in a delta.
-
-        This is the one place that touches CoreFoundation for channel data; it
-        exists as a seam so ``_read_delta`` can be exercised with a plain list
-        of tuples in tests, without hardware. Names come back as read (case
-        preserved); ``unit_label`` may be None when the CFString conversion
-        fails, and callers must treat that as an unknown unit.
+        """Yield ``(name, unit_label, raw_int)`` per channel — the CoreFoundation
+        seam that makes ``_read_delta`` testable. ``unit_label`` may be None.
         """
         arr = _unwrap_to_array(delta)
         if not arr:
@@ -441,10 +426,8 @@ class IOReportSampler:
 
             divisor = _UNIT_DIVISORS.get(unit)
             if divisor is None:
-                # Unknown / None unit label (e.g. a failed CFString conversion):
-                # the rail is NOT read — mark it absent rather than assume Joules
-                # (divisor 1.0 would inflate mJ/uJ/nJ by up to 1e9x) and rather
-                # than leave it at 0.0 (which reads as "idle", not "unknown").
+                # Unknown unit: the rail is absent, not 0.0 (reads as idle) and
+                # not Joules (would inflate nJ by 1e9).
                 continue
             joules = raw / divisor
             watts = joules / interval

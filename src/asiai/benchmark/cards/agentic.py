@@ -61,11 +61,8 @@ def render(result: BenchResult) -> str:
         model_chips.append(
             (f"{subject.engine} {ver.value}" if ver and ver.value else subject.engine, "neutral")
         )
-    # Speculative decoding changes the headline number by tens of percent, so a
-    # card that omits it is not merely incomplete — two cards of the same model
-    # on the same machine then differ by 45% with identical declared conditions,
-    # and a reader comparing the images can only conclude one of them is wrong.
-    # It rides next to the engine name, where the reader already looks.
+    # Speculative decoding moves the headline by tens of percent: it is declared
+    # next to the engine name, where the reader already looks.
     spec = (result.raw.get("engine_config") or {}).get("speculative")
     if isinstance(spec, dict) and spec.get("type"):
         cap = spec.get("draft_n_max")
@@ -89,11 +86,8 @@ def render(result: BenchResult) -> str:
         mv = m.get(f"decode_{phase}")
         return float(mv.value) if mv and isinstance(mv.value, (int, float)) else None
 
-    # ── hero column: the number the card is FOR ──────────────────────
-    # It used to be the prefix-cache verdict, a diagnostic signal that means
-    # nothing outside its own engine family — while throughput, the one figure
-    # every reader came for, sat in 11px type at the right edge (and was clipped
-    # there). Sustained throughput leads; the cache verdict stays, demoted.
+    # ── hero column: sustained throughput, the number the card is FOR ────
+    # The prefix-cache verdict is engine-family-specific: it stays, demoted.
     depths = result.raw.get("context_depth") or {}
     warm_tps = decode_of("warm") or decode_of("cold")
     if warm_tps is not None:
@@ -133,11 +127,8 @@ def render(result: BenchResult) -> str:
     caveat = "prefix reuse is engine-family-specific — compare the raw signal, not across families"
     p.append(wrap_text(54, yb + 6, caveat, 300, size=11))
 
-    # ── phase bars, scaled by THROUGHPUT ─────────────────────────────
-    # They used to be scaled by TTFT, so the slowest phase drew the longest bar
-    # and the card read backwards at a glance. Bars now mean what bars mean:
-    # longer is faster. TTFT keeps its place in the value text, where a number
-    # that is better when small belongs.
+    # ── phase bars, scaled by throughput: longer is faster ──────────────
+    # TTFT (better when small) stays in the value text, never in a bar.
     tps_max = max((t for t in (decode_of(ph) for ph, _ in phases) if t), default=0.0)
     # Four bars used to occupy a third of the panel and leave the rest blank.
     # A card is read at thumbnail size on a timeline: the bars ARE the picture,
@@ -173,11 +164,8 @@ def render(result: BenchResult) -> str:
         chips.append(label)
     if subject and subject.hero and subject.hero.n:
         chips.append(f"n={subject.hero.n} runs")
-    # Energy of the warm decode — computed per run since 1.11 and summarised per
-    # phase since 2026-09-02, but this card never showed it while the throughput
-    # card did: two cards of one campaign disagreed on what they were willing to
-    # say. Decode-scoped (rebaselined at first token), and labelled as such — an
-    # agentic J/tok excludes the prefill a turn card includes.
+    # Energy of the warm decode, labelled "decode": rebaselined at first token,
+    # it excludes the prefill a turn card includes.
     warm = ((result.raw.get("phase_stats") or {}).get("warm")) or {}
     soc_w = (warm.get("soc_watts") or {}).get("median")
     if isinstance(soc_w, (int, float)) and soc_w > 0:
@@ -191,11 +179,8 @@ def render(result: BenchResult) -> str:
         p.append(svg)
         cx += w + 8
 
-    # Second chip row — the regime the numbers were taken UNDER. A throughput
-    # figure is only worth what its conditions are worth: a model that spent its
-    # budget deliberating, or that was measured on a throttled machine, produces
-    # a number that is true and useless. These say so on the card itself,
-    # instead of in a caption nobody carries along with the image.
+    # Second chip row: the regime the numbers were taken under (reasoning,
+    # thermal). A figure without its conditions is true and useless.
     gates = result.raw.get("quality_gates") or {}
     cond: list[str] = []
     thinking = gates.get("thinking") or {}

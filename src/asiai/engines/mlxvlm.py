@@ -1,13 +1,5 @@
-"""mlx-vlm inference engine adapter.
-
-mlx-vlm (github.com/Blaizzy/mlx-vlm) serves MLX vision-language models and
-exposes an OpenAI-compatible API through ``mlx_vlm.server``.  It is a distinct
-project from mlx-lm: it carries the multimodal architectures, its own tool
-parsers, and speculative decoding through DFlash, EAGLE3 or native MTP drafters.
-
-Install with ``pip install mlx-vlm``; start with
-``mlx_vlm.server --model <hf_repo_or_path> --port <port>``.
-"""
+"""mlx-vlm adapter (github.com/Blaizzy/mlx-vlm): ``mlx_vlm.server`` exposes an
+OpenAI-compatible API. Distinct project from mlx-lm."""
 
 from __future__ import annotations
 
@@ -31,13 +23,8 @@ class MlxVlmEngine(OpenAICompatEngine):
         return "mlxvlm"
 
     def version(self) -> str:
-        """Return the mlx-vlm version from installed package metadata.
-
-        mlx_vlm.server has no ``--version`` flag, and the server is commonly run
-        from a dedicated virtualenv that is not the one asiai runs in.  When the
-        package is not importable here, the version is reported as unknown rather
-        than guessed: a bench declares the version it can prove.
-        """
+        """Return the mlx-vlm version from package metadata, or ``""`` (the server
+        has no ``--version`` and often runs in another virtualenv)."""
         try:
             from importlib.metadata import PackageNotFoundError, version
 

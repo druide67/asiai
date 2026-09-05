@@ -57,12 +57,8 @@ SANS = "Helvetica, Arial, sans-serif"
 MONO_K = 0.602
 SANS_K = 0.52
 
-# Helvetica advances vary by more than 2x across classes, so a single average
-# is only right for average text. Model names are not average text: they are
-# mostly capitals and digits, which a 0.52 factor under-measures by ~15%. That
-# is how a chip laid out right after the title ended up sitting ON its last
-# letter ("…Q5_K_XL.ggu" + llamacpp chip, 2026-08-14). Widths below are the
-# real advances of Helvetica, rounded per class.
+# Helvetica advances per glyph class (rounded). A single average under-measures
+# model names (mostly capitals and digits) by ~15 %.
 _SANS_NARROW = frozenset("ijlt.,:;'`|!()[]{}/\\ ")
 _SANS_WIDE = frozenset("mwMW@%")
 _SANS_CAP_DIGIT = frozenset("ABCDEFGHIJKLMNOPQRSTUVXYZ0123456789")
@@ -233,13 +229,10 @@ def bar_row(
 
 
 def _fit_value(value_text: str, size: float) -> str:
-    """Clip a right-hand value to the panel, rather than let it run off the card.
+    """Clip a right-hand value to the panel with an ellipsis.
 
-    SVG text does not wrap and the panel does not clip: a value one character
-    too long is not squeezed, it is *lost past the edge* — which is how
-    "21.5 t/s" shipped as "21.5 t/" (2026-08-14). Truncating is the lesser
-    failure of the two, and an ellipsis says a number was cut instead of
-    letting a plausible wrong one stand.
+    SVG text neither wraps nor clips: an overlong value silently runs off the
+    card, and a truncated "21.5 t/" reads as a plausible wrong number.
     """
     s = str(value_text)
     if mono_w(s, size) <= VALUE_MAX_W:
@@ -339,14 +332,8 @@ _SAMPLING_KEYS = frozenset(
 
 
 def _extra_body_conditions(extra: Any) -> list[str]:
-    """Name what extra_body ACTUALLY set, instead of assuming it was sampling.
-
-    This used to print "custom sampling params" for any non-empty extra_body.
-    On 2026-08-14 every card of the Qwen3.8 campaign therefore claimed a custom
-    sampler we never set, while staying silent about the one condition that
-    decided the whole measurement — reasoning turned off. A conditions line that
-    asserts a condition which did not happen, and omits the one that did, is
-    worse than no conditions line: it is read as a declaration.
+    """Name what extra_body actually set (e.g. reasoning off), never a generic
+    "custom sampling params" label: a conditions line is read as a declaration.
     """
     if not isinstance(extra, dict) or not extra:
         return []

@@ -528,12 +528,8 @@ def save_card(svg: str, fmt: str = "svg", output_dir: str = "") -> str:
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Second-resolution timestamp + PID: two cards saved by the SAME process
-    # within one second collided, and the second silently overwrote the first
-    # (2026-08-14, two cards of one campaign generated back to back — the caller
-    # got two identical paths and one card was gone). Never overwrite a card:
-    # a card is evidence, and evidence that vanishes without a message is worse
-    # than a crash. Suffix until the name is free.
+    # Timestamp + PID is not unique within one second in one process: suffix
+    # until the name is free. A card is evidence and is never overwritten.
     base = f"bench-card-{int(time.time())}_{os.getpid()}"
     path = os.path.join(output_dir, f"{base}.{fmt}")
     n = 1

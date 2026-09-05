@@ -242,10 +242,8 @@ def render(result: BenchResult) -> str:
         color = ACCENT if is_leader and not no_winner else BAR_NEUTRAL
         value = f"{fmt_num(v)}"
         if invalid:
-            # No confidence interval on a figure we are declaring invalid: the
-            # spread of a degenerate run measures nothing, and printing it here
-            # pushed "invalid ✗" off the right edge of the card — the one word
-            # a reader must not miss.
+            # No confidence interval on an invalid figure: it measures nothing
+            # and would push "invalid ✗" off the card.
             value += " · invalid ✗"
         elif s.hero and s.hero.ci95:
             value += f" ±{fmt_num(s.hero.ci95[1] - v)}"
@@ -316,11 +314,8 @@ def _engine_chip_rows(
             chips.append(f"p90 {fmt_num(m['p90_tok_s'].value)}")
         if m.get("vram_gb"):
             chips.append(f"{fmt_num(m['vram_gb'].value)} GB VRAM")
-        # Power chip, ALWAYS labelled with its scope. Until 2026-09-02 it read
-        # "41W" whether that was the SoC or the GPU rail alone — and the two
-        # differ by 3× on a memory-bound decode. The gated block (metrics_version
-        # 4: throttled runs excluded, estimated tokens refused) wins over the
-        # ungated averages; the GPU rail is the last resort and says so.
+        # Power chip always names its rail (SoC vs GPU differ by ~3× on a
+        # memory-bound decode). Gated block > ungated SoC average > GPU rail.
         soc = m.get("soc_watts") or m.get("avg_soc_watts")
         gpu = m.get("avg_power_watts")
         if soc:  # only when measured — never faked (spec §5)

@@ -134,17 +134,8 @@ _MODEL_NAME_SEPARATORS = "-_./@: "
 
 
 def _basename_if_path(name: str) -> str:
-    """An absolute filesystem path becomes its file name.
-
-    A card is made to be published. When the model is given as a path — which is
-    how every llama.cpp bench addresses it — printing it whole puts the operator's
-    home directory on a public image: on 2026-08-15 a batch of seven cards left
-    for social media titled `/Users/<user>/llms/gguf/...`, caught at review. The
-    file name identifies the model exactly as well and leaks nothing.
-
-    Only rooted paths are touched: a Hugging Face id (`org/model`) contains a
-    slash too, and cutting it to `model` would drop the publisher, which is part
-    of the identity a bench must state.
+    """A rooted filesystem path becomes its file name; a Hugging Face id
+    (``org/model``) is kept whole. Cards are published: no home directory on them.
     """
     return name.rsplit("/", 1)[-1] if name.startswith(("/", "~")) else name
 
@@ -350,11 +341,9 @@ def from_standard(payload: dict) -> BenchResult:
     # not a failure, it is an absence. A refusal splits in two so --fail-on-gate
     # can name the cause: thermal (the machine) vs provenance (the instrument).
     if energy_refusals or energy_ok:
-        # Refusals carry their kind as a prefix set by reporter._energy_block:
-        # "thermal:" → energy_thermal, "provenance:" → energy_provenance,
-        # "not_applicable:" (engine reports no usage → no J/token can exist) →
-        # no gate fails: not measurable is not a fault. Unprefixed reasons are
-        # treated as provenance (fail-closed).
+        # Refusal kind (prefix from reporter._energy_block): thermal → energy_thermal,
+        # provenance → energy_provenance, not_applicable → no gate. Unprefixed =
+        # provenance (fail-closed).
         def _kind(r: str) -> str:
             reason = r.split(": ", 1)[1] if ": " in r else r
             for k in ("thermal", "provenance", "not_applicable"):
@@ -472,12 +461,8 @@ def from_agentic(payload: dict) -> BenchResult:
         gates.append(Gate("output_validity", pct_valid >= min_pct, f"{pct_valid}% valid"))
     sr = gates_block.get("session_replay") or {}
     if sr:
-        # This detection existed for one full campaign (2026-09-02) without ever
-        # being able to FAIL anything: agentic.py computed it, run-cell.sh listed
-        # it in --fail-on-gate, and this function silently never built the Gate —
-        # the enforcement chain was severed in the middle and no piece errored.
-        # A control cell with 5 replayed runs passed green. The gate a caller
-        # names in --fail-on-gate must exist here, or the flag lies.
+        # Every detection agentic.py computes must become a Gate here, or
+        # --fail-on-gate on its name enforces nothing.
         n = len(sr.get("replay_runs") or [])
         gates.append(Gate("session_replay", not sr.get("detected"), f"{n} replayed run(s)"))
     bank = gates_block.get("bank_preload") or {}
@@ -498,10 +483,7 @@ def from_agentic(payload: dict) -> BenchResult:
                 f"min speed limit {thermal.get('min_speed_limit')}%",
             )
         )
-    # Both of these were computed and stored but never surfaced as gates, so a
-    # run whose engine spent its whole token budget reasoning — or one measured
-    # next to a second resident engine — reported clean everywhere a reader
-    # actually looks.
+    # Computed by agentic.py; surfaced as gates so a reader sees them.
     thinking = gates_block.get("thinking") or {}
     if thinking:
         status = thinking.get("status")
@@ -1037,13 +1019,8 @@ _ADAPTERS = {
 }
 
 
-# Every gate name build_result() can emit, by bench type. This is the list
-# --fail-on-gate is checked against: a name outside it is a typo or a gate that
-# does not exist, and asking to enforce it must fail loudly. On 2026-09-02 a
-# campaign ran with --fail-on-gate session_replay for a gate this module never
-# built — the flag filtered a name that could not match, and a control cell with
-# five replayed runs passed green. A list the code owns cannot drift from the
-# code; a list in a shell script can.
+# Gate names build_result() can emit, by bench type; --fail-on-gate refuses a
+# name outside it (a typo enforces nothing). Kept in sync by a structural test.
 DOCUMENTED_GATES: dict[str, frozenset[str]] = {
     "standard": frozenset({"thermal", "memory_pressure", "energy_provenance", "energy_thermal"}),
     "language": frozenset({"dataset_coverage", "fluency_judge"}),

@@ -1,11 +1,6 @@
-"""Docs that describe measurements must match the code that produces them.
-
-Two places describing one truth drift apart and neither fails (five times in
-one week, 2026-08). These checks confront the public docs with the constants
-and field names the benchmark actually emits, so a rename or a stale sentence
-turns red instead of quietly lying for a year — as "Source: sudo powermetrics"
-did, three minor versions after IOReport replaced it.
-"""
+"""Docs that describe measurements must match the code that produces them:
+these checks confront the public docs with the constants and field names the
+benchmark emits, so a stale sentence turns red instead of lying for a year."""
 
 from __future__ import annotations
 
@@ -58,14 +53,8 @@ def test_bench_modes_names_the_live_agentic_schema_version():
 
 
 def test_no_doc_or_module_presents_a_stale_agentic_schema_as_current():
-    """A superseded schema may be named as legacy, never as the current one.
-
-    2026-09-05 review: agentic-v5 shipped while docs/commands/leaderboard.md and
-    agentic_report.py's docstring still said rows are self-describing "from
-    schema agentic-v4". Allowed: "legacy agentic-v3", "since agentic-v4".
-    Refused: any "agentic-vN" older than the live one that is not preceded by a
-    legacy/since marker on the same line.
-    """
+    """A superseded schema may be named as legacy ("legacy agentic-v3",
+    "since agentic-v4"), never presented as the current one."""
     live = int(AGENTIC_SCHEMA.rsplit("v", 1)[1])
     src = Path(__file__).resolve().parents[1] / "src" / "asiai"
     offenders = []

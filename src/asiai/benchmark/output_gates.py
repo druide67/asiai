@@ -199,19 +199,9 @@ CONTENT_HEAD_CHARS = 200
 def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any]) -> dict[str, Any]:
     """Deterministic per-turn score for a turn that should emit a tool call.
 
-    When NO tool call is emitted, the head of the text channel is recorded:
-    a turn that should have called a tool and instead narrated ("I need to use
-    the edit_file tool…") is a different defect from one that returned nothing,
-    and the two are indistinguishable from the counters alone.
-
-    ``correct_tool`` is deliberately unchanged (first call, exact name) so runs
-    stay comparable across the whole history. What it never recorded is WHICH
-    tool the model actually chose, and that omission cost a campaign: a suite
-    scoring 37.5% looked like a model that cannot call tools, when the fix-side
-    evidence — argument lengths of 26-61 chars where a correct answer runs to
-    hundreds — said it was substituting a short exploratory call. A counter that
-    says "wrong" without saying "wrong how" cannot be diagnosed, only believed.
-    ``actual_tool``, ``tools_called`` and ``expected_among_calls`` close that.
+    Records ``actual_tool``, ``tools_called``, ``expected_among_calls`` and, when
+    no tool call is emitted, the head of the text channel. ``correct_tool``
+    (first call, exact name) is unchanged so runs stay comparable.
     """
     tcs = getattr(result, "tool_calls", None) or []
     tc = tcs[0] if tcs else None

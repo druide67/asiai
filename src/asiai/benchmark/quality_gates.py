@@ -44,28 +44,13 @@ _REPLAY_BY_DESIGN = frozenset({"warm", "prefix-test-2", "long-prefix"})
 
 
 def detect_session_replay(runs: list, slack_tokens: int = 2) -> dict:
-    """Flag runs whose prompt was served as an exact session replay.
-
-    A genuine agent turn appends a NEW user message, so the engine can never
-    cache the full prompt: on the prefix-test protocol the theoretical reuse
-    ceiling is ~0.8 (USER_Y is never cached — see docs/bench-modes.md). A run
-    reporting ``cached_tokens >= prompt_tokens - slack`` therefore measured a
-    session-bank replay of an identical request, a code path no real agent
-    exercises. On 2026-08-29 such runs rendered 74 ms first tokens (vs 222 ms
-    on the block prefix-cache path) and dominated a cell median 2/3 of whose
-    samples were replays — the effective sample size of real turns was 1.
-
-    Warm is exempt: replaying the previous request verbatim is that phase's
-    documented purpose.
+    """Flag runs served as an exact session replay (``cached_tokens >=
+    prompt_tokens - slack``): a real turn appends a new user message.
+    Phases in ``_REPLAY_BY_DESIGN`` are exempt.
     """
-    # Phases whose replay is the POINT, not a defect: warm replays the previous
-    # request by definition; prefix-test-2 is the protocol's full-reuse probe
-    # (same SYS_A + USER_X as cold, deliberately); long-prefix measures long-
-    # context session restore. Flagging those would make every valid campaign
-    # fail. Everything else — cold, prefix-test-1/3, cold-prefix, long-context —
-    # claims to measure a fresh turn, and a replay THERE is the defect this gate
-    # exists for (agentic-v5; before v5, prefix-test-3 replayed by accident and
-    # three campaigns measured the session bank without knowing it).
+    # Phases whose replay is the point: warm (previous request), prefix-test-2
+    # (full-reuse probe), long-prefix (long-context restore). Every other phase
+    # claims a fresh turn, and a replay there is the defect this gate is for.
     flagged = []
     for r in runs:
         phase = getattr(r, "phase", "") or ""
@@ -86,20 +71,10 @@ def detect_session_replay(runs: list, slack_tokens: int = 2) -> dict:
 
 
 def detect_bank_preload(runs: list) -> dict:
-    """Refuse a campaign whose "cold" was never cold: pre-existing engine state.
+    """Refuse a cell whose first cold run reported reused tokens.
 
-    The 2026-09-02 campaign ran three cells against a 32 GB on-disk session bank
-    holding entries from THREE previous campaigns (oldest blob: five weeks old).
-    Every "cold" rep0 reported cached_tokens=7424 — a first request served at
-    98.6% cache on a freshly started server. No run of the night measured a real
-    agent turn, and nothing refused anything: the numbers just came out plausible
-    and wrong. This gate encodes the one invariant a cold phase has: THE FIRST
-    COLD RUN OF A CELL MUST START FROM NOTHING. If it reports reused tokens, the
-    cell inherited state from outside the measurement and the whole cell is
-    suspect — not just that run, because every later phase builds on the same
-    bank. Fail-closed by design: an operator who intends a warm-start protocol
-    can drop the gate from --fail-on-gate, but silence will never again read as
-    cleanliness.
+    A cold run must start from nothing; reused tokens mean the engine inherited
+    state (e.g. an on-disk session bank) and every later phase builds on it.
     """
     for r in runs:
         if getattr(r, "phase", "") == "cold" and getattr(r, "repeat", None) == 0:
@@ -232,13 +207,8 @@ def _patterns_for(key: str, fallback: str) -> tuple[str, ...]:
     return (value,) if isinstance(value, str) else tuple(value)
 
 
-# Shells run a script whose own arguments name the engine binary, so the raw
-# command line matches the pattern while no engine is running in that process.
-# A bench harness that launches engines from a wrapper (`zsh run-cell.sh …
-# llama-server --model …`) was reported as a duplicate of the engine it had
-# just started — on 4 of 12 cells of the 2026-08 campaign. The engine itself
-# always appears as its own `ps` entry, so skipping shell wrappers loses
-# nothing and removes the whole false-positive class.
+# A shell running a script whose arguments name an engine binary is not that
+# engine; the engine has its own `ps` entry, so wrappers are skipped.
 _SHELL_ARGV0 = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 
 
@@ -605,20 +575,11 @@ def measure_loaded_idle(
     thermal_speed_limit: int | None = None,
     sleep=None,
 ) -> dict[str, Any]:
-    """Loaded-idle SoC power: model resident, server ready, no request in flight.
+    """Loaded-idle SoC power: model resident, no request in flight.
 
-    This is the only subtraction base that isolates the marginal cost of a
-    decode for THIS engine: a bare-machine idle would not subtract the resident
-    model's DRAM nor the server's own polling (some engines spin when idle).
-    Measured once per engine, after warmup and before the first timed run, so
-    the clocks have settled and the bank is in the state the runs will see.
-
-    Returns ``{"soc_watts", "cv_pct", "window_s", "samples", "reason"}`` with
-    ``soc_watts`` None — and a reason — whenever the figure would lie:
-    CV above 10 % (something else was running), background CPU load, a thermal
-    limit already engaged, or a required IOReport rail missing. The raw energy
-    figures are never affected by a refused idle; only the "active" derivation
-    is withheld. Refusing beats publishing an idle that is really a run.
+    Returns ``{"soc_watts", "cv_pct", "window_s", "samples", "reason"}``;
+    ``soc_watts`` is None with a reason when the figure would lie (CV > 10 %,
+    background load, thermal limit engaged, required rail missing).
     """
     from statistics import mean, pstdev
 
@@ -626,11 +587,8 @@ def measure_loaded_idle(
     # when the module loads, so a test that patches ``time.sleep`` afterwards
     # still waits the full 13 s per engine (the suite went 64 s → 283 s).
     sleep = sleep or time.sleep
-    # Conditions known at entry are checked BEFORE the 13 s window: on a
-    # throttled or loaded machine the answer is already "refused", and paying
-    # the wait per engine gave five identical Nones for 65 s (2026-09-05 review).
-    # Two busy cores is the ceiling whatever the core count — a fixed fraction
-    # of the cores let a 16-core machine call a load of 7 "idle".
+    # Conditions known at entry refuse before the 13 s window. Two busy cores
+    # is the ceiling whatever the core count.
     if cpu_load_1 is not None and cpu_load_1 > 2.0:
         return {
             "soc_watts": None,
@@ -914,10 +872,8 @@ class PowerThermalProbe:
         """
         io = self._read_ioreport()
         io_gpu_watts = (io.gpu_watts if io is not None else 0.0) or 0.0
-        # Historical runner contract: 0.0 means "nothing to publish" (the runner
-        # emits soc_watts only when > 0). A None package figure (required rail
-        # missing) collapses to 0.0 here for that reason — and ``rails`` travels
-        # alongside so the caller can see WHY nothing was published.
+        # Runner contract: 0.0 means "nothing to publish", so a None package
+        # figure (required rail missing) collapses to 0.0; ``rails`` says why.
         io_soc_watts = _round_or_none(io.soc_watts if io is not None else None, 2) or 0.0
         io_soc_joules = _round_or_none(io.soc_joules if io is not None else None, 3) or 0.0
         pm_gpu_watts = 0.0

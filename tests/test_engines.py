@@ -859,10 +859,7 @@ class TestMtplxEngine:
         assert engine.name == "mtplx"
 
     def test_version_reads_the_serving_process(self):
-        # The keg is 2.10.0 but the process serves from venv-2.8.3: the version
-        # must come from the PROCESS. A 2026-08-29 campaign archived the keg
-        # version for a control cell that served a different venv, making the
-        # exports misidentify what was measured.
+        # Keg 2.10.0, process serving from venv-2.8.3: the process wins.
         health = {"mlx_runtime": {"path": "/opt/homebrew/var/mtplx/venv-2.8.3/lib/x.so"}}
 
         class _Out:
@@ -876,10 +873,8 @@ class TestMtplxEngine:
             assert engine.version() == "2.8.3"
 
     def test_version_via_brew_is_bare_and_warns(self, caplog):
-        # No serving process: the keg fallback answers with the BARE version —
-        # the field is parsed as a version by the DB, the leaderboard grouping
-        # and the cards, so prose there split one version into two groups — and
-        # the "unverified against the process" caveat goes to the log instead.
+        # No serving process: the keg fallback answers with the BARE version
+        # (the field is parsed as a version downstream); the caveat goes to the log.
         import logging
 
         class _Out:

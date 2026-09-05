@@ -856,13 +856,8 @@ def test_known_gate_not_evaluated_warns_but_passes(capsys):
 
 
 def test_every_detectable_engine_has_an_adapter():
-    """Every engine name `detect` can produce must map to an adapter class.
-
-    2026-09-02: `mlx_vlm` was detected by process name and listed by `asiai
-    detect`, but `_discover_engines` had no class for it, so the engine could
-    never be benchmarked — and nothing failed. This is the test that would have
-    been red.
-    """
+    """Every engine name `detect` can produce must map to an adapter class
+    (a detected engine with no adapter is listed but can never be benchmarked)."""
     from asiai.cli import _engine_classes
     from asiai.engines.detect import _PORT_PROCESS_MAP
 

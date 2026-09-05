@@ -1002,11 +1002,7 @@ def test_duplicate_check_survives_ps_without_ppid():
         assert len(check_duplicate_processes("llamacpp")) == 2
 
 
-# ── measure_loaded_idle ─────────────────────────────────────────────────
-#
-# The idle is what the "active" J/token is subtracted against; an idle that is
-# secretly a run would flatter every engine on that machine. Each refusal path
-# below is a case where publishing a number would have been wrong.
+# ── measure_loaded_idle: each refusal path is a figure that would have lied ──
 
 
 class _IdleSampler:

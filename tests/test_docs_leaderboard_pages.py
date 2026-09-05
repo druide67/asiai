@@ -1,10 +1,6 @@
-"""The nine leaderboard pages must stay structurally identical.
-
-The client script (docs/assets/js/leaderboard.js) is shared by every locale
-and addresses columns by `data-col`. A page that drifts — a column added in
-English only, a stale colspan, a missing view button — renders cells under
-the wrong header in that locale, silently. Labels may differ; structure may not.
-"""
+"""The nine leaderboard pages must stay structurally identical: one shared
+script addresses columns by `data-col`, so a page that drifts renders cells
+under the wrong header. Labels may differ; structure may not."""
 
 from __future__ import annotations
 
@@ -64,9 +60,7 @@ def test_energy_columns_are_view_scoped(page: Path):
         assert th, f"{page.name}: {col} header missing"
         assert "lb-col-energy" in th.group(1), f"{page.name}: {col} not view-scoped"
     # Legacy GPU headers are speed-scoped (hidden with their cells in the
-    # energy view — a header without the class stayed visible while its cells
-    # vanished, shifting every value two columns left; 2026-09-05 review),
-    # never energy-scoped, and always say GPU.
+    # energy view), never energy-scoped, and always say GPU.
     for col in ("median_power_watts", "median_tok_s_per_watt"):
         th = re.search(rf'<th class="([^"]*)" data-col="{col}">([^<]*)</th>', text)
         assert th and "lb-col-energy" not in th.group(1)

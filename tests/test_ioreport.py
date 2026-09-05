@@ -70,14 +70,8 @@ class TestIOReportReading:
 
 
 # ── _reading_from_channels: rails present vs absent (the seam) ────────
-#
-# Why these exist (2026-09-02): _read_delta initialised every rail to 0.0 and
-# silently skipped unknown channel names and unknown units. On a chip where a
-# rail is named differently, soc_watts came out as the SUM OF THE OTHER RAILS —
-# strictly positive, so it passed every ``if soc_watts > 0`` guard downstream
-# and an under-counted J/token would have been published with no signal at all.
-# A rail that was not read must be ABSENT (rails_present), and a package figure
-# that misses a required rail must be None — never a smaller number.
+# A rail that was not read is ABSENT (rails_present); a package figure missing
+# a required rail is None, never a smaller number.
 
 
 def _ch(name, unit, raw):

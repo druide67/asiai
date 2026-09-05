@@ -488,10 +488,8 @@ def build_export_payload(
             if ept_vals:
                 engine_data["avg_energy_per_token_j"] = round(sum(ept_vals) / len(ept_vals), 4)
 
-        # Gated energy block (metrics_version 4). Built from per-run slices, so a
-        # run measured under a thermal limit, or over an estimated token count,
-        # or with a missing IOReport rail, is EXCLUDED and the exclusion is
-        # visible — the old avg_* above silently averaged whatever was there.
+        # Gated energy block (metrics_version 4): built from per-run slices,
+        # exclusions visible; the avg_* above average whatever was there.
         energy, refused = _energy_block(engine_results)
         if energy is not None:
             engine_data["energy"] = energy
@@ -713,21 +711,12 @@ _ENERGY_REQUIRED_RAILS = frozenset({"gpu", "cpu", "dram", "dcs"})
 def _energy_block(runs: list[dict]) -> tuple[dict | None, str]:
     """Aggregate per-run IOReport slices into one publishable ``energy`` block.
 
-    Returns ``(block, refused_reason)``: block is None when nothing was measured
-    (no run carries a slice — not an error) OR when the measurement cannot be
-    trusted, in which case ``refused_reason`` names why. Refusal, not a smaller
-    number: a rail missing on one run means the SoC base differs across runs;
-    an estimated token count means the J/token is a guess; a run under a
-    thermal limit spends more joules per token for reasons that are not the
-    engine's. All-throttled → refused too, with its own reason, so the
-    ``energy_thermal`` gate can tell it apart from a provenance problem.
+    Returns ``(block, refused_reason)``: reason "" when nothing was measured,
+    else prefixed ``provenance:`` / ``thermal:`` / ``not_applicable:``.
     """
     from statistics import median
 
-    # Refusal reasons are prefixed with their KIND — "provenance:", "thermal:",
-    # "not_applicable:" — because from_standard routes them to different gates
-    # (or to none). A gate that hangs on a substring of a sentence changes
-    # behaviour when the sentence is reworded (2026-09-05 review).
+    # Reasons carry their kind as a prefix; result_model routes gates on it.
     refused = [r for r in runs if r.get("energy_refused_run")]
     if refused:
         return None, f"provenance: {refused[0]['energy_refused_run']} on a run"
@@ -748,16 +737,10 @@ def _energy_block(runs: list[dict]) -> tuple[dict | None, str]:
                 f"provenance: required IOReport rail missing on a run (rails={sorted(rails)})",
             )
         if r.get("tokens_source") != "usage":
-            # Not a fault of the measurement: the engine does not report usage,
-            # so no J/token can exist. No gate fails for this (it did, and a
-            # bare --fail-on-gate then refused every OpenAI-compat engine that
-            # omits `usage` from its stream — 2026-09-05 review).
+            # No token usage → no J/token can exist. Not a fault: no gate fails.
             return None, "not_applicable: token count is an estimate (tokens_source != usage)"
-    # Excluded, not refused: a throttled run spends joules for reasons that are
-    # not the engine's; a sub-second window (a fast engine on the short prompt)
-    # is too coarse for the 1 s counter but says nothing against the long
-    # prompts. Refusing the whole block for one short run penalised speed
-    # (2026-09-05 review). The block says how many runs each rule excluded.
+    # Excluded, not refused: throttled runs (joules not the engine's) and
+    # sub-second windows (too coarse for the counter). Counts are published.
     included, throttled, short = [], [], []
     for r in measured:
         if 0 < (r.get("thermal_speed_limit") or 100) < 100:

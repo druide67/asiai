@@ -95,15 +95,9 @@ PHASES: tuple[AgenticPhase, ...] = (
     AgenticPhase("warm", SYS_A, USER_X, 400),
     AgenticPhase("prefix-test-1", SYS_A, USER_Y, 400),
     AgenticPhase("prefix-test-2", SYS_A, USER_X, 400),
-    # USER_Z, not USER_Y (agentic-v5): with USER_Y this phase replayed the exact
-    # prompt of prefix-test-1, which on a session-bank engine (MTPLX) is served as
-    # a full session hit (cached = prompt-1) — it measured session restore, not
-    # the "does the prefix survive alternation" question it was written for. On a
-    # single-slot cache (llama.cpp) the old design worked; the bank generation of
-    # engines made it silently measure something else. Three campaigns (08-16,
-    # 08-29, 09-02) were invalidated before the 09-02 gate made it visible. A
-    # fresh user keeps the intent — SYS_A hit, brand-new user — on every cache
-    # architecture at once.
+    # A never-seen user message (agentic-v5): SYS_A prefix hit, no full-prompt
+    # replay. With USER_Y a session-bank engine served this turn from its bank
+    # and the phase measured session restore instead of prefix reuse.
     AgenticPhase("prefix-test-3", SYS_A, USER_Z, 400),
     AgenticPhase("cold-prefix", SYS_B, USER_X, 400),
     AgenticPhase("long-context", SYS_A, USER_L, 200),

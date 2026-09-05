@@ -38,12 +38,7 @@ def _load_subcommand_plugins(
 
 def _engine_classes() -> dict[str, type]:
     """Engine identifier → adapter class, for every engine detection can name.
-
-    Kept in one place and importable so a test can assert the invariant that
-    bit us on 2026-09-02: an engine that `detect` recognised by process name
-    (`mlx_vlm`) but that no adapter answered for — detected, listed, and
-    impossible to benchmark, with nothing red anywhere. Imports stay lazy: the
-    CLI must start without every adapter's dependencies.
+    Lazy imports: the CLI must start without every adapter's dependencies.
     """
     from asiai.engines.exo import ExoEngine
     from asiai.engines.llamacpp import LlamaCppEngine
@@ -846,16 +841,12 @@ def _gate_exit_code(args: argparse.Namespace, bench_type: str, payload: dict) ->
             return 2
         return 0
     if enforce and only:
-        # A name this bench type can never emit is a typo or a gate that does
-        # not exist. Filtering silently on it is how a campaign ran for weeks
-        # with --fail-on-gate session_replay enforcing nothing (2026-09-02): the
-        # flag matched no gate, so it refused nothing, and looked obeyed.
+        # A name this bench type cannot emit is a typo: refuse loudly rather
+        # than enforce nothing and look obeyed.
         from asiai.benchmark.result_model import DOCUMENTED_GATES
 
-        # Valid = documented for this bench type OR actually emitted by this
-        # result: burst and code name their gates dynamically (`{suite}_judge`,
-        # `no errors @32`), so a static list alone rejected real gates on five
-        # of seven bench types (2026-09-05 review).
+        # Valid = documented for this bench type OR emitted by this result
+        # (burst and code name their gates from the data).
         unknown = only - DOCUMENTED_GATES.get(bench_type, frozenset()) - {g.name for g in gates}
         if unknown:
             names = ", ".join(sorted(unknown))

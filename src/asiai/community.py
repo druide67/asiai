@@ -153,12 +153,9 @@ def _build_slot_entry(
     if load_vals:
         entry["load_time_ms"] = round(sum(load_vals) / len(load_vals), 1)
 
-    # Gated SoC energy block (metrics_version 4) — the same pure aggregation the
-    # local export uses, so the leaderboard can never carry a figure the export
-    # would have refused. All-or-nothing: a slot whose runs disagree on rails,
-    # token provenance or thermal state ships NO energy rather than a blend.
-    # tok_s_per_soc_watt is deliberately not shipped for the standard runner
-    # (decode-only throughput over a full-window power is not a physical ratio).
+    # Gated SoC energy block (metrics_version 4): same aggregation as the local
+    # export, all-or-nothing. tok_s_per_soc_watt is not shipped (not a physical
+    # ratio for the standard runner).
     from asiai.benchmark.reporter import _energy_block
 
     energy, _refused = _energy_block(slot_results)

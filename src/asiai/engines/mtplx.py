@@ -28,18 +28,8 @@ class MtplxEngine(OpenAICompatEngine):
         return "mtplx"
 
     def version(self) -> str:
-        """Return the version of the MTPLX process actually serving requests.
-
-        Read from the server's ``/health`` payload: ``mlx_runtime.path``
-        points inside the serving venv (``.../var/mtplx/venv-X.Y.Z/...``),
-        which identifies the process. ``brew list`` only reports the keg —
-        on 2026-08-29 a benchmark campaign exported the keg version for a
-        cell that served a different venv, making the archived results
-        misidentify what was measured. The keg fallback is kept, returns the
-        bare version (the field is parsed as a version by the DB, the
-        leaderboard grouping and the cards — prose there split one version
-        into two groups, 2026-09-05 review) and logs that it is unverified;
-        proving identity stays with the bench protocol, not with this string.
+        """Version of the MTPLX process serving requests, from
+        ``/health.mlx_runtime.path``; falls back to the keg version with a warning.
         """
         import re
 

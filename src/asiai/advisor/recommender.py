@@ -114,13 +114,8 @@ def _from_local(
         return []
 
     rows = query_benchmarks(db_path, model=model_filter)
-    # Only compare rows produced by the same metrics definition: tok/s and
-    # TTFT changed scope in the 1.11.0 instrumentation overhaul
-    # (metrics_version 3). Mixing generations would rank apples against
-    # oranges; with no v3 rows the advisor falls back to community data.
-    # 3 and 4 share the soc_watts base (five rails, decode-scoped energy); v4
-    # only ADDS per-run slices and conditions. Generations 1-2 (GPU-only
-    # powermetrics) stay out.
+    # metrics_version 3 and 4 share the tok/s, TTFT and soc_watts definitions;
+    # generations 1-2 (GPU-only powermetrics) are not comparable and stay out.
     rows = [r for r in rows if r.get("metrics_version") in (3, 4)]
     if not rows:
         return []
@@ -139,11 +134,8 @@ def _from_local(
     for (engine, model), entries in groups.items():
         tok_values = [e["tok_per_sec"] for e in entries if e.get("tok_per_sec")]
         ttft_values = [e["ttft_ms"] for e in entries if e.get("ttft_ms")]
-        # SoC joules per token from metrics_version 4 rows ONLY: v3 stored an
-        # engine-window figure (all tokens, estimated counts allowed, throttled
-        # runs included), v4 a per-run (n−1), usage-only, unthrottled one — two
-        # definitions under one column, never medianised together. 0 means
-        # "not measured", never "free" — hence the truthiness filter.
+        # J/token from metrics_version 4 only (v3 stored a different, engine-window
+        # definition under the same column). 0 means "not measured".
         ept_values = [
             e["energy_per_token_j"]
             for e in entries
@@ -376,11 +368,8 @@ def _score_use_case(
         return tok_norm * 0.5  # fallback if no ttft data
 
     if use_case == "efficiency":
-        # Rank by measured SoC joules per token (lower is better) when at
-        # least one group carries it; tok/s only breaks ties. Until 2026-09-02
-        # this branch returned tok_norm alone — "efficiency" was a synonym of
-        # "throughput" and the energy column the runner had stored since 1.11
-        # never reached the ranking.
+        # Measured J/token (lower is better) leads; tok/s breaks ties. Groups
+        # without an energy figure rank below every measured one.
         ept_values = [s["med_ept"] for _, s in all_group_stats if s.get("med_ept", 0) > 0]
         if ept_values:
             inv_ept = _normalize([1.0 / v for v in ept_values])

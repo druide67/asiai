@@ -387,13 +387,8 @@ def collect_power_mode() -> int | None:
 
 
 def collect_power_supply() -> str | None:
-    """Return ``"ac"`` or ``"battery"`` from ``pmset -g batt``, or ``None``.
-
-    An energy figure taken on battery is not the same measurement as one taken
-    on mains: the SoC throttles its power budget when unplugged, and the only
-    honest "tokens per % of battery" claim needs to KNOW it was on battery. The
-    M5 Max that runs production is a laptop, so this cannot be assumed either
-    way. ``None`` when pmset says nothing recognisable — never a guess.
+    """Return ``"ac"`` or ``"battery"`` from ``pmset -g batt``, or ``None``;
+    the SoC power budget differs on battery.
     """
     try:
         out = subprocess.run(
@@ -452,13 +447,8 @@ def collect_run_metadata(
     cores = collect_cpu_cores()
     md: dict[str, Any] = {
         "asiai_version": __version__,
-        # The version string alone cannot prove WHICH asiai measured: the
-        # 2026-09-02 campaign ran a locally-installed working tree whose exports
-        # said "1.32.0" — byte-for-byte the same claim a stock PyPI install makes.
-        # The audit could not tell the instrumented tool from the bare one without
-        # grepping the payload for side effects. This fingerprint hashes the
-        # SOURCE ACTUALLY LOADED (every asiai module file on disk), so two
-        # different instruments can never share an identity again.
+        # Hash of the source actually loaded: a version string cannot tell a
+        # patched working tree from a stock install.
         "instrument_fingerprint": _instrument_fingerprint(),
         "machine_model": machine_model or None,
         "hw_chip": collect_hw_chip() or None,
