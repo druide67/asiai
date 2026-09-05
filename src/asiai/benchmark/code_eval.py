@@ -523,8 +523,31 @@ def _summarize_toolcall(
         # The edit_file turns are the array-of-objects truncation probe.
         "edit_turns_pct_clean": _pct([_turn_clean(s) for s in edits]),
         "edit_turns_empty_object_bug": sum(1 for s in edits if s["empty_object_bug"]),
+        "substitutions": _substitutions(per_turn),
         "per_turn": per_turn,
     }
+
+
+def _substitutions(per_turn: list[dict[str, Any]]) -> dict[str, int]:
+    """``"expected→actual": count`` over the turns that scored the wrong tool.
+
+    The headline percentage says how often the tool was wrong; this says what it
+    was wrong WITH, which is the whole diagnosis. A suite where every miss is
+    ``edit_file→search_code`` is a model exploring before it writes — arguably
+    the better agent, and certainly not the same defect as ``edit_file→write_file``
+    (rewrites the file instead of patching it) or a scattering of unrelated names.
+    Absent this breakdown the three are one number, and the number gets read as
+    "the model cannot call tools".
+    """
+    subs: dict[str, int] = {}
+    for s in per_turn:
+        if s.get("correct_tool"):
+            continue
+        actual = s.get("actual_tool") or (
+            "<none>" if not s.get("emitted_tool_call") else "<unknown>"
+        )
+        subs[f"{s['expected_tool']}→{actual}"] = subs.get(f"{s['expected_tool']}→{actual}", 0) + 1
+    return dict(sorted(subs.items(), key=lambda kv: -kv[1]))
 
 
 # --- Suite: recovery (deterministic) ------------------------------------------

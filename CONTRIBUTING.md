@@ -42,6 +42,10 @@ pytest --integration -v
 - **Types**: type hints everywhere, no `Any` unless justified
 - **Dependencies**: zero external dependencies for core. Optional extras only.
 - **Security**: no `shell=True`, parameterized SQL, no telemetry
+- **Eval suites**: changing a scored turn in `bench --code` changes what published
+  numbers mean. Read the *Eval suites* rules in [AGENTS.md](AGENTS.md) first — a
+  turn must be solvable only by the capability it targets, and its success
+  criterion must be necessary and sufficient.
 
 ## Commits
 

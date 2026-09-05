@@ -94,6 +94,33 @@ ruff format src/ tests/
 - **No tests requiring Apple Silicon hardware** in CI (mark with `@pytest.mark.apple_silicon`)
 - **Integration tests**: `pytest --integration -v` (real engines required, skipped by default)
 
+### Eval suites (`bench --code`, `--agentic-mode`)
+
+Changing a scored turn changes what published numbers mean. Every addition or edit
+goes through the three validities of the [Agentic Benchmark Checklist](https://uiuc-kang-lab.github.io/agentic-benchmarks/)
+([paper](https://arxiv.org/pdf/2507.02825)) — applied to ten well-known agentic
+benchmarks, it found outcome-validity flaws in seven and task-validity flaws in seven.
+
+- **Task validity**: a task is solvable *if and only if* the agent has the target
+  capability. Count the objects the turn asks to modify against the tool schema's
+  arity — a turn demanding two files from a single-`path` tool is unsolvable, and
+  scores the harness, not the model.
+- **Outcome validity**: the criterion must be necessary *and* sufficient. A shape
+  proxy (tool name, arg length, keyword present) is not a success criterion.
+- **Reporting**: publish the denominator — which suite, how many turns, what is
+  excluded and why. Never quote one suite's sub-metric as if it covered both.
+- **Play the adversary before merging a turn**: could an *excellent* model fail it
+  by doing the right thing? If yes, the turn measures compliance, not capability.
+- **Never merge engine conformity with model capability into one score.** Valid
+  JSON, non-truncation and template bugs are engine facts with an exact oracle;
+  reaching the goal is a model fact. A blended score cannot be diagnosed.
+- **Check collinearity** before presenting a metric as multi-criteria: if two
+  columns never diverge on real data, there is only one.
+- **Prefer an oracle on final state** over one on the trajectory (cf. τ-bench,
+  Aider polyglot): it stops punishing legitimate-but-unexpected paths.
+- **Instrument the failure, not just its count**: record the tool actually called
+  and the full call list, not only whether the first one matched.
+
 ### Commits
 
 - **Format**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`)

@@ -203,9 +203,19 @@ def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any])
     a turn that should have called a tool and instead narrated ("I need to use
     the edit_file tool…") is a different defect from one that returned nothing,
     and the two are indistinguishable from the counters alone.
+
+    ``correct_tool`` is deliberately unchanged (first call, exact name) so runs
+    stay comparable across the whole history. What it never recorded is WHICH
+    tool the model actually chose, and that omission cost a campaign: a suite
+    scoring 37.5% looked like a model that cannot call tools, when the fix-side
+    evidence — argument lengths of 26-61 chars where a correct answer runs to
+    hundreds — said it was substituting a short exploratory call. A counter that
+    says "wrong" without saying "wrong how" cannot be diagnosed, only believed.
+    ``actual_tool``, ``tools_called`` and ``expected_among_calls`` close that.
     """
     tcs = getattr(result, "tool_calls", None) or []
     tc = tcs[0] if tcs else None
+    names = [t.get("name") or "" for t in tcs]
     scored = {
         "emitted_tool_call": tc is not None,
         "json_valid": tc is not None and tc.get("parse_error") is None,
@@ -217,6 +227,14 @@ def score_toolcall_turn(result: Any, expected_tool: str, schema: dict[str, Any])
         and tc.get("name") == expected_tool
         and is_empty_object_bug(tc, schema),
         "args_char_len": len(tc.get("arguments_raw", "")) if tc else 0,
+        # --- what the model actually did, not just whether it matched ---
+        "actual_tool": tc.get("name") if tc else None,
+        "tools_called": names,
+        "n_tool_calls": len(tcs),
+        # Parallel tool calls: only the first is scored, so a turn that emitted
+        # the expected tool in second position reads exactly like a turn that
+        # never emitted it. These are different defects and must be separable.
+        "expected_among_calls": expected_tool in names,
     }
     if tc is None:
         text = getattr(result, "text", "") or ""
