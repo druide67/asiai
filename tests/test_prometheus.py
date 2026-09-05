@@ -211,3 +211,10 @@ class TestPowerSocGauges:
             _make_snapshot(power_gpu_watts=12.0, power_total_watts=15.0, power_soc_watts=None)
         )
         assert "asiai_power_soc_watts" not in output
+
+    def test_legacy_total_gauge_absent_when_a_required_rail_was_missing(self):
+        output = format_prometheus(
+            _make_snapshot(power_gpu_watts=12.0, power_total_watts=None, power_soc_watts=None)
+        )
+        assert "asiai_power_gpu_watts 12.0" in output
+        assert "asiai_power_total_watts" not in output

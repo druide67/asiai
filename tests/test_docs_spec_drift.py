@@ -57,6 +57,42 @@ def test_bench_modes_names_the_live_agentic_schema_version():
     assert set(stale) <= {AGENTIC_SCHEMA}, f"stale agentic schema versions in bench-modes: {stale}"
 
 
+def test_no_doc_or_module_presents_a_stale_agentic_schema_as_current():
+    """A superseded schema may be named as legacy, never as the current one.
+
+    2026-09-05 review: agentic-v5 shipped while docs/commands/leaderboard.md and
+    agentic_report.py's docstring still said rows are self-describing "from
+    schema agentic-v4". Allowed: "legacy agentic-v3", "since agentic-v4".
+    Refused: any "agentic-vN" older than the live one that is not preceded by a
+    legacy/since marker on the same line.
+    """
+    live = int(AGENTIC_SCHEMA.rsplit("v", 1)[1])
+    src = Path(__file__).resolve().parents[1] / "src" / "asiai"
+    offenders = []
+    for path in list(DOCS.rglob("*.md")) + list(src.rglob("*.py")):
+        for line in path.read_text(errors="ignore").splitlines():
+            for m in re.finditer(r"agentic-v(\d+)", line):
+                if int(m.group(1)) < live and not re.search(
+                    r"legacy|since|older|before|from schema.*to|→|->|v\d+\s*(→|->)", line, re.I
+                ):
+                    offenders.append(f"{path.relative_to(src.parent.parent)}: {line.strip()[:90]}")
+    assert not offenders, offenders
+
+
+def test_docs_state_the_live_metrics_version():
+    """`metrics_version = N` in the docs must be the value the DB writes."""
+    db_src = (Path(__file__).resolve().parents[1] / "src/asiai/storage/db.py").read_text()
+    live = int(re.search(r"^\s*(\d+),\s*# metrics_version", db_src, re.M).group(1))
+    offenders = []
+    for path in DOCS.rglob("*.md"):
+        for m in re.finditer(
+            r"metrics_version\W{0,3}=\W{0,3}(\d+)", path.read_text(errors="ignore")
+        ):
+            if int(m.group(1)) != live:
+                offenders.append(f"{path.name}: metrics_version = {m.group(1)} (live: {live})")
+    assert not offenders, offenders
+
+
 def test_leaderboard_legend_names_the_same_rails_as_the_code():
     legend = (DOCS / "leaderboard.md").read_text()
     for word in ("GPU", "CPU", "Neural Engine", "DRAM", "memory controllers"):

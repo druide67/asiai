@@ -409,6 +409,7 @@ def run_benchmark(
                             run_index + 1,
                             runs,
                         )
+                        n_before_run = len(run.results)
                         _run_single(
                             engine,
                             engine_model,
@@ -431,7 +432,7 @@ def run_benchmark(
                             extra_body=extra_body,
                         )
                         if ioreport_ok and probe.available:
-                            _annotate_run_energy(run, results_before, slices, probe, idle)
+                            _annotate_run_energy(run, n_before_run, slices, probe, idle)
 
                 # Stop the probe and annotate this engine's results.
                 # read_aggregate() applies the IOReport/powermetrics precedence
@@ -747,7 +748,7 @@ def _model_matches(running_name: str, target: str) -> bool:
 
 def _annotate_run_energy(
     run: BenchmarkRun,
-    results_before: int,
+    n_before_run: int,
     slices: list[dict[str, Any]],
     probe: PowerThermalProbe,
     idle: dict[str, Any] | None,
@@ -756,18 +757,31 @@ def _annotate_run_energy(
 
     Called right after ``_run_single`` — whether or not it appended a result
     (an errored run still consumes a slice, or the next run would inherit its
-    energy). The slice is stamped only on a result that has server-exact
-    tokens: a J/token over an estimated token count is a guess dressed up as a
-    measurement, so it is omitted rather than approximated.
+    energy). ``n_before_run`` is the result count captured right before the
+    run: the run's result, if any, is the last one and exists iff the count
+    grew. (The first version reconstructed that pairing from the slice count;
+    one errored run desynchronised it and every later run silently lost its
+    J/token — 2026-09-05 review.) The slice is stamped only on a result that
+    has server-exact tokens: a J/token over an estimated token count is a guess
+    dressed up as a measurement, so it is omitted rather than approximated.
     """
     sl = probe.read_power()
-    if not sl or sl.get("energy_joules") is None or not sl.get("interval_s"):
+    if not sl:
+        return
+    appended = len(run.results) > n_before_run
+    if sl.get("energy_joules") is None or not sl.get("interval_s"):
+        # Read, but not publishable: a required rail was missing (rails says
+        # which were read). Say so on the result, so the energy block is
+        # REFUSED with a reason instead of quietly absent — "nothing measured"
+        # and "measured, unusable" must not look the same downstream.
+        if appended and sl.get("rails") is not None:
+            run.results[-1]["energy_rails"] = sl["rails"]
+            run.results[-1]["energy_refused_run"] = "required IOReport rail missing"
         return
     slices.append(sl)
-    new_results = run.results[results_before + len(slices) - 1 :]
-    if len(run.results) <= results_before + len(slices) - 1:
-        return  # this run appended nothing (error path)
-    result = new_results[0] if len(new_results) == 1 else run.results[-1]
+    if not appended:
+        return  # this run appended nothing (error path); its slice is consumed
+    result = run.results[-1]
     result["run_soc_watts"] = sl["soc_watts"]
     result["run_energy_joules"] = sl["energy_joules"]
     result["interval_s"] = sl["interval_s"]

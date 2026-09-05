@@ -3,7 +3,8 @@
 Ports the decision logic validated in the 2026-06 campaign — deterministic gates
 on validity / TTFT / prefix-cache reuse, then tiers (★ winner · ✓ viable ·
 ⚠ reserve · ✗ eliminated) grouped per machine — into asiai itself, replacing the
-external ``aggregate.py`` hack. With schema ``agentic-v4`` every column is read
+external ``aggregate.py`` hack. Since schema ``agentic-v4`` (current: ``agentic-v5``)
+every column is read
 from the JSON's own self-describing fields (``hw_chip``, ``machine_model``,
 ``ram_gb``, ``powermode``, ``engine_version``); for legacy ``agentic-v3`` JSON it
 falls back to parsing the file stem.

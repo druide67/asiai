@@ -139,9 +139,16 @@ def _from_local(
     for (engine, model), entries in groups.items():
         tok_values = [e["tok_per_sec"] for e in entries if e.get("tok_per_sec")]
         ttft_values = [e["ttft_ms"] for e in entries if e.get("ttft_ms")]
-        # SoC joules per token (metrics_version 3+, IOReport). 0 means "not
-        # measured" in the table, never "free" — hence the truthiness filter.
-        ept_values = [e["energy_per_token_j"] for e in entries if e.get("energy_per_token_j")]
+        # SoC joules per token from metrics_version 4 rows ONLY: v3 stored an
+        # engine-window figure (all tokens, estimated counts allowed, throttled
+        # runs included), v4 a per-run (n−1), usage-only, unthrottled one — two
+        # definitions under one column, never medianised together. 0 means
+        # "not measured", never "free" — hence the truthiness filter.
+        ept_values = [
+            e["energy_per_token_j"]
+            for e in entries
+            if e.get("energy_per_token_j") and e.get("metrics_version") == 4
+        ]
         if not tok_values:
             continue
         med_tok = _median(tok_values)

@@ -132,13 +132,13 @@ class TestAggregateSize:
             soc_watts=25.0,
             energy_joules=20.0,
         )
-        # 50 t/s over 25 W SoC => 2.0 tok/s/W (headline); 20 J over the 49 decode
-        # INTERVALS of 50 tokens => 0.4082 J/tok. (n-1) since 2026-09-02, aligned
-        # with agentic: the energy of a decode is spent between tokens, and the
-        # three modes used three denominators under one key before that.
+        # 50 t/s over 25 W SoC => 2.0 tok/s/W (headline); 20 J over the decode
+        # INTERVALS: 5 calls × (10 − 1) = 45, not 50 − 1 = 49 — each concurrent
+        # call spends its energy between ITS tokens (2026-09-05 review; the
+        # first (n−1) cut flattered burst by N/total). Aligned with agentic.
         assert agg.soc_watts == 25.0
         assert agg.tok_s_per_soc_watt == 2.0
-        assert agg.energy_per_token_j == round(20.0 / 49, 4)
+        assert agg.energy_per_token_j == round(20.0 / 45, 4)
         # GPU rail still recorded as a diagnostic alongside
         assert agg.gpu_watts == 10.0
         assert agg.tok_s_per_watt == 5.0

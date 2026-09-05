@@ -626,6 +626,27 @@ def measure_loaded_idle(
     # when the module loads, so a test that patches ``time.sleep`` afterwards
     # still waits the full 13 s per engine (the suite went 64 s → 283 s).
     sleep = sleep or time.sleep
+    # Conditions known at entry are checked BEFORE the 13 s window: on a
+    # throttled or loaded machine the answer is already "refused", and paying
+    # the wait per engine gave five identical Nones for 65 s (2026-09-05 review).
+    # Two busy cores is the ceiling whatever the core count — a fixed fraction
+    # of the cores let a 16-core machine call a load of 7 "idle".
+    if cpu_load_1 is not None and cpu_load_1 > 2.0:
+        return {
+            "soc_watts": None,
+            "cv_pct": None,
+            "window_s": 0.0,
+            "samples": 0,
+            "reason": f"background CPU load {cpu_load_1:.1f} (limit 2.0)",
+        }
+    if thermal_speed_limit is not None and 0 < thermal_speed_limit < 100:
+        return {
+            "soc_watts": None,
+            "cv_pct": None,
+            "window_s": 0.0,
+            "samples": 0,
+            "reason": f"thermal limit {thermal_speed_limit} % already engaged",
+        }
     sleep(settle_s)
     sampler.sample()  # discard the settle window; start the measured one clean
     readings = []
@@ -652,12 +673,6 @@ def measure_loaded_idle(
         return out
     if cv is not None and cv > 10.0:
         out["reason"] = f"idle unstable (CV {cv:.1f} % > 10 %) — background activity"
-        return out
-    if cpu_load_1 is not None and cpu_cores and cpu_load_1 > 2.0 * cpu_cores / 4.0:
-        out["reason"] = f"background CPU load {cpu_load_1:.1f} on {cpu_cores} cores"
-        return out
-    if thermal_speed_limit is not None and 0 < thermal_speed_limit < 100:
-        out["reason"] = f"thermal limit {thermal_speed_limit} % already engaged"
         return out
     from statistics import median
 

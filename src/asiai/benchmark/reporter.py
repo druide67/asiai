@@ -724,6 +724,13 @@ def _energy_block(runs: list[dict]) -> tuple[dict | None, str]:
     """
     from statistics import median
 
+    # Refusal reasons are prefixed with their KIND — "provenance:", "thermal:",
+    # "not_applicable:" — because from_standard routes them to different gates
+    # (or to none). A gate that hangs on a substring of a sentence changes
+    # behaviour when the sentence is reworded (2026-09-05 review).
+    refused = [r for r in runs if r.get("energy_refused_run")]
+    if refused:
+        return None, f"provenance: {refused[0]['energy_refused_run']} on a run"
     measured = [r for r in runs if r.get("run_energy_joules") is not None]
     if not measured:
         return None, ""
@@ -732,19 +739,40 @@ def _energy_block(runs: list[dict]) -> tuple[dict | None, str]:
             # A slice of zero joules over a real window is a dead counter, not
             # a free decode. Published, it would sort first on every energy
             # column. Refuse; never let 0 stand for "measured".
-            return None, "zero-energy slice on a run (counter not advancing)"
+            return None, "provenance: zero-energy slice on a run (counter not advancing)"
         rails = set(r.get("energy_rails") or [])
         gpu_ok = "gpu" in rails or "gpu_nj" in rails
         if not gpu_ok or not (_ENERGY_REQUIRED_RAILS - {"gpu"}) <= rails:
-            return None, f"required IOReport rail missing on a run (rails={sorted(rails)})"
+            return (
+                None,
+                f"provenance: required IOReport rail missing on a run (rails={sorted(rails)})",
+            )
         if r.get("tokens_source") != "usage":
-            return None, "token count is an estimate on a run (tokens_source != usage)"
-        if (r.get("interval_s") or 0) < 1.0:
-            return None, "energy window under 1 s on a run"
-    throttled = [r for r in measured if 0 < (r.get("thermal_speed_limit") or 100) < 100]
-    included = [r for r in measured if r not in throttled]
+            # Not a fault of the measurement: the engine does not report usage,
+            # so no J/token can exist. No gate fails for this (it did, and a
+            # bare --fail-on-gate then refused every OpenAI-compat engine that
+            # omits `usage` from its stream — 2026-09-05 review).
+            return None, "not_applicable: token count is an estimate (tokens_source != usage)"
+    # Excluded, not refused: a throttled run spends joules for reasons that are
+    # not the engine's; a sub-second window (a fast engine on the short prompt)
+    # is too coarse for the 1 s counter but says nothing against the long
+    # prompts. Refusing the whole block for one short run penalised speed
+    # (2026-09-05 review). The block says how many runs each rule excluded.
+    included, throttled, short = [], [], []
+    for r in measured:
+        if 0 < (r.get("thermal_speed_limit") or 100) < 100:
+            throttled.append(r)
+        elif (r.get("interval_s") or 0) < 1.0:
+            short.append(r)
+        else:
+            included.append(r)
     if not included:
-        return None, f"all {len(measured)} measured run(s) thermally throttled"
+        if throttled and not short:
+            return None, f"thermal: all {len(measured)} measured run(s) thermally throttled"
+        return None, (
+            f"provenance: no usable run: {len(throttled)} thermally throttled, "
+            f"{len(short)} with an energy window under 1 s"
+        )
 
     joules = sum(r["run_energy_joules"] for r in included)
     dt = sum(r["interval_s"] for r in included)
@@ -769,6 +797,7 @@ def _energy_block(runs: list[dict]) -> tuple[dict | None, str]:
         "tokens_source": "usage",
         "runs_included": len(included),
         "runs_excluded_thermal": len(throttled),
+        "runs_excluded_short": len(short),
     }
     if ept:
         block["energy_per_token_j"] = round(median(ept), 4)

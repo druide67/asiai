@@ -31,8 +31,8 @@ description: Apple Silicon Mac 社区基准测试结果。按引擎、模型和�
   <th class="lb-sortable" data-col="median_ttft_ms">TTFT</th>
   <th>芯片 · RAM</th>
   <th>Quant</th>
-  <th class="lb-sortable" data-col="median_power_watts">GPU W</th>
-  <th class="lb-sortable" data-col="median_tok_s_per_watt">tok/s/W (GPU)</th>
+  <th class="lb-sortable lb-col-speed" data-col="median_power_watts">GPU W</th>
+  <th class="lb-sortable lb-col-speed" data-col="median_tok_s_per_watt">tok/s/W (GPU)</th>
   <th class="lb-sortable lb-col-energy" data-col="median_soc_watts">SoC W</th>
   <th class="lb-sortable lb-col-energy" data-col="median_energy_per_token_j">J/tok</th>
   <th class="lb-sortable lb-col-energy" data-col="median_energy_per_token_active_j">J/tok 活跃</th>

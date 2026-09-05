@@ -82,7 +82,7 @@ interpretable across repeated identical runs, which only standard mode produces.
 ## Metrics generation (1.11.0)
 
 The 1.11.0 audit overhaul changed several formulas; the metrics generation is
-tracked by `metrics_version = 3` (standard/leaderboard DB) and
+tracked by `metrics_version = 4` (standard/leaderboard DB) and
 `SCHEMA_VERSION = agentic-v5` (agentic JSON). Points from different schema versions must never be aggregated
 with older v2/v1 points — the definitions differ:
 

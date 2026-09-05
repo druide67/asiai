@@ -878,3 +878,16 @@ def test_mlxvlm_adapter_is_wired():
     from asiai.engines.mlxvlm import MlxVlmEngine
 
     assert _engine_classes()["mlxvlm"] is MlxVlmEngine
+
+
+def test_fail_on_gate_accepts_a_gate_the_result_emits_on_a_non_agentic_bench():
+    """`--fail-on-gate fluency_judge` on a language bench used to exit 2 as
+    "no such gate": the documented list only knew standard and agentic
+    (2026-09-05 review). A name the result actually emits is valid."""
+    import argparse
+
+    from asiai.cli import _gate_exit_code
+    from tests.test_result_model import _language_payload
+
+    args = argparse.Namespace(export=None, fail_on_gate="fluency_judge")
+    assert _gate_exit_code(args, "language", _language_payload()) == 0

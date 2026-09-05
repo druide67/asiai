@@ -157,7 +157,7 @@ leaderboard medianises per-session values of the same `base` and `window`.
 after the warmup and before the first timed run: 3 s settle, then 5 samples × 2 s, median.
 
 **Invalid (→ absent, the raw M10 stays)** when the sample CV exceeds 10 %, the 1-minute CPU
-load exceeds `cores / 2`, the machine is throttled, or a required rail is missing.
+load exceeds 2.0 (two busy cores, whatever the core count), the machine is throttled, or a required rail is missing.
 
 `energy_per_token_active_j = (soc_joules − idle_soc_watts × interval_s) / (completion_tokens − 1)`
 is published next to M10 when the subtraction stays positive. It answers "what did *this

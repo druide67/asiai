@@ -63,11 +63,27 @@ def test_energy_columns_are_view_scoped(page: Path):
         th = re.search(rf'<th class="([^"]*)" data-col="{col}"', text)
         assert th, f"{page.name}: {col} header missing"
         assert "lb-col-energy" in th.group(1), f"{page.name}: {col} not view-scoped"
-    # Legacy GPU headers are never energy-scoped and always say GPU.
+    # Legacy GPU headers are speed-scoped (hidden with their cells in the
+    # energy view — a header without the class stayed visible while its cells
+    # vanished, shifting every value two columns left; 2026-09-05 review),
+    # never energy-scoped, and always say GPU.
     for col in ("median_power_watts", "median_tok_s_per_watt"):
         th = re.search(rf'<th class="([^"]*)" data-col="{col}">([^<]*)</th>', text)
         assert th and "lb-col-energy" not in th.group(1)
+        assert "lb-col-speed" in th.group(1), f"{page.name}: {col} header not speed-scoped"
         assert "GPU" in th.group(2), f"{page.name}: {col} label must name the GPU rail"
+
+
+def test_header_and_cell_view_classes_match_the_script():
+    """Every column the script scopes to a view has a header carrying that class."""
+    js = (DOCS / "assets" / "js" / "leaderboard.js").read_text()
+    view_cols = dict(re.findall(r'^\s*(median_[a-z_]+): "(speed|energy)"', js, re.M))
+    assert view_cols, "VIEW_COLS not found in leaderboard.js"
+    text = REFERENCE.read_text()
+    for col, view in view_cols.items():
+        th = re.search(rf'<th class="([^"]*)" data-col="{col}"', text)
+        assert th, f"header for {col} missing"
+        assert f"lb-col-{view}" in th.group(1), f"{col}: header lacks lb-col-{view}"
 
 
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)

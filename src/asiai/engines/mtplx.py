@@ -35,8 +35,11 @@ class MtplxEngine(OpenAICompatEngine):
         which identifies the process. ``brew list`` only reports the keg —
         on 2026-08-29 a benchmark campaign exported the keg version for a
         cell that served a different venv, making the archived results
-        misidentify what was measured. Keg fallback is kept but explicitly
-        marked as such so it can never be mistaken for a served version.
+        misidentify what was measured. The keg fallback is kept, returns the
+        bare version (the field is parsed as a version by the DB, the
+        leaderboard grouping and the cards — prose there split one version
+        into two groups, 2026-09-05 review) and logs that it is unverified;
+        proving identity stays with the bench protocol, not with this string.
         """
         import re
 
@@ -61,7 +64,12 @@ class MtplxEngine(OpenAICompatEngine):
             if out:
                 parts = out.split()
                 if len(parts) >= 2:
-                    return parts[-1] + " (keg, unverified against process)"
+                    logger.warning(
+                        "MTPLX version %s read from the Homebrew keg, not from the "
+                        "serving process (/health has no mlx_runtime.path)",
+                        parts[-1],
+                    )
+                    return parts[-1]
         except Exception:
             pass
         return ""

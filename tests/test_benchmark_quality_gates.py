@@ -1069,3 +1069,34 @@ def test_loaded_idle_thermal_engaged_returns_none():
     out = measure_loaded_idle(s, samples=5, sleep=_noop_sleep, thermal_speed_limit=50)
     assert out["soc_watts"] is None
     assert "thermal" in out["reason"]
+
+
+class _CountingSleep:
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self, _s):
+        self.calls += 1
+
+
+def test_loaded_idle_refuses_before_waiting_when_machine_is_loaded():
+    """Conditions known at entry are checked before the 13 s window."""
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([10.0] * 6)
+    sleep = _CountingSleep()
+    out = measure_loaded_idle(s, samples=5, sleep=sleep, cpu_load_1=3.0, cpu_cores=16)
+    assert out["soc_watts"] is None
+    assert "CPU load" in out["reason"]
+    assert sleep.calls == 0
+
+
+def test_loaded_idle_refuses_before_waiting_when_throttled():
+    from asiai.benchmark.quality_gates import measure_loaded_idle
+
+    s = _IdleSampler([10.0] * 6)
+    sleep = _CountingSleep()
+    out = measure_loaded_idle(s, samples=5, sleep=sleep, thermal_speed_limit=80)
+    assert out["soc_watts"] is None
+    assert "thermal" in out["reason"]
+    assert sleep.calls == 0

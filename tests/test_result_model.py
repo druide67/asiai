@@ -623,7 +623,10 @@ def test_energy_gates_pass_when_block_present():
 def test_energy_provenance_gate_fails_on_refusal():
     from asiai.benchmark.result_model import build_result
 
-    eng = {"median_tok_s": 40.0, "energy_refused": "required IOReport rail missing on a run"}
+    eng = {
+        "median_tok_s": 40.0,
+        "energy_refused": "provenance: required IOReport rail missing on a run",
+    }
     r = build_result("standard", _std_payload({"mtplx": eng}))
     g = {x.name: x for x in r.gates}
     assert g["energy_provenance"].passed is False
@@ -633,7 +636,10 @@ def test_energy_provenance_gate_fails_on_refusal():
 def test_energy_thermal_gate_fails_when_all_runs_throttled():
     from asiai.benchmark.result_model import build_result
 
-    eng = {"median_tok_s": 40.0, "energy_refused": "all 3 measured run(s) thermally throttled"}
+    eng = {
+        "median_tok_s": 40.0,
+        "energy_refused": "thermal: all 3 measured run(s) thermally throttled",
+    }
     r = build_result("standard", _std_payload({"mtplx": eng}))
     g = {x.name: x for x in r.gates}
     assert g["energy_thermal"].passed is False
@@ -683,11 +689,11 @@ def test_every_standard_gate_name_is_buildable_and_can_fail(name):
             "engines": {
                 "mtplx": {
                     "median_tok_s": 40.0,
-                    "energy_refused": "all 1 measured run(s) thermally throttled",
+                    "energy_refused": "thermal: all 1 measured run(s) thermally throttled",
                 },
                 "llamacpp": {
                     "median_tok_s": 30.0,
-                    "energy_refused": "required IOReport rail missing on a run",
+                    "energy_refused": "provenance: required IOReport rail missing on a run",
                 },
             },
         },
@@ -705,3 +711,44 @@ def test_every_standard_gate_name_is_buildable_and_can_fail(name):
     g = {x.name: x for x in r.gates}
     assert name in g, f"{name} is documented but build_result never emits it"
     assert g[name].passed is False, f"{name} did not FAIL on a payload built to fail it"
+
+
+def test_energy_provenance_passes_when_engine_reports_no_token_usage():
+    """Not measurable is not a fault: no gate fails for an engine without `usage`."""
+    p = _standard_payload()
+    p["benchmark"]["engines"]["llamacpp"]["energy_refused"] = (
+        "not_applicable: token count is an estimate (tokens_source != usage)"
+    )
+    g = {x.name: x for x in build_result("standard", p).gates}
+    assert g["energy_provenance"].passed is True
+    assert "without token usage" in g["energy_provenance"].detail
+    assert g["energy_thermal"].passed is True
+
+
+def test_documented_gates_cover_every_literal_gate_the_adapters_emit():
+    """DOCUMENTED_GATES must name every Gate("literal") its adapter emits, and
+    nothing else — the two lists used to be maintained by hand and drifted
+    (2026-09-05 review: --fail-on-gate fluency_judge refused as a typo)."""
+    import inspect
+    import re
+
+    from asiai.benchmark import result_model
+
+    src = inspect.getsource(result_model)
+    for bench_type, fn in (
+        ("standard", "from_standard"),
+        ("agentic", "from_agentic"),
+        ("language", "from_language"),
+    ):
+        start = src.index(f"def {fn}(")
+        end = src.find("\ndef ", start + 1)
+        body = src[start:end]
+        emitted = set(re.findall(r'Gate\(\s*"([a-z_]+)"', body))
+        assert emitted, f"{fn} emits no literal gate?"
+        documented = DOCUMENTED_GATES[bench_type]
+        assert emitted <= documented, (
+            f"{bench_type}: emitted but undocumented: {sorted(emitted - documented)}"
+        )
+        assert documented <= emitted, (
+            f"{bench_type}: documented but never emitted: {sorted(documented - emitted)}"
+        )

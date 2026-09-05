@@ -288,3 +288,13 @@ def test_efficiency_unmeasured_group_ranks_below_measured_ones():
 def test_efficiency_without_any_energy_falls_back_to_throughput():
     rows = _MOCK_ROWS  # no energy_per_token_j anywhere
     assert _ranked(rows, "efficiency") == _ranked(rows, "throughput")
+
+
+def test_efficiency_ignores_energy_from_metrics_version_3_rows():
+    """v3 stored an engine-window J/token (all tokens, estimates allowed,
+    throttled runs included); v4 a per-run usage-only one. Never pooled."""
+    v3_rows = [dict(r, metrics_version=3) for r in _SLOWER_BUT_FRUGAL]  # frugal, but v3
+    rows = _FAST_BUT_HUNGRY + v3_rows
+    # With the v3 energy ignored, the only measured group is the hungry one,
+    # which therefore ranks first; the v3 group is "unmeasured", below it.
+    assert _ranked(rows, "efficiency")[0] == "mtplx"

@@ -31,8 +31,8 @@ description: Résultats de benchmark communautaires sur les Mac Apple Silicon. C
   <th class="lb-sortable" data-col="median_ttft_ms">TTFT</th>
   <th>Puce · RAM</th>
   <th>Quant</th>
-  <th class="lb-sortable" data-col="median_power_watts">W GPU</th>
-  <th class="lb-sortable" data-col="median_tok_s_per_watt">tok/s/W (GPU)</th>
+  <th class="lb-sortable lb-col-speed" data-col="median_power_watts">W GPU</th>
+  <th class="lb-sortable lb-col-speed" data-col="median_tok_s_per_watt">tok/s/W (GPU)</th>
   <th class="lb-sortable lb-col-energy" data-col="median_soc_watts">W SoC</th>
   <th class="lb-sortable lb-col-energy" data-col="median_energy_per_token_j">J/tok</th>
   <th class="lb-sortable lb-col-energy" data-col="median_energy_per_token_active_j">J/tok actif</th>

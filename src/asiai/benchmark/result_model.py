@@ -350,15 +350,29 @@ def from_standard(payload: dict) -> BenchResult:
     # not a failure, it is an absence. A refusal splits in two so --fail-on-gate
     # can name the cause: thermal (the machine) vs provenance (the instrument).
     if energy_refusals or energy_ok:
-        thermal_refusals = [r for r in energy_refusals if "thermally throttled" in r]
-        provenance_refusals = [r for r in energy_refusals if r not in thermal_refusals]
+        # Refusals carry their kind as a prefix set by reporter._energy_block:
+        # "thermal:" → energy_thermal, "provenance:" → energy_provenance,
+        # "not_applicable:" (engine reports no usage → no J/token can exist) →
+        # no gate fails: not measurable is not a fault. Unprefixed reasons are
+        # treated as provenance (fail-closed).
+        def _kind(r: str) -> str:
+            reason = r.split(": ", 1)[1] if ": " in r else r
+            for k in ("thermal", "provenance", "not_applicable"):
+                if reason.startswith(k + ":"):
+                    return k
+            return "provenance"
+
+        thermal_refusals = [r for r in energy_refusals if _kind(r) == "thermal"]
+        provenance_refusals = [r for r in energy_refusals if _kind(r) == "provenance"]
+        not_applicable = [r for r in energy_refusals if _kind(r) == "not_applicable"]
         gates.append(
             Gate(
                 "energy_provenance",
                 not provenance_refusals,
                 "; ".join(provenance_refusals)
                 if provenance_refusals
-                else f"{len(energy_ok)} slot(s)",
+                else f"{len(energy_ok)} slot(s)"
+                + (f", {len(not_applicable)} without token usage" if not_applicable else ""),
             )
         )
         gates.append(
@@ -1032,6 +1046,10 @@ _ADAPTERS = {
 # code; a list in a shell script can.
 DOCUMENTED_GATES: dict[str, frozenset[str]] = {
     "standard": frozenset({"thermal", "memory_pressure", "energy_provenance", "energy_thermal"}),
+    "language": frozenset({"dataset_coverage", "fluency_judge"}),
+    # burst and code name their gates from the data (`{suite}_judge`,
+    # `no errors @{size}`); instruct and thinking-ablation emit none. For those
+    # the CLI accepts any name the result actually emitted.
     "agentic": frozenset(
         {
             "early_stop",

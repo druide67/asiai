@@ -2018,3 +2018,106 @@ class TestExportEnergyBlock:
         blk = self._export(runs)["energy"]
         assert blk["idle"] == {"kind": "loaded", "soc_watts": 2.0}
         assert blk["energy_per_token_active_j"] == 0.16
+
+
+class TestEnergySlicesAfterErrors:
+    """Pairing a slice with its result must survive a run that produced none.
+
+    2026-09-05 review: the pairing was reconstructed from the slice count, so
+    one errored run (slice consumed, no result) shifted it for the rest of the
+    engine and every later run silently lost its J/token.
+    """
+
+    def test_errored_run_does_not_desync_later_slices(self):
+        from asiai.engines.base import GenerateResult
+
+        sampler = _SliceSampler()
+        engine = _mock_engine(generate_result=_gen())
+        # warmup + 3 measured runs; the second measured run errors
+        engine.generate.side_effect = [_gen(), _gen(), GenerateResult(error="boom"), _gen()]
+        ps = _energy_patches()
+        with (
+            ps[0],
+            ps[1],
+            ps[2],
+            ps[3],
+            ps[4],
+            ps[5],
+            ps[6],
+            ps[7],
+            patch("asiai.collectors.ioreport.IOReportSampler", return_value=sampler),
+        ):
+            run = run_benchmark([engine], "test-model", ["code"], runs=3)
+        assert len(run.results) == 2  # the errored run appended nothing
+        for r in run.results:
+            assert r["run_energy_joules"] == 20.0, r.get("run_energy_joules")
+            assert r["energy_per_token_j"] == 0.2
+
+    def test_missing_required_rail_marks_the_run_refused_not_silent(self):
+        class _NoDcs(_SliceSampler):
+            def sample(self):
+                self.calls += 1
+                return _IORReading(
+                    gpu_watts=8.0,
+                    cpu_watts=2.0,
+                    gpu_joules=16.0,
+                    cpu_joules=4.0,
+                    interval_s=2.0,
+                    rails_present=frozenset({"gpu", "cpu", "ane", "dram"}),
+                )
+
+        sampler = _NoDcs()
+        ps = _energy_patches()
+        with (
+            ps[0],
+            ps[1],
+            ps[2],
+            ps[3],
+            ps[4],
+            ps[5],
+            ps[6],
+            ps[7],
+            patch("asiai.collectors.ioreport.IOReportSampler", return_value=sampler),
+        ):
+            run = run_benchmark(
+                [_mock_engine(generate_result=_gen())], "test-model", ["code"], runs=2
+            )
+        for r in run.results:
+            assert "run_energy_joules" not in r
+            assert r["energy_refused_run"] == "required IOReport rail missing"
+            assert "dcs" not in r["energy_rails"]
+        # and the export refuses WITH the reason — not "nothing measured"
+        from asiai.benchmark.reporter import build_export_payload
+
+        results = run.results
+        eng = build_export_payload(results, aggregate_results(results))["benchmark"]["engines"]
+        e = next(iter(eng.values()))
+        assert "energy" not in e
+        assert e["energy_refused"].startswith("provenance:")
+
+
+class TestEnergyBlockExclusions:
+    def _export(self, runs):
+        from asiai.benchmark.reporter import build_export_payload
+
+        return build_export_payload(runs, aggregate_results(runs))["benchmark"]["engines"]["mtplx"]
+
+    def test_short_window_run_is_excluded_not_refused(self):
+        short = _energy_run(1, joules=5.0, ept=0.05)
+        short["interval_s"] = 0.5
+        e = self._export([_energy_run(0), short, _energy_run(2)])
+        blk = e["energy"]
+        assert blk["runs_included"] == 2
+        assert blk["runs_excluded_short"] == 1
+        assert blk["energy_per_token_j"] == 0.2  # the short run did not dilute it
+
+    def test_estimated_tokens_is_not_applicable(self):
+        e = self._export([_energy_run(0, source="chunks")])
+        assert "energy" not in e
+        assert e["energy_refused"].startswith("not_applicable:")
+
+    def test_refusal_kinds_are_prefixed(self):
+        e = self._export([_energy_run(0), _energy_run(1, rails=["cpu", "dcs", "dram"])])
+        assert e["energy_refused"].startswith("provenance:")
+        e = self._export([_energy_run(0, thermal=50)])
+        assert e["energy_refused"].startswith("thermal:")

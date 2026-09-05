@@ -439,14 +439,15 @@ def _aggregate_size(
         if soc_watts and throughput_tokens_per_s
         else None
     )
-    # (n-1) intervals, like agentic (agentic.py): the energy of a decode is
-    # spent BETWEEN tokens. Standard, agentic and burst used three different
-    # denominators under one key until 2026-09-02; they must converge or the
-    # modes can never be compared.
+    # Decode intervals, like agentic (agentic.py): the energy of a decode is
+    # spent BETWEEN tokens, so each of the N concurrent calls contributes
+    # (its tokens − 1) intervals — total − N, not total − 1 (the first cut
+    # flattered burst by up to N/total, 2026-09-05 review). Standard, agentic
+    # and burst used three different denominators under one key until
+    # 2026-09-02; they must converge or the modes can never be compared.
+    intervals = total_tokens - len(ok_results)
     energy_per_token_j = (
-        round(energy_joules / (total_tokens - 1), 4)
-        if energy_joules and total_tokens and total_tokens > 1
-        else None
+        round(energy_joules / intervals, 4) if energy_joules and intervals > 0 else None
     )
     valid_pct = output_valid_pct([r.output_valid for r in ok_results]) if ok_results else None
 
