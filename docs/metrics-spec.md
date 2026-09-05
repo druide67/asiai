@@ -170,11 +170,11 @@ a **new base** (e.g. `soc7` = `soc5` + `AMCC` + `FAB`), never a silent redefinit
 leaderboard exposes the distinct bases behind a group (`energy_bases`) and the number of
 contributing sessions (`energy_samples`).
 
-### M13. `wall_calibration` — Wall-meter Calibration (optional)
+### M13. `wall_calibration` — Wall-meter Calibration (planned, not yet implemented)
 
-An affine model `wall = a + b · soc_watts` fitted once per machine against a wall meter
-(`asiai calibrate wall`), stored locally and declared with the submission (`a`, `b`, `R²`,
-`n`, meter, file hash). It **never** enters M9–M11: the leaderboard publishes SoC figures,
+An affine model `wall = a + b · soc_watts` fitted once per machine against a wall meter,
+stored locally and declared with the submission (`a`, `b`, `R²`, `n`, meter, file hash).
+No release ships it yet; the field is reserved so the payload shape is known. It **never** enters M9–M11: the leaderboard publishes SoC figures,
 the calibration is a declared, contestable factor a reader may apply. Without it, no claim
 in € or in battery % is made.
 

@@ -48,7 +48,7 @@ description: Community benchmark results across Apple Silicon Macs. Compare tok/
 </div>
 
 <div class="lb-legend" markdown>
-<p><strong>Energy columns.</strong> <em>SoC W</em> is the mean package power — GPU, CPU, Neural Engine, DRAM and memory controllers — read from Apple's IOReport energy counters while this engine ran its measured prompts (warmup excluded). <em>J/tok</em> is that energy divided by the tokens generated over the same window; it includes prompt processing and excludes the display, storage, fans and power-supply losses, so it is a lower bound on what a wall meter reads. <em>J/tok active</em> subtracts the engine's loaded idle power (<em>Idle W</em>, measured with the model resident and no request in flight). <em>GPU W</em> is the GPU rail alone, kept for continuity; GPU and SoC figures are never averaged together. A dash means no measurement was submitted — never a zero.</p>
+<p><strong>Energy columns.</strong> <em>SoC W</em>: package power (GPU, CPU, Neural Engine, DRAM, memory controllers) from Apple's IOReport counters during the measured prompts. <em>J/tok</em>: that energy per generated token, prompt processing included — a lower bound on what a wall meter reads. <em>J/tok active</em>: minus the engine's loaded idle (<em>Idle W</em>). <em>GPU W</em>: the GPU rail alone, legacy. A dash means not measured — never a zero. Details: <a href="../metrics-spec/#m9-soc_watts-soc-package-power">metrics spec M9–M12</a>.</p>
 </div>
 
 <div class="lb-footer">

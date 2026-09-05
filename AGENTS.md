@@ -98,8 +98,7 @@ ruff format src/ tests/
 
 Changing a scored turn changes what published numbers mean. Every addition or edit
 goes through the three validities of the [Agentic Benchmark Checklist](https://uiuc-kang-lab.github.io/agentic-benchmarks/)
-([paper](https://arxiv.org/pdf/2507.02825)) — applied to ten well-known agentic
-benchmarks, it found outcome-validity flaws in seven and task-validity flaws in seven.
+([paper](https://arxiv.org/pdf/2507.02825)).
 
 - **Task validity**: a task is solvable *if and only if* the agent has the target
   capability. Count the objects the turn asks to modify against the tool schema's
