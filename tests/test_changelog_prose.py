@@ -17,11 +17,16 @@ NARRATIVE = re.compile(
 DATE = re.compile(r"\b20\d\d-\d\d-\d\d\b")
 
 
+CURED_DOWN_TO = "1.31.0"  # sections from Unreleased down to this version are held to the rule
+
+
 def _unreleased_bullets() -> list[str]:
     text = CHANGELOG.read_text()
-    m = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[)", text, re.M | re.S)
-    assert m, "no [Unreleased] section"
-    return [b.strip() for b in re.findall(r"(?ms)^- (.*?)(?=^- |^### |\Z)", m.group(1))]
+    end = text.index(f"## [{CURED_DOWN_TO}]")
+    end = text.find("\n## [", end + 1)
+    head = text[: end if end > 0 else len(text)]
+    assert "## [Unreleased]" in head
+    return [b.strip() for b in re.findall(r"(?ms)^- (.*?)(?=^- |^### |^## |\Z)", head)]
 
 
 def test_unreleased_bullets_are_short():

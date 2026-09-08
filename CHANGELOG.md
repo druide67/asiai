@@ -44,194 +44,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **`--fail-on-gate`: a failed quality gate can now stop the run.** asiai has
-  always computed its gates and always exited 0, so a scripted caller could
-  publish a number the tool itself knew was invalid — a run whose responses
-  were all empty reported a decode figure and a clean exit. The bare flag
-  enforces every gate; a comma-separated subset enforces only those
-  (`--fail-on-gate output_validity,thinking`), which matters on a laptop, where
-  sustained generation throttles whatever the operator does and a blanket rule
-  would push people back to ignoring gates entirely. Exits 2, distinct from 1
-  (failed export), so a caller can tell a missing artifact from an untrustworthy
-  one. Enforcement is opt-in; failed gates now print either way.
-- **Every gate is now reported.** `output_validity`, `thermal`, `thinking` and
-  `other_engines_resident` were computed and stored but never surfaced where a
-  reader looks: the agentic terminal output hand-rolled three of them, and the
-  last two never became gates at all. All seven now flow through one path.
-- **`context_depth` in the agentic payload and report** — median, min, max and
-  spread of prompt tokens. Decode throughput is a function of depth, so a tok/s
-  figure without the depth it was measured at cannot be compared with anything;
-  the spread tells a reader whether two engines were asked the same question or
-  merely tokenized it differently.
-- **`thinking.status` / `thinking.comparable`** — four explicit regimes
-  (`off_honoured`, `off_ignored`, `unrequested`, `absent`) replacing a single
-  `honoured` flag that was vacuously true whenever nothing had been requested:
-  a caller who never asked for thinking-off got a green light computed from no
-  measurement. A run that spends its token budget reasoning is not measuring the
-  same thing as a run that answers, so `unrequested` is not comparable even
-  though nothing malfunctioned. `honoured` is kept for schema compatibility.
-
-### Fixed
-
-- **Shell wrappers are no longer counted as duplicate engines.** The process
-  gates matched the whole command line, so a harness that launches engines from
-  a script whose own argv names the engine binary (`zsh run.sh … llama-server
-  --model …`) was reported as a duplicate of the engine it had just started.
-  `argv[0]` is now checked, and shells are excluded; interpreter launches
-  (MTPLX runs as `python -m mtplx.server.openai`) stay eligible.
-
-- **A delegated runtime is no longer a rival engine.** Ollama and LM Studio
-  both hand generation to a `llama-server` child, which the solo-residency gate
-  reported as a foreign engine — accusing the measured engine of competing with
-  itself, and under `--fail-on-gate` discarding an otherwise valid run. A match
-  whose parent chain reaches the engine under test is now tolerated; a
-  `llama-server` started independently still descends from launchd, so it is
-  still reported.
-
-- **An engine is identified by every name it runs under.** LM Studio runs
-  headless as `llmster`, with no `.app` process, so matching the app name alone
-  left it unidentifiable in that mode — and a parent-chain tolerance is only as
-  good as the identity it starts from. Pattern values may now be a tuple of
-  alternatives.
-
-- **A helper of the same server is no longer a duplicate.** LM Studio's daemon
-  spawns a node helper whose *inline script text* contains `llmster`, so the
-  pattern matched twice on a single running server. What makes a duplicate
-  harmful is two servers competing for the GPU; two processes of one server tree
-  do not, so a match descending from another match is no longer counted.
-
-- **Context depth is reported per phase group.** The agentic protocol mixes
-  ~7.5K and ~56K prompts, so a single spread across all phases read as several
-  hundred percent — arithmetically right, and useless: it measured the
-  protocol's own design instead of whether two engines got the same question.
-
-- **`--code` stress suite: large-payload cell** — two turns that demand volume
-  (a complete 60+ line HTML page with style and script blocks in one
-  `write_file`, then four multi-line `edit_file` replacements), plus a per-turn
-  `max_tokens` override so a turn that asks for a large file gets a budget to
-  match. asiai already streams tool calls, so volume was the one dimension the
-  suite never exercised — and reported tool-call corruptions on Qwen3.6 servers
-  are specific to large or heavily-escaped arguments.
-- **`content_head` on turns that emit no tool call** — the first 200 characters
-  of the text channel are recorded, which distinguishes a model that narrated
-  instead of calling ("I need to use the edit_file tool…") from one that
-  returned nothing. The counters alone cannot tell the two apart.
+- **`--fail-on-gate`**: a failed quality gate can stop the run (exit 2, distinct from a failed export). Bare flag enforces every gate; a comma-separated subset enforces only those. Opt-in; failed gates are printed either way.
+- **Every gate is reported** through one path: `output_validity`, `thermal`, `thinking` and `other_engines_resident` were computed but not surfaced.
+- **`context_depth`** in the agentic payload and report: median, min, max and spread of prompt tokens, per phase group.
+- **`thinking.status` / `thinking.comparable`**: four regimes (`off_honoured`, `off_ignored`, `unrequested`, `absent`) replace a flag that was true when nothing had been requested. `honoured` kept for compatibility.
+- **`--code` stress suite: large-payload cell** (two volume turns with a per-turn `max_tokens` override) and **`content_head`** on turns that emit no tool call.
 
 ### Changed
 
-- **Dataset version bumped to `code-v2`.** The stress suite grew from 9 to 11
-  turns, and two of its published figures — `count_empty_object_bug` and
-  `edit_turns_empty_object_bug` — are RAW COUNTS, not ratios: they scale with
-  the number of opportunities, so the same engine scores differently under
-  `code-v1` and `code-v2` without having changed. The payload *shape* is
-  untouched, so `schema_version` stays `code-v1`; the workload is what moved,
-  which is precisely the distinction `dataset_version` exists for. The
-  dev-quality tables in the docs (9 locales) now state the dataset they were
-  measured on.
-- **`--thinking-ablation` keeps the 9-turn workload** via a dedicated
-  `ABLATION_TOOLCALL_TURNS`, which excludes any turn carrying a per-turn budget
-  override. The ablation isolates one variable — whether reasoning is enabled —
-  and a raised-budget turn breaks that isolation: with `enable_thinking=True`
-  the reasoning tokens are drawn from the *same* completion budget, so the
-  thinking-on arm would hit the ceiling earlier on a turn that must emit a
-  60-line document, and the run would measure budget pressure instead of
-  reasoning. Raising the ablation's own budget was the other option and was
-  rejected: it shifts its latency and token baselines, breaking comparability
-  with every ablation run recorded so far. Three tests guard both directions so
-  the exclusion cannot be forgotten when a turn is added.
+- **Dataset version `code-v2`**: the stress suite grew from 9 to 11 turns; raw-count figures are not comparable across dataset versions. `schema_version` stays `code-v1`. Docs tables state the dataset measured.
+- **`--thinking-ablation` keeps the 9-turn workload** (`ABLATION_TOOLCALL_TURNS`), excluding turns with a raised budget so the ablation isolates reasoning only.
 
 ### Fixed
 
-- **MCP extra pinned below the 2.x SDK.** `mcp` 2.0.0 removed
-  `mcp.server.fastmcp` (`FastMCP` became `mcp.server.MCPServer`), so a fresh
-  `pip install asiai[mcp]` broke the MCP server outright — every import in
-  `asiai.mcp` failed, and CI went red on `main` without a single line of our
-  code changing. The extra now requires `mcp>=1.12,<2` so installs are working
-  again; migrating to the 2.x API is a separate change.
-- **Large-payload turns no longer score as parser failures for lack of budget.**
-  The suite sent a flat 1024 `max_tokens` for every turn; a turn asking for a
-  large file ran out mid-argument, and the truncated call surfaced as invalid
-  JSON or as content leaking into the text channel — an artefact of the harness
-  that looks exactly like an engine defect. Measured on MTPLX 2.3.0: 81.8% JSON
-  validity at 1024 tokens versus 100% at 4096 on the same cell, with 5-7 KB
-  argument payloads intact.
+- **Shell wrappers are not duplicate engines**: `argv[0]` is checked; interpreter launches stay eligible.
+- **A delegated runtime is not a rival engine**: a `llama-server` child of Ollama or LM Studio is tolerated when its parent chain reaches the engine under test.
+- **Engines are matched by every name they run under** (LM Studio headless as `llmster`); a helper of the same server tree is not a duplicate.
+- **MCP extra pinned to `mcp>=1.12,<2`**: 2.0.0 removed `mcp.server.fastmcp`.
+- **Large-payload turns no longer score as parser failures**: the flat 1024-token budget truncated calls mid-argument.
 
 ## [1.32.0](https://github.com/druide67/asiai/compare/v1.31.0...v1.32.0) — 2026-07-25
 
 ### Changed
 
-- **Compare panel: growth-loop empty state** (#88): when this machine has
-  local run groups but none has a community counterpart, the "This
-  machine vs community" panel now says so and invites the user to be the
-  first — with a copyable `asiai bench --share` snippet and a note on
-  what a submission contains (chip, RAM, engine version, medians only).
-  The populated state gains per-engine sample counts under each median
-  and a neutral band for deltas under 2% (measurement noise, never a
-  win); a local engine with no counterpart keeps the loop in place of
-  its delta. The three pre-existing empty states (no local runs, no
-  local match, fetch failed) keep their distinct messages, and the
-  ADR 0002 matching rule is unchanged.
-- **Leaderboard table on the docs site** (#87): rank pills as a CSS
-  counter, top-3 podium, chip and RAM stacked in one cell (nine
-  locales), tok/s as the hero column over full-width bars, and a sticky
-  header — CSS only on the markdown-rendered table, light and dark. The
-  #1 accent on tok/s only applies while the table is actually sorted by
-  tok/s descending.
+- **Compare panel: growth-loop empty state** (#88) with a copyable `asiai bench --share` snippet; per-engine sample counts; a neutral band for deltas under 2 %.
+- **Leaderboard table on the docs site** (#87): rank pills, top-3 podium, chip and RAM in one cell, tok/s as hero column, sticky header; nine locales, light and dark.
 
 ### Fixed
 
-- **Compare panel: `community_matched` semantics.** The flag was true as
-  soon as the community had data for this chip and model, even on
-  engines this machine never ran — which rendered a "0 of N matched"
-  grid instead of the share band. It is now derived from the built rows.
-- **Compare panel: copy button on plain HTTP.** The Clipboard API needs
-  a secure context and the dashboard is served over HTTP on the mesh and
-  LAN, so the button did nothing there; it now falls back the same way
-  the Bench page does.
-- **`--code` tool-call suite: `empty_object_bug` no longer counts
-  wrong-tool calls.** The per-turn scorer judged every call's arguments
-  against the EXPECTED tool's schema, so a well-formed call to a
-  different tool (e.g. `search_code` where `edit_file` was expected)
-  raised the headline empty-object-bug count spuriously. The flag is now
-  specific to the expected tool's argument collapse; tool-choice misses
-  remain visible through `correct_tool` / `pct_correct_tool`.
-  Empty-object-bug counts from earlier reports may mix the two
-  categories when `pct_correct_tool` was below 100%.
+- **Compare panel `community_matched`** is derived from the built rows, not from chip/model availability.
+- **Compare panel copy button** falls back on plain HTTP (no Clipboard API without a secure context).
+- **`--code` `empty_object_bug` no longer counts wrong-tool calls**; tool-choice misses stay visible through `correct_tool`. Earlier reports may mix the two when `pct_correct_tool` was below 100 %.
 
 ## [1.31.0](https://github.com/druide67/asiai/compare/v1.30.0...v1.31.0) — 2026-07-18
 
 ### Added
 
-- **"This machine vs community" panel on the Leaderboard** (#82): local
-  medians (from this machine's benchmark history) next to community
-  medians per engine, with signed deltas and sample counts, for one
-  model over one window. Matching is strict on (chip, model, engine) —
-  quantization is part of the identity — per ADR 0002; a zero match
-  renders the local medians alone under an honest empty state. New
-  `GET /api/v1/leaderboard/compare` endpoint behind the same rate
-  limit, semaphore and cache discipline as the sibling community
-  proxies.
-- **Prefix-cache hits in code-suite results** (#80): `code_eval` reads
-  `usage.prompt_tokens_details.cached_tokens` (with the flat
-  `cached_tokens` fallback) per turn, so cache reuse on tool-call
-  sessions is measurable instead of invisible.
+- **"This machine vs community" panel** (#82): local vs community medians per engine, strict (chip, model, engine) matching per ADR 0002; new `GET /api/v1/leaderboard/compare`.
+- **Prefix-cache hits in code-suite results** (#80): `cached_tokens` read per turn.
 
 ### Changed
 
-- **Bench page craft pass from the design handoff** (#81): the mode
-  form's model picker is a grouped dropdown (loaded models, installed
-  models tagged "will load", inline free-text entry) driving the same
-  hidden form field; a failed run keeps its live log with the error
-  line, a frozen progress bar, a Retry button and a Doctor link; the
-  running state shows an eta; `extra_body` sits behind an "edit JSON
-  detail" reveal. Form field contract unchanged.
-- **Hardened release gates**: the release workflow now fails closed —
-  before anything is built or published — when the tag, `pyproject.toml`
-  and `__init__.py` versions disagree, or when `CHANGELOG.md` has no
-  entry for the version being tagged (two releases had shipped with the
-  changelog silently forgotten). The GitHub Release step is now
-  idempotent (re-running a release run no longer fails on an existing
-  release — the 2026-06-25 v1.14.1 incident class).
+- **Bench page craft pass** (#81): grouped model picker, failed-run state with log, Retry and Doctor link, eta, `extra_body` behind a reveal. Form contract unchanged.
+- **Hardened release gates**: the release workflow fails closed on version disagreement or a missing CHANGELOG entry; the GitHub Release step is idempotent.
 
 ## [1.30.0](https://github.com/druide67/asiai/compare/v1.29.0...v1.30.0) — 2026-07-16
 
