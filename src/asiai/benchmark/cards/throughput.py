@@ -241,10 +241,12 @@ def render(result: BenchResult) -> str:
         )
         color = ACCENT if is_leader and not no_winner else BAR_NEUTRAL
         value = f"{fmt_num(v)}"
-        if s.hero and s.hero.ci95:
-            value += f" ±{fmt_num(s.hero.ci95[1] - v)}"
         if invalid:
+            # No confidence interval on an invalid figure: it measures nothing
+            # and would push "invalid ✗" off the card.
             value += " · invalid ✗"
+        elif s.hero and s.hero.ci95:
+            value += f" ±{fmt_num(s.hero.ci95[1] - v)}"
         y = y0 + i * pitch
         p.append(
             bar_row(
@@ -312,14 +314,18 @@ def _engine_chip_rows(
             chips.append(f"p90 {fmt_num(m['p90_tok_s'].value)}")
         if m.get("vram_gb"):
             chips.append(f"{fmt_num(m['vram_gb'].value)} GB VRAM")
-        watts = m.get("avg_soc_watts") or m.get("avg_power_watts")
-        if watts:  # only when measured — never faked (spec §5)
-            power = f"{fmt_num(watts.value, 0)}W"
-            if m.get("avg_tok_s_per_soc_watt"):
-                power += f" · {fmt_num(m['avg_tok_s_per_soc_watt'].value)} tok/s/W"
-            if m.get("avg_energy_per_token_j"):
-                power += f" · {fmt_num(m['avg_energy_per_token_j'].value, 2)} J/tok"
+        # Power chip always names its rail (SoC vs GPU differ by ~3× on a
+        # memory-bound decode). Gated block > ungated SoC average > GPU rail.
+        soc = m.get("soc_watts") or m.get("avg_soc_watts")
+        gpu = m.get("avg_power_watts")
+        if soc:  # only when measured — never faked (spec §5)
+            power = f"{fmt_num(soc.value, 0)}W SoC"
+            ept = m.get("energy_per_token_j") or m.get("avg_energy_per_token_j")
+            if ept:
+                power += f" · {fmt_num(ept.value, 2)} J/tok"
             chips.append(power)
+        elif gpu:
+            chips.append(f"{fmt_num(gpu.value, 0)}W GPU")
         for label in chips:
             svg, w = chip(cx, y, label)
             p.append(svg)

@@ -133,6 +133,13 @@ def _pct(key: str, label: str, value: Any, *, n: int = 0, caveat: str = "") -> M
 _MODEL_NAME_SEPARATORS = "-_./@: "
 
 
+def _basename_if_path(name: str) -> str:
+    """A rooted filesystem path becomes its file name; a Hugging Face id
+    (``org/model``) is kept whole. Cards are published: no home directory on them.
+    """
+    return name.rsplit("/", 1)[-1] if name.startswith(("/", "~")) else name
+
+
 def display_model(models: list[str]) -> str:
     """One display name for a set of model names.
 
@@ -141,7 +148,7 @@ def display_model(models: list[str]) -> str:
     long enough to mean something — else the generic "N-model comparison".
     A fabricated family name would be worse than the generic label.
     """
-    distinct = sorted({m for m in models if m})
+    distinct = sorted({_basename_if_path(m) for m in models if m})
     if not distinct:
         return ""
     if len(distinct) == 1:
@@ -168,6 +175,8 @@ def from_standard(payload: dict) -> BenchResult:
     engines: dict[str, dict] = bench.get("engines") or {}
     subjects: list[Subject] = []
     quants: set[str] = set()
+    energy_refusals: list[str] = []
+    energy_ok: list[str] = []
     for name in sorted(engines):
         e = engines[name]
         runs_n = int(e.get("runs_count") or 0)
@@ -233,6 +242,29 @@ def from_standard(payload: dict) -> BenchResult:
         ):
             if _num(e.get(key)) is not None:
                 metrics.append(MetricValue(key, label, _num(e.get(key)), unit, direction=direction))
+        # The gated block (metrics_version 4) wins over the ungated avg_* when
+        # present: it excludes throttled runs and refuses estimated tokens.
+        energy = e.get("energy") or {}
+        if _num(energy.get("energy_per_token_j")) is not None:
+            metrics.append(
+                MetricValue(
+                    "energy_per_token_j",
+                    "energy per token",
+                    _num(energy["energy_per_token_j"]),
+                    "J",
+                    direction="lower",
+                )
+            )
+        if _num(energy.get("soc_watts")) is not None:
+            metrics.append(
+                MetricValue(
+                    "soc_watts", "SoC power", _num(energy["soc_watts"]), "W", direction="lower"
+                )
+            )
+        if e.get("energy_refused"):
+            energy_refusals.append(f"{name}: {e['energy_refused']}")
+        elif energy:
+            energy_ok.append(name)
         subjects.append(
             Subject(
                 label=name,
@@ -305,6 +337,40 @@ def from_standard(payload: dict) -> BenchResult:
     mp = qg.get("memory_pressure")
     if mp is not None:
         gates.append(Gate("memory_pressure", not mp.get("alerted"), _fmt(mp.get("alert_reason"))))
+    # Energy gates exist only when something was measured: "not measured" is
+    # not a failure, it is an absence. A refusal splits in two so --fail-on-gate
+    # can name the cause: thermal (the machine) vs provenance (the instrument).
+    if energy_refusals or energy_ok:
+        # Refusal kind (prefix from reporter._energy_block): thermal → energy_thermal,
+        # provenance → energy_provenance, not_applicable → no gate. Unprefixed =
+        # provenance (fail-closed).
+        def _kind(r: str) -> str:
+            reason = r.split(": ", 1)[1] if ": " in r else r
+            for k in ("thermal", "provenance", "not_applicable"):
+                if reason.startswith(k + ":"):
+                    return k
+            return "provenance"
+
+        thermal_refusals = [r for r in energy_refusals if _kind(r) == "thermal"]
+        provenance_refusals = [r for r in energy_refusals if _kind(r) == "provenance"]
+        not_applicable = [r for r in energy_refusals if _kind(r) == "not_applicable"]
+        gates.append(
+            Gate(
+                "energy_provenance",
+                not provenance_refusals,
+                "; ".join(provenance_refusals)
+                if provenance_refusals
+                else f"{len(energy_ok)} slot(s)"
+                + (f", {len(not_applicable)} without token usage" if not_applicable else ""),
+            )
+        )
+        gates.append(
+            Gate(
+                "energy_thermal",
+                not thermal_refusals,
+                "; ".join(thermal_refusals) if thermal_refusals else "no run excluded",
+            )
+        )
 
     model_display = str(bench.get("model") or "") or display_model(
         [s.model for s in subjects],
@@ -393,6 +459,21 @@ def from_agentic(payload: dict) -> BenchResult:
     if pct_valid is not None:
         min_pct = _num(validity.get("min_valid_pct")) or 0
         gates.append(Gate("output_validity", pct_valid >= min_pct, f"{pct_valid}% valid"))
+    sr = gates_block.get("session_replay") or {}
+    if sr:
+        # Every detection agentic.py computes must become a Gate here, or
+        # --fail-on-gate on its name enforces nothing.
+        n = len(sr.get("replay_runs") or [])
+        gates.append(Gate("session_replay", not sr.get("detected"), f"{n} replayed run(s)"))
+    bank = gates_block.get("bank_preload") or {}
+    if bank:
+        gates.append(
+            Gate(
+                "bank_preload",
+                not bank.get("detected"),
+                _fmt(bank.get("reason")),
+            )
+        )
     thermal = gates_block.get("thermal") or {}
     if thermal.get("observed"):
         gates.append(
@@ -402,10 +483,7 @@ def from_agentic(payload: dict) -> BenchResult:
                 f"min speed limit {thermal.get('min_speed_limit')}%",
             )
         )
-    # Both of these were computed and stored but never surfaced as gates, so a
-    # run whose engine spent its whole token budget reasoning — or one measured
-    # next to a second resident engine — reported clean everywhere a reader
-    # actually looks.
+    # Computed by agentic.py; surfaced as gates so a reader sees them.
     thinking = gates_block.get("thinking") or {}
     if thinking:
         status = thinking.get("status")
@@ -938,6 +1016,30 @@ _ADAPTERS = {
     "language": from_language,
     "instruct": from_instruct,
     "thinking-ablation": from_thinking_ablation,
+}
+
+
+# Gate names build_result() can emit, by bench type; --fail-on-gate refuses a
+# name outside it (a typo enforces nothing). Kept in sync by a structural test.
+DOCUMENTED_GATES: dict[str, frozenset[str]] = {
+    "standard": frozenset({"thermal", "memory_pressure", "energy_provenance", "energy_thermal"}),
+    "language": frozenset({"dataset_coverage", "fluency_judge"}),
+    # burst and code name their gates from the data (`{suite}_judge`,
+    # `no errors @{size}`); instruct and thinking-ablation emit none. For those
+    # the CLI accepts any name the result actually emitted.
+    "agentic": frozenset(
+        {
+            "early_stop",
+            "memory_pressure",
+            "duplicate_processes",
+            "output_validity",
+            "session_replay",
+            "bank_preload",
+            "thermal",
+            "thinking",
+            "other_engines_resident",
+        }
+    ),
 }
 
 

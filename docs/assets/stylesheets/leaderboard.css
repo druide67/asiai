@@ -419,3 +419,48 @@ body:has(#leaderboard-app) .md-main__inner.md-grid {
     margin-right: 8px;
   }
 }
+
+/* ---- Two views, one table (speed = legacy GPU rail, energy = SoC block) ---- */
+.lb-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.lb-view-btn {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.85rem;
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  border: 0;
+  cursor: pointer;
+}
+.lb-view-btn + .lb-view-btn {
+  border-left: 1px solid var(--md-default-fg-color--lightest);
+}
+.lb-view-btn:hover { color: var(--md-default-fg-color); }
+.lb-view-btn.lb-view-active {
+  background: var(--md-accent-fg-color);
+  color: var(--md-accent-bg-color);
+}
+/* Before the script runs, the table shows the speed view. */
+.lb-table .lb-col-energy { display: none; }
+.lb-table.lb-view-energy .lb-col-energy { display: table-cell; }
+.lb-table.lb-view-energy .lb-col-speed { display: none; }
+
+/* Provenance dot on a gated SoC value: hover for sample count and rail base. */
+.lb-prov {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 0.35rem;
+  border-radius: 50%;
+  background: var(--md-accent-fg-color);
+  vertical-align: middle;
+  opacity: 0.75;
+}
+.lb-legend {
+  font-size: 0.8rem;
+  color: var(--md-default-fg-color--light);
+  margin-top: 0.75rem;
+}

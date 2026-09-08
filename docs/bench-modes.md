@@ -82,15 +82,15 @@ interpretable across repeated identical runs, which only standard mode produces.
 ## Metrics generation (1.11.0)
 
 The 1.11.0 audit overhaul changed several formulas; the metrics generation is
-tracked by `metrics_version = 3` (standard/leaderboard DB) and
-`SCHEMA_VERSION = agentic-v3` (agentic JSON). v3 points must never be aggregated
+tracked by `metrics_version = 4` (standard/leaderboard DB) and
+`SCHEMA_VERSION = agentic-v5` (agentic JSON). Points from different schema versions must never be aggregated
 with older v2/v1 points — the definitions differ:
 
 - **Power headline is SoC, not GPU.** `soc_watts = gpu + cpu + ane + dram + dcs`
-  (the DRAM-controller rail). On unified memory a decode is memory-bound, so
-  GPU-only badly undercounts (measured idle on M5: GPU 0.07 W vs SoC 21.8 W).
+  (the DRAM-controller rail). On unified memory a decode is memory-bound and the
+  GPU rail alone badly undercounts it (~3 % of package power at loaded idle).
   `gpu_watts` is kept as a diagnostic; the efficiency headline is
-  `tok_s_per_soc_watt` (≈ tokens/Joule) with `energy_per_token_j`.
+  `energy_per_token_j` (see [metrics-spec M10](metrics-spec.md)).
 - **Power is decode-scoped** in agentic/burst: the window is rebaselined at
   first-token so watts/energy pair with `decode_tok_s`; prefill is captured
   separately as `prefill_watts`.

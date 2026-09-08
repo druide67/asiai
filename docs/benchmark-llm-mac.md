@@ -59,8 +59,8 @@ That's it. asiai auto-detects the best model across your engines and runs a cros
 |--------|--------------|
 | **tok/s** | Tokens generated per second (generation only, excludes prompt processing) |
 | **TTFT** | Time to First Token — latency before generation starts |
-| **Power** | GPU + CPU watts during inference (via IOReport, no sudo needed) |
-| **tok/s/W** | Energy efficiency — tokens per second per watt |
+| **Power** | GPU-rail watts (legacy) and SoC package watts — GPU + CPU + ANE + DRAM + DRAM controller — during inference (IOReport, no sudo needed) |
+| **tok/s/W** | Legacy efficiency on the GPU rail; the SoC headline is **J/tok** (joules per generated token, lower is better) |
 | **VRAM** | Memory used by the model (native API or estimated via `ri_phys_footprint`) |
 | **Stability** | Run-to-run variance: stable (<5% CV), variable (<10%), unstable (>10%) |
 | **Thermal** | Whether your Mac throttled during the benchmark |

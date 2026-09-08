@@ -17,13 +17,31 @@ from asiai.benchmark.cards._frame import (
     fmt_num,
     gates_row,
     metric_map,
+    mono_w,
     rrect,
     text,
     wrap_text,
 )
 from asiai.benchmark.result_model import BenchResult
 
-_PHASE_ORDER = ("cold", "prefix_warm", "warm")
+# Reading order, not measurement order: the phases someone actually decides on
+# come first. "cold" is the number you pay once, "warm" the one you live with,
+# "long-context" the one that says whether the model still works at depth.
+_PHASE_ORDER = ("cold", "warm", "cold-prefix", "prefix_warm", "long-context", "long-prefix")
+
+# Phase labels are internal names; these are what they mean to a reader.
+_PHASE_LABEL = {
+    "cold": "first call",
+    "warm": "warm",
+    "cold-prefix": "cold + prefix",
+    "long-context": "long context",
+    "long-prefix": "long + prefix",
+}
+
+
+def _thousands(n: float) -> str:
+    """5839 -> '5.8k'. Context depths are read as magnitudes, not as exact counts."""
+    return f"{n / 1000:.0f}k" if n >= 9500 else f"{n / 1000:.1f}k"
 
 
 def render(result: BenchResult) -> str:
@@ -43,6 +61,12 @@ def render(result: BenchResult) -> str:
         model_chips.append(
             (f"{subject.engine} {ver.value}" if ver and ver.value else subject.engine, "neutral")
         )
+    # Speculative decoding moves the headline by tens of percent: it is declared
+    # next to the engine name, where the reader already looks.
+    spec = (result.raw.get("engine_config") or {}).get("speculative")
+    if isinstance(spec, dict) and spec.get("type"):
+        cap = spec.get("draft_n_max")
+        model_chips.append((f"{spec['type']}{f' cap {cap}' if cap else ''}", "neutral"))
 
     p = [
         chrome_open(
@@ -53,58 +77,83 @@ def render(result: BenchResult) -> str:
         )
     ]
 
-    # ── hero column (330 wide — word hero) ───────────────────────────
-    p.append(text(54, 226, verdict, size=52, weight=700, fill=ACCENT))
-    if fraction is not None:
-        p.append(text(54, 268, f"{fraction:.2f}", size=34, weight=700, fill=TEXT))
-        p.append(
-            text(
-                54 + len(f"{fraction:.2f}") * 0.602 * 34 + 10,
-                268,
-                "prefix-cache reuse fraction",
-                size=12,
-                family=SANS,
-                fill=TEXT2,
-            )
-        )
-        p.append(rrect(54, 284, 280, 10, 5, fill=ACCENT_DIM))
-        p.append(rrect(54, 284, max(2, min(1.0, fraction) * 280), 10, 5, fill=ACCENT))
-    caveat = "engine-family-specific — compare the raw signal, not across families"
-    p.append(wrap_text(54, 322, caveat, 300, size=12))
-
-    # ── phase bars ───────────────────────────────────────────────────
+    # ── phases, ordered for reading ──────────────────────────────────
     phases = [(k.removeprefix("ttft_"), m[k]) for k in m if k.startswith("ttft_")]
-    phases.sort(key=lambda kv: _PHASE_ORDER.index(kv[0]) if kv[0] in _PHASE_ORDER else 9)
-    ttft_max = max(
-        (float(mv.value) for _, mv in phases if isinstance(mv.value, (int, float))), default=0.0
-    )
-    pitch = 31
-    y0 = body_y0(len(phases) * pitch - 9 + 60)
-    for i, (phase, mv) in enumerate(phases[:4]):
-        v = float(mv.value) if isinstance(mv.value, (int, float)) else 0.0
-        decode = m.get(f"decode_{phase}")
-        value = f"TTFT {v:.0f}ms"
-        if mv.caveat.startswith("CV="):
-            try:
-                value += f" CV{float(mv.caveat.removeprefix('CV=')) * 100:.0f}%"
-            except ValueError:
-                pass
-        if decode and isinstance(decode.value, (int, float)):
-            value += f" · {fmt_num(decode.value)} t/s"
+    phases.sort(key=lambda kv: _PHASE_ORDER.index(kv[0]) if kv[0] in _PHASE_ORDER else 99)
+    phases = phases[:4]
+
+    def decode_of(phase: str) -> float | None:
+        mv = m.get(f"decode_{phase}")
+        return float(mv.value) if mv and isinstance(mv.value, (int, float)) else None
+
+    # ── hero column: sustained throughput, the number the card is FOR ────
+    # The prefix-cache verdict is engine-family-specific: it stays, demoted.
+    depths = result.raw.get("context_depth") or {}
+    warm_tps = decode_of("warm") or decode_of("cold")
+    if warm_tps is not None:
+        p.append(text(54, 240, fmt_num(warm_tps), size=64, weight=700, fill=ACCENT))
+        hx = 54 + mono_w(fmt_num(warm_tps), 64) + 12
+        p.append(text(hx, 240, "tok/s", size=17, family=SANS, fill=TEXT2))
+        short = (depths.get("short") or {}).get("median") or depths.get("median")
+        sub = "sustained, warm cache"
+        if isinstance(short, (int, float)) and short:
+            sub += f" · {_thousands(short)} ctx"
+        p.append(text(54, 264, sub, size=13, family=SANS, fill=TEXT2))
+
+    # Second line: does it hold at depth? A model that collapses at long context
+    # is a different product from one that does not, and one number cannot say so.
+    long_tps = decode_of("long-context")
+    deep = (depths.get("long") or {}).get("median") or depths.get("max")
+    yb = 300
+    if long_tps is not None:
+        label = "at depth"
+        if isinstance(deep, (int, float)) and deep:
+            label = f"at {_thousands(deep)} ctx"
+        p.append(text(54, yb, label, size=13, family=SANS, fill=TEXT2))
+        deep_tps = f"{fmt_num(long_tps)} t/s"
+        p.append(text(190, yb, deep_tps, size=15, weight=700, fill=TEXT))
+        if warm_tps:
+            drop = (long_tps - warm_tps) / warm_tps * 100
+            x_drop = 190 + mono_w(deep_tps, 15) + 10
+            p.append(text(x_drop, yb, f"{drop:+.0f}%", size=13, fill=TEXT2))
+        yb += 26
+
+    if fraction is not None:
+        p.append(text(54, yb, "prefix reuse", size=13, family=SANS, fill=TEXT2))
+        p.append(text(190, yb, f"{verdict} {fraction:.2f}", size=15, weight=700, fill=TEXT))
+        p.append(rrect(54, yb + 12, 280, 6, 3, fill=ACCENT_DIM))
+        p.append(rrect(54, yb + 12, max(2, min(1.0, fraction) * 280), 6, 3, fill=ACCENT))
+        yb += 32
+    caveat = "prefix reuse is engine-family-specific — compare the raw signal, not across families"
+    p.append(wrap_text(54, yb + 6, caveat, 300, size=11))
+
+    # ── phase bars, scaled by throughput: longer is faster ──────────────
+    # TTFT (better when small) stays in the value text, never in a bar.
+    tps_max = max((t for t in (decode_of(ph) for ph, _ in phases) if t), default=0.0)
+    # Four bars used to occupy a third of the panel and leave the rest blank.
+    # A card is read at thumbnail size on a timeline: the bars ARE the picture,
+    # so they get the room.
+    pitch, bar_h = 44, 28
+    y0 = body_y0(len(phases) * pitch - (pitch - bar_h) + 60)
+    for i, (phase, mv) in enumerate(phases):
+        ttft = float(mv.value) if isinstance(mv.value, (int, float)) else 0.0
+        tps = decode_of(phase)
+        value = f"{fmt_num(tps)} t/s · {ttft:.0f}ms" if tps is not None else f"TTFT {ttft:.0f}ms"
         p.append(
             bar_row(
                 y0 + i * pitch,
-                phase,
-                (v / ttft_max) if ttft_max else 0,
+                _PHASE_LABEL.get(phase, phase),
+                (tps / tps_max) if (tps and tps_max) else 0,
                 value,
                 bar_color=BAR_NEUTRAL if phase == "cold" else ACCENT,
                 label_color=TEXT if phase != "cold" else TEXT2,
+                height=bar_h,
                 value_size=11.5,
             )
         )
 
     # chips under the bars
-    cy = y0 + len(phases[:4]) * pitch + 8
+    cy = y0 + len(phases) * pitch + 6
     cx = 482.0
     chips: list[str] = []
     rss_peak, rss_warm = m.get("engine_rss_peak_mb"), m.get("engine_rss_warm_mb")
@@ -115,11 +164,40 @@ def render(result: BenchResult) -> str:
         chips.append(label)
     if subject and subject.hero and subject.hero.n:
         chips.append(f"n={subject.hero.n} runs")
+    # Energy of the warm decode, labelled "decode": rebaselined at first token,
+    # it excludes the prefill a turn card includes.
+    warm = ((result.raw.get("phase_stats") or {}).get("warm")) or {}
+    soc_w = (warm.get("soc_watts") or {}).get("median")
+    if isinstance(soc_w, (int, float)) and soc_w > 0:
+        label = f"{fmt_num(soc_w, 0)}W SoC"
+        ept = (warm.get("energy_per_token_j") or {}).get("median")
+        if isinstance(ept, (int, float)) and ept > 0:
+            label += f" · {fmt_num(ept, 2)} J/tok decode"
+        chips.append(label)
     for label in chips:
         svg, w = chip(cx, cy, label)
         p.append(svg)
         cx += w + 8
 
-    p.append(gates_row(result, 424))
+    # Second chip row: the regime the numbers were taken under (reasoning,
+    # thermal). A figure without its conditions is true and useless.
+    gates = result.raw.get("quality_gates") or {}
+    cond: list[str] = []
+    thinking = gates.get("thinking") or {}
+    if thinking.get("requested_off"):
+        cond.append("reasoning off · verified" if thinking.get("honoured") else "REASONING LEAKED")
+    validity = (gates.get("output_validity") or {}).get("output_valid_pct")
+    if isinstance(validity, (int, float)):
+        cond.append(f"{validity:.0f}% valid outputs")
+    thermal = gates.get("thermal") or {}
+    if thermal.get("throttled") and isinstance(thermal.get("min_speed_limit"), (int, float)):
+        cond.append(f"throttled to {thermal['min_speed_limit']:.0f}% · declared")
+    cx = 482.0
+    for label in cond:
+        svg, w = chip(cx, cy + 36, label)
+        p.append(svg)
+        cx += w + 8
+
+    p.append(gates_row(result, 468))
     p.append(chrome_close(result))
     return "".join(p)

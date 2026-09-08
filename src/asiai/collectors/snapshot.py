@@ -108,7 +108,14 @@ def collect_snapshot(
             result["power_cpu_watts"] = reading.cpu_watts
             result["power_ane_watts"] = reading.ane_watts
             result["power_dram_watts"] = reading.dram_watts
-            result["power_total_watts"] = reading.total_watts
+            result["power_dcs_watts"] = reading.dcs_watts
+            # None when a required rail was not read — never a smaller total,
+            # for the legacy DCS-less total as much as for the SoC figure.
+            result["power_total_watts"] = (
+                reading.total_watts if reading.soc_watts is not None else None
+            )
+            result["power_soc_watts"] = reading.soc_watts
+            result["power_rails"] = sorted(reading.rails_present)
             result["power_source"] = "ioreport"
         except Exception as e:
             logger.debug("IOReport power collection failed: %s", e)

@@ -36,24 +36,126 @@ class TestIOReportReading:
     def test_defaults_include_energy_and_dcs(self):
         r = IOReportReading()
         assert r.dcs_watts == 0.0
-        assert r.soc_watts == 0.0
-        assert r.soc_joules == 0.0
+        # No rail read → no package figure. 0.0 here used to mean "idle" AND
+        # "unknown" at once; the empty default now says unknown, on purpose.
+        assert r.soc_watts is None
+        assert r.soc_joules is None
+        assert r.rails_present == frozenset()
         assert r.gpu_joules == 0.0
         assert r.dcs_joules == 0.0
 
     def test_soc_watts_includes_dcs(self):
         # soc_watts = gpu+cpu+ane+dram+dcs; total_watts stays DCS-free (legacy).
         r = IOReportReading(
-            gpu_watts=12.5, cpu_watts=4.3, ane_watts=0.0, dram_watts=2.1, dcs_watts=2.2
+            gpu_watts=12.5,
+            cpu_watts=4.3,
+            ane_watts=0.0,
+            dram_watts=2.1,
+            dcs_watts=2.2,
+            rails_present=frozenset({"gpu", "cpu", "ane", "dram", "dcs"}),
         )
         assert r.total_watts == pytest.approx(18.9, abs=0.01)
         assert r.soc_watts == pytest.approx(21.1, abs=0.01)
 
     def test_soc_joules_sums_all_rails(self):
         r = IOReportReading(
-            gpu_joules=10.0, cpu_joules=5.0, ane_joules=0.0, dram_joules=2.0, dcs_joules=3.0
+            gpu_joules=10.0,
+            cpu_joules=5.0,
+            ane_joules=0.0,
+            dram_joules=2.0,
+            dcs_joules=3.0,
+            rails_present=frozenset({"gpu", "cpu", "ane", "dram", "dcs"}),
         )
         assert r.soc_joules == pytest.approx(20.0, abs=0.01)
+
+
+# ── _reading_from_channels: rails present vs absent (the seam) ────────
+# A rail that was not read is ABSENT (rails_present); a package figure missing
+# a required rail is None, never a smaller number.
+
+
+def _ch(name, unit, raw):
+    return (name, unit, raw)
+
+
+FIVE_RAILS = [
+    _ch("CPU Energy", "mJ", 4000),
+    _ch("GPU", "mJ", 20000),
+    _ch("ANE", "mJ", 0),
+    _ch("DRAM", "mJ", 1000),
+    _ch("DCS", "mJ", 500),
+]
+
+
+class TestReadingFromChannels:
+    def test_nominal_five_rails(self):
+        r = IOReportSampler._reading_from_channels(FIVE_RAILS, interval=2.0)
+        assert r.gpu_watts == pytest.approx(10.0)
+        assert r.cpu_watts == pytest.approx(2.0)
+        assert r.dram_watts == pytest.approx(0.5)
+        assert r.dcs_watts == pytest.approx(0.25)
+        assert r.rails_present == frozenset({"gpu", "cpu", "ane", "dram", "dcs"})
+        assert r.soc_watts == pytest.approx(12.75)
+        assert r.soc_joules == pytest.approx(25.5)
+
+    def test_missing_gpu_rail_marks_rail_absent_not_zero(self):
+        # No channel named GPU at all (renamed on this chip, say).
+        chans = [c for c in FIVE_RAILS if c[0] not in ("GPU", "GPU Energy")]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert "gpu" not in r.rails_present
+        # The package figure must refuse, not shrink to cpu+dram+dcs.
+        assert r.soc_watts is None
+        assert r.soc_joules is None
+
+    def test_unknown_unit_on_required_rail_marks_absent(self):
+        chans = [c for c in FIVE_RAILS if c[0] != "GPU"] + [_ch("GPU", "kWh", 3)]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert "gpu" not in r.rails_present
+        assert r.soc_watts is None
+
+    def test_none_unit_label_marks_absent(self):
+        # A failed CFString conversion yields None for the unit.
+        chans = [c for c in FIVE_RAILS if c[0] != "DRAM"] + [_ch("DRAM", None, 1000)]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert "dram" not in r.rails_present
+        assert r.soc_watts is None
+
+    def test_zero_energy_rail_is_still_present(self):
+        # ANE at 0 J is a READ rail (it exists, it idles) — not an absent one.
+        r = IOReportSampler._reading_from_channels(FIVE_RAILS, interval=2.0)
+        assert "ane" in r.rails_present
+        assert r.ane_watts == 0.0
+
+    def test_optional_ane_missing_does_not_refuse(self):
+        chans = [c for c in FIVE_RAILS if c[0] != "ANE"]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert "ane" not in r.rails_present
+        assert r.soc_watts == pytest.approx(12.75)  # ANE is optional
+
+    def test_gpu_nj_fallback_is_visible_in_rails(self):
+        chans = [c for c in FIVE_RAILS if c[0] != "GPU"] + [_ch("GPU Energy", "nJ", 20_000_000_000)]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert r.gpu_watts == pytest.approx(10.0)
+        assert "gpu_nj" in r.rails_present
+        assert r.soc_watts is not None
+
+    def test_joule_unit_is_converted(self):
+        # A channel reported in plain Joules used to be dropped (rail → 0).
+        chans = [c for c in FIVE_RAILS if c[0] != "GPU"] + [_ch("GPU", "J", 20)]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert r.gpu_watts == pytest.approx(10.0)
+        assert "gpu" in r.rails_present
+
+    def test_amcc_and_fab_are_read_when_exposed(self):
+        # Present on M5 Max (0.39 W + 0.22 W at idle, +29 % over soc5); read as
+        # optional rails so the soc5→soc7 decision can be taken on real numbers.
+        chans = FIVE_RAILS + [_ch("AMCC", "mJ", 800), _ch("FAB", "mJ", 400)]
+        r = IOReportSampler._reading_from_channels(chans, interval=2.0)
+        assert r.amcc_watts == pytest.approx(0.4)
+        assert r.fab_watts == pytest.approx(0.2)
+        assert {"amcc", "fab"} <= r.rails_present
+        assert r.soc_watts == pytest.approx(12.75)  # soc5 unchanged until decided
+        assert r.soc7_watts == pytest.approx(13.35)
 
 
 # ── Availability tests ─────────────────────────────────────────────

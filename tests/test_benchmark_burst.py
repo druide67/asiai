@@ -132,10 +132,11 @@ class TestAggregateSize:
             soc_watts=25.0,
             energy_joules=20.0,
         )
-        # 50 t/s over 25 W SoC => 2.0 tok/s/W (headline); 20 J / 50 tok => 0.4 J/tok
+        # 50 t/s over 25 W SoC => 2.0 tok/s/W; 20 J over 5 × (10 − 1) = 45
+        # decode intervals (each concurrent call spends energy between ITS tokens).
         assert agg.soc_watts == 25.0
         assert agg.tok_s_per_soc_watt == 2.0
-        assert agg.energy_per_token_j == 0.4
+        assert agg.energy_per_token_j == round(20.0 / 45, 4)
         # GPU rail still recorded as a diagnostic alongside
         assert agg.gpu_watts == 10.0
         assert agg.tok_s_per_watt == 5.0

@@ -12,6 +12,7 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("asiai.collectors.system")
@@ -385,6 +386,44 @@ def collect_power_mode() -> int | None:
     return int(m.group(1)) if m else None
 
 
+def collect_power_supply() -> str | None:
+    """Return ``"ac"`` or ``"battery"`` from ``pmset -g batt``, or ``None``;
+    the SoC power budget differs on battery.
+    """
+    try:
+        out = subprocess.run(
+            ["pmset", "-g", "batt"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        ).stdout
+    except Exception:
+        return None
+    head = out.splitlines()[0].lower() if out.strip() else ""
+    if "ac power" in head:
+        return "ac"
+    if "battery power" in head:
+        return "battery"
+    return None
+
+
+def _instrument_fingerprint() -> str | None:
+    """SHA-256 (first 16 hex chars) over the bytes of every asiai source file."""
+    import hashlib
+
+    import asiai
+
+    try:
+        root = Path(asiai.__file__).parent
+        h = hashlib.sha256()
+        for f in sorted(root.rglob("*.py")):
+            h.update(f.read_bytes())
+        return h.hexdigest()[:16]
+    except Exception:
+        return None
+
+
 def collect_run_metadata(
     *, engine_version: str = "", bench_mode: str = "", include_host: bool = False
 ) -> dict[str, Any]:
@@ -408,6 +447,9 @@ def collect_run_metadata(
     cores = collect_cpu_cores()
     md: dict[str, Any] = {
         "asiai_version": __version__,
+        # Hash of the source actually loaded: a version string cannot tell a
+        # patched working tree from a stock install.
+        "instrument_fingerprint": _instrument_fingerprint(),
         "machine_model": machine_model or None,
         "hw_chip": collect_hw_chip() or None,
         "os_version": collect_os_version() or None,

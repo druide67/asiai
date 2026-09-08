@@ -523,8 +523,26 @@ def _summarize_toolcall(
         # The edit_file turns are the array-of-objects truncation probe.
         "edit_turns_pct_clean": _pct([_turn_clean(s) for s in edits]),
         "edit_turns_empty_object_bug": sum(1 for s in edits if s["empty_object_bug"]),
+        "substitutions": _substitutions(per_turn),
         "per_turn": per_turn,
     }
+
+
+def _substitutions(per_turn: list[dict[str, Any]]) -> dict[str, int]:
+    """``"expected→actual": count`` over the turns that scored the wrong tool.
+
+    ``correct_tool`` says how often; this says what it was wrong WITH
+    (exploring with ``search_code`` is not the same defect as ``write_file``).
+    """
+    subs: dict[str, int] = {}
+    for s in per_turn:
+        if s.get("correct_tool"):
+            continue
+        actual = s.get("actual_tool") or (
+            "<none>" if not s.get("emitted_tool_call") else "<unknown>"
+        )
+        subs[f"{s['expected_tool']}→{actual}"] = subs.get(f"{s['expected_tool']}→{actual}", 0) + 1
+    return dict(sorted(subs.items(), key=lambda kv: -kv[1]))
 
 
 # --- Suite: recovery (deterministic) ------------------------------------------

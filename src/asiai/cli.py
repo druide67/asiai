@@ -36,13 +36,15 @@ def _load_subcommand_plugins(
             )
 
 
-def _discover_engines(urls: list[str] | None = None) -> list:
-    """Detect inference engines and return instantiated adapters."""
-    from asiai.engines.detect import detect_engines
+def _engine_classes() -> dict[str, type]:
+    """Engine identifier → adapter class, for every engine detection can name.
+    Lazy imports: the CLI must start without every adapter's dependencies.
+    """
     from asiai.engines.exo import ExoEngine
     from asiai.engines.llamacpp import LlamaCppEngine
     from asiai.engines.lmstudio import LMStudioEngine
     from asiai.engines.mlxlm import MlxLmEngine
+    from asiai.engines.mlxvlm import MlxVlmEngine
     from asiai.engines.mtplx import MtplxEngine
     from asiai.engines.ollama import OllamaEngine
     from asiai.engines.omlx import OmlxEngine
@@ -50,10 +52,11 @@ def _discover_engines(urls: list[str] | None = None) -> list:
     from asiai.engines.vllm_mlx import VllmMlxEngine
     from asiai.engines.vmlx import VmlxEngine
 
-    engine_map = {
+    return {
         "ollama": OllamaEngine,
         "lmstudio": LMStudioEngine,
         "mlxlm": MlxLmEngine,
+        "mlxvlm": MlxVlmEngine,
         "llamacpp": LlamaCppEngine,
         "omlx": OmlxEngine,
         "rapidmlx": RapidMlxEngine,
@@ -63,7 +66,13 @@ def _discover_engines(urls: list[str] | None = None) -> list:
         "exo": ExoEngine,
     }
 
+
+def _discover_engines(urls: list[str] | None = None) -> list:
+    """Detect inference engines and return instantiated adapters."""
     from asiai.engines.config import resolve_api_key
+    from asiai.engines.detect import detect_engines
+
+    engine_map = _engine_classes()
 
     found = detect_engines(urls)
     engines = []
@@ -820,7 +829,8 @@ def _gate_exit_code(args: argparse.Namespace, bench_type: str, payload: dict) ->
         else {g.strip() for g in str(selected).split(",") if g.strip()}
     )
     try:
-        failed = [g for g in build_result(bench_type, payload).gates if not g.passed]
+        gates = build_result(bench_type, payload).gates
+        failed = [g for g in gates if not g.passed]
     except Exception as e:  # never traceback out of a finished bench
         if enforce:
             print(red(f"✗ could not evaluate quality gates: {e}"), file=sys.stderr)
@@ -830,6 +840,28 @@ def _gate_exit_code(args: argparse.Namespace, bench_type: str, payload: dict) ->
             )
             return 2
         return 0
+    if enforce and only:
+        # A name this bench type cannot emit is a typo: refuse loudly rather
+        # than enforce nothing and look obeyed.
+        from asiai.benchmark.result_model import DOCUMENTED_GATES
+
+        # Valid = documented for this bench type OR emitted by this result
+        # (burst and code name their gates from the data).
+        unknown = only - DOCUMENTED_GATES.get(bench_type, frozenset()) - {g.name for g in gates}
+        if unknown:
+            names = ", ".join(sorted(unknown))
+            print(red(f"✗ --fail-on-gate: no such gate for {bench_type}: {names}"), file=sys.stderr)
+            print(red("  refusing: an enforcement that cannot enforce."), file=sys.stderr)
+            return 2
+        not_evaluated = only - {g.name for g in gates}
+        if not_evaluated:
+            # Known gate, not measured this run (e.g. thermal never observed):
+            # not an error, but say it — silence here reads as "passed".
+            names = ", ".join(sorted(not_evaluated))
+            print(
+                yellow(f"  ⚠ gate(s) requested but not evaluated in this run: {names}"),
+                file=sys.stderr,
+            )
     if not failed:
         return 0
     blocking = {g.name for g in failed if only is None or g.name in only} if enforce else set()

@@ -528,9 +528,14 @@ def save_card(svg: str, fmt: str = "svg", output_dir: str = "") -> str:
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    ts = f"{int(time.time())}_{os.getpid()}"
-    filename = f"bench-card-{ts}.{fmt}"
-    path = os.path.join(output_dir, filename)
+    # Timestamp + PID is not unique within one second in one process: suffix
+    # until the name is free. A card is evidence and is never overwritten.
+    base = f"bench-card-{int(time.time())}_{os.getpid()}"
+    path = os.path.join(output_dir, f"{base}.{fmt}")
+    n = 1
+    while os.path.exists(path):
+        path = os.path.join(output_dir, f"{base}-{n}.{fmt}")
+        n += 1
 
     with open(path, "w") as f:
         f.write(svg)

@@ -39,6 +39,62 @@ from asiai.collectors.system import (
     find_engine_process_by_url,
 )
 
+# Phases whose replay is deliberate (see detect_session_replay's docstring note).
+_REPLAY_BY_DESIGN = frozenset({"warm", "prefix-test-2", "long-prefix"})
+
+
+def detect_session_replay(runs: list, slack_tokens: int = 2) -> dict:
+    """Flag runs served as an exact session replay (``cached_tokens >=
+    prompt_tokens - slack``): a real turn appends a new user message.
+    Phases in ``_REPLAY_BY_DESIGN`` are exempt.
+    """
+    # Phases whose replay is the point: warm (previous request), prefix-test-2
+    # (full-reuse probe), long-prefix (long-context restore). Every other phase
+    # claims a fresh turn, and a replay there is the defect this gate is for.
+    flagged = []
+    for r in runs:
+        phase = getattr(r, "phase", "") or ""
+        if phase in _REPLAY_BY_DESIGN:
+            continue
+        cached = getattr(r, "cached_tokens", None)
+        prompt = getattr(r, "prompt_tokens", None)
+        if cached is not None and prompt and cached >= prompt - slack_tokens:
+            flagged.append(
+                {
+                    "phase": phase,
+                    "repeat": getattr(r, "repeat", None),
+                    "cached_tokens": cached,
+                    "prompt_tokens": prompt,
+                }
+            )
+    return {"detected": bool(flagged), "replay_runs": flagged}
+
+
+def detect_bank_preload(runs: list) -> dict:
+    """Refuse a cell whose first cold run reported reused tokens.
+
+    A cold run must start from nothing; reused tokens mean the engine inherited
+    state (e.g. an on-disk session bank) and every later phase builds on it.
+    """
+    for r in runs:
+        if getattr(r, "phase", "") == "cold" and getattr(r, "repeat", None) == 0:
+            cached = getattr(r, "cached_tokens", None)
+            if cached is not None and cached > 0:
+                return {
+                    "detected": True,
+                    "reason": (
+                        f"cold rep0 reused {cached} cached tokens — the engine "
+                        "started with pre-existing bank/cache state"
+                    ),
+                    "cached_tokens": cached,
+                }
+            return {"detected": False, "reason": "", "cached_tokens": cached or 0}
+    return {"detected": False, "reason": "no cold rep0 run found", "cached_tokens": 0}
+
+
+def _round_or_none(value: float | None, ndigits: int) -> float | None:
+    return round(value, ndigits) if value is not None else None
+
 
 def _bytes_to_mb(b: int) -> float | None:
     """Bytes -> MB (1 decimal), or None when there is no reading (<= 0)."""
@@ -131,6 +187,9 @@ _ENGINE_PROCESS_PATTERNS: dict[str, str | tuple[str, ...]] = {
     # A parent-chain tolerance is only as good as the identity it starts from.
     "lmstudio": ("LM Studio", "llmster"),
     "mlxlm": "mlx_lm.server",
+    # mlx-vlm is a separate project from mlx-lm; the module paths differ by one
+    # character, so match the full path and never a shortened prefix.
+    "mlxvlm": "mlx_vlm.server",
     # jundot/omlx — NOT mlx-omni-server (different project).
     "omlx": "omlx serve",
     "vmlx": "vmlx serve",
@@ -148,13 +207,8 @@ def _patterns_for(key: str, fallback: str) -> tuple[str, ...]:
     return (value,) if isinstance(value, str) else tuple(value)
 
 
-# Shells run a script whose own arguments name the engine binary, so the raw
-# command line matches the pattern while no engine is running in that process.
-# A bench harness that launches engines from a wrapper (`zsh run-cell.sh …
-# llama-server --model …`) was reported as a duplicate of the engine it had
-# just started — on 4 of 12 cells of the 2026-08 campaign. The engine itself
-# always appears as its own `ps` entry, so skipping shell wrappers loses
-# nothing and removes the whole false-positive class.
+# A shell running a script whose arguments name an engine binary is not that
+# engine; the engine has its own `ps` entry, so wrappers are skipped.
 _SHELL_ARGV0 = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 
 
@@ -510,6 +564,80 @@ class MemoryWatcher(_IntervalSampler):
 # --- Power + thermal probe (per-run window sampler) ----------------------
 
 
+def measure_loaded_idle(
+    sampler,
+    *,
+    settle_s: float = 3.0,
+    samples: int = 5,
+    step_s: float = 2.0,
+    cpu_load_1: float | None = None,
+    cpu_cores: int | None = None,
+    thermal_speed_limit: int | None = None,
+    sleep=None,
+) -> dict[str, Any]:
+    """Loaded-idle SoC power: model resident, no request in flight.
+
+    Returns ``{"soc_watts", "cv_pct", "window_s", "samples", "reason"}``;
+    ``soc_watts`` is None with a reason when the figure would lie (CV > 10 %,
+    background load, thermal limit engaged, required rail missing).
+    """
+    from statistics import mean, pstdev
+
+    # Resolved at call time on purpose: a ``sleep=time.sleep`` default is bound
+    # when the module loads, so a test that patches ``time.sleep`` afterwards
+    # still waits the full 13 s per engine (the suite went 64 s → 283 s).
+    sleep = sleep or time.sleep
+    # Conditions known at entry refuse before the 13 s window. Two busy cores
+    # is the ceiling whatever the core count.
+    if cpu_load_1 is not None and cpu_load_1 > 2.0:
+        return {
+            "soc_watts": None,
+            "cv_pct": None,
+            "window_s": 0.0,
+            "samples": 0,
+            "reason": f"background CPU load {cpu_load_1:.1f} (limit 2.0)",
+        }
+    if thermal_speed_limit is not None and 0 < thermal_speed_limit < 100:
+        return {
+            "soc_watts": None,
+            "cv_pct": None,
+            "window_s": 0.0,
+            "samples": 0,
+            "reason": f"thermal limit {thermal_speed_limit} % already engaged",
+        }
+    sleep(settle_s)
+    sampler.sample()  # discard the settle window; start the measured one clean
+    readings = []
+    for _ in range(samples):
+        sleep(step_s)
+        readings.append(sampler.sample())
+
+    out: dict[str, Any] = {
+        "soc_watts": None,
+        "cv_pct": None,
+        "window_s": round(samples * step_s, 1),
+        "samples": samples,
+        "reason": "",
+    }
+    if any(r.soc_watts is None for r in readings):
+        out["reason"] = "required IOReport rail missing in idle window"
+        return out
+    watts = [r.soc_watts for r in readings]
+    m = mean(watts)
+    cv = (pstdev(watts) / m * 100.0) if m > 0 else None
+    out["cv_pct"] = round(cv, 1) if cv is not None else None
+    if m <= 0:
+        out["reason"] = "idle power reads as zero"
+        return out
+    if cv is not None and cv > 10.0:
+        out["reason"] = f"idle unstable (CV {cv:.1f} % > 10 %) — background activity"
+        return out
+    from statistics import median
+
+    out["soc_watts"] = round(median(watts), 2)
+    return out
+
+
 class PowerThermalProbe:
     """Single power/thermal instrument shared by all three bench modes.
 
@@ -590,6 +718,18 @@ class PowerThermalProbe:
         from asiai.collectors.power import PowerMonitor
 
         return PowerMonitor()
+
+    def measure_loaded_idle(self, **kwargs: Any) -> dict[str, Any] | None:
+        """Loaded-idle SoC power via :func:`measure_loaded_idle`, or None when
+        IOReport is unavailable. Call after warmup and BEFORE ``start()``: it
+        consumes ~13 s and leaves the sampler on a fresh baseline."""
+        if self._sampler is None:
+            return None
+        try:
+            return measure_loaded_idle(self._sampler, **kwargs)
+        except Exception:  # noqa: BLE001 — an idle we cannot read is None, not 0
+            logger.debug("loaded-idle measurement failed", exc_info=True)
+            return None
 
     def start(self) -> None:
         """Reset the energy/time baseline (and start powermetrics if cross-validating)."""
@@ -688,8 +828,10 @@ class PowerThermalProbe:
         phys_mb = _bytes_to_mb(p.phys_footprint_bytes) if p is not None else None
         return {
             "gpu_watts": io.gpu_watts if io is not None else None,
-            "soc_watts": round(io.soc_watts, 2) if io is not None else None,
-            "energy_joules": round(io.soc_joules, 3) if io is not None else None,
+            "soc_watts": _round_or_none(io.soc_watts if io is not None else None, 2),
+            "energy_joules": _round_or_none(io.soc_joules if io is not None else None, 3),
+            "interval_s": io.interval_s if io is not None else None,
+            "rails": sorted(io.rails_present) if io is not None else None,
             "thermal_speed_limit": self._read_thermal(),
             "engine_rss_mb": rss_mb,
             "engine_phys_footprint_mb": phys_mb,
@@ -706,8 +848,10 @@ class PowerThermalProbe:
         io = self._read_ioreport()
         return {
             "gpu_watts": io.gpu_watts if io is not None else None,
-            "soc_watts": round(io.soc_watts, 2) if io is not None else None,
-            "energy_joules": round(io.soc_joules, 3) if io is not None else None,
+            "soc_watts": _round_or_none(io.soc_watts if io is not None else None, 2),
+            "energy_joules": _round_or_none(io.soc_joules if io is not None else None, 3),
+            "interval_s": io.interval_s if io is not None else None,
+            "rails": sorted(io.rails_present) if io is not None else None,
         }
 
     def read_aggregate(self) -> dict[str, Any]:
@@ -728,8 +872,10 @@ class PowerThermalProbe:
         """
         io = self._read_ioreport()
         io_gpu_watts = (io.gpu_watts if io is not None else 0.0) or 0.0
-        io_soc_watts = round(io.soc_watts, 2) if io is not None else 0.0
-        io_soc_joules = round(io.soc_joules, 3) if io is not None else 0.0
+        # Runner contract: 0.0 means "nothing to publish", so a None package
+        # figure (required rail missing) collapses to 0.0; ``rails`` says why.
+        io_soc_watts = _round_or_none(io.soc_watts if io is not None else None, 2) or 0.0
+        io_soc_joules = _round_or_none(io.soc_joules if io is not None else None, 3) or 0.0
         pm_gpu_watts = 0.0
         if self._monitor is not None:
             try:
@@ -762,6 +908,8 @@ class PowerThermalProbe:
             "power_watts_ioreport": io_gpu_watts,
             "power_watts_powermetrics": pm_gpu_watts,
             "power_source": power_source,
+            "interval_s": io.interval_s if io is not None else None,
+            "rails": sorted(io.rails_present) if io is not None else None,
             "thermal_speed_limit": self._read_thermal(),
             "engine_rss_mb": rss_mb,
             "engine_phys_footprint_mb": phys_mb,

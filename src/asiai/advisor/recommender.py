@@ -114,11 +114,9 @@ def _from_local(
         return []
 
     rows = query_benchmarks(db_path, model=model_filter)
-    # Only compare rows produced by the same metrics definition: tok/s and
-    # TTFT changed scope in the 1.11.0 instrumentation overhaul
-    # (metrics_version 3). Mixing generations would rank apples against
-    # oranges; with no v3 rows the advisor falls back to community data.
-    rows = [r for r in rows if r.get("metrics_version") == 3]
+    # metrics_version 3 and 4 share the tok/s, TTFT and soc_watts definitions;
+    # generations 1-2 (GPU-only powermetrics) are not comparable and stay out.
+    rows = [r for r in rows if r.get("metrics_version") in (3, 4)]
     if not rows:
         return []
 
@@ -136,11 +134,19 @@ def _from_local(
     for (engine, model), entries in groups.items():
         tok_values = [e["tok_per_sec"] for e in entries if e.get("tok_per_sec")]
         ttft_values = [e["ttft_ms"] for e in entries if e.get("ttft_ms")]
+        # J/token from metrics_version 4 only (v3 stored a different, engine-window
+        # definition under the same column). 0 means "not measured".
+        ept_values = [
+            e["energy_per_token_j"]
+            for e in entries
+            if e.get("energy_per_token_j") and e.get("metrics_version") == 4
+        ]
         if not tok_values:
             continue
         med_tok = _median(tok_values)
         med_ttft = _median(ttft_values) if ttft_values else 0.0
         p99_ttft = _percentile(ttft_values, 99) if ttft_values else 0.0
+        med_ept = _median(ept_values) if ept_values else 0.0
         vram = max((e.get("vram_bytes") or 0) for e in entries)
         stability = _compute_stability_score(tok_values)
         all_medians.append(med_tok)
@@ -151,6 +157,7 @@ def _from_local(
                     "med_tok": med_tok,
                     "med_ttft": med_ttft,
                     "p99_ttft": p99_ttft,
+                    "med_ept": med_ept,
                     "vram": vram,
                     "stability": stability,
                     "runs": len(tok_values),
@@ -227,6 +234,17 @@ def _from_community(
     # Normalize tok/s across community entries
     tok_values = [e.get("median_tok_s", 0.0) for e in entries]
     tok_norms = _normalize(tok_values)
+    # Community energy (v2.1 additive aggregate): present on groups whose
+    # submissions carried a gated SoC block, absent on GPU-only groups. Groups
+    # without it are ranked below every measured one, never assumed free.
+    ept_norms: list[float | None] | None = None
+    ept_raw = [entry.get("median_energy_per_token_j") for entry in entries]
+    if any(isinstance(v, (int, float)) and v > 0 for v in ept_raw):
+        measured = [1.0 / v for v in ept_raw if isinstance(v, (int, float)) and v > 0]
+        norms = iter(_normalize(measured))
+        ept_norms = [
+            next(norms) if isinstance(v, (int, float)) and v > 0 else None for v in ept_raw
+        ]
 
     results: list[Recommendation] = []
     for idx, entry in enumerate(entries):
@@ -237,6 +255,12 @@ def _from_community(
 
         # Simple scoring: community has no per-run stability data
         score = tok_norms[idx] if use_case == "throughput" else tok_norms[idx] * 0.7
+        if use_case == "efficiency" and ept_norms is not None:
+            ept_norm = ept_norms[idx]
+            if ept_norm is None:
+                score = tok_norms[idx] * 0.3  # unmeasured: below every measured group
+            else:
+                score = ept_norm * 0.7 + tok_norms[idx] * 0.3
 
         results.append(
             Recommendation(
@@ -344,8 +368,16 @@ def _score_use_case(
         return tok_norm * 0.5  # fallback if no ttft data
 
     if use_case == "efficiency":
-        # Approximate: tok/s per watt — without real power data, use tok/s as proxy
-        return tok_norm
+        # Measured J/token (lower is better) leads; tok/s breaks ties. Groups
+        # without an energy figure rank below every measured one.
+        ept_values = [s["med_ept"] for _, s in all_group_stats if s.get("med_ept", 0) > 0]
+        if ept_values:
+            inv_ept = _normalize([1.0 / v for v in ept_values])
+            ept_idx = _filtered_index(all_group_stats, group_idx, "med_ept")
+            if ept_idx is not None:
+                return inv_ept[ept_idx] * 0.7 + tok_norm * 0.3
+            return tok_norm * 0.3  # measured groups outrank unmeasured ones
+        return tok_norm  # no energy data anywhere: throughput proxy, as before
 
     # Default: throughput
     return tok_norm * 0.7 + stability * 0.3

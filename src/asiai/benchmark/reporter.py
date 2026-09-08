@@ -488,6 +488,14 @@ def build_export_payload(
             if ept_vals:
                 engine_data["avg_energy_per_token_j"] = round(sum(ept_vals) / len(ept_vals), 4)
 
+        # Gated energy block (metrics_version 4): built from per-run slices,
+        # exclusions visible; the avg_* above average whatever was there.
+        energy, refused = _energy_block(engine_results)
+        if energy is not None:
+            engine_data["energy"] = energy
+        if refused:
+            engine_data["energy_refused"] = refused
+
         # Outliers
         outliers = data.get("outliers", [])
         if outliers:
@@ -695,3 +703,99 @@ def report_to_slots(report: dict) -> list[dict]:
     engines = report.get("engines", {})
     slots = [{"engine": name, "model": model, **stats} for name, stats in engines.items()]
     return sorted(slots, key=lambda s: s.get("median_tok_s", 0), reverse=True)
+
+
+_ENERGY_REQUIRED_RAILS = frozenset({"gpu", "cpu", "dram", "dcs"})
+
+
+def _energy_block(runs: list[dict]) -> tuple[dict | None, str]:
+    """Aggregate per-run IOReport slices into one publishable ``energy`` block.
+
+    Returns ``(block, refused_reason)``: reason "" when nothing was measured,
+    else prefixed ``provenance:`` / ``thermal:`` / ``not_applicable:``.
+    """
+    from statistics import median
+
+    # Reasons carry their kind as a prefix; result_model routes gates on it.
+    refused = [r for r in runs if r.get("energy_refused_run")]
+    if refused:
+        return None, f"provenance: {refused[0]['energy_refused_run']} on a run"
+    measured = [r for r in runs if r.get("run_energy_joules") is not None]
+    if not measured:
+        return None, ""
+    for r in measured:
+        if (r.get("run_energy_joules") or 0) <= 0:
+            # A slice of zero joules over a real window is a dead counter, not
+            # a free decode. Published, it would sort first on every energy
+            # column. Refuse; never let 0 stand for "measured".
+            return None, "provenance: zero-energy slice on a run (counter not advancing)"
+        rails = set(r.get("energy_rails") or [])
+        gpu_ok = "gpu" in rails or "gpu_nj" in rails
+        if not gpu_ok or not (_ENERGY_REQUIRED_RAILS - {"gpu"}) <= rails:
+            return (
+                None,
+                f"provenance: required IOReport rail missing on a run (rails={sorted(rails)})",
+            )
+        if r.get("tokens_source") != "usage":
+            # No token usage → no J/token can exist. Not a fault: no gate fails.
+            return None, "not_applicable: token count is an estimate (tokens_source != usage)"
+    # Excluded, not refused: throttled runs (joules not the engine's) and
+    # sub-second windows (too coarse for the counter). Counts are published.
+    included, throttled, short = [], [], []
+    for r in measured:
+        if 0 < (r.get("thermal_speed_limit") or 100) < 100:
+            throttled.append(r)
+        elif (r.get("interval_s") or 0) < 1.0:
+            short.append(r)
+        else:
+            included.append(r)
+    if not included:
+        if throttled and not short:
+            return None, f"thermal: all {len(measured)} measured run(s) thermally throttled"
+        return None, (
+            f"provenance: no usable run: {len(throttled)} thermally throttled, "
+            f"{len(short)} with an energy window under 1 s"
+        )
+
+    joules = sum(r["run_energy_joules"] for r in included)
+    dt = sum(r["interval_s"] for r in included)
+    ept = [r["energy_per_token_j"] for r in included if r.get("energy_per_token_j") is not None]
+    active = [
+        r["energy_per_token_active_j"]
+        for r in included
+        if r.get("energy_per_token_active_j") is not None
+    ]
+    idles = [r["idle_soc_watts"] for r in included if r.get("idle_soc_watts") is not None]
+    rails_union = sorted(set().union(*(set(r.get("energy_rails") or []) for r in included)))
+    block: dict = {
+        "v": 1,
+        # Published base stays the five named rails until the soc5/soc7 decision
+        # is taken on measurements under load; the rails list says what was read.
+        "base": "soc5",
+        "rails": rails_union,
+        "window": "turn",
+        "source": included[0].get("power_source") or "ioreport",
+        "soc_watts": round(joules / dt, 2) if dt else None,
+        "energy_joules": round(joules, 3),
+        "tokens_source": "usage",
+        "runs_included": len(included),
+        "runs_excluded_thermal": len(throttled),
+        "runs_excluded_short": len(short),
+    }
+    if ept:
+        block["energy_per_token_j"] = round(median(ept), 4)
+    if active:
+        block["energy_per_token_active_j"] = round(median(active), 4)
+    if idles:
+        block["idle"] = {"kind": "loaded", "soc_watts": round(median(idles), 2)}
+    conditions = {}
+    for key in ("powermode", "power_supply"):
+        vals = {r.get(key) for r in included if r.get(key) is not None}
+        if len(vals) == 1:
+            conditions[key] = vals.pop()
+    limits = [r.get("thermal_speed_limit") for r in included if r.get("thermal_speed_limit")]
+    if limits:
+        conditions["min_speed_limit"] = min(limits)
+    if conditions:
+        block["conditions"] = conditions
+    return block, ""

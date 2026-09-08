@@ -4,7 +4,7 @@ description: Resultados de benchmark da comunidade em Macs com Apple Silicon. Co
 
 # Leaderboard da Comunidade
 
-<div id="leaderboard-app" data-label-loading="Carregando..." data-label-count="{n} resultado(s)" data-label-updated="Atualizado: {t}" data-label-error="Não foi possível acessar api.asiai.dev" data-label-empty="Nenhum resultado encontrado">
+<div id="leaderboard-app" data-label-loading="Carregando..." data-label-count="{n} resultado(s)" data-label-updated="Atualizado: {t}" data-label-error="Não foi possível acessar api.asiai.dev" data-label-empty="Nenhum resultado encontrado" data-label-provenance="{n} amostra(s) de energia, base {b}">
 
 <div class="lb-filters" markdown>
 <div class="lb-filter-row">
@@ -12,6 +12,8 @@ description: Resultados de benchmark da comunidade em Macs com Apple Silicon. Co
   <input type="text" id="lb-model" placeholder="Filtrar por modelo (ex: qwen2.5)" class="lb-input">
   <button id="lb-search" class="lb-btn">Buscar</button>
   <button id="lb-clear" class="lb-btn lb-btn-secondary">Limpar</button>
+
+  <span class="lb-view-toggle" role="group"><button type="button" class="lb-view-btn lb-view-active" data-view="speed" aria-pressed="true">Velocidade</button><button type="button" class="lb-view-btn" data-view="energy" aria-pressed="false">Energia</button></span>
 </div>
 <div class="lb-status">
   <span id="lb-count"></span>
@@ -29,14 +31,18 @@ description: Resultados de benchmark da comunidade em Macs com Apple Silicon. Co
   <th class="lb-sortable" data-col="median_ttft_ms">TTFT</th>
   <th>Chip · RAM</th>
   <th>Quant</th>
-  <th class="lb-sortable" data-col="median_power_watts">W</th>
-  <th class="lb-sortable" data-col="median_tok_s_per_watt">tok/s/W</th>
+  <th class="lb-sortable lb-col-speed" data-col="median_power_watts">W GPU</th>
+  <th class="lb-sortable lb-col-speed" data-col="median_tok_s_per_watt">tok/s/W (GPU)</th>
+  <th class="lb-sortable lb-col-energy" data-col="median_soc_watts">W SoC</th>
+  <th class="lb-sortable lb-col-energy" data-col="median_energy_per_token_j">J/tok</th>
+  <th class="lb-sortable lb-col-energy" data-col="median_energy_per_token_active_j">J/tok ativo</th>
+  <th class="lb-sortable lb-col-energy" data-col="median_idle_soc_watts">W repouso</th>
   <th class="lb-sortable" data-col="last_submitted_at">Último envio</th>
   <th class="lb-sortable" data-col="samples">Amostras</th>
 </tr>
 </thead>
 <tbody id="lb-body">
-<tr><td colspan="10" class="lb-loading">Carregando dados da comunidade...</td></tr>
+<tr><td colspan="14" class="lb-loading">Carregando dados da comunidade...</td></tr>
 </tbody>
 </table>
 </div>

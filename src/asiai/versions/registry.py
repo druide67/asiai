@@ -55,6 +55,12 @@ _INTERNAL_SPECS: dict[str, EngineVersionSpec] = {
         pip_package="mlx-lm",
         github_repo="ml-explore/mlx-lm",
     ),
+    "mlxvlm": EngineVersionSpec(
+        "mlxvlm",
+        display="mlx-vlm",
+        pip_package="mlx-vlm",
+        github_repo="Blaizzy/mlx-vlm",
+    ),
     "llamacpp": EngineVersionSpec(
         "llamacpp",
         display="llama.cpp",
@@ -65,7 +71,10 @@ _INTERNAL_SPECS: dict[str, EngineVersionSpec] = {
     "omlx": EngineVersionSpec(
         "omlx",
         display="oMLX",
-        pip_package="omlx",
+        # No PyPI package: `pypi.org/simple/omlx` returns 404. This spec used to
+        # declare one, so upstream resolution failed silently and the engine
+        # showed no available version at all.
+        github_repo="Jundot/omlx",
         app_bundle_path="/Applications/oMLX.app",
     ),
     "rapidmlx": EngineVersionSpec(
@@ -89,6 +98,7 @@ _INTERNAL_SPECS: dict[str, EngineVersionSpec] = {
         "vmlx",
         display="vMLX",
         pip_package="vmlx",
+        github_repo="jjang-ai/vmlx",
     ),
     "exo": EngineVersionSpec(
         "exo",

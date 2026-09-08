@@ -253,7 +253,7 @@ Large context sizes (32k+) can cause instability on engines that pre-allocate KV
 
 ## Power Measurement
 
-asiai measures GPU, CPU, ANE and DRAM power consumption via Apple's IOReport Energy Model framework — **no sudo required**. Power is measured automatically in every benchmark and every monitoring snapshot.
+asiai measures GPU, CPU, ANE, DRAM and DRAM-controller (DCS) power via Apple's IOReport Energy Model framework — **no sudo required**. Power is measured automatically in every benchmark and every monitoring snapshot, and every figure says which rails it was built from.
 
 IOReport reads the same hardware energy counters as `sudo powermetrics`, but through a user-space API (`libIOReport.dylib` via ctypes). This eliminates the need for passwordless sudo configuration.
 
@@ -268,12 +268,17 @@ We cross-validated IOReport against `sudo powermetrics` under LLM inference load
 
 Both engines confirmed <1.5% average delta with 10/10 paired samples. ANE power was 0.000W across all 20 samples, confirming no LLM engine currently uses the Neural Engine.
 
+**What this validation covers — and what it does not.** It compares the **GPU rail alone** (`power_watts`, M6), because that is the only rail `powermetrics` reports, and it predates the DCS rail. The SoC package figure (`soc_watts`, M9 — GPU + CPU + ANE + DRAM + DCS) has **no software counter-measure**: only a wall meter can corroborate it, and until one does the SoC figure is published as what it is — a lower bound on what the plug pays, with display, storage, fans and power-supply losses excluded. See [metrics-spec M9–M13](metrics-spec.md#m9-soc_watts-soc-package-power).
+
 The `--power` flag enables additional cross-validation by running both IOReport and `sudo powermetrics` simultaneously, storing both readings for comparison.
 
 ### Power Efficiency
 
-Power efficiency (tok/s per watt) is calculated as `tok_per_sec / gpu_watts` for each benchmark result. This metric enables comparison of inference cost across engines and hardware.
+Two efficiency figures coexist and are never averaged together:
+
+- `tok_per_sec_per_watt` (legacy, **GPU rail**): `tok_per_sec / gpu_watts`, per result. Kept for continuity, always labelled `(GPU)`.
+- `energy_per_token_j` (**SoC**, since 1.34): `soc_joules / (completion_tokens − 1)` per run, on the full request window, published only when the engine counted the tokens (`tokens_source = usage`) and the run was not throttled. Lower is better. A loaded-idle measurement (`idle_soc_watts`) and the idle-subtracted variant (`energy_per_token_active_j`) are published next to it, so a reader sees both "what the plug paid" and "what this generation added".
 
 ## Metadata
 
-Every benchmark result stores: engine, engine_version, model, model_format, model_quantization, hw_chip, os_version, thermal_level, thermal_speed_limit, power_watts, power_source, metrics_version. This enables fair regression comparison and cross-machine benchmarks.
+Every benchmark result stores: engine, engine_version, model, model_format, model_quantization, hw_chip, os_version, thermal_level, thermal_speed_limit, power_watts, power_source, metrics_version — and, since metrics_version 4: soc_watts, energy_per_token_j, energy_rails/energy_base, idle_soc_watts, energy_per_token_active_j, powermode, power_supply (`ac`/`battery`) and the measurement interval. This enables fair regression comparison and cross-machine benchmarks.

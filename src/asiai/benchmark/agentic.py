@@ -50,6 +50,7 @@ from asiai.benchmark.prompts import (
     USER_L,
     USER_X,
     USER_Y,
+    USER_Z,
 )
 from asiai.benchmark.quality_gates import (
     EngineMemorySampler,
@@ -58,7 +59,9 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
     check_other_engines_resident,
+    detect_bank_preload,
     detect_early_stop,
+    detect_session_replay,
     summarize_thermal,
 )
 from asiai.collectors.system import collect_run_metadata
@@ -69,7 +72,7 @@ logger = logging.getLogger("asiai.benchmark.agentic")
 # os_version, ram_gb, cpu_cores, powermode, engine_version, bench_mode (via
 # collect_run_metadata) + a `footprint` summary (peak/warm engine RSS). v3
 # readers ignore the extra keys; no field was removed or renamed.
-SCHEMA_VERSION = "agentic-v4"
+SCHEMA_VERSION = "agentic-v5"
 
 # Caveat on token counts: other tokenizers compress differently. Llama-3
 # averages ~4.0 chars/token on the same prose; the long-context phase
@@ -92,7 +95,10 @@ PHASES: tuple[AgenticPhase, ...] = (
     AgenticPhase("warm", SYS_A, USER_X, 400),
     AgenticPhase("prefix-test-1", SYS_A, USER_Y, 400),
     AgenticPhase("prefix-test-2", SYS_A, USER_X, 400),
-    AgenticPhase("prefix-test-3", SYS_A, USER_Y, 400),
+    # A never-seen user message (agentic-v5): SYS_A prefix hit, no full-prompt
+    # replay. With USER_Y a session-bank engine served this turn from its bank
+    # and the phase measured session restore instead of prefix reuse.
+    AgenticPhase("prefix-test-3", SYS_A, USER_Z, 400),
     AgenticPhase("cold-prefix", SYS_B, USER_X, 400),
     AgenticPhase("long-context", SYS_A, USER_L, 200),
     AgenticPhase("long-prefix", SYS_A, USER_L, 200),
@@ -496,6 +502,11 @@ def _phase_stats(runs: list[AgenticRun]) -> dict[str, dict[str, Any]]:
                 [float(r.ttft_ms) if r.ttft_ms is not None else None for r in phase_runs]
             ),
             "soc_watts": _stat([r.soc_watts for r in phase_runs]),
+            # Computed per run since 1.11 but never summarised: a card or an
+            # export reader had the raw runs and no per-phase figure to compare.
+            "prefill_watts": _stat([r.prefill_watts for r in phase_runs]),
+            "energy_per_token_j": _stat([r.energy_per_token_j for r in phase_runs]),
+            "tok_s_per_soc_watt": _stat([r.tok_s_per_soc_watt for r in phase_runs]),
         }
         for phase, phase_runs in by_phase.items()
     }
@@ -769,6 +780,8 @@ def run_agentic_bench(
     reuse = _compute_reuse(runs)
     quality_gates: dict[str, Any] = {
         "early_stop": detect_early_stop(runs),
+        "session_replay": detect_session_replay(runs),
+        "bank_preload": detect_bank_preload(runs),
         "duplicate_processes": duplicates,
         "other_engines_resident": other_engines,
         "thermal": summarize_thermal(runs),

@@ -6,6 +6,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from asiai import __version__
 from asiai.benchmark.output_gates import check_degenerate
@@ -17,9 +18,13 @@ from asiai.benchmark.quality_gates import (
 )
 from asiai.collectors.gpu import collect_gpu
 from asiai.collectors.system import (
+    collect_cpu_cores,
+    collect_cpu_load,
     collect_hw_chip,
     collect_memory,
     collect_os_version,
+    collect_power_mode,
+    collect_power_supply,
     collect_thermal,
     find_engine_process,
 )
@@ -362,9 +367,28 @@ def run_benchmark(
             # fresh window per engine (discards the stale IOReport sample and
             # starts powermetrics) AFTER the warmup, so warmup energy is excluded.
             probe = PowerThermalProbe(cross_validate=power and not power_unavailable)
+
+            # Loaded idle (model resident, no request), once per engine before the
+            # timed window: the base "active" J/token is subtracted against.
+            idle: dict[str, Any] | None = None
+            if ioreport_ok and probe.available:
+                cpu_load = collect_cpu_load()
+                idle = probe.measure_loaded_idle(
+                    cpu_load_1=getattr(cpu_load, "load_1", None),
+                    cpu_cores=collect_cpu_cores() or None,
+                    thermal_speed_limit=collect_thermal().speed_limit,
+                )
+                if idle and idle.get("soc_watts") is None and idle.get("reason"):
+                    logger.info("%s: loaded idle refused — %s", engine.name, idle["reason"])
+            powermode = collect_power_mode()
+            power_supply = collect_power_supply()
+
             probe.start()
 
             results_before = len(run.results)
+            # Per-run energy slices (IOReport only): a thermal regime change
+            # inside one engine window is visible per run. Engine figure = sum.
+            slices: list[dict[str, Any]] = []
 
             # try/finally guarantees the probe (powermetrics subprocess +
             # IOReport window) is torn down even if a run raises, so an orphaned
@@ -380,6 +404,7 @@ def run_benchmark(
                             run_index + 1,
                             runs,
                         )
+                        n_before_run = len(run.results)
                         _run_single(
                             engine,
                             engine_model,
@@ -401,6 +426,8 @@ def run_benchmark(
                             ollama_runner_type=ollama_runner_type,
                             extra_body=extra_body,
                         )
+                        if ioreport_ok and probe.available:
+                            _annotate_run_energy(run, n_before_run, slices, probe, idle)
 
                 # Stop the probe and annotate this engine's results.
                 # read_aggregate() applies the IOReport/powermetrics precedence
@@ -413,6 +440,16 @@ def run_benchmark(
             gpu_watts = reading["gpu_watts"]
             soc_watts = reading["soc_watts"]
             energy_joules = reading["energy_joules"]
+            if slices:
+                # read_aggregate() only saw the tail since the last slice; the
+                # engine window is the sum of its slices. Energy is additive,
+                # mean watts are time-weighted.
+                dt = sum(s_["interval_s"] for s_ in slices) or 0.0
+                energy_joules = round(sum(s_["energy_joules"] for s_ in slices), 3)
+                soc_watts = round(energy_joules / dt, 2) if dt else 0.0
+                gpu_dt = sum((s_["gpu_watts"] or 0.0) * s_["interval_s"] for s_ in slices)
+                if gpu_dt:
+                    gpu_watts = round(gpu_dt / dt, 2)
             window_results = run.results[results_before:]
             # Energy-per-token is an engine-window aggregate (SoC Joules over all
             # this engine's runs / their total tokens); annotated identically on
@@ -424,6 +461,10 @@ def run_benchmark(
             )
             for result in window_results:
                 tok_s = result.get("tok_per_sec", 0.0)
+                if powermode is not None:
+                    result["powermode"] = powermode
+                if power_supply is not None:
+                    result["power_supply"] = power_supply
                 if gpu_watts > 0:
                     result["power_watts"] = gpu_watts
                     result["power_watts_ioreport"] = reading["power_watts_ioreport"]
@@ -433,10 +474,16 @@ def run_benchmark(
                         result["tok_per_sec_per_watt"] = round(tok_s / gpu_watts, 2)
                 if soc_watts > 0:
                     result["soc_watts"] = soc_watts
-                    if energy_per_token_j is not None:
+                    # Engine-window J/token: fallback only when no per-run slice
+                    # exists, and never on an estimated token count.
+                    if (
+                        not slices
+                        and energy_per_token_j is not None
+                        and result.get("tokens_source") == "usage"
+                    ):
                         result["energy_per_token_j"] = energy_per_token_j
                     if tok_s > 0:
-                        result["tok_s_per_soc_watt"] = round(tok_s / soc_watts, 2)
+                        result["tok_s_per_soc_watt"] = round(tok_s / soc_watts, 3)
 
             # Check for thermal throttling during this engine's runs
             for result in run.results[results_before:]:
@@ -686,6 +733,52 @@ def _model_matches(running_name: str, target: str) -> bool:
     if norm_running == norm_target or norm_target in norm_running or norm_running in norm_target:
         return True
     return False
+
+
+def _annotate_run_energy(
+    run: BenchmarkRun,
+    n_before_run: int,
+    slices: list[dict[str, Any]],
+    probe: PowerThermalProbe,
+    idle: dict[str, Any] | None,
+) -> None:
+    """Close one per-run IOReport slice and stamp it on the run's result.
+
+    Called after every ``_run_single``; ``n_before_run`` is the result count
+    before it. J/token is stamped only on server-exact token counts.
+    """
+    sl = probe.read_power()
+    if not sl:
+        return
+    appended = len(run.results) > n_before_run
+    if sl.get("energy_joules") is None or not sl.get("interval_s"):
+        # Read but unpublishable (required rail missing): mark the result so the
+        # block is refused with a reason, not quietly absent.
+        if appended and sl.get("rails") is not None:
+            run.results[-1]["energy_rails"] = sl["rails"]
+            run.results[-1]["energy_refused_run"] = "required IOReport rail missing"
+        return
+    slices.append(sl)
+    if not appended:
+        return  # this run appended nothing (error path); its slice is consumed
+    result = run.results[-1]
+    result["run_soc_watts"] = sl["soc_watts"]
+    result["run_energy_joules"] = sl["energy_joules"]
+    result["interval_s"] = sl["interval_s"]
+    if sl.get("rails") is not None:
+        result["energy_rails"] = sl["rails"]
+    n = result.get("tokens_generated", 0)
+    if result.get("tokens_source") == "usage" and n and n > 1:
+        e = sl["energy_joules"]
+        result["energy_per_token_j"] = round(e / (n - 1), 4)
+        idle_w = (idle or {}).get("soc_watts")
+        if idle_w is not None:
+            result["idle_soc_watts"] = idle_w
+            active = (e - idle_w * sl["interval_s"]) / (n - 1)
+            # A non-positive "active" energy means the idle was higher than the
+            # run's own power — the regime changed, the idle is wrong: withhold.
+            if active > 0:
+                result["energy_per_token_active_j"] = round(active, 4)
 
 
 def _check_thermal_drift(run: BenchmarkRun, results_start: int, engine_name: str) -> None:

@@ -190,8 +190,10 @@
                         <th class="text-left sortable" data-key="quantizations">Quant</th>
                         <th class="text-right sortable sort-desc" data-key="median_tok_s">tok/s (median)</th>
                         <th class="text-right sortable" data-key="median_ttft_ms">TTFT (median)</th>
-                        <th class="text-right sortable" data-key="median_power_watts">W</th>
-                        <th class="text-right sortable" data-key="median_tok_s_per_watt">tok/s/W</th>
+                        <th class="text-right sortable" data-key="median_power_watts" title="GPU rail only (legacy submissions)">GPU W</th>
+                        <th class="text-right sortable" data-key="median_tok_s_per_watt" title="tok/s per GPU watt (legacy)">tok/s/W (GPU)</th>
+                        <th class="text-right sortable" data-key="median_soc_watts" title="Package power: GPU+CPU+ANE+DRAM+DCS (IOReport), turn window">SoC W</th>
+                        <th class="text-right sortable" data-key="median_energy_per_token_j" title="SoC joules per generated token, full turn — lower is better">J/tok</th>
                         <th class="text-right sortable" data-key="samples">Samples</th>
                         <th class="text-left sortable" data-key="last_submitted_at">Last seen</th>
                     </tr>
@@ -222,6 +224,8 @@
         median_ttft_ms: true,
         median_power_watts: true,
         median_tok_s_per_watt: true,
+        median_soc_watts: true,
+        median_energy_per_token_j: true,
         samples: true,
         last_submitted_at: true
     };
@@ -670,6 +674,8 @@
             td(ttft ? Math.round(ttft) + ' ms' : '—', true);
             td(fmtNum(e.median_power_watts, 1), true);
             td(fmtNum(e.median_tok_s_per_watt, 2), true);
+            td(fmtNum(e.median_soc_watts, 1), true);
+            td(fmtNum(e.median_energy_per_token_j, 3), true);
             td(String(e.samples || e.submissions || 0), true);
             tr.appendChild(lastSeenCell(e));
             tr.addEventListener('click', function () { toggleDetail(tr, e); });

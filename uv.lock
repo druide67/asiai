@@ -35,7 +35,7 @@ wheels = [
 
 [[package]]
 name = "asiai"
-version = "1.22.0"
+version = "1.32.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
@@ -78,8 +78,8 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "jinja2", marker = "extra == 'all'", specifier = ">=3.1" },
     { name = "jinja2", marker = "extra == 'web'", specifier = ">=3.1" },
-    { name = "mcp", marker = "extra == 'all'", specifier = ">=1.12" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.12" },
+    { name = "mcp", marker = "extra == 'all'", specifier = ">=1.12,<2" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.12,<2" },
     { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.2" },
     { name = "mkdocs-material", marker = "extra == 'docs'" },
     { name = "pytest", marker = "extra == 'dev'" },

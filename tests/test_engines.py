@@ -858,19 +858,45 @@ class TestMtplxEngine:
         engine = MtplxEngine("http://localhost:8005")
         assert engine.name == "mtplx"
 
-    def test_version_via_brew(self):
+    def test_version_reads_the_serving_process(self):
+        # Keg 2.10.0, process serving from venv-2.8.3: the process wins.
+        health = {"mlx_runtime": {"path": "/opt/homebrew/var/mtplx/venv-2.8.3/lib/x.so"}}
+
+        class _Out:
+            stdout = "mtplx 2.10.0\n"
+
+        with (
+            patch("asiai.engines.detect.http_get_json", return_value=(health, {})),
+            patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()),
+        ):
+            engine = MtplxEngine("http://localhost:8005")
+            assert engine.version() == "2.8.3"
+
+    def test_version_via_brew_is_bare_and_warns(self, caplog):
+        # No serving process: the keg fallback answers with the BARE version
+        # (the field is parsed as a version downstream); the caveat goes to the log.
+        import logging
+
         class _Out:
             stdout = "mtplx 2.0.2\n"
 
-        with patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()):
+        with (
+            patch("asiai.engines.detect.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()),
+            caplog.at_level(logging.WARNING, logger="asiai.engines.mtplx"),
+        ):
             engine = MtplxEngine("http://localhost:8005")
             assert engine.version() == "2.0.2"
+        assert "keg" in caplog.text and "2.0.2" in caplog.text
 
     def test_version_not_installed(self):
         class _Out:
             stdout = ""
 
-        with patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()):
+        with (
+            patch("asiai.engines.detect.http_get_json", return_value=(None, {})),
+            patch("asiai.engines.mtplx.subprocess.run", return_value=_Out()),
+        ):
             engine = MtplxEngine("http://localhost:8005")
             assert engine.version() == ""
 

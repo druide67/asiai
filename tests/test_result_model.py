@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from asiai.benchmark.report_md import render_markdown
-from asiai.benchmark.result_model import build_result, display_model
+from asiai.benchmark.result_model import DOCUMENTED_GATES, build_result, display_model
 
 NOW = 1783900000
 
@@ -594,3 +594,161 @@ def test_context_depth_falls_back_for_exports_without_groups():
     payload["context_depth"] = {"median": 7530, "spread_pct": 0.88, "n": 18}
     cond = build_result("agentic", payload).conditions["context_depth"]
     assert "7530 prompt tokens" in cond
+
+
+# ── energy gates on the standard result ───────────────────────────────────────
+
+
+def _std_payload(engines: dict) -> dict:
+    return {"benchmark": {"model": "m", "engines": engines}, "hw_chip": "M5 Max"}
+
+
+def test_energy_gates_absent_when_nothing_measured():
+    from asiai.benchmark.result_model import build_result
+
+    r = build_result("standard", _std_payload({"mtplx": {"median_tok_s": 40.0}}))
+    assert not [g for g in r.gates if g.name.startswith("energy_")]
+
+
+def test_energy_gates_pass_when_block_present():
+    from asiai.benchmark.result_model import build_result
+
+    eng = {"median_tok_s": 40.0, "energy": {"energy_per_token_j": 0.2, "soc_watts": 10.0}}
+    r = build_result("standard", _std_payload({"mtplx": eng}))
+    g = {x.name: x for x in r.gates}
+    assert g["energy_provenance"].passed and g["energy_thermal"].passed
+    assert any(m.key == "energy_per_token_j" and m.value == 0.2 for m in r.subjects[0].metrics)
+
+
+def test_energy_provenance_gate_fails_on_refusal():
+    from asiai.benchmark.result_model import build_result
+
+    eng = {
+        "median_tok_s": 40.0,
+        "energy_refused": "provenance: required IOReport rail missing on a run",
+    }
+    r = build_result("standard", _std_payload({"mtplx": eng}))
+    g = {x.name: x for x in r.gates}
+    assert g["energy_provenance"].passed is False
+    assert g["energy_thermal"].passed is True
+
+
+def test_energy_thermal_gate_fails_when_all_runs_throttled():
+    from asiai.benchmark.result_model import build_result
+
+    eng = {
+        "median_tok_s": 40.0,
+        "energy_refused": "thermal: all 3 measured run(s) thermally throttled",
+    }
+    r = build_result("standard", _std_payload({"mtplx": eng}))
+    g = {x.name: x for x in r.gates}
+    assert g["energy_thermal"].passed is False
+    assert g["energy_provenance"].passed is True
+
+
+# ── every documented gate is buildable — the test that would have caught
+#    session_replay being computed, listed in FAIL_ON_GATE, and never built ────
+
+import pytest  # noqa: E402
+
+_AGENTIC_FULL_GATES = {
+    "early_stop": {"detected": True, "truncated_runs": [{"phase": "cold"}]},
+    "memory_pressure": {"alerted": True, "alert_reason": "swap"},
+    "duplicate_processes": [{"pid": 1}],
+    "output_validity": {"output_valid_pct": 50.0, "min_valid_pct": 90.0},
+    "session_replay": {"detected": True, "replay_runs": [{"phase": "prefix-test-3"}]},
+    "bank_preload": {"detected": True, "reason": "cold rep0 reused 7424 cached tokens"},
+    "thermal": {"observed": True, "throttled": True, "min_speed_limit": 50},
+    "thinking": {"status": "off_ignored", "comparable": False},
+    "other_engines_resident": [{"engine": "ollama"}],
+}
+
+
+@pytest.mark.parametrize("name", sorted(DOCUMENTED_GATES["agentic"]))
+def test_every_agentic_gate_name_is_buildable_and_can_fail(name):
+    payload = {
+        "schema_version": "agentic-v5",
+        "engine": "mtplx",
+        "model": "m",
+        "runs": [],
+        "phase_stats": {},
+        "quality_gates": _AGENTIC_FULL_GATES,
+    }
+    r = build_result("agentic", payload)
+    g = {x.name: x for x in r.gates}
+    assert name in g, f"{name} is documented but build_result never emits it"
+    assert g[name].passed is False, f"{name} did not FAIL on a payload built to fail it"
+
+
+@pytest.mark.parametrize("name", sorted(DOCUMENTED_GATES["standard"]))
+def test_every_standard_gate_name_is_buildable_and_can_fail(name):
+    payload = {
+        "hw_chip": "M5 Max",
+        "benchmark": {
+            "model": "m",
+            "engines": {
+                "mtplx": {
+                    "median_tok_s": 40.0,
+                    "energy_refused": "thermal: all 1 measured run(s) thermally throttled",
+                },
+                "llamacpp": {
+                    "median_tok_s": 30.0,
+                    "energy_refused": "provenance: required IOReport rail missing on a run",
+                },
+            },
+        },
+        "quality_gates": {
+            "thermal": {
+                "observed": True,
+                "throttled": True,
+                "min_speed_limit": 50,
+                "worst_level": "serious",
+            },
+            "memory_pressure": {"alerted": True, "alert_reason": "swap 14 GB"},
+        },
+    }
+    r = build_result("standard", payload)
+    g = {x.name: x for x in r.gates}
+    assert name in g, f"{name} is documented but build_result never emits it"
+    assert g[name].passed is False, f"{name} did not FAIL on a payload built to fail it"
+
+
+def test_energy_provenance_passes_when_engine_reports_no_token_usage():
+    """Not measurable is not a fault: no gate fails for an engine without `usage`."""
+    p = _standard_payload()
+    p["benchmark"]["engines"]["llamacpp"]["energy_refused"] = (
+        "not_applicable: token count is an estimate (tokens_source != usage)"
+    )
+    g = {x.name: x for x in build_result("standard", p).gates}
+    assert g["energy_provenance"].passed is True
+    assert "without token usage" in g["energy_provenance"].detail
+    assert g["energy_thermal"].passed is True
+
+
+def test_documented_gates_cover_every_literal_gate_the_adapters_emit():
+    """DOCUMENTED_GATES must name every Gate("literal") its adapter emits, and
+    nothing else — the two lists used to be maintained by hand and drifted
+    (2026-09-05 review: --fail-on-gate fluency_judge refused as a typo)."""
+    import inspect
+    import re
+
+    from asiai.benchmark import result_model
+
+    src = inspect.getsource(result_model)
+    for bench_type, fn in (
+        ("standard", "from_standard"),
+        ("agentic", "from_agentic"),
+        ("language", "from_language"),
+    ):
+        start = src.index(f"def {fn}(")
+        end = src.find("\ndef ", start + 1)
+        body = src[start:end]
+        emitted = set(re.findall(r'Gate\(\s*"([a-z_]+)"', body))
+        assert emitted, f"{fn} emits no literal gate?"
+        documented = DOCUMENTED_GATES[bench_type]
+        assert emitted <= documented, (
+            f"{bench_type}: emitted but undocumented: {sorted(emitted - documented)}"
+        )
+        assert documented <= emitted, (
+            f"{bench_type}: documented but never emitted: {sorted(documented - emitted)}"
+        )

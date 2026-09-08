@@ -343,6 +343,26 @@ MIGRATIONS = [
             "ALTER TABLE benchmarks ADD COLUMN energy_per_token_j REAL DEFAULT 0",
         ],
     },
+    # v1.34 (metrics_version 4): per-run energy slices, loaded idle, conditions.
+    {
+        "table": "benchmarks",
+        "columns": [
+            "energy_per_token_active_j",
+            "idle_soc_watts",
+            "energy_rails",
+            "interval_s",
+            "powermode",
+            "power_supply",
+        ],
+        "sql": [
+            "ALTER TABLE benchmarks ADD COLUMN energy_per_token_active_j REAL",
+            "ALTER TABLE benchmarks ADD COLUMN idle_soc_watts REAL",
+            "ALTER TABLE benchmarks ADD COLUMN energy_rails TEXT",
+            "ALTER TABLE benchmarks ADD COLUMN interval_s REAL",
+            "ALTER TABLE benchmarks ADD COLUMN powermode INTEGER",
+            "ALTER TABLE benchmarks ADD COLUMN power_supply TEXT",
+        ],
+    },
     # v1.11: token provenance ('usage'|'chunks') + prefill throughput (Lot C).
     # tok/s is only comparable at comparable token counts — tokens_source flags
     # whether the count is server-exact (usage) or a streamed chunk estimate.

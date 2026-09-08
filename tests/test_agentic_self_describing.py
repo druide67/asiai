@@ -203,7 +203,7 @@ def test_agentic_recording_v4_and_metadata(tmp_path):
             skip_quality_gates=True,
         )
 
-    assert out["schema_version"] == "agentic-v4"
+    assert out["schema_version"] == "agentic-v5"
     assert out["bench_mode"] == "agentic"
     assert out["hw_chip"] == "Apple M5 Max"
     assert out["powermode"] == 2
@@ -294,7 +294,7 @@ def test_burst_recording_v2_and_metadata():
 
 def _sample_data():
     return {
-        "schema_version": "agentic-v4",
+        "schema_version": "agentic-v5",
         "engine": "llamacpp",
         "model": "Qwopus3.6-35B-A3B-v1-MTP-Q4_K_S.gguf",
         "hw_chip": "Apple M5 Max",

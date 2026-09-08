@@ -150,6 +150,7 @@ SYS_A = _grow_to(31500, "SYSTEM-A-canonical-eos-analyst")
 SYS_B = _grow_to(31500, "SYSTEM-B-orbital-radio-pulsar-timer")
 USER_X = _grow_to(8000, "USER-X-tidal-deformability-question")
 USER_Y = _grow_to(8000, "USER-Y-mass-radius-degeneracy-question")
+USER_Z = _grow_to(8000, "USER-Z-glitch-recovery-timing-question")
 USER_L = _grow_to(265000, "USER-L-long-context-multi-event-corpus")
 
 

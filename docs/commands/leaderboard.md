@@ -49,7 +49,7 @@ Agentic bench — decision tiers
   ★  Qwopus-35B · llamacpp b9430 ▲MTP  123.3  127.5   83.8     67    0.8   1.590   29.0   100
 ```
 
-Each row is self-describing from schema `agentic-v4`: the machine, chip, power
+Each row is self-describing from schema `agentic-v5`: the machine, chip, power
 mode and engine version are read from the JSON, so the table needs no filename
 parsing or hardcoded version map. Gates match the community ranking
 (`valid ≥ 80%`); `★` ranks throughput only — the final pick also weighs output

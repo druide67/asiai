@@ -63,7 +63,7 @@ Benchmark: qwen3.5
 |--------|-------------|
 | **tok/s** | Generation speed (tokens/sec), excluding prompt processing |
 | **TTFT** | Time to first token — prompt processing latency |
-| **Power** | GPU power draw in watts (`sudo powermetrics`) |
+| **Power** | GPU-rail watts and SoC package watts (IOReport energy counters, no sudo); J/token when tokens are counted by the engine |
 | **tok/s/W** | Energy efficiency — tokens per second per watt |
 | **Stability** | Run-to-run variance: stable (<5%), variable (<10%), unstable (>10%) |
 | **VRAM** | Memory footprint — native (Ollama, LM Studio) or estimated via `ri_phys_footprint` (all engines) |

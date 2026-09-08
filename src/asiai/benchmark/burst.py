@@ -439,8 +439,11 @@ def _aggregate_size(
         if soc_watts and throughput_tokens_per_s
         else None
     )
+    # Decode intervals, as in agentic: energy is spent between tokens, and each
+    # of the N concurrent calls contributes (tokens − 1) intervals → total − N.
+    intervals = total_tokens - len(ok_results)
     energy_per_token_j = (
-        round(energy_joules / total_tokens, 4) if energy_joules and total_tokens else None
+        round(energy_joules / intervals, 4) if energy_joules and intervals > 0 else None
     )
     valid_pct = output_valid_pct([r.output_valid for r in ok_results]) if ok_results else None
 
