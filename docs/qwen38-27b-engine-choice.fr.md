@@ -1,9 +1,9 @@
 ---
 title: "Le meilleur moteur pour un agent local sur Qwen3.8-27B : MTPLX, et ce n'est pas serré"
-description: "Onze configurations, huit moteurs, un M5 Max. Pour du travail d'agent, le gagnant prend toutes les mesures qui comptent : 99 ms au premier jeton, réutilisation de préfixe au token près, 44 tok/s, 27 Go. Et le drapeau qui rapporte 20 à 50 % est éteint par défaut chez quatre des six moteurs qui le supportent."
+description: "Onze configurations, huit moteurs, un M5 Max. Pour du travail d'agent, le gagnant prend toutes les mesures qui comptent : 99 ms pour reprendre une session, réutilisation de préfixe au token près, 44 tok/s, 27 Go. Et le drapeau qui rapporte 20 à 50 % est éteint par défaut chez quatre des six moteurs qui le supportent."
 type: article
 date: 2026-08-16
-updated: 2026-08-16
+updated: 2026-09-02
 ---
 
 # Le meilleur moteur pour un agent local sur Qwen3.8-27B
@@ -16,8 +16,8 @@ près :
 
 | | MTPLX Optimized-Speed | llama.cpp b10434 +MTP | Ollama 0.32.13 |
 |---|---|---|---|
-| Premier jeton | **99 ms** | 125 ms | 240 ms |
-| Premier jeton, 56k froid | **301 ms** | 365 ms | 574 ms |
+| Premier jeton, session reprise | **99 ms** | 125 ms | 240 ms |
+| Premier jeton, 56k repris | **301 ms** | 365 ms | 574 ms |
 | Réutilisation de préfixe | **7 530 / 7 530** | 7 526 / 7 530 | 0 / 7 530 |
 | Débit | **44,4 tok/s** | 31,8 | 32,8 |
 | Mémoire | **27 Go** | 36,8 Go | 30,3 Go |
@@ -29,8 +29,11 @@ le meilleur des autres. C'est ce que nous faisons tourner en production.
 
 Un agent n'est pas un chat. Il ne déroule pas une longue réponse d'un trait — il enchaîne
 des dizaines de tours courts, et **chaque tour relit tout ce qui précède**. Le chiffre que
-vous ressentez est donc le temps au premier jeton, payé une fois par tour, et il dépend
-presque entièrement de la capacité du moteur à garder le prompt précédent en cache.
+vous ressentez est donc le temps au premier jeton, et il dépend presque entièrement de la
+capacité du moteur à garder le prompt précédent en cache. Les colonnes de latence
+ci-dessous mesurent le tour *repris* — le moteur qui retrouve une session. Un vrai tour
+ajoute du texte neuf par-dessus le préfixe en cache et paie aussi son prefill ; ce que le
+tableau classe, c'est la machinerie de cache — précisément ce qui sépare ces moteurs.
 
 L'écart sur cette mesure est de **335×** dans notre tableau — de 99 ms à 33 secondes.
 L'écart sur le débit est de 5 %. Voilà tout l'argument : pour un agent, choisissez sur la
@@ -44,8 +47,10 @@ Trois ne réutilisent rien du tout et repaient le prompt entier à chaque fois �
 
 ## Le tableau complet
 
-« À chaud » et « à 56k » sont des tok/s. Premier jeton sur le tour à chaud ; @56k sur un
-prompt froid de 55 839 tokens.
+« À chaud » et « à 56k » sont des tok/s. « Premier jeton » et « @56k » sont le tour
+repris (médiane des répétitions à chaud, prompts de 7 530 et 55 839 tokens). Pour les
+moteurs sans aucun cache — mlx-vlm, rapid-mlx — repris égale froid : ils repaient tout
+le prefill à chaque fois.
 
 | Moteur | Poids | À chaud | À 56k | Premier jeton | @56k | Mémoire | tok/s/W |
 |---|---|---|---|---|---|---|---|
@@ -63,13 +68,15 @@ prompt froid de 55 839 tokens.
 
 ⁽¹⁾ ⁽²⁾ = fichier de poids identique au bit près. Les lignes MTPLX ont tourné sur la
 2.6.0. Une cellule, un export. Toutes les colonnes sont des médianes du tour à chaud.
-`tok/s/W` divise le débit de décodage par la puissance du **SoC entier** (de 58 à 83 W
+`tok/s/W` divise le débit de décodage par la puissance du **SoC** (cinq rails IOReport : GPU, CPU, ANE, DRAM et contrôleur mémoire — de 58 à 83 W
 selon le moteur) — pas du GPU seul, qui classerait autrement.
 
 **Comment le lire.** Les écarts de débit inférieurs à 8 % sont du bruit : d'Ollama à
 LM Studio+MTP (32,8 à 27,8), ces moteurs sont à égalité, pas classés. Les deux entrées à
-100 secondes sont des défauts de cache, pas une vitesse de moteur : Optimized-Quality fait
-118 ms à chaud et revient à 498 ms sur le tour 56k répété. La mémoire n'est pas comparable
+100 secondes sont ce que coûte réellement un *premier passage* sur un prompt de 56k sur ce
+matériel — chaque moteur le paie une fois ; les entrées en millisecondes de cette colonne
+sont des tours repris servis par le cache (Optimized-Quality montre les deux : 100 s au
+premier passage, 498 ms une fois en cache). La mémoire n'est pas comparable
 entre familles (llama.cpp mappe son fichier : 36,8 Go résidents = 19,4 Go physiques).
 
 ## Ce qui surprend : le serveur ne compte presque pas
@@ -112,7 +119,7 @@ et `xhigh` est la valeur par défaut.
 d'API** — envoyé comme paramètre de requête ordinaire, il est ignoré en silence. Il doit
 être posé au lancement.
 
-## Quatre limites qui changent votre lecture
+## Cinq limites qui changent votre lecture
 
 1. **Rien ici n'a mené une tâche à son terme.** La sortie était plafonnée à 400 tokens et
    chaque exécution a atteint ce plafond. Ce sont des débits de flux sur des continuations
@@ -129,6 +136,18 @@ d'API** — envoyé comme paramètre de requête ordinaire, il est ignoré en si
    seules où moteur et format de poids ne peuvent pas être séparés. Pesez-le en conséquence
    — la table des drapeaux, en annexe, est la partie de cette page qu'il ne nous coûte rien
    d'avoir juste.
+
+5. **MTPLX garde une banque de session persistante sur disque, qui survit aux
+   redémarrages** — et elle a servi des phases que notre protocole croyait froides.
+   Découvert le 02/09/2026 (trois campagnes contaminées avant qu'un garde-fou
+   fail-closed ne l'attrape) : banque réellement vide, le premier jeton sur un prompt
+   froid de 7,5k est à **8,7 s** et un prefill 56k froid à **82 s** (mesurés sur MTPLX
+   2.10.2, M5 en limitation thermique — des majorants). Les colonnes de latence
+   ci-dessus sont donc des chiffres de *reprise de session* — la mesure dont vit un
+   agent — mais n'ont jamais été des démarrages à froid, et les moteurs sans banque
+   persistante ne pouvaient pas bénéficier du même effet entre les runs. Le protocole
+   de banc purge désormais la banque par cellule et refuse les phases rejouées
+   (agentic-v5).
 
 Deux moteurs à MTP natif, vmlx et vllm-mlx, n'ont pas pu être mesurés à temps.
 
@@ -178,3 +197,13 @@ prompts : demandez-les et nous les publions.
 
 Si vous ne retenez qu'une chose : **vérifiez si votre moteur dispose de la prédiction
 multi-token, et si elle est activée.**
+
+## Corrections
+
+**02/09/2026.** Les colonnes de latence ont été requalifiées de « premier jeton » /
+« 56k froid » en *session reprise* : un garde-fou fail-closed ajouté à notre banc a
+révélé que la banque de session persistante de MTPLX avait servi des prompts d'une
+campagne à l'autre — les chiffres, correctement mesurés, n'ont jamais été des
+démarrages à froid. Les vrais chiffres à froid et le correctif de protocole sont dans
+la limite 5 ci-dessus. Le classement entre moteurs à cache est inchangé ; les entrées
+mlx-vlm et rapid-mlx ont toujours été de vrais froids (ils n'ont pas de cache).
