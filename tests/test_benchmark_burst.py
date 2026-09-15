@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+import asiai.benchmark.burst as b
 from asiai.benchmark.burst import (
     MAX_BURST_SIZE,
     SCHEMA_VERSION,
@@ -332,3 +333,109 @@ def test_burst_probe_closed_on_exception():
         except RuntimeError:
             pass
     probe.close.assert_called_once()
+
+
+class TestWarmupAndNominalWait:
+    """Pass 0 was cold (bank, page cache) and pooled into the
+    aggregate; passes started throttled with nothing waiting for nominal."""
+
+    @staticmethod
+    def _fake_pass(wall_s: float, **extra):
+        p = {
+            "n": 2,
+            "wall_time_s": wall_s,
+            "latency_ms": {"p50": wall_s * 500, "p95": wall_s * 1000, "p99": 0.0, "max": 0.0},
+            "ttft_ms": {"p50": 0.0, "p95": 0.0, "p99": 0.0},
+            "throughput_calls_per_s": 1.0,
+            "throughput_tokens_aggregate_per_s": 100.0 / wall_s,
+            "errors_count": 0,
+            "error_summary": [],
+            "memory_pressure_swap_delta_mb": 0.0,
+            "memory_pressure_swapouts_delta": 0,
+            "duplicate_processes": [],
+            "output_valid_pct": 100.0,
+            "thermal_speed_limit": 100,
+        }
+        p.update(extra)
+        return p
+
+    def _run(self, monkeypatch, walls, **kw):
+        it = iter(walls)
+        monkeypatch.setattr(b, "_run_one_burst_pass", lambda **_: self._fake_pass(next(it)))
+        monkeypatch.setattr(b.time, "sleep", lambda _s: None)
+        monkeypatch.setattr(b, "collect_run_metadata", lambda **_: {})
+        return b.run_burst(base_url="http://x", engine="e", model="m", burst_sizes=(2,), **kw)
+
+    def test_warmup_pass_kept_apart_and_median_unchanged(self, monkeypatch):
+        # Cold pass at 10 s, warm passes 2.0/2.2/2.4 → median must read 2.2.
+        out = self._run(monkeypatch, [10.0, 2.0, 2.2, 2.4], runs=3)
+        size = out["results"]["2"]
+        assert size["n_passes"] == 3
+        assert size["wall_time_s"]["median"] == 2.2
+        assert [p["run_index"] for p in size["passes"]] == [0, 1, 2]
+        assert all(p["is_warmup"] is False for p in size["passes"])
+        warm = size["warmup"]
+        assert warm["is_warmup"] is True and warm["run_index"] == -1
+        assert warm["wall_time_s"] == 10.0
+        # (10 - 2.2) / 2.2 = +354.5 %
+        assert warm["vs_warm_pct"]["wall_time_s"] == 354.5
+        assert warm["vs_warm_pct"]["p95_ms"] == 354.5
+        assert out["warmup"] is True
+
+    def test_warmup_with_single_run_compares_to_that_run(self, monkeypatch):
+        out = self._run(monkeypatch, [9.0, 3.0], runs=1)
+        size = out["results"]["2"]
+        assert size["wall_time_s"] == 3.0
+        assert size["warmup"]["vs_warm_pct"]["wall_time_s"] == 200.0
+
+    def test_no_warmup_flag_runs_only_measured_passes(self, monkeypatch):
+        out = self._run(monkeypatch, [2.0, 2.2], runs=2, warmup=False)
+        assert "warmup" not in out["results"]["2"]
+        assert out["warmup"] is False
+
+    def test_wait_for_nominal_is_recorded_per_pass_and_summed(self, monkeypatch):
+        levels = iter(["serious", "fair", "nominal", "nominal", "nominal"])
+        monkeypatch.setattr(b, "collect_thermal", lambda: type("T", (), {"level": next(levels)})())
+        clock = [0.0]
+
+        def _tick():
+            clock[0] += 5.0
+            return clock[0]
+
+        monkeypatch.setattr(b.time, "perf_counter", _tick)
+        out = self._run(monkeypatch, [1.0, 1.0], runs=2, warmup=False, wait_nominal_s=60)
+        passes = out["results"]["2"]["passes"]
+        assert passes[0]["thermal_at_first_poll"] == "serious"
+        assert passes[0]["thermal_at_start"] == "nominal"
+        assert passes[0]["waited_nominal_s"] > 0
+        assert passes[1]["waited_nominal_s"] > 0  # one poll always costs a tick here
+        total = out["results"]["2"]["waited_nominal_s"]
+        assert total == round(passes[0]["waited_nominal_s"] + passes[1]["waited_nominal_s"], 1)
+
+    def test_wait_for_nominal_gives_up_at_timeout_and_says_so(self, monkeypatch):
+        monkeypatch.setattr(b, "collect_thermal", lambda: type("T", (), {"level": "serious"})())
+        clock = [0.0]
+
+        def _tick():
+            clock[0] += 30.0
+            return clock[0]
+
+        monkeypatch.setattr(b.time, "perf_counter", _tick)
+        monkeypatch.setattr(b.time, "sleep", lambda _s: None)
+        info = b._wait_for_nominal(60.0)
+        assert info["thermal_at_start"] == "serious"
+        assert info["waited_nominal_s"] >= 60.0
+
+    def test_aggregate_carries_worst_thermal_and_total_wait(self):
+        passes = [
+            self._fake_pass(2.0, thermal_speed_limit=100, waited_nominal_s=0.0),
+            self._fake_pass(2.0, thermal_speed_limit=50, waited_nominal_s=42.0),
+            self._fake_pass(2.0, thermal_speed_limit=None, waited_nominal_s=8.0),
+        ]
+        agg = b._aggregate_passes(passes)
+        assert agg["thermal_speed_limit"] == 50
+        assert agg["waited_nominal_s"] == 50.0
+
+    def test_compare_warmup_none_when_reference_missing(self):
+        dev = b._compare_warmup({"wall_time_s": 5.0}, {"wall_time_s": {"median": 0.0}})
+        assert dev["wall_time_s"] is None

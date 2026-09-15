@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **`bench --code` reports tool substitutions** (`"expected→actual": count`) next to `correct_tool`. Eval-suite validity rules in AGENTS.md.
 - **`--fail-on-gate` refuses an unknown gate name** (exit 2) and warns when a requested gate was not evaluated.
 - **Exports carry an `instrument_fingerprint`** (version, source hash, interpreter).
+- **Burst warm-up pass kept apart.** One priming pass per size is exported under `results[size].warmup` with its deviation from the warm passes; it never enters the aggregate. `--burst-no-warmup` skips it.
+- **`--burst-wait-nominal SECONDS`** waits for thermal pressure to read nominal before each burst pass; the wait is recorded per pass and summed per size.
 
 ### Changed
 
@@ -30,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Burst gates read the worst pass, not the median.** `errors`, `memory_pressure`, `output_validity` and `thermal` are now named gates on max swap, min validity and min speed limit, so `--fail-on-gate` can enforce them.
 - **`session_replay` and `bank_preload` are enforceable gates**; they were computed but never converted, so `--fail-on-gate session_replay` enforced nothing.
 - **Energy slices stay paired with their run after an errored run**; previously every later run lost its J/token.
 - **`--fail-on-gate <name>` accepts gates emitted by burst, code and language benches.**

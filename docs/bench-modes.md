@@ -32,7 +32,7 @@ applicable.
 | Latency p50/p95/p99/max | ❌ sequential | ❌ sequential | ✅ **the concurrency signal** |
 | Aggregate throughput (calls/s, tok/s) | ❌ | ❌ | ✅ **the point of the mode** |
 | cached_tokens + prefix-cache verdict | ❌ | ✅ **the point of the mode** | ❌ |
-| Multi-run variance | ✅ `--runs` | ✅ `--runs` repeats the protocol (`phase_stats`: median + CV) | ✅ `--burst-runs` |
+| Multi-run variance | ✅ `--runs` | ✅ `--runs` repeats the protocol (`phase_stats`: median + CV) | ✅ `--burst-runs`; warm-up pass exported apart, never pooled |
 | **SoC power (watts)** | ✅ per-engine window | ✅ **decode-scoped per-run window** | ✅ **aggregate** over the concurrent window |
 | powermetrics cross-validation (sudo) | ✅ leaderboard provenance | ❌ noise (sudo + smears over 2–8 s) | ❌ noise |
 | Efficiency tok/s per SoC-watt | ✅ decode | ✅ decode per run | ✅ aggregate throughput |

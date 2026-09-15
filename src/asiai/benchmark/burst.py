@@ -59,7 +59,7 @@ from asiai.benchmark.quality_gates import (
     PowerThermalProbe,
     check_duplicate_processes,
 )
-from asiai.collectors.system import collect_run_metadata
+from asiai.collectors.system import collect_run_metadata, collect_thermal
 
 logger = logging.getLogger("asiai.benchmark.burst")
 
@@ -589,6 +589,56 @@ def _run_one_burst_pass(
     return asdict(size_result)
 
 
+def _wait_for_nominal(max_wait_s: float, poll_s: float = 5.0) -> dict[str, Any]:
+    """Block until thermal pressure reads nominal, or ``max_wait_s`` elapses.
+
+    Returns what a reader needs to judge the pass: the level seen at first
+    poll, the level when the pass actually starts, and the seconds spent.
+    """
+    t0 = time.perf_counter()
+    first = collect_thermal().level
+    level = first
+    while level != "nominal" and (time.perf_counter() - t0) < max_wait_s:
+        time.sleep(poll_s)
+        level = collect_thermal().level
+    waited = round(time.perf_counter() - t0, 1)
+    if level != "nominal":
+        logger.warning("thermal still %s after %.0fs — pass starts throttled", level, waited)
+    elif waited > 0:
+        logger.info("waited %.0fs for thermal nominal (was %s)", waited, first)
+    return {"thermal_at_first_poll": first, "thermal_at_start": level, "waited_nominal_s": waited}
+
+
+_WARMUP_COMPARED_KEYS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("p50_ms", ("latency_ms", "p50")),
+    ("p95_ms", ("latency_ms", "p95")),
+    ("wall_time_s", ("wall_time_s",)),
+    ("agg_tok_s", ("throughput_tokens_aggregate_per_s",)),
+)
+
+
+def _compare_warmup(warmup: dict[str, Any], warm: dict[str, Any]) -> dict[str, float | None]:
+    """Signed % deviation of the warm-up pass from the warm passes' median.
+
+    A cold first pass is a fact about the engine (bank, page cache, KV
+    pool) — it is kept, shown, and never pooled with the warm passes.
+    """
+
+    def _get(d: dict[str, Any], path: tuple[str, ...]) -> float | None:
+        v: Any = d
+        for k in path:
+            v = v.get(k) if isinstance(v, dict) else None
+        if isinstance(v, dict):
+            v = v.get("median")
+        return float(v) if isinstance(v, (int, float)) else None
+
+    out: dict[str, float | None] = {}
+    for label, path in _WARMUP_COMPARED_KEYS:
+        w, ref = _get(warmup, path), _get(warm, path)
+        out[label] = round((w - ref) / ref * 100.0, 1) if w is not None and ref else None
+    return out
+
+
 def _aggregate_passes(passes: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate multiple burst passes into a single result with variance.
 
@@ -668,6 +718,11 @@ def _aggregate_passes(passes: list[dict[str, Any]]) -> dict[str, Any]:
         "tok_s_per_soc_watt": _agg_optional("tok_s_per_soc_watt"),
         "energy_per_token_j": _agg_optional("energy_per_token_j"),
         "output_valid_pct": _agg_optional("output_valid_pct"),
+        # Worst reading across passes: a gate reads the throttled pass, not the median.
+        "thermal_speed_limit": (
+            int(min(v)) if (v := _extract_present("thermal_speed_limit")) else None
+        ),
+        "waited_nominal_s": round(sum(_extract_present("waited_nominal_s")), 1),
         "engine_rss_mb": _agg_optional("engine_rss_mb"),
         "engine_phys_footprint_mb": _agg_optional("engine_phys_footprint_mb"),
         "passes": passes,
@@ -687,6 +742,8 @@ def run_burst(
     extra_body: dict[str, Any] | None = None,
     stream: bool = True,
     runs: int = 1,
+    warmup: bool = True,
+    wait_nominal_s: float = 0.0,
     engine_version: str = "",
     include_host: bool = False,
     api_key: str | None = None,
@@ -711,6 +768,12 @@ def run_burst(
             Use 3-5 for production-grade measurements with variance reporting.
             Per-run results are stored under ``results[<size>]["passes"]``,
             and aggregate p50/min/max across passes under ``results[<size>]``.
+        warmup: Run one extra pass per size first, stored apart under
+            ``results[<size>]["warmup"]`` with its % deviation from the warm
+            passes (``vs_warm_pct``); never pooled into the aggregate.
+        wait_nominal_s: Before each pass, wait up to this many seconds for
+            thermal pressure to read nominal; the wait is recorded per pass
+            (``waited_nominal_s``) and summed per size. 0 disables.
 
     Returns:
         dict matching the burst-v1 schema, ready for ``json.dump``.
@@ -737,8 +800,8 @@ def run_burst(
     for size in burst_sizes:
         logger.info("burst size=%d starting (runs=%d)", size, runs)
 
-        pass_results: list[dict[str, Any]] = []
-        for run_idx in range(runs):
+        def _one_pass(run_idx: int) -> dict[str, Any]:
+            thermal_wait = _wait_for_nominal(wait_nominal_s) if wait_nominal_s > 0 else {}
             pass_dict = _run_one_burst_pass(
                 base_url=base_url,
                 engine=engine,
@@ -751,18 +814,29 @@ def run_burst(
                 stream=stream,
                 api_key=api_key,
             )
+            pass_dict.update(thermal_wait)
             pass_dict["run_index"] = run_idx
-            pass_results.append(pass_dict)
+            pass_dict["is_warmup"] = run_idx < 0
             logger.info(
-                "burst size=%d run=%d/%d wall=%.1fs p50=%.0fms p95=%.0fms errors=%d",
+                "burst size=%d %s wall=%.1fs p50=%.0fms p95=%.0fms errors=%d",
                 size,
-                run_idx + 1,
-                runs,
+                "warmup" if run_idx < 0 else f"run={run_idx + 1}/{runs}",
                 pass_dict["wall_time_s"],
                 pass_dict["latency_ms"]["p50"],
                 pass_dict["latency_ms"]["p95"],
                 pass_dict["errors_count"],
             )
+            return pass_dict
+
+        warmup_pass: dict[str, Any] | None = None
+        if warmup:
+            warmup_pass = _one_pass(-1)
+            if pause_between_sizes > 0:
+                time.sleep(pause_between_sizes)
+
+        pass_results: list[dict[str, Any]] = []
+        for run_idx in range(runs):
+            pass_results.append(_one_pass(run_idx))
             if run_idx < runs - 1 and pause_between_sizes > 0:
                 time.sleep(pause_between_sizes)
 
@@ -770,6 +844,9 @@ def run_burst(
             results[str(size)] = pass_results[0]
         else:
             results[str(size)] = _aggregate_passes(pass_results)
+        if warmup_pass is not None:
+            warmup_pass["vs_warm_pct"] = _compare_warmup(warmup_pass, results[str(size)])
+            results[str(size)]["warmup"] = warmup_pass
 
         # Cooldown between sizes (let engine flush KV pool / reclaim memory)
         if size != burst_sizes[-1] and pause_between_sizes > 0:
@@ -790,6 +867,8 @@ def run_burst(
         "extra_body": extra_body or {},
         "streaming": stream,
         "runs": runs,
+        "warmup": warmup,
+        "wait_nominal_s": wait_nominal_s,
         "results": results,
     }
     out.update(

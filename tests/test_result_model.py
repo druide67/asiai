@@ -303,10 +303,74 @@ class TestBuildResult:
     def test_burst_gates_and_subjects(self):
         r = build_result("burst", _burst_payload())
         assert [s.label for s in r.subjects] == ["burst-10", "burst-60"]
-        names = {g.name for g in r.gates}
-        assert "2 errors @60" in names
-        assert "no errors @10" in names
-        assert "swap +120 MB @60" in names
+        gates = {g.name: g for g in r.gates}
+        assert not gates["errors"].passed and "2 errors @60" in gates["errors"].detail
+        assert not gates["memory_pressure"].passed
+        assert "swap +120 MB @60" in gates["memory_pressure"].detail
+
+    def test_burst_gates_read_the_worst_pass_not_the_median(self):
+        # One pass in three swapped 3.4 GB and throttled
+        # to 50 %; the median said 0 and the gate stayed green.
+        payload = _burst_payload()
+        payload["runs"] = 3
+        payload["results"]["10"].update(
+            {
+                "n_passes": 3,
+                "errors_count": {"median": 0.0, "min": 0.0, "max": 0.0},
+                "memory_pressure_swap_delta_mb": {"median": 0.0, "min": 0.0, "max": 3409.2},
+                "output_valid_pct": {"median": 100.0, "min": 66.7, "max": 100.0},
+                # Older aggregates carry the speed limit only per pass.
+                "passes": [
+                    {"thermal_speed_limit": 100},
+                    {"thermal_speed_limit": 50},
+                    {"thermal_speed_limit": 100},
+                ],
+            }
+        )
+        gates = {g.name: g for g in build_result("burst", payload).gates}
+        assert not gates["memory_pressure"].passed
+        assert "3409 MB @10" in gates["memory_pressure"].detail
+        assert not gates["output_validity"].passed
+        assert "66.7% valid @10" in gates["output_validity"].detail
+        assert not gates["thermal"].passed
+        assert "50% @10" in gates["thermal"].detail
+
+    def test_burst_gates_green_when_every_pass_is_clean(self):
+        payload = _burst_payload()
+        payload["results"]["60"].update({"errors_count": 0, "memory_pressure_swap_delta_mb": 0.0})
+        for data in payload["results"].values():
+            data.update({"output_valid_pct": 100.0, "thermal_speed_limit": 100})
+        gates = {g.name: g for g in build_result("burst", payload).gates}
+        assert set(gates) == {"errors", "memory_pressure", "output_validity", "thermal"}
+        assert all(g.passed for g in gates.values())
+
+    def test_burst_documented_gates_match_what_the_code_emits(self):
+        # A name --fail-on-gate accepts must be one from_burst can produce, and
+        # every name from_burst produces must be nameable — else enforcing it
+        # enforces nothing (session_replay was inert this way).
+        from asiai.benchmark.result_model import BURST_GATE_NAMES, DOCUMENTED_GATES
+
+        payload = _burst_payload()
+        for data in payload["results"].values():
+            data.update({"output_valid_pct": 50.0, "thermal_speed_limit": 50})
+        emitted = {g.name for g in build_result("burst", payload).gates}
+        assert emitted == BURST_GATE_NAMES == DOCUMENTED_GATES["burst"]
+
+    def test_burst_warmup_pass_is_a_metric_not_pooled(self):
+        payload = _burst_payload()
+        payload["warmup"] = True
+        payload["results"]["10"]["warmup"] = {
+            "is_warmup": True,
+            "latency_ms": {"p50": 4000.0, "p95": 9000.0},
+            "vs_warm_pct": {"p95_ms": 900.0},
+        }
+        r = build_result("burst", payload)
+        subj = next(s for s in r.subjects if s.label == "burst-10")
+        # The hero (p95) is untouched by the cold pass; the deviation is shown.
+        assert subj.hero.value == 900.0
+        dev = next(m for m in subj.metrics if m.key.startswith("warmup_"))
+        assert dev.value == 900.0
+        assert r.conditions["warmup_pass"] == "True"
 
     def test_code_judge_offline_gate(self):
         r = build_result("code", _code_payload())

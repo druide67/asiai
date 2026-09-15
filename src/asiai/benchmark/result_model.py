@@ -557,10 +557,100 @@ def from_agentic(payload: dict) -> BenchResult:
     )
 
 
+# Gate names from_burst emits — the single source DOCUMENTED_GATES["burst"]
+# derives from, so --fail-on-gate can name every one of them.
+BURST_GATE_NAMES: frozenset[str] = frozenset(
+    {"errors", "memory_pressure", "output_validity", "thermal"}
+)
+
+
+def _burst_gate_facts(size_str: str, data: dict, facts: dict[str, list]) -> None:
+    """Collect, per burst size, the WORST pass for each gate.
+
+    runs>1 folds stats into {median,min,max}: a gate reads the max swap, the
+    min validity, the min speed limit — the median hid a 3.4 GB swap and a
+    50 % throttle on one pass out of three.
+    """
+
+    def _worst(v: Any, key: str) -> float | None:
+        if isinstance(v, dict):
+            return _num(v.get(key))
+        return _num(v)
+
+    passes = data.get("passes") or []
+    errors = _worst(data.get("errors_count"), "max")
+    if errors is not None:
+        facts["errors"].append((size_str, errors))
+    swap = _worst(data.get("memory_pressure_swap_delta_mb"), "max")
+    if swap is not None:
+        facts["swap"].append((size_str, swap))
+    valid = _worst(data.get("output_valid_pct"), "min")
+    if valid is None and passes:
+        vals = [_num(p.get("output_valid_pct")) for p in passes]
+        vals = [v for v in vals if v is not None]
+        valid = min(vals) if vals else None
+    if valid is not None:
+        facts["valid"].append((size_str, valid))
+    # Older aggregates carry the speed limit only per pass.
+    limit = _num(data.get("thermal_speed_limit"))
+    if limit is None and passes:
+        lims = [_num(p.get("thermal_speed_limit")) for p in passes]
+        lims = [v for v in lims if v is not None]
+        limit = min(lims) if lims else None
+    if limit is not None:
+        facts["thermal"].append((size_str, limit))
+
+
+def _burst_gates(facts: dict[str, list]) -> list[Gate]:
+    from asiai.benchmark.output_gates import DEFAULT_MIN_VALID_PCT
+
+    gates: list[Gate] = []
+    if facts["errors"]:
+        bad = [(s, n) for s, n in facts["errors"] if n > 0]
+        gates.append(
+            Gate(
+                "errors",
+                not bad,
+                "; ".join(f"{int(n)} errors @{s}" for s, n in bad) or "no errors",
+            )
+        )
+    if facts["swap"]:
+        bad = [(s, mb) for s, mb in facts["swap"] if mb > 0]
+        gates.append(
+            Gate(
+                "memory_pressure",
+                not bad,
+                "; ".join(f"swap +{mb:.0f} MB @{s}" for s, mb in bad) or "no swap",
+            )
+        )
+    if facts["valid"]:
+        bad = [(s, v) for s, v in facts["valid"] if v < DEFAULT_MIN_VALID_PCT]
+        worst = min(v for _, v in facts["valid"])
+        gates.append(
+            Gate(
+                "output_validity",
+                not bad,
+                "; ".join(f"{v:g}% valid @{s}" for s, v in bad) or f"worst pass {worst:g}% valid",
+            )
+        )
+    if facts["thermal"]:
+        bad = [(s, lim) for s, lim in facts["thermal"] if lim < 100]
+        gates.append(
+            Gate(
+                "thermal",
+                not bad,
+                "; ".join(f"min speed limit {lim:g}% @{s}" for s, lim in bad) or "nominal",
+            )
+        )
+    assert {g.name for g in gates} <= BURST_GATE_NAMES
+    return gates
+
+
 def from_burst(payload: dict) -> BenchResult:
     results: dict = payload.get("results") or {}
     subjects: list[Subject] = []
     gates: list[Gate] = []
+    facts: dict[str, list] = {"errors": [], "swap": [], "valid": [], "thermal": []}
 
     def _scalar(v: Any) -> float | None:
         # runs>1 folds each stat into {median,min,max}: report the median.
@@ -645,6 +735,15 @@ def from_burst(payload: dict) -> BenchResult:
                 n=n_passes,
                 direction="lower",
             ),
+            # Warm-up pass kept apart: its p95 deviation from the warm passes.
+            MetricValue(
+                "warmup_p95_vs_warm_pct",
+                "warm-up p95 vs warm",
+                _num(((data.get("warmup") or {}).get("vs_warm_pct") or {}).get("p95_ms")),
+                "%",
+                n=1,
+                direction="lower",
+            ),
         ]
         subjects.append(
             Subject(
@@ -655,16 +754,9 @@ def from_burst(payload: dict) -> BenchResult:
                 metrics=[m for m in metrics if m.value is not None],
             )
         )
-        errors = data.get("errors_count")
-        if isinstance(errors, dict):
-            errors = errors.get("max")
-        if _num(errors):
-            gates.append(Gate(f"{int(errors)} errors @{size_str}", False, "errors during burst"))
-        else:
-            gates.append(Gate(f"no errors @{size_str}", True, ""))
-        swap = _scalar(data.get("memory_pressure_swap_delta_mb"))
-        if swap and swap > 0:
-            gates.append(Gate(f"swap +{swap:.0f} MB @{size_str}", False, "swap pressure"))
+        _burst_gate_facts(size_str, data, facts)
+
+    gates.extend(_burst_gates(facts))
 
     conditions = _base_conditions(payload)
     for key, label in (
@@ -672,6 +764,8 @@ def from_burst(payload: dict) -> BenchResult:
         ("max_tokens_per_call", "max_tokens_per_call"),
         ("streaming", "streaming"),
         ("runs", "runs"),
+        ("warmup", "warmup_pass"),
+        ("wait_nominal_s", "wait_nominal_s"),
     ):
         if payload.get(key) is not None:
             conditions[label] = _fmt(payload.get(key))
@@ -1024,9 +1118,10 @@ _ADAPTERS = {
 DOCUMENTED_GATES: dict[str, frozenset[str]] = {
     "standard": frozenset({"thermal", "memory_pressure", "energy_provenance", "energy_thermal"}),
     "language": frozenset({"dataset_coverage", "fluency_judge"}),
-    # burst and code name their gates from the data (`{suite}_judge`,
-    # `no errors @{size}`); instruct and thinking-ablation emit none. For those
-    # the CLI accepts any name the result actually emitted.
+    "burst": BURST_GATE_NAMES,
+    # code names its gates from the data (`{suite}_judge`); instruct and
+    # thinking-ablation emit none. For those the CLI accepts any name the
+    # result actually emitted.
     "agentic": frozenset(
         {
             "early_stop",

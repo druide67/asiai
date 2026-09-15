@@ -994,6 +994,8 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
         extra_body=extra_body,
         stream=not getattr(args, "burst_no_stream", False),
         runs=getattr(args, "burst_runs", 1),
+        warmup=not getattr(args, "burst_no_warmup", False),
+        wait_nominal_s=getattr(args, "burst_wait_nominal", 0.0) or 0.0,
         engine_version=engine_version,
         api_key=engine.api_key or None,
     )
@@ -1031,6 +1033,24 @@ def _run_burst_bench(args: argparse.Namespace) -> int:
                 f"p99={lat['p99']:>6.0f}ms  max={lat['max']:>6.0f}ms  "
                 f"agg={tput:>6.1f}t/s{err_str}"
             )
+
+        warm = size_data.get("warmup")
+        if warm:
+            dev = warm.get("vs_warm_pct") or {}
+            p95_dev = dev.get("p95_ms")
+            dev_str = f"  ({p95_dev:+.0f}% p95 vs warm)" if p95_dev is not None else ""
+            print(
+                dim(
+                    f"             warm-up  wall={warm['wall_time_s']:.1f}s  "
+                    f"p50={warm['latency_ms']['p50']:.0f}ms  "
+                    f"p95={warm['latency_ms']['p95']:.0f}ms{dev_str} — kept apart"
+                )
+            )
+        waited = size_data.get("waited_nominal_s")
+        if isinstance(waited, dict):
+            waited = None
+        if waited:
+            print(dim(f"             waited {waited:.0f}s for thermal nominal across passes"))
 
         def _scalar_or_max(v):
             return v["max"] if isinstance(v, dict) and "max" in v else v
@@ -2646,6 +2666,27 @@ def main(argv: list[str] | None = None) -> int:
             "Independent passes per burst size (default: 1). Use 3-5 for "
             "production-grade measurements with variance reporting "
             "(median/min/max across passes)."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-no-warmup",
+        action="store_true",
+        help=(
+            "Skip the warm-up pass run before each burst size. By default one "
+            "extra pass primes the engine (KV pool, page cache, session bank); "
+            "it is exported apart under results[size].warmup with its %% "
+            "deviation from the warm passes, never pooled into the aggregate."
+        ),
+    )
+    bench_parser.add_argument(
+        "--burst-wait-nominal",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help=(
+            "Before each burst pass, wait up to SECONDS for thermal pressure to "
+            "read nominal (default: 0 = do not wait). The time spent is "
+            "recorded per pass and summed per size."
         ),
     )
     bench_parser.add_argument(
