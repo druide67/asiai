@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.34.0](https://github.com/druide67/asiai/compare/v1.33.0...v1.34.0) — 2026-09-15
+
 ### Added
 
 - **Energy per token on the SoC.** Each run records `soc_watts`, the IOReport rails read and `energy_per_token_j` (joules over `completion_tokens − 1`), published only with engine-reported token usage and no throttling. `metrics_version` 3 → 4.
