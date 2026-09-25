@@ -28,14 +28,38 @@ class LlamaCppEngine(OpenAICompatEngine):
         return "llamacpp"
 
     def version(self) -> str:
-        """Return llama.cpp version via /props or brew."""
-        # Try /props endpoint first (has build_info)
+        """Version of the server ACTUALLY answering, from /props.
+
+        ``/props`` returns ``build_info`` as a plain string ("b10270-071327508"),
+        not as a mapping. Testing for a dict therefore always failed, and the
+        method silently fell through to ``brew list --versions`` — which reports
+        whatever binary sits in PATH, not the one serving the port.
+
+        That gap is not cosmetic. Running a pinned build alongside the brew one
+        is the normal way to hold an engine steady across a benchmark campaign:
+        on 2026-08-14 a run served by b10270 was recorded as b10360, the version
+        it was pinned to avoid. A build recorded wrong makes the whole
+        measurement uncomparable, and nothing in the artifact would have shown it.
+
+        The brew fallback is kept ONLY when the server is unreachable — never
+        when it answers without a usable ``build_info``. An engine that responds
+        but will not name itself yields "", which downstream reads as unknown;
+        naming it after a different binary would be worse than saying nothing.
+        """
         data, _ = http_get_json(f"{self.base_url}/props", **self._http_kwargs())
         if data and isinstance(data, dict):
-            build_info = data.get("build_info", {})
-            if isinstance(build_info, dict) and "version" in build_info:
-                return build_info["version"]
-        # Fallback: brew
+            build_info = data.get("build_info")
+            if isinstance(build_info, str) and build_info.strip():
+                return build_info.strip()
+            if isinstance(build_info, dict):
+                v = build_info.get("version")
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+            # The server answered but did not name itself: unknown, not "the one
+            # in PATH". Falling back here is how a pinned build gets mislabelled.
+            return ""
+        # Server unreachable — brew is then the only source, and it describes an
+        # engine that is not currently serving anything anyway.
         try:
             out = subprocess.run(
                 ["brew", "list", "--versions", "llama.cpp"],
